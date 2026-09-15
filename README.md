@@ -55,8 +55,9 @@ npm test          # 営業時間・祝日・空き判定のユニットテスト
    - `DIRECT_URL`：Direct connection（ポート 5432）の URI（テーブル作成用）
 3. 環境変数を設定（`.env.example` 参照）：`SESSION_SECRET`（32 文字以上の乱数）、`CRON_SECRET`、
    `HQ_PASSWORD`、SMS を使う場合は `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM`
-4. 初回のみ、ローカルから本番 DB に対して `DATABASE_URL=... DIRECT_URL=... npm run db:push && npm run seed`
-5. デプロイ後 `/admin/login` に `HQ` でログインし、本部画面から 24 店舗を登録する
+4. Deploy を押す。ビルド時にテーブル作成（`prisma db push`）と初期データ投入（seed）が自動で走るので、
+   ローカルでの作業は不要
+5. デプロイ後 `/admin/login` に `HQ` でログインし、本部画面から 24 店舗を登録する（サンプル店舗 S001/S002 は停止する）
 
 `vercel.json` の Cron（毎日 18:00 UTC ＝ 3:00 JST）が `/api/cron/cleanup` を呼び、保持期間を過ぎた
 予約・予約表セルを削除する。Vercel は `CRON_SECRET` を自動で Authorization ヘッダーに付ける。
