@@ -14,11 +14,16 @@ export function isJpMobile(e164: string): boolean {
   return /^\+81[789]0\d{8}$/.test(e164);
 }
 
+/** Twilio の設定が揃っていれば true（SMS を送る） */
+export function smsEnabled(): boolean {
+  return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
+}
+
 export async function sendSms(to: string, body: string): Promise<SmsResult> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   const from = process.env.TWILIO_FROM;
-  if (!sid || !token || !from) {
+  if (!smsEnabled() || !sid || !token || !from) {
     console.log(`[sms:skipped] to=${to}\n${body}`);
     return 'SKIPPED';
   }

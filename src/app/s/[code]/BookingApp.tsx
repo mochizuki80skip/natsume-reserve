@@ -8,7 +8,7 @@ type DayMark = 'open' | 'full' | 'closed' | 'unpublished';
 type SlotStatus = 'open' | 'phone' | 'closed';
 interface Slot { time: number; status: SlotStatus; period: 'AM' | 'PM' }
 
-interface Props { store: { code: string; name: string; phone: string } }
+interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean }
 
 const KIND_LABEL: Record<Kind, string> = {
   NEW: 'はじめての方／1ヶ月以上ご来院の無い方',
@@ -22,7 +22,7 @@ function shiftMonth(ym: string, n: number) {
   return d.toISOString().slice(0, 7);
 }
 
-export default function BookingApp({ store }: Props) {
+export default function BookingApp({ store, smsEnabled }: Props) {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [kind, setKind] = useState<Kind | null>(null);
   const [month, setMonth] = useState<string>('');
@@ -187,7 +187,7 @@ export default function BookingApp({ store }: Props) {
           </label>
           <label className="mb-3 block text-sm">電話番号（携帯）<span className="ml-1 text-red-500">*</span>
             <input required type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" placeholder="例）09012345678" />
-            <span className="mt-1 block text-xs text-slate-500">ご予約確定のSMSをお送りします。</span>
+            <span className="mt-1 block text-xs text-slate-500">{smsEnabled ? 'ご予約確定のSMSをお送りします。' : '当院からご連絡する場合に使用します。'}</span>
           </label>
           <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-brand px-4 py-3 text-base font-bold text-white disabled:opacity-50">
             {loading ? '送信中…' : 'この内容で予約する'}
@@ -201,7 +201,9 @@ export default function BookingApp({ store }: Props) {
           <h2 className="text-lg font-bold text-brand-dark">ご予約が確定しました</h2>
           <p className="mt-3 text-base">{formatDateJa(done.date)} {minToHm(done.time)}〜</p>
           <p className="mt-1 text-sm text-slate-600">{store.name}</p>
-          {done.smsStatus === 'SENT' && <p className="mt-3 text-sm">確認のSMSをお送りしました。</p>}
+          {done.smsStatus === 'SENT'
+            ? <p className="mt-3 text-sm">確認のSMSをお送りしました。</p>
+            : <p className="mt-3 text-sm text-slate-600">この画面を保存（スクリーンショット）しておいてください。</p>}
           {kind === 'NEW' && <p className="mt-3 text-sm">初めての方は10分前にお越しください。</p>}
           <p className="mt-3 text-sm">変更・キャンセルはお電話（{phoneLink}）へお願いいたします。</p>
           <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setKind(null); setDate(''); setTime(null); setDone(null); setForm({ cardNo: '', name: '', phone: '' }); }}>続けて予約する</button>

@@ -6,7 +6,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url       = env("DATABASE_URL") // アプリが使う接続（Supabase はプーラー 6543 番）
+  directUrl = env("DIRECT_URL")   // db push 用の直接接続（5432 番）
 }
 
 // 全店共通の設定（1行のみ。id = 1）

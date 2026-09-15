@@ -50,14 +50,25 @@ npm test          # 営業時間・祝日・空き判定のユニットテスト
 ## Vercel へのデプロイ
 
 1. Vercel → Add New → Project → このリポジトリを選択、**Root Directory を `booking`** にする
-2. Storage で Postgres（Supabase / Neon）を接続するか、環境変数 `DATABASE_URL` を設定
+2. Supabase でプロジェクトを作り、Connect から 2 種類の URI を取得して環境変数に設定
+   - `DATABASE_URL`：Transaction pooler（ポート 6543）の URI の末尾に `?pgbouncer=true&connection_limit=1` を付ける
+   - `DIRECT_URL`：Direct connection（ポート 5432）の URI（テーブル作成用）
 3. 環境変数を設定（`.env.example` 参照）：`SESSION_SECRET`（32 文字以上の乱数）、`CRON_SECRET`、
    `HQ_PASSWORD`、SMS を使う場合は `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM`
-4. 初回のみ、ローカルから本番 DB に対して `DATABASE_URL=... npm run db:push && npm run seed`
+4. 初回のみ、ローカルから本番 DB に対して `DATABASE_URL=... DIRECT_URL=... npm run db:push && npm run seed`
 5. デプロイ後 `/admin/login` に `HQ` でログインし、本部画面から 24 店舗を登録する
 
 `vercel.json` の Cron（毎日 18:00 UTC ＝ 3:00 JST）が `/api/cron/cleanup` を呼び、保持期間を過ぎた
 予約・予約表セルを削除する。Vercel は `CRON_SECRET` を自動で Authorization ヘッダーに付ける。
+
+### 費用の目安
+
+- Supabase 無料枠（DB 500MB・転送 5GB/月）で 24 店舗分をまかなえる見込み。
+  予約表のセルは 1 店舗 1 日あたり最大 180 行、60 日保持でも全店で約 26 万行（100MB 未満）。
+  無料枠は 1 週間アクセスが無いと一時停止されるが、毎日の利用と Cron があるため実運用では止まらない。
+- SMS（Twilio）は有料のため当面は未設定（＝送信しない）。有効化するときは環境変数 3 つを追加するだけ。
+- Vercel の Hobby（無料）プランは商用利用不可の規約のため、業務利用は Pro プラン（月額 20 ドル程度）が必要。
+  無料で商用利用できるホスティングに置く場合は Netlify などへの移行が可能（要確認）。
 
 ## 運用メモ
 
