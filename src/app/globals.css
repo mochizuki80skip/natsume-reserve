@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: light; }
+body { @apply bg-slate-50 text-slate-800; }
+
+/* 予約表グリッド */
+.grid-cell input {
+  @apply w-full h-full px-1 py-0.5 text-sm bg-transparent outline-none;
+}
+.grid-cell input:focus { @apply bg-yellow-50 ring-2 ring-brand; }
+
+@media print {
+  body { background: white; }
+  .no-print { display: none !important; }
+  @page { size: A4 portrait; margin: 10mm; }
+}

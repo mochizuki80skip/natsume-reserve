@@ -1,0 +1,125 @@
+// 接骨院 WEB予約システム（24店舗・店舗コードログイン）
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 全店共通の設定（1行のみ。id = 1）
+model GlobalSetting {
+  id                 Int      @id @default(1)
+  slotMinutes        Int      @default(15) // 予約枠の刻み
+  newVisitSlots      Int      @default(2)  // ①初回に必要な連続枠数（2 = 30分）
+  returnVisitSlots   Int      @default(1)  // ②通院中に必要な枠数
+  webCutoffMinutes   Int      @default(30) // 開始N分前までWEB予約可
+  phoneCutoffMinutes Int      @default(15) // 開始N分前までは電話対応（それ以降は受付終了）
+  phoneMarkRemaining Int      @default(1)  // 残り枠がこの数以下なら〇の代わりに電話マーク
+  closeOnHolidays    Boolean  @default(true) // 祝日は休診
+  retentionDays      Int      @default(60) // 個人情報の保持日数（2ヶ月）
+  // 営業時間。期間ごとに曜日別の営業セッションを持つ（詳細は docs/SPEC.md）
+  hours              Json
+  updatedAt          DateTime @updatedAt
+}
+
+model Store {
+  id                String   @id @default(cuid())
+  code              String   @unique // 店舗コード（ログインID・顧客URLにも使用）
+  name              String
+  phone             String   // 電話マーク・SMS に表示する電話番号
+  beds              Int      @default(5) // 用意するベッド数（列数）
+  defaultActiveBeds Int      @default(3) // 日別設定が無い日に稼働とみなすベッド数
+  publishDaysAhead  Int      @default(30) // 何日先まで顧客に公開するか（個別の非公開設定が優先）
+  hoursOverride     Json?    // null = 全店共通の営業時間を使う
+  notifyPhone       String?  // 新規予約を店舗にSMS通知する番号（任意）
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  accounts     AdminAccount[]
+  days         DayStatus[]
+  bedStatuses  BedStatus[]
+  cells        Cell[]
+  reservations Reservation[]
+}
+
+// 管理画面ログインアカウント。role = "store"（店舗）| "hq"（本部：全店舗横断）
+model AdminAccount {
+  id           String   @id @default(cuid())
+  code         String   @unique // ログインID（店舗は店舗コードと同じ）
+  passwordHash String
+  role         String   @default("store")
+  storeId      String?
+  store        Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// 日付ごとの状態（公開/非公開・臨時休診）。行が無い日は既定ルールに従う
+model DayStatus {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  published Boolean? // null = 既定（publishDaysAhead 以内なら公開）
+  closed    Boolean  @default(false) // 臨時休診
+  memo      String?
+  updatedAt DateTime @updatedAt
+
+  @@unique([storeId, date])
+}
+
+// 日付×ベッドの稼働（チェック）状態。行が無い日は defaultActiveBeds 台が稼働
+model BedStatus {
+  id      String  @id @default(cuid())
+  storeId String
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  date    String
+  bed     Int     // 1..beds
+  active  Boolean @default(true)
+  label   String? // 施術者名など（管理画面の列見出し。顧客には出さない）
+
+  @@unique([storeId, date, bed])
+}
+
+// 予約表のセル。bed = 0 は「枠外」列。text は氏名など自由入力
+model Cell {
+  id            String       @id @default(cuid())
+  storeId       String
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  date          String       // YYYY-MM-DD
+  time          Int          // 0:00 からの分（9:00 = 540）
+  bed           Int          // 0 = 枠外, 1..beds
+  text          String
+  reservationId String?
+  reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([storeId, date, time, bed])
+  @@index([storeId, date])
+}
+
+// WEB予約の記録（顧客が入力した情報）
+model Reservation {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  date      String
+  time      Int
+  bed       Int
+  kind      String   // NEW（初回/1ヶ月以上来院なし）| RETURN（通院中）
+  cardNo    String?  // 診察券番号（②のみ）
+  name      String
+  phone     String
+  status    String   @default("BOOKED") // BOOKED | CANCELLED
+  smsStatus String?  // SENT | FAILED | SKIPPED
+  createdAt DateTime @default(now())
+
+  cells Cell[]
+
+  @@index([storeId, date])
+  @@index([createdAt])
+}

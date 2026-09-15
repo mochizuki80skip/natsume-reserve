@@ -1,0 +1,30 @@
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { apiContext } from '@/lib/admin';
+import { prisma } from '@/lib/prisma';
+import { isValidDate } from '@/lib/time';
+
+const Body = z.object({
+  date: z.string().refine(isValidDate),
+  cells: z.array(z.object({ time: z.number().int().min(0).max(1440), bed: z.number().int().min(0).max(20), text: z.string().max(100) })).max(500),
+});
+
+/** セルの一括保存。text が空なら削除 */
+export async function PUT(req: Request) {
+  const ctx = await apiContext();
+  if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  const parsed = Body.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: 'bad request' }, { status: 400 });
+  const { date, cells } = parsed.data;
+  const storeId = ctx.store.id;
+  await prisma.$transaction(async (tx) => {
+    for (const c of cells) {
+      if (c.bed > ctx.store.beds) continue;
+      const text = c.text.trim();
+      const where = { storeId_date_time_bed: { storeId, date, time: c.time, bed: c.bed } };
+      if (text === '') await tx.cell.deleteMany({ where: { storeId, date, time: c.time, bed: c.bed } });
+      else await tx.cell.upsert({ where, update: { text }, create: { storeId, date, time: c.time, bed: c.bed, text } });
+    }
+  });
+  return NextResponse.json({ ok: true });
+}
