@@ -13,6 +13,7 @@ export default function HqClient({ stores, setting }: { stores: StoreRow[]; sett
   const [s, setS] = useState(setting);
   const [ns, setNs] = useState({ code: '', name: '', phone: '', password: '' });
   const [msg, setMsg] = useState('');
+  const [edit, setEdit] = useState<{ code: string; newCode: string; name: string; phone: string } | null>(null);
 
   async function saveSetting(e: React.FormEvent) {
     e.preventDefault();
@@ -28,12 +29,20 @@ export default function HqClient({ stores, setting }: { stores: StoreRow[]; sett
     setMsg(r.ok ? `店舗 ${ns.code} を追加しました` : (await r.json()).error ?? '追加に失敗しました');
     if (r.ok) { setNs({ code: '', name: '', phone: '', password: '' }); router.refresh(); }
   }
-  async function storeAction(code: string, action: 'reset' | 'toggle') {
+  async function storeAction(code: string, action: 'reset' | 'toggle' | 'delete') {
     let password: string | null = null;
     if (action === 'reset') { password = prompt(`${code} の新しいパスワード（8文字以上）`); if (!password) return; }
+    if (action === 'delete' && !confirm(`店舗 ${code} を削除します。この店舗の予約表・予約データもすべて消えます。よろしいですか？`)) return;
     const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, action, password }) });
     setMsg(r.ok ? '更新しました' : (await r.json()).error ?? '更新に失敗しました');
     router.refresh();
+  }
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!edit) return;
+    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: edit.code, action: 'update', newCode: edit.newCode, name: edit.name, phone: edit.phone }) });
+    setMsg(r.ok ? '店舗情報を更新しました' : (await r.json()).error ?? '更新に失敗しました');
+    if (r.ok) { setEdit(null); router.refresh(); }
   }
   const num = (k: keyof SettingForm) => (e: React.ChangeEvent<HTMLInputElement>) => setS({ ...s, [k]: Number(e.target.value) });
 
@@ -47,14 +56,29 @@ export default function HqClient({ stores, setting }: { stores: StoreRow[]; sett
         <table className="w-full text-sm">
           <thead><tr className="text-left text-slate-500"><th>コード</th><th>店舗名</th><th>電話</th><th>ベッド</th><th>状態</th><th></th></tr></thead>
           <tbody>
-            {stores.map((st) => (
+            {stores.map((st) => edit && edit.code === st.code ? (
+              <tr key={st.code} className="border-t bg-yellow-50">
+                <td colSpan={6} className="py-2">
+                  <form onSubmit={saveEdit} className="flex flex-wrap items-center gap-2">
+                    <input value={edit.newCode} onChange={(e) => setEdit({ ...edit, newCode: e.target.value })} placeholder="店舗コード" required className="w-32 rounded border px-2 py-1 font-mono" />
+                    <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="店舗名" required className="w-48 rounded border px-2 py-1" />
+                    <input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="電話番号" required className="w-40 rounded border px-2 py-1" />
+                    <button type="submit" className="rounded bg-brand px-3 py-1 text-white">保存</button>
+                    <button type="button" onClick={() => setEdit(null)} className="rounded border px-3 py-1">やめる</button>
+                    <span className="text-xs text-slate-500">店舗コードを変えると顧客URLとログインIDも変わります</span>
+                  </form>
+                </td>
+              </tr>
+            ) : (
               <tr key={st.code} className="border-t">
                 <td className="py-1 font-mono">{st.code}</td><td>{st.name}</td><td>{st.phone}</td><td>{st.beds}</td>
                 <td>{st.active ? '稼働' : '停止'}</td>
-                <td className="space-x-2 text-right">
+                <td className="space-x-2 whitespace-nowrap text-right">
                   <a href={`/s/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">顧客URL</a>
+                  <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name, phone: st.phone })} className="rounded border px-2">編集</button>
                   <button type="button" onClick={() => storeAction(st.code, 'reset')} className="rounded border px-2">PW再設定</button>
                   <button type="button" onClick={() => storeAction(st.code, 'toggle')} className="rounded border px-2">{st.active ? '停止' : '再開'}</button>
+                  <button type="button" onClick={() => storeAction(st.code, 'delete')} className="rounded border border-red-300 px-2 text-red-700">削除</button>
                 </td>
               </tr>
             ))}
