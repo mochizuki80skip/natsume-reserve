@@ -19,7 +19,7 @@ export default async function SettingsPage() {
       {/* 画面が広いときは 2 列（左：店舗設定、右：スタッフ・シフト）、半面では 1 列 */}
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
         <StoreSettingsForm
-          store={{ name: store.name, phone: store.phone, beds: store.beds, defaultActiveBeds: store.defaultActiveBeds, maxTherapists: store.maxTherapists, maxReception: store.maxReception, publishDaysAhead: store.publishDaysAhead, notifyPhone: store.notifyPhone ?? '', hoursOverride: store.hoursOverride ? JSON.stringify(store.hoursOverride, null, 2) : '' }}
+          store={{ code: store.code, name: store.name, phone: store.phone, beds: store.beds, defaultActiveBeds: store.defaultActiveBeds, maxTherapists: store.maxTherapists, maxReception: store.maxReception, publishDaysAhead: store.publishDaysAhead, notifyPhone: store.notifyPhone ?? '', hoursOverride: store.hoursOverride ? JSON.stringify(store.hoursOverride, null, 2) : '' }}
           globalHours={JSON.stringify(setting.hours, null, 2)}
           canChangePassword={session.role === 'store'}
           smsEnabled={smsEnabled()}

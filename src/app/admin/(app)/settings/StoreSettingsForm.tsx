@@ -2,8 +2,19 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface StoreForm { name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; notifyPhone: string; hoursOverride: string }
+interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; notifyPhone: string; hoursOverride: string }
 interface Props { store: StoreForm; globalHours: string; canChangePassword: boolean; smsEnabled: boolean }
+
+function UrlRow({ label, path }: { label: string; path: string }) {
+  const url = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
+  return (
+    <div className="mb-1 flex flex-wrap items-center gap-2">
+      <span className="w-44 text-slate-600">{label}</span>
+      <code className="rounded bg-slate-100 px-2 py-0.5 text-xs">{url}</code>
+      <button type="button" onClick={() => navigator.clipboard.writeText(url)} className="rounded border px-2 py-0.5 text-xs">コピー</button>
+    </div>
+  );
+}
 
 export default function StoreSettingsForm({ store, globalHours, canChangePassword, smsEnabled }: Props) {
   const router = useRouter();
@@ -37,6 +48,11 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
   return (
     <div className="space-y-6">
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
+      <div className="rounded border bg-white p-4 text-sm">
+        <h2 className="mb-2 font-bold">この店舗のURL</h2>
+        <UrlRow label="管理画面（スタッフ用）" path={`/admin/login/${store.code}`} />
+        <UrlRow label="患者様用（WEB予約）" path={`/s/${store.code}`} />
+      </div>
       <form onSubmit={save} className="space-y-3 rounded border bg-white p-4">
         <label className="block text-sm">店舗名<input value={f.name} onChange={str('name')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
         <label className="block text-sm">電話番号（顧客サイトの電話マークに表示）<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>

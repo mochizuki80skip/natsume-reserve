@@ -52,7 +52,8 @@ export default function HqClient({ stores, setting }: { stores: StoreRow[]; sett
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
 
       <section className="rounded border bg-white p-4">
-        <h2 className="mb-3 font-bold">店舗一覧（{stores.length} 店舗）</h2>
+        <h2 className="mb-1 font-bold">店舗一覧（{stores.length} 店舗）</h2>
+        <p className="mb-3 text-xs text-slate-500">各店舗には「管理URL」（/admin/login/店舗コード：パスワードだけでログイン）と「顧客URL」（/s/店舗コード）を配布してください。</p>
         <table className="w-full text-sm">
           <thead><tr className="text-left text-slate-500"><th>コード</th><th>店舗名</th><th>電話</th><th>ベッド</th><th>状態</th><th></th></tr></thead>
           <tbody>
@@ -75,6 +76,7 @@ export default function HqClient({ stores, setting }: { stores: StoreRow[]; sett
                 <td>{st.active ? '稼働' : '停止'}</td>
                 <td className="space-x-2 whitespace-nowrap text-right">
                   <a href={`/s/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">顧客URL</a>
+                  <a href={`/admin/login/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">管理URL</a>
                   <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name, phone: st.phone })} className="rounded border px-2">編集</button>
                   <button type="button" onClick={() => storeAction(st.code, 'reset')} className="rounded border px-2">PW再設定</button>
                   <button type="button" onClick={() => storeAction(st.code, 'toggle')} className="rounded border px-2">{st.active ? '停止' : '再開'}</button>

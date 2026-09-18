@@ -246,6 +246,20 @@ await ap.screenshot({ path: 'e2e/out-print.png', fullPage: true });
 await ap.goto(`${BASE}/admin/hq`);
 ok('店舗アカウントは本部画面に入れない', !ap.url().includes('/admin/hq'));
 
+// 店舗専用ログインURL（パスワードのみ）
+{
+  const sp = await browser.newContext(); const spp = await sp.newPage();
+  await spp.goto(`${BASE}/admin/login/S001`);
+  ok('店舗専用ログイン画面に店舗名', (await spp.textContent('h1')).includes('サンプル本店') && (await spp.locator('input[autocomplete="username"]').count()) === 0);
+  await spp.fill('input[type="password"]', 'password');
+  await spp.getByRole('button', { name: 'ログイン' }).click();
+  await spp.waitForURL(/\/admin\/day\//, { timeout: 15000 });
+  ok('店舗専用URLからログインできる', true);
+  const r404 = await spp.goto(`${BASE}/admin/login/NOPE`);
+  ok('存在しない店舗コードは404', r404.status() === 404);
+  await sp.close();
+}
+
 // 本部ログイン
 await ap.goto(`${BASE}/api/admin/logout`).catch(() => {});
 const hq = await browser.newContext();

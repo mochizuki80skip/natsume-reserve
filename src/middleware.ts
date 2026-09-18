@@ -3,7 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth';
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isLogin = pathname === '/admin/login' || pathname === '/api/admin/login';
+  const isLogin = pathname === '/admin/login' || pathname.startsWith('/admin/login/') || pathname === '/api/admin/login';
   if (isLogin) return NextResponse.next();
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
