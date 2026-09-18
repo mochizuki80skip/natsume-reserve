@@ -53,7 +53,7 @@ const m = dateTitle.match(/(\d+)年(\d+)月(\d+)日/);
 const date = `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
 await ap.goto(`${BASE}/admin/day/${date}`);
 await ap.waitForSelector('table');
-const inputs = ap.locator('table tbody input');
+const inputs = ap.locator('#grid tbody input');
 const values = await inputs.evaluateAll((els) => els.map((e) => e.value));
 ok('予約表に氏名（初）が入る', values.includes('テスト 太郎（初）'));
 ok('2枠目に「上記初診対応」が入る', values.includes('上記初診対応'));
@@ -72,37 +72,37 @@ await ap.goto(`${BASE}/admin/day/${date}`);
 await ap.waitForSelector('table');
 const capText = await ap.locator('text=顧客に見える枠数').first().locator('..').textContent();
 ok('シフト(前休)が枠数に反映（午前2/午後3）', /シフトから 2/.test(capText) && /シフトから 3/.test(capText), capText);
-ok('管理側に12:00の行がある', (await ap.locator('table tbody td', { hasText: /^12:00$/ }).count()) === 1);
+const amReserved = async () => Number((await ap.locator('table').first().locator('tr', { hasText: '予約' }).first().locator('td').nth(1).textContent()).trim());
+ok('管理側に12:00の行がある', (await ap.locator('#grid tbody td', { hasText: /^12:00$/ }).count()) === 1);
 {
-  const before = (await ap.locator('text=午前').first().textContent()).match(/午前\s*(\d+)/)[1];
-  const row12 = ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: /^12:00$/ }) });
+  const before = await amReserved();
+  const row12 = ap.locator('#grid tbody tr').filter({ has: ap.locator('td', { hasText: /^12:00$/ }) });
   const c = row12.locator('input').nth(2);
   await c.fill('正午さん'); await c.press('Enter');
   await ap.waitForSelector('text=保存しました', { timeout: 10000 });
-  const after = (await ap.locator('text=午前').first().textContent()).match(/午前\s*(\d+)/)[1];
+  const after = await amReserved();
   ok('12:00 の入力は午前の人数に入る', Number(after) === Number(before) + 1, `${before}→${after}`);
 }
 const wk = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), date);
 const dayW = wk.days.find((x) => x.date === date);
 ok('顧客側は11:45まで', dayW && !dayW.slots.some((s) => s.time === 720) && dayW.slots.some((s) => s.time === 705));
-ok('枠外列が無い', (await ap.locator('table thead th').allTextContents()).every((t) => !t.includes('枠外')));
-ok('ベッド8列', (await ap.locator('table thead tr').last().locator('th').count()) === 9);
-const countText = await ap.locator('text=午前').first().textContent();
-ok('人数カウント表示', /名/.test(countText), countText);
+ok('枠外列が無い', (await ap.locator('#grid thead th').allTextContents()).every((t) => !t.includes('枠外')));
+ok('ベッド8列', (await ap.locator('#grid thead tr').last().locator('th').count()) === 9);
+ok('人数カウント表示（予約 午前）', Number.isInteger(await amReserved()), String(await amReserved()));
 
 // セル入力 → 保存 → リロードで残る
-const firstEmpty = ap.locator('table tbody input').filter({ hasNot: ap.locator('[value]') });
-const cellInput = ap.locator('table tbody tr').nth(2).locator('input').nth(1);
+const firstEmpty = ap.locator('#grid tbody input').filter({ hasNot: ap.locator('[value]') });
+const cellInput = ap.locator('#grid tbody tr').nth(2).locator('input').nth(1);
 await cellInput.fill('鈴木');
 await cellInput.press('Enter');
 await ap.waitForSelector('text=保存しました', { timeout: 10000 });
 await ap.reload();
 await ap.waitForSelector('table');
-const after = await ap.locator('table tbody tr').nth(2).locator('input').nth(1).inputValue();
+const after = await ap.locator('#grid tbody tr').nth(2).locator('input').nth(1).inputValue();
 ok('セル自動保存', after === '鈴木', after);
 
 // 複数セル貼り付け（タブ・改行区切り）
-const target = ap.locator('table tbody tr').nth(4).locator('input').nth(0);
+const target = ap.locator('#grid tbody tr').nth(4).locator('input').nth(0);
 await target.focus();
 await ap.evaluate(() => {
   const el = document.activeElement;
@@ -113,8 +113,8 @@ await ap.evaluate(() => {
 await ap.waitForSelector('text=保存しました', { timeout: 10000 });
 await ap.reload();
 await ap.waitForSelector('table');
-const r4 = await ap.locator('table tbody tr').nth(4).locator('input').nth(1).inputValue();
-const r5 = await ap.locator('table tbody tr').nth(5).locator('input').nth(0).inputValue();
+const r4 = await ap.locator('#grid tbody tr').nth(4).locator('input').nth(1).inputValue();
+const r5 = await ap.locator('#grid tbody tr').nth(5).locator('input').nth(0).inputValue();
 ok('複数セル貼り付け', r4 === '高橋' && r5 === '田中', `${r4}/${r5}`);
 // Excel の B7:L36 相当（時間列＋結合セル5ベッド、12:00 行なし）を 9:00 ベッド1 に貼り付け
 {
@@ -129,9 +129,9 @@ ok('複数セル貼り付け', r4 === '高橋' && r5 === '田中', `${r4}/${r5}`
     return [hm(t), ...beds.flatMap((b) => [b, ''])].join('\t');
   });
   const tsv = lines.join('\r\n') + '\r\n';
-  const rowOf0 = (t) => ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${hm(t)}$`) }) });
+  const rowOf0 = (t) => ap.locator('#grid tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${hm(t)}$`) }) });
   const noonBefore = await rowOf0(720).locator('input').nth(2).inputValue();
-  const first = ap.locator('table tbody tr').nth(0).locator('input').nth(0);
+  const first = ap.locator('#grid tbody tr').nth(0).locator('input').nth(0);
   await first.focus();
   await ap.evaluate((text) => {
     const dt = new DataTransfer(); dt.setData('text/plain', text);
@@ -139,7 +139,7 @@ ok('複数セル貼り付け', r4 === '高橋' && r5 === '田中', `${r4}/${r5}`
   }, tsv);
   await ap.waitForSelector('text=保存しました', { timeout: 10000 });
   await ap.reload(); await ap.waitForSelector('table');
-  const rowOf = (t) => ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${hm(t)}$`) }) });
+  const rowOf = (t) => ap.locator('#grid tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${hm(t)}$`) }) });
   const v = async (t, bed) => rowOf(t).locator('input').nth(bed - 1).inputValue();
   ok('Excel貼付: 9:00 ベッド1', (await v(540, 1)) === 'エクセル太郎', await v(540, 1));
   ok('Excel貼付: 結合セル→ベッド2に入る', (await v(705, 2)) === '十一時四十五分', await v(705, 2));
@@ -157,15 +157,16 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   await ap.goto(`${BASE}/admin/reservations`); await ap.waitForSelector('table');
   ok('WEB予約一覧に表示される', (await ap.locator('table').textContent()).includes('取消太郎'));
   await ap.goto(`${BASE}/admin/day/${d2}`); await ap.waitForSelector('table');
-  ok('ベッド番号の上に表示範囲の見出し', (await ap.locator('table thead').textContent()).includes('予約サイトに表示') && (await ap.locator('table thead').textContent()).includes('非表示'));
-  const rowOf = (t) => ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${t}$`) }) });
-  ap.once('dialog', (dlg) => dlg.accept());
-  await rowOf('10:00').locator('button[aria-label="WEB予約を取り消す"]').click();
+  ok('ベッド番号の上に表示範囲の見出し', (await ap.locator('#grid thead').textContent()).includes('予約サイトに表示') && (await ap.locator('#grid thead').textContent()).includes('非表示'));
+  const rowOf = (t) => ap.locator('#grid tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${t}$`) }) });
+  await rowOf('10:00').locator('button[aria-label="メニュー"]').first().click();
+  ap.once('dialog', (dlg) => dlg.accept(''));
+  await ap.getByRole('button', { name: /キャンセル（連絡あり）/ }).click();
   await ap.waitForTimeout(800);
   await ap.reload(); await ap.waitForSelector('table');
   const v1 = await rowOf('10:00').locator('input').nth(0).inputValue();
   const v2 = await rowOf('10:15').locator('input').nth(0).inputValue();
-  ok('取消ボタンで氏名と2枠目が消える', v1 === '' && v2 === '', `'${v1}' / '${v2}'`);
+  ok('メニューのキャンセルで氏名と2枠目が消える', v1 === '' && v2 === '', `'${v1}' / '${v2}'`);
   const wk2 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), d2);
   const slot = wk2.days.find((x) => x.date === d2)?.slots.find((s) => s.time === 600);
   ok('取消後は顧客側で空きに戻る', slot && slot.status !== 'closed', JSON.stringify(slot));
@@ -187,8 +188,41 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   const r0 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'REVISIT', date: d, time: 660, name: '番号なし', phone: '09033334445' }) })).json(), d3);
   ok('再来は診察券番号が必須', r0.ok !== true && /診察券/.test(r0.error ?? ''), JSON.stringify(r0));
   await ap.goto(`${BASE}/admin/day/${d3}`); await ap.waitForSelector('table');
-  const vals = await ap.locator('table tbody input').evaluateAll((els) => els.map((e) => e.value));
+  const vals = await ap.locator('#grid tbody input').evaluateAll((els) => els.map((e) => e.value));
   ok('予約表に「再来花子（再）」と「上記再来対応」', vals.includes('再来花子（再）') && vals.includes('上記再来対応'));
+}
+
+// 来院チェック → 来院人数、キャンセル名簿へ移動 → 枠が空く → 戻す
+{
+  const d4 = '2026-09-30';
+  await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'NEW', date: d, time: 900, name: '来院確認', phone: '09055556666' }) })).json(), d4);
+  await ap.goto(`${BASE}/admin/day/${d4}`); await ap.waitForSelector('table');
+  const rowOf = (t) => ap.locator('#grid tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${t}$`) }) });
+  await rowOf('15:00').locator('button[aria-label="来院チェック"]').first().click();
+  await ap.waitForTimeout(600);
+  await ap.reload(); await ap.waitForSelector('table');
+  const visitedCount = await ap.locator('td.text-green-700').nth(1).textContent();
+  ok('来院チェック → 午後の来院人数 1', visitedCount.trim() === '1', visitedCount);
+  ok('来院チェック済みは2枠目も緑', (await rowOf('15:15').locator('td.bg-green-100').count()) === 1);
+  // 名簿へ
+  await rowOf('15:00').locator('button[aria-label="メニュー"]').first().click();
+  ap.once('dialog', (dlg) => dlg.accept('体調不良'));
+  await ap.getByRole('button', { name: /キャンセル（連絡あり）/ }).click();
+  await ap.waitForTimeout(800);
+  await ap.reload(); await ap.waitForSelector('table');
+  ok('名簿へ移すとセルが空く', (await rowOf('15:00').locator('input').nth(0).inputValue()) === '' && (await rowOf('15:15').locator('input').nth(0).inputValue()) === '');
+  const listText = await ap.locator('h2:has-text("キャンセル名簿")').locator('..').textContent();
+  const memoVal = await ap.locator('input[placeholder="メモ"]').first().inputValue();
+  ok('キャンセル名簿に載る', /来院確認/.test(listText) && /事前連絡/.test(listText) && /WEB予約/.test(listText) && memoVal === '体調不良', memoVal);
+  const wk3 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), d4);
+  ok('名簿へ移した枠は顧客側で空き', wk3.days.find((x) => x.date === d4)?.slots.find((s) => s.time === 900)?.status !== 'closed');
+  await ap.goto(`${BASE}/admin/reservations?tab=cancel`); await ap.waitForSelector('table');
+  ok('ログ画面のキャンセル名簿タブ', (await ap.locator('table').textContent()).includes('来院確認'));
+  await ap.goto(`${BASE}/admin/day/${d4}`); await ap.waitForSelector('table');
+  await ap.getByRole('button', { name: '予約表に戻す' }).first().click();
+  await ap.waitForTimeout(800);
+  await ap.reload(); await ap.waitForSelector('table');
+  ok('名簿から予約表に戻せる', (await rowOf('15:00').locator('input').nth(0).inputValue()) === '来院確認（初）' && (await rowOf('15:15').locator('input').nth(0).inputValue()) === '上記初診対応');
 }
 
 // 顧客API に個人情報が含まれない

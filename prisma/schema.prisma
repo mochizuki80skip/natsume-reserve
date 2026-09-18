@@ -47,6 +47,7 @@ model Store {
   days         DayStatus[]
   members      StaffMember[]
   shifts       Shift[]
+  cancels      CancelLog[]
   staff        StaffDay[]
   bedStatuses  BedStatus[]
   cells        Cell[]
@@ -146,11 +147,33 @@ model Cell {
   time          Int          // 0:00 からの分（9:00 = 540）
   bed           Int          // 0 = 枠外, 1..beds
   text          String
+  visited       Boolean      @default(false) // 来院チェック
   reservationId String?
   reservation   Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   updatedAt     DateTime     @updatedAt
 
   @@unique([storeId, date, time, bed])
+  @@index([storeId, date])
+}
+
+// キャンセル名簿。予約表のセルから外した予約の記録
+// kind: ADVANCE（事前連絡あり）| NOSHOW（無断）、source: WEB | MANUAL
+model CancelLog {
+  id            String   @id @default(cuid())
+  storeId       String
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  date          String
+  time          Int
+  bed           Int
+  name          String   // 1枠目のセルの文字（例：山田（初））
+  contText      String?  // 2枠目があった場合の文字（上記初診対応 など）
+  kind          String
+  source        String
+  reservationId String?
+  byCode        String   // 登録したログインID（店舗コード or HQ）
+  memo          String?
+  createdAt     DateTime @default(now())
+
   @@index([storeId, date])
 }
 

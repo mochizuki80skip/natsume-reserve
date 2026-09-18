@@ -45,5 +45,7 @@ body { @apply bg-slate-50 text-slate-800; }
 @media print {
   body { background: white; }
   .no-print { display: none !important; }
-  @page { size: A4 portrait; margin: 10mm; }
+  @page { size: A4 portrait; margin: 8mm; }
+  main { max-width: none !important; }
+  table, tr, td, th { page-break-inside: avoid; }
 }

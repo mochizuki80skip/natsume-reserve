@@ -13,7 +13,7 @@ function jpPhone(p: string): string {
   return /^0\d{10}$/.test(d) ? `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}` : /^0\d{9}$/.test(d) ? `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}` : d;
 }
 
-export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; status?: string; q?: string }> }) {
+export default async function ReservationsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; status?: string; q?: string; tab?: string }> }) {
   const sp = await searchParams;
   const session = await requireSession();
   const store = await resolveStore(session);
@@ -23,7 +23,12 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
   const to = sp.to && isValidDate(sp.to) ? sp.to : addDays(today, 60);
   const status = sp.status === 'BOOKED' || sp.status === 'CANCELLED' ? sp.status : '';
   const q = (sp.q ?? '').trim();
-  const rows = await prisma.reservation.findMany({
+  const tab = sp.tab === 'cancel' ? 'cancel' : 'web';
+  const cancels = tab === 'cancel' ? await prisma.cancelLog.findMany({
+    where: { storeId: store.id, date: { gte: from, lte: to }, ...(q ? { name: { contains: q } } : {}) },
+    orderBy: [{ date: 'desc' }, { time: 'asc' }], take: 500,
+  }) : [];
+  const rows = tab === 'cancel' ? [] : await prisma.reservation.findMany({
     where: {
       storeId: store.id, date: { gte: from, lte: to },
       ...(status ? { status } : {}),
@@ -36,8 +41,13 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
 
   return (
     <div>
-      <h1 className="mb-3 text-xl font-bold">WEB予約一覧（ログ）</h1>
+      <h1 className="mb-3 text-xl font-bold">予約・来院ログ</h1>
+      <div className="mb-3 flex gap-2 text-sm">
+        <Link href={`/admin/reservations?from=${from}&to=${to}`} className={`rounded px-3 py-1 ${tab === 'web' ? 'bg-brand text-white' : 'border bg-white'}`}>WEB予約一覧</Link>
+        <Link href={`/admin/reservations?tab=cancel&from=${from}&to=${to}`} className={`rounded px-3 py-1 ${tab === 'cancel' ? 'bg-brand text-white' : 'border bg-white'}`}>キャンセル名簿</Link>
+      </div>
       <form className="mb-3 flex flex-wrap items-end gap-2 rounded border bg-white p-3 text-sm">
+        <input type="hidden" name="tab" value={tab} />
         <label>予約日（from）<input type="date" name="from" defaultValue={from} className="ml-1 rounded border px-2 py-1" /></label>
         <label>〜（to）<input type="date" name="to" defaultValue={to} className="ml-1 rounded border px-2 py-1" /></label>
         <label>状態
@@ -47,14 +57,37 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
         </label>
         <label>氏名・電話・診察券<input name="q" defaultValue={q} className="ml-1 w-40 rounded border px-2 py-1" /></label>
         <button type="submit" className="rounded bg-brand px-3 py-1 text-white">絞り込む</button>
-        <span className="text-xs text-slate-500">{rows.length} 件（最大 500 件表示）。個人情報は保持期間（既定 60 日）を過ぎると自動削除されます。</span>
+        <span className="text-xs text-slate-500">{tab === 'cancel' ? cancels.length : rows.length} 件（最大 500 件表示）。個人情報は保持期間（既定 60 日）を過ぎると自動削除されます。</span>
       </form>
+      {tab === 'cancel' && (
+        <div className="overflow-x-auto rounded border bg-white">
+          <table className="w-full text-sm">
+            <thead><tr className="bg-slate-100 text-left"><th className="px-2 py-1">予約日時</th><th className="px-2 py-1">ベッド</th><th className="px-2 py-1">氏名</th><th className="px-2 py-1">区分</th><th className="px-2 py-1">種別</th><th className="px-2 py-1">登録</th><th className="px-2 py-1">メモ</th><th></th></tr></thead>
+            <tbody>
+              {cancels.map((c) => (
+                <tr key={c.id} className="border-t">
+                  <td className="whitespace-nowrap px-2 py-1">{formatDateShort(c.date)} {minToHm(c.time)}</td>
+                  <td className="px-2 py-1">{c.bed}</td>
+                  <td className="px-2 py-1">{c.name}</td>
+                  <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${c.kind === 'ADVANCE' ? 'bg-brand-light text-brand-dark' : 'bg-red-100 text-red-800'}`}>{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</span></td>
+                  <td className="px-2 py-1 text-xs">{c.source === 'WEB' ? 'WEB予約' : '電話・窓口'}</td>
+                  <td className="whitespace-nowrap px-2 py-1 text-xs text-slate-500">{fmt.format(c.createdAt)} {c.byCode}</td>
+                  <td className="px-2 py-1 text-xs">{c.memo ?? ''}</td>
+                  <td className="px-2 py-1"><Link href={`/admin/day/${c.date}`} className="text-brand underline">予約表</Link></td>
+                </tr>
+              ))}
+              {cancels.length === 0 && <tr><td colSpan={8} className="px-2 py-4 text-center text-slate-500">該当するキャンセルはありません</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {tab === 'web' && (
       <div className="overflow-x-auto rounded border bg-white">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-100 text-left">
               <th className="px-2 py-1">受付日時</th><th className="px-2 py-1">予約日時</th><th className="px-2 py-1">ベッド</th><th className="px-2 py-1">区分</th>
-              <th className="px-2 py-1">氏名</th><th className="px-2 py-1">診察券</th><th className="px-2 py-1">電話</th><th className="px-2 py-1">状態</th><th className="px-2 py-1">SMS</th><th></th>
+              <th className="px-2 py-1">氏名</th><th className="px-2 py-1">診察券</th><th className="px-2 py-1">電話</th><th className="px-2 py-1">状態</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -68,14 +101,14 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
                 <td className="px-2 py-1">{r.cardNo ?? ''}</td>
                 <td className="whitespace-nowrap px-2 py-1">{jpPhone(r.phone)}</td>
                 <td className="px-2 py-1">{STATUS_JA[r.status] ?? r.status}</td>
-                <td className="px-2 py-1 text-xs">{r.smsStatus === 'SENT' ? '送信' : r.smsStatus === 'FAILED' ? '失敗' : '未送信'}</td>
                 <td className="px-2 py-1"><Link href={`/admin/day/${r.date}`} className="text-brand underline">予約表</Link></td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={10} className="px-2 py-4 text-center text-slate-500">該当する予約はありません</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={9} className="px-2 py-4 text-center text-slate-500">該当する予約はありません</td></tr>}
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

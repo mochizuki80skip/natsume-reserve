@@ -3,75 +3,67 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { DayData } from '@/lib/dayData';
-import { addDays, formatDateJa, minToHm } from '@/lib/time';
+import { addDays, formatDateJa, minToHm, nowJst } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { planPaste } from '@/lib/paste';
+import { cellState, isContinuationText, type CellState } from '@/lib/attendance';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string }
 
 const key = (time: number, bed: number) => `${time}:${bed}`;
+const KIND_JA: Record<string, string> = { NEW: '初診', REVISIT: '再来', RETURN: '通院中' };
+const STATE_BG: Record<CellState, string> = { visited: 'bg-green-100', noshow: 'bg-red-100', pending: 'bg-yellow-100', none: '' };
 
-export default function DayGrid({ data, storeName, published, today }: Props) {
+export default function DayGrid({ data, published, today }: Props) {
   const router = useRouter();
   const [cells, setCells] = useState<Map<string, string>>(() => new Map(data.cells.map((c) => [key(c.time, c.bed), c.text])));
+  const [visited, setVisited] = useState<Set<string>>(() => new Set(data.cells.filter((c) => c.visited).map((c) => key(c.time, c.bed))));
   const webInfo = useMemo(() => new Map(data.cells.filter((c) => c.web).map((c) => [key(c.time, c.bed), c.web!])), [data.cells]);
   const [day, setDay] = useState(data.day);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [menu, setMenu] = useState<string | null>(null);
+  const [pasteInfo, setPasteInfo] = useState('');
   const dirty = useRef(new Map<string, string>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef(new Map<string, HTMLInputElement>());
 
-  // 列：物理ベッド 1..N（管理側は施術者数に関係なくどのベッドにも入力できる）
+  // 現在時刻（日本時間）。当日は毎分更新して「未チェック」「未来院」の表示を切り替える
+  const [nowMin, setNowMin] = useState<number | null>(() => (data.date < today ? Infinity : data.date === today ? nowJst().minutes : null));
+  useEffect(() => {
+    if (data.date !== today) return;
+    const id = setInterval(() => setNowMin(nowJst().minutes), 60 * 1000);
+    return () => clearInterval(id);
+  }, [data.date, today]);
+
   const cols = data.beds;
   const rows = data.times;
+  const cap = data.capacity;
+  const am = (t: number) => isAm(data.sessions, t);
+  const capacityAt = (t: number) => (am(t) ? cap.am : cap.pm);
+  const customerSet = useMemo(() => new Set(data.customerTimes), [data.customerTimes]);
 
+  // ---------- 保存 ----------
   const flush = useCallback(async () => {
     if (dirty.current.size === 0) return;
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    const batch = Array.from(dirty.current.entries()).map(([k, text]) => {
-      const [time, bed] = k.split(':').map(Number);
-      return { time, bed, text };
-    });
+    const batch = Array.from(dirty.current.entries()).map(([k, text]) => { const [time, bed] = k.split(':').map(Number); return { time, bed, text }; });
     dirty.current.clear();
     setSaveState('saving');
     try {
-      // keepalive: ページ移動・再読み込みの直前でも送信が完了するようにする
       const r = await fetch('/api/admin/cells', { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: batch }) });
       setSaveState(r.ok ? 'saved' : 'error');
     } catch { setSaveState('error'); }
   }, [data.date]);
-
-  const schedule = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, 200);
-  }, [flush]);
-
-  // 画面を離れるとき（別ページ・再読み込み・タブを閉じる）に未保存分を送る
+  const schedule = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(flush, 200); }, [flush]);
   useEffect(() => {
     const onLeave = () => { void flush(); };
     window.addEventListener('pagehide', onLeave);
     window.addEventListener('beforeunload', onLeave);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') onLeave(); });
-    return () => {
-      window.removeEventListener('pagehide', onLeave);
-      window.removeEventListener('beforeunload', onLeave);
-      void flush();
-    };
+    const onVis = () => { if (document.visibilityState === 'hidden') onLeave(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.removeEventListener('pagehide', onLeave); window.removeEventListener('beforeunload', onLeave); document.removeEventListener('visibilitychange', onVis); void flush(); };
   }, [flush]);
-
-  /** WEB予約の取消：氏名と2枠目のセルをまとめて削除し、予約を取消扱いにする */
-  async function cancelReservation(id: string, name: string) {
-    if (!confirm(`WEB予約「${name}」を取り消しますか？\n予約表から削除され、顧客側では空き枠に戻ります。`)) return;
-    const r = await fetch('/api/admin/reservations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
-    if (!r.ok) { alert('取消に失敗しました'); return; }
-    setCells((m) => {
-      const n = new Map(m);
-      for (const [k, w] of webInfo) if (w.id === id) n.set(k, '');
-      return n;
-    });
-    router.refresh();
-  }
 
   function setCell(time: number, bed: number, text: string) {
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), text); return n; });
@@ -79,26 +71,22 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
     schedule();
   }
 
+  // ---------- キー操作・貼り付け ----------
   function focusCell(r: number, c: number) {
     if (r < 0 || r >= rows.length || c < 0 || c >= cols.length) return;
     inputs.current.get(key(rows[r], cols[c]))?.focus();
   }
-
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>, r: number, c: number) {
     const nav: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], Enter: [1, 0] };
     if (e.key in nav) { e.preventDefault(); focusCell(r + nav[e.key][0], c + nav[e.key][1]); return; }
-    if (e.key === 'Tab') { e.preventDefault(); const d = e.shiftKey ? -1 : 1; focusCell(r, c + d); return; }
+    if (e.key === 'Tab') { e.preventDefault(); focusCell(r, c + (e.shiftKey ? -1 : 1)); return; }
     const el = e.currentTarget;
     if (e.key === 'ArrowLeft' && el.selectionStart === 0 && el.selectionEnd === 0) { e.preventDefault(); focusCell(r, c - 1); }
     if (e.key === 'ArrowRight' && el.selectionStart === el.value.length) { e.preventDefault(); focusCell(r, c + 1); }
   }
-
-  const [pasteInfo, setPasteInfo] = useState('');
-
-  /** Excel / スプレッドシートからの複数セル貼り付け。時間列付き・結合セルにも対応（lib/paste.ts） */
   function onPaste(e: React.ClipboardEvent<HTMLInputElement>, r: number, c: number) {
     const text = e.clipboardData.getData('text/plain');
-    if (!text.includes('\n') && !text.includes('\t')) return; // 単一セルは通常の貼り付け
+    if (!text.includes('\n') && !text.includes('\t')) return;
     e.preventDefault();
     const plan = planPaste(text, rows, r);
     let n = 0;
@@ -113,42 +101,91 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
     setPasteInfo(notes.join('。'));
   }
 
+  // ---------- 来院チェック・キャンセル ----------
+  async function toggleVisit(time: number, bed: number) {
+    const k = key(time, bed);
+    const next = !visited.has(k);
+    setVisited((s) => { const n = new Set(s); if (next) n.add(k); else n.delete(k); return n; });
+    const r = await fetch('/api/admin/visit', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, visited: next }) });
+    if (!r.ok) { setVisited((s) => { const n = new Set(s); if (next) n.delete(k); else n.add(k); return n; }); alert('来院チェックの保存に失敗しました'); }
+  }
+  async function cancelCell(time: number, bed: number, kind: 'ADVANCE' | 'NOSHOW') {
+    setMenu(null);
+    await flush();
+    const name = cells.get(key(time, bed)) ?? '';
+    const memo = prompt(`「${name}」を${kind === 'ADVANCE' ? 'キャンセル（連絡あり）' : '無断キャンセル'}としてキャンセル名簿に移します。\nメモがあれば入力してください（空欄可）。`);
+    if (memo === null) return;
+    const r = await fetch('/api/admin/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, kind, memo }) });
+    if (!r.ok) { alert((await r.json()).error ?? 'キャンセルに失敗しました'); return; }
+    setCells((m) => { const n = new Map(m); n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); return n; });
+    router.refresh();
+  }
+  function deleteCell(time: number, bed: number) {
+    setMenu(null);
+    if (!confirm('この入力を削除します（名簿には残しません）。よろしいですか？')) return;
+    setCell(time, bed, '');
+    const k2 = key(time + data.slotMinutes, bed);
+    if (isContinuationText(cells.get(k2))) setCell(time + data.slotMinutes, bed, '');
+  }
+  async function restore(id: string) {
+    const r = await fetch('/api/admin/cancel', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    if (!r.ok) { alert((await r.json()).error ?? '戻せませんでした'); return; }
+    router.refresh();
+    // 画面のセルにも即反映
+    const c = data.cancels.find((x) => x.id === id);
+    if (c) setCells((m) => { const n = new Map(m); n.set(key(c.time, c.bed), c.name); if (c.contText) n.set(key(c.time + data.slotMinutes, c.bed), c.contText); return n; });
+  }
+  async function saveMemo(id: string, memo: string) {
+    await fetch('/api/admin/cancel', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, memo }) });
+  }
+
+  // ---------- 日付設定 ----------
+  async function updateDay(patch: Partial<typeof day>) {
+    setDay({ ...day, ...patch });
+    await fetch('/api/admin/days', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, ...patch }) });
+    router.refresh();
+  }
   async function saveCapacity(which: 'capacityAm' | 'capacityPm', raw: string) {
     const v = raw.trim() === '' ? null : Math.max(0, Math.min(20, Number(raw)));
     if (v !== null && Number.isNaN(v)) return;
     await updateDay({ [which]: v } as Partial<typeof day>);
   }
-  async function updateDay(patch: Partial<typeof day>) {
-    const next = { ...day, ...patch };
-    setDay(next);
-    await fetch('/api/admin/days', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, ...patch }) });
-    router.refresh();
-  }
-
   function copyAll() {
     const header = ['時間', ...cols.map((b) => `ベッド${b}`)].join('\t');
     const body = rows.map((t) => [minToHm(t), ...cols.map((b) => cells.get(key(t, b)) ?? '')].join('\t')).join('\n');
     navigator.clipboard.writeText(`${header}\n${body}`);
   }
 
+  // ---------- 集計 ----------
   const counts = useMemo(() => {
-    let am = 0, pm = 0;
+    const c = { rAm: 0, rPm: 0, vAm: 0, vPm: 0 };
     for (const [k, v] of cells) {
       if (!isPatientText(v)) continue;
       const time = Number(k.split(':')[0]);
-      if (isAm(data.sessions, time)) am++; else pm++;
+      const a = isAm(data.sessions, time);
+      if (a) c.rAm++; else c.rPm++;
+      if (visited.has(k)) { if (a) c.vAm++; else c.vPm++; }
     }
-    return { am, pm, total: am + pm };
-  }, [cells, data.sessions]);
+    return c;
+  }, [cells, visited, data.sessions]);
 
-  const cap = data.capacity;
-  const am = (t: number) => isAm(data.sessions, t);
-  const capacityAt = (t: number) => (am(t) ? cap.am : cap.pm);
-  const customerSet = useMemo(() => new Set(data.customerTimes), [data.customerTimes]);
+  /** セルの色。2枠目は1枠目（同じベッドの1つ前の枠）の状態に合わせる */
+  function stateOf(t: number, b: number): CellState {
+    const k = key(t, b);
+    const text = cells.get(k) ?? '';
+    if (!text.trim()) return 'none';
+    if (isContinuationText(text)) {
+      const pt = t - data.slotMinutes;
+      const ptext = cells.get(key(pt, b)) ?? '';
+      if (!ptext.trim()) return 'none';
+      return cellState(visited.has(key(pt, b)), pt, nowMin);
+    }
+    return cellState(visited.has(k), t, nowMin);
+  }
   const shiftLabel: Record<string, string> = { WORK: '〇', OFF: '休', AM_OFF: '前休', PM_OFF: '後休', PAID: '有給', AM_PAID: '前有', PM_PAID: '後有' };
 
   return (
-    <div>
+    <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
       <div className="no-print mb-3 flex flex-wrap items-center gap-2">
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => router.push(`/admin/day/${addDays(data.date, -1)}`)}>‹ 前日</button>
         <input type="date" value={data.date} onChange={(e) => e.target.value && router.push(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1" />
@@ -163,7 +200,13 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
 
       <div className="mb-3 flex flex-wrap items-end gap-x-6 gap-y-2">
         <h1 className="text-2xl font-bold">{formatDateJa(data.date)}</h1>
-        <div className="text-sm">午前 <b className="text-lg">{counts.am}</b> 名　午後 <b className="text-lg">{counts.pm}</b> 名　合計 <b className="text-lg">{counts.total}</b> 名</div>
+        <table className="text-sm">
+          <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
+          <tbody>
+            <tr><td className="pr-2 text-slate-500">予約</td><td className="px-2 text-right text-lg font-bold tabular-nums">{counts.rAm}</td><td className="px-2 text-right text-lg font-bold tabular-nums">{counts.rPm}</td><td className="px-2 text-right text-lg font-bold tabular-nums">{counts.rAm + counts.rPm}</td></tr>
+            <tr><td className="pr-2 text-slate-500">来院</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vPm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm + counts.vPm}</td></tr>
+          </tbody>
+        </table>
         <div className="no-print flex flex-wrap items-center gap-3 text-sm">
           <span className={`rounded px-2 py-0.5 ${published && !day.closed ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>
             顧客サイト：{day.closed ? '臨時休診' : published ? '公開中' : '非公開'}
@@ -204,15 +247,22 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
         </div>
       </div>
 
+      <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+        <span><i className="mr-1 inline-block h-3 w-3 border bg-sky-50 align-[-2px]" />WEB予約</span>
+        <span><i className="mr-1 inline-block h-3 w-3 border bg-green-100 align-[-2px]" />来院チェック済み</span>
+        <span><i className="mr-1 inline-block h-3 w-3 border bg-yellow-100 align-[-2px]" />予約時刻を過ぎて未チェック</span>
+        <span><i className="mr-1 inline-block h-3 w-3 border bg-red-100 align-[-2px]" />未来院（予約時刻＋30分）</span>
+        <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
+      </div>
+
       {pasteInfo && <p className="no-print mb-2 rounded bg-brand-light px-3 py-1 text-xs text-brand-dark">{pasteInfo}</p>}
       {rows.length === 0 ? (
         <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日・臨時休診）のため予約表はありません。営業する場合は「臨時休診」を外すか、店舗設定の営業時間を確認してください。</p>
       ) : (
         <div className="overflow-x-auto rounded border bg-white">
-          <table className="w-full border-collapse text-sm">
+          <table id="grid" className="w-full border-collapse text-sm">
             <thead>
               {(() => {
-                // ベッド番号の上に「予約サイトに表示されている範囲／されていない範囲」を表示
                 const lo = Math.min(cap.am, cap.pm), hi = Math.max(cap.am, cap.pm), n = cols.length;
                 const groups: { span: number; label: string; cls: string }[] = [];
                 if (lo > 0) groups.push({ span: Math.min(lo, n), label: `予約サイトに表示（午前 ${cap.am} 枠／午後 ${cap.pm} 枠）`, cls: 'bg-green-50 text-green-800' });
@@ -227,11 +277,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
               })()}
               <tr className="bg-slate-100">
                 <th className="w-16 border px-1 py-1">時間</th>
-                {cols.map((b) => (
-                  <th key={b} className={`border px-1 py-1 ${b > Math.max(cap.am, cap.pm) ? 'bg-slate-100 text-slate-500' : ''}`}>
-                    ベッド{b}
-                  </th>
-                ))}
+                {cols.map((b) => <th key={b} className={`border px-1 py-1 ${b > Math.max(cap.am, cap.pm) ? 'bg-slate-100 text-slate-500' : ''}`}>ベッド{b}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -239,28 +285,48 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
                 const isPmStart = r > 0 && am(rows[r - 1]) && !am(t);
                 const adminOnly = !customerSet.has(t);
                 return (
-                  <tr key={t} className={`${isPmStart ? 'border-t-4 border-t-slate-300' : ''}`}>
+                  <tr key={t} className={isPmStart ? 'border-t-4 border-t-slate-300' : ''}>
                     <td className={`border px-1 text-center font-mono ${adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`} title={adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>{minToHm(t)}</td>
                     {cols.map((b, c) => {
                       const k = key(t, b);
+                      const text = cells.get(k) ?? '';
                       const web = webInfo.get(k);
+                      const cont = isContinuationText(text);
+                      const st = stateOf(t, b);
+                      const bg = STATE_BG[st] || (web ? 'bg-sky-50' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '');
+                      const hasName = text.trim() !== '' && !cont;
                       return (
-                        <td key={b} className={`grid-cell border p-0 ${b > capacityAt(t) ? 'bg-slate-50' : ''} ${adminOnly ? 'bg-amber-50/40' : ''} ${web ? 'bg-sky-50' : ''}`}
-                          title={web ? `WEB予約（${web.kind === 'NEW' ? '初診' : web.kind === 'REVISIT' ? '再来' : '通院中'}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
-                          <div className="relative">
+                        <td key={b} className={`grid-cell border p-0 ${bg}`}
+                          title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
+                          <div className="relative flex items-center">
+                            {hasName && (
+                              <button type="button" tabIndex={-1} onClick={() => toggleVisit(t, b)} aria-label={visited.has(k) ? '来院チェックを外す' : '来院チェック'}
+                                className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
+                            )}
                             <input
                               ref={(el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k); }}
-                              value={cells.get(k) ?? ''}
+                              value={text}
                               onChange={(e) => setCell(t, b, e.target.value)}
                               onKeyDown={(e) => onKeyDown(e, r, c)}
                               onPaste={(e) => onPaste(e, r, c)}
                               onBlur={flush}
-                              className={web && (cells.get(k) ?? '') !== '' ? 'pr-5' : ''}
+                              className={hasName ? (st === 'noshow' || st === 'pending' ? 'pr-16' : 'pr-4') : ''}
                             />
-                            {web && (cells.get(k) ?? '') !== '' && (
-                              <button type="button" tabIndex={-1} onClick={() => cancelReservation(web.id, cells.get(k) ?? '')}
-                                title="WEB予約を取り消す（氏名と2枠目をまとめて削除）" aria-label="WEB予約を取り消す"
-                                className="no-print absolute right-0 top-0 h-full w-5 text-xs text-slate-400 hover:bg-red-100 hover:text-red-700">×</button>
+                            {hasName && st === 'noshow' && <span className="no-print pointer-events-none absolute right-4 rounded bg-red-600 px-1 text-[10px] leading-4 text-white">未来院</span>}
+                            {hasName && st === 'pending' && <span className="no-print pointer-events-none absolute right-4 rounded bg-yellow-600 px-1 text-[10px] leading-4 text-white">未チェック</span>}
+                            {hasName && (
+                              <button type="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); setMenu(menu === k ? null : k); }} aria-label="メニュー"
+                                className="no-print absolute right-0 top-0 h-full w-4 text-xs text-slate-400 hover:text-slate-700">⋯</button>
+                            )}
+                            {menu === k && (
+                              <div data-menu className="absolute right-0 top-full z-20 min-w-[200px] rounded border bg-white py-1 text-left text-sm shadow-lg">
+                                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => { setMenu(null); toggleVisit(t, b); }}>{visited.has(k) ? '来院チェックを外す' : '✓ 来院'}</button>
+                                <div className="my-1 border-t" />
+                                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => cancelCell(t, b, 'ADVANCE')}>キャンセル（連絡あり）→ 名簿へ</button>
+                                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => cancelCell(t, b, 'NOSHOW')}>無断キャンセル → 名簿へ</button>
+                                <div className="my-1 border-t" />
+                                <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50" onClick={() => deleteCell(t, b)}>削除（入力ミス・名簿に残さない）</button>
+                              </div>
                             )}
                           </div>
                         </td>
@@ -274,6 +340,28 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
         </div>
       )}
 
+      <h2 className="mt-4 flex items-center gap-2 text-base font-bold">キャンセル名簿 <span className="text-xs font-normal text-slate-500">この日にキャンセルになった予約。セルからは外れているので枠は空いています。</span></h2>
+      <div className="mt-1 overflow-x-auto rounded border bg-white">
+        <table className="w-full text-sm">
+          <thead><tr className="bg-slate-100 text-left text-xs"><th className="px-2 py-1">時刻</th><th className="px-2 py-1">ベッド</th><th className="px-2 py-1">氏名</th><th className="px-2 py-1">区分</th><th className="px-2 py-1">種別</th><th className="px-2 py-1">登録</th><th className="px-2 py-1">メモ</th><th className="no-print"></th></tr></thead>
+          <tbody>
+            {data.cancels.map((c) => (
+              <tr key={c.id} className="border-t">
+                <td className="px-2 py-1 font-mono">{minToHm(c.time)}</td>
+                <td className="px-2 py-1 text-center">{c.bed}</td>
+                <td className="px-2 py-1">{c.name}</td>
+                <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${c.kind === 'ADVANCE' ? 'bg-brand-light text-brand-dark' : 'bg-red-100 text-red-800'}`}>{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</span></td>
+                <td className="px-2 py-1 text-xs">{c.source === 'WEB' ? 'WEB予約' : '電話・窓口'}</td>
+                <td className="px-2 py-1 text-xs text-slate-500">{c.createdAt} {c.byCode}</td>
+                <td className="px-2 py-1"><input defaultValue={c.memo ?? ''} onBlur={(e) => e.target.value !== (c.memo ?? '') && saveMemo(c.id, e.target.value)} placeholder="メモ" className="w-full rounded border px-1 text-xs" /></td>
+                <td className="no-print px-2 py-1 text-right"><button type="button" onClick={() => restore(c.id)} className="text-xs text-brand underline">予約表に戻す</button></td>
+              </tr>
+            ))}
+            {data.cancels.length === 0 && <tr><td colSpan={8} className="px-2 py-2 text-xs text-slate-400">キャンセルはありません</td></tr>}
+          </tbody>
+        </table>
+      </div>
+
       <div className="mt-3">
         <label className="block text-sm text-slate-600">メモ（電話・とびこみ など）
           <textarea defaultValue={day.memo} onBlur={(e) => e.target.value !== day.memo && updateDay({ memo: e.target.value })} rows={3} className="mt-1 w-full rounded border px-2 py-1 text-sm" />
@@ -282,10 +370,8 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
       <p className="no-print mt-2 text-xs text-slate-500">
         セルに氏名を入力すると自動保存されます。Excel／スプレッドシートからの貼り付けは、<b>時間の列を含めて</b>（例：B7:L36）コピーし、9:00 のベッド1 のセルで Ctrl+V。
         時刻で行を合わせ、結合セル（2列で1ベッド）は自動で1列にまとめます。矢印キー／Enter／Tab で移動。
-        薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。セル右端の「×」でその予約（氏名と2枠目）をまとめて取り消せます。文字を消して保存しても同じく空き枠に戻ります。
-        初診の 2 枠目は「上記初診対応」、再来（1ヶ月以上ぶり）は「氏名（再）」＋「上記再来対応」。これらと「〃」「✖」は人数に数えません。
-        施術者数を超える列（灰色）にも入力できますが、顧客には施術者数ぶんの枠しか空きとして見えません。
-        黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません（初回30分の2枠目としては使われます）。
+        氏名の左の □ で来院チェック、右の「⋯」でキャンセル（名簿へ）や削除。初診の 2 枠目「上記初診対応」、再来の「上記再来対応」は 1 枠目と同じ色になり、人数には数えません。
+        黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません。
       </p>
     </div>
   );

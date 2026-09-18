@@ -5,10 +5,12 @@ import { loadDay } from '@/lib/dayData';
 import { formatDateJa, isValidDate, minToHm } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
+import { isContinuationText } from '@/lib/attendance';
 import PrintButton from './PrintButton';
 
 export const dynamic = 'force-dynamic';
 
+/** A4 縦 1 枚に収める印刷用ページ（行の高さと文字を小さくし、キャンセル名簿も同じページに載せる） */
 export default async function PrintPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = await params;
   if (!isValidDate(date)) notFound();
@@ -17,27 +19,40 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
   if (!store) notFound();
   const setting = await getGlobalSetting();
   const d = await loadDay(store, setting, date);
-  const cell = new Map(d.cells.map((c) => [`${c.time}:${c.bed}`, c.text]));
-  let am = 0, pm = 0;
-  for (const c of d.cells) if (isPatientText(c.text)) { if (isAm(d.sessions, c.time)) am++; else pm++; }
+  const cell = new Map(d.cells.map((c) => [`${c.time}:${c.bed}`, c]));
+  const cnt = { rAm: 0, rPm: 0, vAm: 0, vPm: 0 };
+  for (const c of d.cells) {
+    if (!isPatientText(c.text)) continue;
+    const a = isAm(d.sessions, c.time);
+    if (a) cnt.rAm++; else cnt.rPm++;
+    if (c.visited) { if (a) cnt.vAm++; else cnt.vPm++; }
+  }
   const cols = d.beds;
   const names = (n: string[]) => (n.length ? n.join('・') : '－');
+  const visitedOf = (t: number, b: number) => {
+    const c = cell.get(`${t}:${b}`);
+    if (!c) return false;
+    if (isContinuationText(c.text)) return cell.get(`${t - d.slotMinutes}:${b}`)?.visited ?? false;
+    return c.visited;
+  };
+  // 行の高さ：A4 縦（有効 約 277mm）に 32 行＋見出し＋名簿を収める
+  const rowMm = d.times.length > 30 ? 4.6 : 5.2;
 
   return (
-    <main className="mx-auto max-w-[190mm] bg-white p-4 text-[11px] print:p-0">
+    <main className="mx-auto max-w-[194mm] bg-white p-3 text-[10px] leading-tight print:p-0">
       <PrintButton />
-      <div className="mb-2 flex items-end justify-between">
-        <h1 className="text-lg font-bold">《予約表》 {store.name}</h1>
-        <div className="text-sm">午前 <b>{am}</b> 名　午後 <b>{pm}</b> 名　合計 <b>{am + pm}</b> 名</div>
+      <div className="mb-1 flex items-end justify-between">
+        <h1 className="text-base font-bold">《予約表》 {store.name}　{formatDateJa(date)}</h1>
+        <div className="text-[11px]">予約 午前 <b>{cnt.rAm}</b>／午後 <b>{cnt.rPm}</b>／計 <b>{cnt.rAm + cnt.rPm}</b>　来院 午前 <b>{cnt.vAm}</b>／午後 <b>{cnt.vPm}</b>／計 <b>{cnt.vAm + cnt.vPm}</b></div>
       </div>
-      <div className="mb-1 text-base font-bold">{formatDateJa(date)}</div>
-      <div className="mb-2 flex flex-wrap gap-x-4 text-[10px] text-slate-700">
+      <div className="mb-1 flex flex-wrap gap-x-4 text-[9px] text-slate-700">
         <span>午前：{names(d.capacity.namesAm)}（{d.capacity.am} 枠）</span>
         <span>午後：{names(d.capacity.namesPm)}（{d.capacity.pm} 枠）</span>
         <span>受付：{names(d.receptionNames)}</span>
+        <span>✓＝来院　網掛け＝予約サイト非表示／管理側のみの枠</span>
       </div>
       {d.times.length === 0 ? <p>休診日</p> : (
-        <table className="w-full border-collapse">
+        <table className="w-full table-fixed border-collapse">
           <thead>
             {(() => {
               const lo = Math.min(d.capacity.am, d.capacity.pm), hi = Math.max(d.capacity.am, d.capacity.pm), n = cols.length;
@@ -46,28 +61,51 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
               if (hi > lo && lo < n) g.push({ span: Math.min(hi, n) - lo, label: d.capacity.am > d.capacity.pm ? '午前のみ表示' : '午後のみ表示' });
               if (hi < n) g.push({ span: n - hi, label: '非表示（管理側のみ）' });
               return (
-                <tr className="text-[9px]">
+                <tr className="text-[8px]">
                   <th className="border border-black" />
                   {g.map((x, i) => <th key={i} colSpan={x.span} className="border border-black px-1 font-normal">{x.label}</th>)}
                 </tr>
               );
             })()}
             <tr>
-              <th className="w-14 border border-black px-1">時間</th>
-              {cols.map((b) => <th key={b} className={`border border-black px-1 ${b > Math.max(d.capacity.am, d.capacity.pm) ? 'bg-slate-200' : ''}`}>{b}</th>)}
+              <th className="w-11 border border-black px-0.5">時間</th>
+              {cols.map((b) => <th key={b} className={`border border-black px-0.5 ${b > Math.max(d.capacity.am, d.capacity.pm) ? 'bg-slate-200' : ''}`}>{b}</th>)}
             </tr>
           </thead>
           <tbody>
             {d.times.map((t, r) => (
-              <tr key={t} className={r > 0 && isAm(d.sessions, d.times[r - 1]) && !isAm(d.sessions, t) ? 'border-t-2 border-t-black' : ''}>
-                <td className={`border border-black px-1 text-center font-mono ${d.customerTimes.includes(t) ? '' : 'bg-slate-100'}`}>{minToHm(t)}</td>
-                {cols.map((b) => <td key={b} className="h-[5.2mm] border border-black px-1">{cell.get(`${t}:${b}`) ?? ''}</td>)}
+              <tr key={t} className={r > 0 && isAm(d.sessions, d.times[r - 1]) && !isAm(d.sessions, t) ? 'border-t-2 border-t-black' : ''} style={{ height: `${rowMm}mm` }}>
+                <td className={`border border-black px-0.5 text-center font-mono ${d.customerTimes.includes(t) ? '' : 'bg-slate-100'}`}>{minToHm(t)}</td>
+                {cols.map((b) => {
+                  const c = cell.get(`${t}:${b}`);
+                  const v = visitedOf(t, b);
+                  return (
+                    <td key={b} className={`overflow-hidden whitespace-nowrap border border-black px-0.5 ${b > (isAm(d.sessions, t) ? d.capacity.am : d.capacity.pm) ? 'bg-slate-100' : ''}`}>
+                      {v && c && !isContinuationText(c.text) ? <span className="mr-0.5 font-bold">✓</span> : null}{c?.text ?? ''}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {d.day.memo && <div className="mt-2 whitespace-pre-wrap border border-black p-1"><b>メモ：</b>{d.day.memo}</div>}
+      <div className="mt-1 flex gap-2">
+        <div className="flex-1">
+          <div className="text-[9px] font-bold">キャンセル名簿</div>
+          {d.cancels.length === 0 ? <div className="border border-black px-1 py-0.5 text-[9px] text-slate-500">なし</div> : (
+            <table className="w-full border-collapse text-[9px]">
+              <thead><tr><th className="border border-black px-1 text-left">時刻</th><th className="border border-black px-1">ベッド</th><th className="border border-black px-1 text-left">氏名</th><th className="border border-black px-1">区分</th><th className="border border-black px-1">種別</th><th className="border border-black px-1 text-left">メモ</th></tr></thead>
+              <tbody>
+                {d.cancels.map((c) => (
+                  <tr key={c.id}><td className="border border-black px-1 font-mono">{minToHm(c.time)}</td><td className="border border-black px-1 text-center">{c.bed}</td><td className="border border-black px-1">{c.name}</td><td className="border border-black px-1 text-center">{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</td><td className="border border-black px-1 text-center">{c.source === 'WEB' ? 'WEB' : '電話'}</td><td className="border border-black px-1">{c.memo ?? ''}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {d.day.memo && <div className="w-[60mm] border border-black p-1 text-[9px] whitespace-pre-wrap"><b>メモ：</b>{d.day.memo}</div>}
+      </div>
     </main>
   );
 }
