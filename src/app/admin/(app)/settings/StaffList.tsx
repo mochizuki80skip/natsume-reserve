@@ -26,13 +26,29 @@ export default function StaffList({ members, maxTherapists, maxReception }: { me
   const th = members.filter((m) => m.role === 'THERAPIST');
   const rc = members.filter((m) => m.role === 'RECEPTION');
   const Row = ({ m }: { m: Member }) => (
-    <li className={`flex items-center gap-2 py-1 ${m.active ? '' : 'text-slate-400'}`}>
-      <input defaultValue={m.name} onBlur={(e) => e.target.value.trim() && e.target.value !== m.name && call('PUT', { id: m.id, name: e.target.value.trim() })} className="w-36 rounded border px-2 py-1" />
-      <button type="button" onClick={() => call('PUT', { id: m.id, move: 'up' })} className="rounded border px-2" title="上へ">↑</button>
-      <button type="button" onClick={() => call('PUT', { id: m.id, move: 'down' })} className="rounded border px-2" title="下へ">↓</button>
-      <button type="button" onClick={() => call('PUT', { id: m.id, active: !m.active })} className="rounded border px-2">{m.active ? '休職/停止' : '復帰'}</button>
-      <button type="button" onClick={() => confirm(`${m.name} を削除しますか？シフトも消えます。`) && call('DELETE', { id: m.id })} className="rounded border border-red-300 px-2 text-red-700">削除</button>
-    </li>
+    <tr className={`border-t ${m.active ? '' : 'text-slate-400'}`}>
+      <td className="py-1 pr-2">
+        <input defaultValue={m.name} onBlur={(e) => e.target.value.trim() && e.target.value !== m.name && call('PUT', { id: m.id, name: e.target.value.trim() })} className="w-36 rounded border px-2 py-1" />
+      </td>
+      <td className="whitespace-nowrap py-1 pr-2">
+        <button type="button" onClick={() => call('PUT', { id: m.id, move: 'up' })} className="rounded border px-2 py-1" title="上へ">↑</button>
+        <button type="button" onClick={() => call('PUT', { id: m.id, move: 'down' })} className="ml-1 rounded border px-2 py-1" title="下へ">↓</button>
+      </td>
+      <td className="whitespace-nowrap py-1 pr-2">
+        <button type="button" onClick={() => call('PUT', { id: m.id, active: !m.active })} className="rounded border px-2 py-1 text-xs">{m.active ? '休職・停止' : '復帰'}</button>
+      </td>
+      <td className="whitespace-nowrap py-1">
+        <button type="button" onClick={() => confirm(`${m.name} を削除しますか？シフトも消えます。`) && call('DELETE', { id: m.id })} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">削除</button>
+      </td>
+    </tr>
+  );
+  const List = ({ list, label, max }: { list: Member[]; label: string; max: number }) => (
+    <div>
+      <div className="mb-1 text-xs text-slate-500">{label}（{list.filter((m) => m.active).length}／最大 {max} 名）</div>
+      {list.length === 0 ? <p className="text-xs text-slate-400">未登録{label === '施術者' ? '（既定の施術者数を使用中）' : ''}</p> : (
+        <table className="text-sm"><tbody>{list.map((m) => <Row key={m.id} m={m} />)}</tbody></table>
+      )}
+    </div>
   );
 
   return (
@@ -43,17 +59,9 @@ export default function StaffList({ members, maxTherapists, maxReception }: { me
         <span className="text-xs text-slate-500">シフト表の施術者の人数（午前／午後）が、顧客に見える枠数になります。</span>
       </div>
       {msg && <p className="mb-2 rounded bg-red-50 px-3 py-1 text-red-700">{msg}</p>}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <div className="mb-1 text-xs text-slate-500">施術者（{th.filter((m) => m.active).length}／最大 {maxTherapists} 名）</div>
-          <ul>{th.map((m) => <Row key={m.id} m={m} />)}</ul>
-          {th.length === 0 && <p className="text-xs text-slate-400">未登録（既定の施術者数を使用中）</p>}
-        </div>
-        <div>
-          <div className="mb-1 text-xs text-slate-500">受付（{rc.filter((m) => m.active).length}／最大 {maxReception} 名）</div>
-          <ul>{rc.map((m) => <Row key={m.id} m={m} />)}</ul>
-          {rc.length === 0 && <p className="text-xs text-slate-400">未登録</p>}
-        </div>
+      <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+        <List list={th} label="施術者" max={maxTherapists} />
+        <List list={rc} label="受付" max={maxReception} />
       </div>
       <form onSubmit={add} className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
         <select value={role} onChange={(e) => setRole(e.target.value as 'THERAPIST' | 'RECEPTION')} className="rounded border px-2 py-1">

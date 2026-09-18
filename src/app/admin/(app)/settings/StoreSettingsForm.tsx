@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface StoreForm { name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; notifyPhone: string; hoursOverride: string }
-interface Props { store: StoreForm; globalHours: string; canChangePassword: boolean }
+interface Props { store: StoreForm; globalHours: string; canChangePassword: boolean; smsEnabled: boolean }
 
-export default function StoreSettingsForm({ store, globalHours, canChangePassword }: Props) {
+export default function StoreSettingsForm({ store, globalHours, canChangePassword, smsEnabled }: Props) {
   const router = useRouter();
   const [f, setF] = useState(store);
   const [pw, setPw] = useState({ current: '', next: '' });
@@ -39,16 +39,26 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       <form onSubmit={save} className="space-y-3 rounded border bg-white p-4">
         <label className="block text-sm">店舗名<input value={f.name} onChange={str('name')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
-        <label className="block text-sm">電話番号（顧客サイトの電話マーク・SMSに表示）<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          <label className="block text-sm">ベッド数（予約表の列数）<input type="number" min={1} max={20} value={f.beds} onChange={num('beds')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-          <label className="block text-sm">既定の施術者数（シフト未入力の日）<input type="number" min={0} max={20} value={f.defaultActiveBeds} onChange={num('defaultActiveBeds')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-          <label className="block text-sm">公開する日数（今日から）<input type="number" min={0} max={365} value={f.publishDaysAhead} onChange={num('publishDaysAhead')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-          <label className="block text-sm">施術者の最大人数（シフト欄の数）<input type="number" min={1} max={20} value={f.maxTherapists} onChange={num('maxTherapists')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-          <label className="block text-sm">受付の最大人数（シフト欄の数）<input type="number" min={0} max={20} value={f.maxReception} onChange={num('maxReception')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-        </div>
+        <label className="block text-sm">電話番号（顧客サイトの電話マークに表示）<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
+        <table className="w-full text-sm">
+          <tbody>
+            {([
+              ['beds', 'ベッド数', '予約表の列数', 1, 20],
+              ['defaultActiveBeds', '既定の施術者数', 'シフト未入力の日に顧客へ見せる枠数', 0, 20],
+              ['publishDaysAhead', '公開する日数', '今日から何日先まで顧客が予約できるか', 0, 365],
+              ['maxTherapists', '施術者の最大人数', 'スタッフ登録・シフト表の上限', 1, 20],
+              ['maxReception', '受付の最大人数', 'スタッフ登録・シフト表の上限', 0, 20],
+            ] as const).map(([k, label, help, min, max]) => (
+              <tr key={k} className="border-t">
+                <td className="w-40 whitespace-nowrap py-1.5 pr-3 font-medium">{label}</td>
+                <td className="w-24 py-1.5 pr-3"><input type="number" min={min} max={max} value={f[k]} onChange={num(k)} className="w-20 rounded border px-2 py-1 text-right" /></td>
+                <td className="py-1.5 text-xs text-slate-500">{help}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
         <p className="text-xs text-slate-500">顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
-        <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>
+        {smsEnabled && <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>}
         <label className="block text-sm">営業時間の個別設定（空欄＝全店共通設定を使う）
           <textarea value={f.hoursOverride} onChange={str('hoursOverride')} rows={8} className="mt-1 w-full rounded border px-2 py-1 font-mono text-xs" placeholder={globalHours} />
         </label>
