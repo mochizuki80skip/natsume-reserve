@@ -2,9 +2,8 @@ import { prisma } from '@/lib/prisma';
 import { getGlobalSetting } from '@/lib/settings';
 
 export async function loadStore(code: string) {
-  const store = await prisma.store.findUnique({ where: { code } });
+  const [store, setting] = await Promise.all([prisma.store.findUnique({ where: { code } }), getGlobalSetting()]);
   if (!store || !store.active) return null;
-  const setting = await getGlobalSetting();
   return { store, setting };
 }
 

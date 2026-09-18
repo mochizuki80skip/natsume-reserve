@@ -61,6 +61,9 @@ npm test          # 営業時間・祝日・空き判定のユニットテスト
    ローカルでの作業は不要
 5. デプロイ後 `/admin/login` に `HQ` でログインし、本部画面から 24 店舗を登録する（サンプル店舗 S001/S002 は停止する）
 
+`vercel.json` で関数の実行リージョンを東京（hnd1）にしている。Supabase も東京なので、リージョンが
+米国のままだと画面表示が数倍遅くなる（Vercel の Settings → Functions → Region でも確認できる）。
+
 `vercel.json` の Cron（毎日 18:00 UTC ＝ 3:00 JST）が `/api/cron/cleanup` を呼び、保持期間を過ぎた
 予約・予約表セルを削除する。Vercel は `CRON_SECRET` を自動で Authorization ヘッダーに付ける。
 

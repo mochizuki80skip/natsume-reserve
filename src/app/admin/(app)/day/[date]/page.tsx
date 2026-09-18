@@ -12,9 +12,8 @@ export default async function DayPage({ params }: { params: Promise<{ date: stri
   const { date } = await params;
   if (!isValidDate(date)) notFound();
   const session = await requireSession();
-  const store = await resolveStore(session);
+  const [store, setting] = await Promise.all([resolveStore(session), getGlobalSetting()]);
   if (!store) return <p>店舗が登録されていません。本部画面から店舗を追加してください。</p>;
-  const setting = await getGlobalSetting();
   const data = await loadDay(store, setting, date);
   const today = nowJst().date;
   return (

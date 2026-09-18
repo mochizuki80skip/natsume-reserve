@@ -1,13 +1,14 @@
+import { cache } from 'react';
 import type { GlobalSetting, Store } from '@prisma/client';
 import { prisma } from './prisma';
 import { DEFAULT_HOURS, parseHoursConfig, sessionsForDate, type HoursConfig, type ResolvedSession } from './hours';
 
-/** 全店共通設定（無ければ既定値で作成） */
-export async function getGlobalSetting(): Promise<GlobalSetting> {
+/** 全店共通設定（無ければ既定値で作成）。同一リクエスト内では 1 回だけ読む */
+export const getGlobalSetting = cache(async (): Promise<GlobalSetting> => {
   const s = await prisma.globalSetting.findUnique({ where: { id: 1 } });
   if (s) return s;
   return prisma.globalSetting.create({ data: { id: 1, hours: DEFAULT_HOURS as object } });
-}
+});
 
 /** 店舗に適用する営業時間設定（個別設定があればそちら） */
 export function hoursForStore(store: Pick<Store, 'hoursOverride'>, setting: GlobalSetting): HoursConfig {
