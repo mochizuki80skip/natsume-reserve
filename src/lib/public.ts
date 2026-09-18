@@ -2,7 +2,7 @@
 import type { GlobalSetting, Store } from '@prisma/client';
 import { prisma } from './prisma';
 import { allBeds, capacitiesFor, capacityFor, storeSessions, type DayCapacity } from './settings';
-import { cellKey, computeAvailability, isOccupiedText, type AvailabilityInput, type SlotStatus } from './availability';
+import { cellKey, computeAvailability, isBlockMark, isOccupiedText, type AvailabilityInput, type SlotStatus } from './availability';
 import { addDays, datesOfMonth, nowJst } from './time';
 import { isAm, isJpHoliday } from './hours';
 
@@ -38,7 +38,8 @@ export async function buildInput(
   const sessions = storeSessions(store, setting, date, opts.closed);
   const cells = opts.cells ?? (await prisma.cell.findMany({ where: { storeId: store.id, date, bed: { gt: 0 } } }));
   const occupied = new Set<string>();
-  for (const c of cells) if (c.bed > 0 && isOccupiedText(c.text)) occupied.add(cellKey(c.time, c.bed));
+  const blocked = new Set<string>();
+  for (const c of cells) if (c.bed > 0 && isOccupiedText(c.text)) { occupied.add(cellKey(c.time, c.bed)); if (isBlockMark(c.text)) blocked.add(cellKey(c.time, c.bed)); }
   return {
     sessions,
     slotMinutes: setting.slotMinutes,
@@ -46,6 +47,7 @@ export async function buildInput(
     capacityAm: (opts.capacity ?? (await capacityFor(store, date))).am,
     capacityPm: (opts.capacity ?? (await capacityFor(store, date))).pm,
     occupied,
+    blocked,
     neededSlots: neededSlots(setting, kind),
     phoneMarkRemaining: setting.phoneMarkRemaining,
     nowMinutes: nowMinutesFor(date, today, minutes),

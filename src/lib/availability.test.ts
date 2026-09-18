@@ -87,6 +87,14 @@ describe('availability', () => {
     const occ2 = new Set(['555:7', '555:8']);
     expect(computeAvailability(base({ occupied: occ2 })).find((s) => s.time === 555)).toMatchObject({ status: 'phone', remaining: 1 });
   });
+  it('✖（ベッド閉鎖）はそのベッドを使えなくするが、施術者数は消費しない', () => {
+    // 施術者 3 人、ベッド 4〜8 に ✖ → 残りはベッド 1〜3 の 3 枠
+    const occ = new Set(['540:4', '540:5', '540:6', '540:7', '540:8']);
+    const r = computeAvailability(base({ occupied: occ, blocked: occ }));
+    expect(r.find((s) => s.time === 540)).toMatchObject({ status: 'open', remaining: 3 });
+    // ✖ を閉鎖印として渡さない場合は埋まり扱い（施術者数を超える）→ 0
+    expect(computeAvailability(base({ occupied: occ })).find((s) => s.time === 540)!.remaining).toBe(0);
+  });
   it('初回は 2 枠とも施術者数の範囲内で空いている必要がある', () => {
     // 9:15 が施術者数いっぱい → 9:00 の初回は不可、9:00 の通院中は可
     const occ = new Set(['555:1', '555:2', '555:3']);

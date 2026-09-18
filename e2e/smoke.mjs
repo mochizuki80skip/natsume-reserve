@@ -23,6 +23,13 @@ for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) {
 }
 ok('週間一覧に〇がある', (await openSlot.count()) > 0);
 ok('凡例が日付行の上にある', (await page.locator('.wk-head .wk-legend').count()) === 1);
+// 来院区分に戻れる
+await page.getByRole('button', { name: '← 来院区分の選択に戻る' }).click();
+ok('週間一覧から来院区分に戻れる', (await page.getByRole('button', { name: /ご通院中の方/ }).count()) > 0);
+await page.getByRole('button', { name: /はじめての方/ }).first().click();
+await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+openSlot = page.locator('td.o button').first();
+for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); openSlot = page.locator('td.o button').first(); }
 const slotLabel = await openSlot.getAttribute('aria-label');
 await openSlot.click();
 await page.getByRole('button', { name: 'この日時で予約へ進む' }).click();
@@ -186,7 +193,9 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   const r = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'REVISIT', date: d, time: 600, name: '再来花子', phone: '09033334444', cardNo: '1234' }) })).json(), d3);
   ok('再来の予約作成', r.ok === true, JSON.stringify(r));
   const r0 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'REVISIT', date: d, time: 660, name: '番号なし', phone: '09033334445' }) })).json(), d3);
-  ok('再来は診察券番号が必須', r0.ok !== true && /診察券/.test(r0.error ?? ''), JSON.stringify(r0));
+  ok('再来は診察券番号なしでも予約できる', r0.ok === true, JSON.stringify(r0));
+  const r2 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'RETURN', date: d, time: 900, name: '通院中番号なし', phone: '09033334446' }) })).json(), d3);
+  ok('通院中は診察券番号が必須', r2.ok !== true && /診察券/.test(r2.error ?? ''), JSON.stringify(r2));
   await ap.goto(`${BASE}/admin/day/${d3}`); await ap.waitForSelector('table');
   const vals = await ap.locator('#grid tbody input').evaluateAll((els) => els.map((e) => e.value));
   ok('予約表に「再来花子（再）」と「上記再来対応」', vals.includes('再来花子（再）') && vals.includes('上記再来対応'));

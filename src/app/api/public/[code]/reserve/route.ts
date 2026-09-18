@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? '入力内容を確認してください' }, { status: 400 });
   }
   const body = parsed.data;
-  if (body.kind !== 'NEW' && !body.cardNo) {
+  if (body.kind === 'RETURN' && !body.cardNo) { // 再来は診察券番号が無くても可
     return NextResponse.json({ error: '診察券番号を入力してください' }, { status: 400 });
   }
   const phone = normalizeJpPhone(body.phone);

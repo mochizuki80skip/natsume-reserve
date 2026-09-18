@@ -15,7 +15,8 @@ export interface AvailabilityInput {
   beds: number[];                // 物理ベッド番号（1..beds）。管理側はどのベッドにも入力できる
   capacityAm: number;            // 顧客に見せる枠数（午前 ＝ 午前に勤務する施術者数）
   capacityPm: number;            // 同（午後）
-  occupied: Set<string>;         // "time:bed" が埋まっている
+  occupied: Set<string>;         // "time:bed" が埋まっている（✖ などベッド閉鎖の印も含む）
+  blocked?: Set<string>;         // "time:bed" が ✖ などの「ベッド閉鎖」印。施術者数は消費しない
   neededSlots: number;           // 必要な連続枠数（初回 2 / 通院中 1）
   phoneMarkRemaining: number;    // 残りがこの数以下なら電話マーク
   /** 今日なら現在時刻（分）。未来日は null。過去日は Infinity を渡す */
@@ -51,9 +52,9 @@ export function freeBedsAt(input: AvailabilityInput, time: number): number[] {
   return input.beds.filter((b) => bedFreeAt(input, time, b)).sort((a, b) => a - b);
 }
 
-/** 指定時刻に埋まっているベッド数 */
-export function occupiedCountAt(input: Pick<AvailabilityInput, 'beds' | 'occupied'>, time: number): number {
-  return input.beds.filter((b) => input.occupied.has(cellKey(time, b))).length;
+/** 指定時刻に患者が入っているベッド数（✖ などの閉鎖印は施術者を使わないので数えない） */
+export function occupiedCountAt(input: Pick<AvailabilityInput, 'beds' | 'occupied' | 'blocked'>, time: number): number {
+  return input.beds.filter((b) => input.occupied.has(cellKey(time, b)) && !input.blocked?.has(cellKey(time, b))).length;
 }
 
 /**
@@ -105,4 +106,10 @@ export function isPatientText(text: string | null | undefined): boolean {
 /** セルとして「埋まっている」とみなすか（空文字以外はすべて埋まり扱い） */
 export function isOccupiedText(text: string | null | undefined): boolean {
   return (text ?? '').trim().length > 0;
+}
+
+/** ベッド閉鎖の印か（✖ など）。ベッドは使えないが施術者数は消費しない */
+const BLOCK_MARKS = new Set(['✖', '×', 'X', 'x', '-', 'ー', '－', '休', '休み']);
+export function isBlockMark(text: string | null | undefined): boolean {
+  return BLOCK_MARKS.has((text ?? '').trim());
 }
