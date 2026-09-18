@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:3002';
 const results = [];
-const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', name, extra]); if (!cond) process.exitCode = 1; };
+const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', name, extra]); console.log(cond ? 'PASS' : 'FAIL', name, extra); if (!cond) process.exitCode = 1; };
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 420, height: 860 } });
@@ -12,8 +12,8 @@ const page = await ctx.newPage();
 // --- 顧客サイト
 await page.goto(`${BASE}/s/S001`);
 ok('顧客ページ表示', (await page.textContent('h1')).includes('WEB予約'));
-await page.getByRole('button', { name: /はじめての方/ }).first().click();
 await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+ok('最初の画面が週間一覧', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('はじめての方'));
 // 〇 が無い週なら翌週へ進む
 let openSlot = page.locator('td.o button').first();
 for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) {
@@ -23,11 +23,10 @@ for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) {
 }
 ok('週間一覧に〇がある', (await openSlot.count()) > 0);
 ok('凡例が日付行の上にある', (await page.locator('.wk-head .wk-legend').count()) === 1);
-// 来院区分に戻れる
-await page.getByRole('button', { name: '← 来院区分の選択に戻る' }).click();
-ok('週間一覧から来院区分に戻れる', (await page.getByRole('button', { name: /ご通院中の方/ }).count()) > 0);
-await page.getByRole('button', { name: /はじめての方/ }).first().click();
-await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+// 来院区分は週間一覧の上で切り替え
+await page.getByRole('button', { name: /ご通院中の方/ }).click(); await page.waitForTimeout(600);
+ok('②に切り替えられる', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('ご通院中'));
+await page.getByRole('button', { name: /はじめての方/ }).click(); await page.waitForTimeout(800);
 openSlot = page.locator('td.o button').first();
 for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); openSlot = page.locator('td.o button').first(); }
 const slotLabel = await openSlot.getAttribute('aria-label');
@@ -261,5 +260,4 @@ ok('本部画面', (await hp.textContent('h1')).includes('本部管理'));
 ok('店舗切替セレクト', await hp.locator('select[name="store"]').count() === 1);
 
 await browser.close();
-for (const [s, n, x] of results) console.log(s, n, x);
 console.log(process.exitCode ? 'SMOKE FAILED' : 'SMOKE OK');

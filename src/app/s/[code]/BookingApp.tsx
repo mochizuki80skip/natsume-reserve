@@ -12,7 +12,8 @@ const KIND_LABEL: Record<Kind, string> = {
 };
 
 export default function BookingApp({ store, smsEnabled }: Props) {
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=完了
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [kind, setKind] = useState<Kind>('NEW');
   // ①はじめての方／1ヶ月以上ご来院の無い方 の内訳（NEW=初診, REVISIT=再来）
   const [firstSub, setFirstSub] = useState<'NEW' | 'REVISIT'>('NEW');
@@ -36,8 +37,8 @@ export default function BookingApp({ store, smsEnabled }: Props) {
         body: JSON.stringify({ kind: submitKind, date: sel.date, time: sel.time, ...form }),
       });
       const j = await r.json();
-      if (!r.ok) { setError(j.error ?? '予約に失敗しました'); if (r.status === 409) { setStep(2); setSel(null); setGridKey((k) => k + 1); } return; }
-      setDone(j); setStep(4);
+      if (!r.ok) { setError(j.error ?? '予約に失敗しました'); if (r.status === 409) { setStep(1); setSel(null); setGridKey((k) => k + 1); } return; }
+      setDone(j); setStep(3);
     } catch { setError('通信に失敗しました'); } finally { setLoading(false); }
   }
 
@@ -48,9 +49,9 @@ export default function BookingApp({ store, smsEnabled }: Props) {
       <header className="mb-3">
         <h1 className="text-lg font-bold">{store.name}　WEB予約</h1>
         <ol className="mt-2 flex gap-1 text-xs text-slate-500">
-          {['来院区分', '日時', '入力', '完了'].map((l, i) => {
-            const n = (i + 1) as 1 | 2 | 3 | 4;
-            const canGoBack = step !== 4 && n < step;
+          {['日時', '入力', '完了'].map((l, i) => {
+            const n = (i + 1) as 1 | 2 | 3;
+            const canGoBack = step !== 3 && n < step;
             return (
               <li key={l} className={`flex-1 rounded px-1 py-1 text-center ${step === n ? 'bg-brand text-white' : n < step ? 'bg-brand-light text-brand' : 'bg-slate-100'}`}>
                 {canGoBack ? <button type="button" onClick={() => { setStep(n); setError(''); }} className="w-full underline">{l}</button> : l}
@@ -60,33 +61,18 @@ export default function BookingApp({ store, smsEnabled }: Props) {
         </ol>
       </header>
 
-      {error && step !== 2 && <p className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && step !== 1 && <p className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {step === 1 && (
         <section>
-          <h2 className="mb-3 font-bold">来院区分をお選びください</h2>
-          {(['NEW', 'RETURN'] as Kind[]).map((k) => (
-            <button key={k} type="button" onClick={() => { setKind(k); setStep(2); setError(''); }}
-              className="mb-3 block w-full rounded-lg border-2 border-brand bg-white px-4 py-4 text-left text-base font-semibold text-brand-dark hover:bg-brand-light">
-              {k === 'NEW' ? '①' : '②'} {KIND_LABEL[k]}
-              <span className="mt-1 block text-xs font-normal text-slate-500">
-                {k === 'NEW' ? '初回は30分枠でご案内します' : '診察券番号をご用意ください'}
-              </span>
-            </button>
-          ))}
-        </section>
-      )}
-
-      {step === 2 && (
-        <section>
+          <p className="mb-2 text-xs text-slate-600">上の「①はじめての方／②ご通院中の方」を選んでから、ご希望の日時の〇を押してください。</p>
           {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone}
-            onProceed={(s) => { setSel(s); setStep(3); setError(''); }} />
-          <button type="button" className="mt-2 text-sm text-brand underline" onClick={() => { setStep(1); setError(''); }}>← 来院区分の選択に戻る</button>
+            onProceed={(s) => { setSel(s); setStep(2); setError(''); }} />
         </section>
       )}
 
-      {step === 3 && sel && (
+      {step === 2 && sel && (
         <form onSubmit={submit}>
           <h2 className="mb-1 font-bold">{formatDateJa(sel.date)} {minToHm(sel.time)}〜</h2>
           <p className="mb-4 text-xs text-slate-500">{KIND_LABEL[kind]}</p>
@@ -113,14 +99,11 @@ export default function BookingApp({ store, smsEnabled }: Props) {
           <button type="submit" disabled={loading} className="mt-2 w-full rounded-lg bg-brand px-4 py-3 text-base font-bold text-white disabled:opacity-50">
             {loading ? '送信中…' : 'この内容で予約する'}
           </button>
-          <div className="mt-4 flex gap-4">
-            <button type="button" className="text-sm text-brand underline" onClick={() => { setStep(2); setError(''); }}>← 日時を変更</button>
-            <button type="button" className="text-sm text-brand underline" onClick={() => { setStep(1); setError(''); }}>← 来院区分を変更</button>
-          </div>
+          <button type="button" className="mt-4 text-sm text-brand underline" onClick={() => { setStep(1); setError(''); }}>← 日時・来院区分を変更</button>
         </form>
       )}
 
-      {step === 4 && done && (
+      {step === 3 && done && (
         <section className="rounded-lg border border-brand bg-white p-5">
           <h2 className="text-lg font-bold text-brand-dark">ご予約が確定しました</h2>
           <p className="mt-3 text-base">{formatDateJa(done.date)} {minToHm(done.time)}〜</p>
