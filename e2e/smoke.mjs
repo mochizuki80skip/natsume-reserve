@@ -57,14 +57,25 @@ const inputs = ap.locator('table tbody input');
 const values = await inputs.evaluateAll((els) => els.map((e) => e.value));
 ok('予約表に氏名（初）が入る', values.includes('テスト 太郎（初）'));
 ok('2枠目に〃が入る', values.includes('〃'));
-// シフト入力 → 顧客に見える枠数が施術者数になる
-const th1 = ap.locator('input[placeholder="施術者1"]');
-await th1.fill('山本'); await th1.press('Tab');
-await ap.locator('input[placeholder="施術者2"]').fill('佐々木'); await ap.locator('input[placeholder="施術者2"]').press('Tab');
-await ap.waitForTimeout(800);
-await ap.reload(); await ap.waitForSelector('table');
-const capText = await ap.locator('text=顧客に見える枠数').first().textContent();
-ok('施術者数が枠数に反映', /2/.test(capText), capText);
+// スタッフ登録 → シフト（前休）→ 顧客に見える枠数が午前/午後で変わる
+await ap.goto(`${BASE}/admin/settings`);
+for (const n of ['山本', '佐々木', '田村']) {
+  await ap.fill('input[placeholder="氏名"]', n);
+  await ap.getByRole('button', { name: '追加' }).click();
+  await ap.waitForTimeout(500);
+}
+await ap.goto(`${BASE}/admin/shifts?month=${date.slice(0, 7)}`);
+await ap.waitForSelector('table');
+await ap.selectOption(`select[aria-label="山本 ${date}"]`, 'AM_OFF');
+await ap.waitForTimeout(600);
+await ap.goto(`${BASE}/admin/day/${date}`);
+await ap.waitForSelector('table');
+const capText = await ap.locator('text=顧客に見える枠数').first().locator('..').textContent();
+ok('シフト(前休)が枠数に反映（午前2/午後3）', /シフトから 2/.test(capText) && /シフトから 3/.test(capText), capText);
+ok('管理側に12:00の行がある', (await ap.locator('table tbody td', { hasText: /^12:00$/ }).count()) === 1);
+const wk = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), date);
+const dayW = wk.days.find((x) => x.date === date);
+ok('顧客側は11:45まで', dayW && !dayW.slots.some((s) => s.time === 720) && dayW.slots.some((s) => s.time === 705));
 ok('枠外列が無い', (await ap.locator('table thead th').allTextContents()).every((t) => !t.includes('枠外')));
 ok('ベッド8列', (await ap.locator('table thead th').count()) === 9);
 const countText = await ap.locator('text=午前').first().textContent();

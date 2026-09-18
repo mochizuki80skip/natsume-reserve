@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean }
 interface SettingForm {
   slotMinutes: number; newVisitSlots: number; returnVisitSlots: number; webCutoffMinutes: number; phoneCutoffMinutes: number;
-  phoneMarkRemaining: number; closeOnHolidays: boolean; retentionDays: number; hours: string;
+  phoneMarkRemaining: number; closeOnHolidays: boolean; adminExtraSlots: number; retentionDays: number; hours: string;
 }
 
 export default function HqClient({ stores, setting }: { stores: StoreRow[]; setting: SettingForm }) {
@@ -102,6 +102,7 @@ export default function HqClient({ stores, setting }: { stores: StoreRow[]; sett
           <label>電話マークにする残り枠数<input type="number" min={0} max={20} value={s.phoneMarkRemaining} onChange={num('phoneMarkRemaining')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>WEB予約の締切（開始N分前）<input type="number" min={0} max={1440} value={s.webCutoffMinutes} onChange={num('webCutoffMinutes')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>電話受付の締切（開始N分前）<input type="number" min={0} max={1440} value={s.phoneCutoffMinutes} onChange={num('phoneCutoffMinutes')} className="mt-1 w-full rounded border px-2 py-1" /></label>
+          <label>管理側の追加枠数（受付終了後の行）<input type="number" min={0} max={8} value={s.adminExtraSlots} onChange={num('adminExtraSlots')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>個人情報の保持日数<input type="number" min={7} max={3650} value={s.retentionDays} onChange={num('retentionDays')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label className="flex items-end gap-2 pb-2"><input type="checkbox" checked={s.closeOnHolidays} onChange={(e) => setS({ ...s, closeOnHolidays: e.target.checked })} />祝日は休診</label>
         </div>

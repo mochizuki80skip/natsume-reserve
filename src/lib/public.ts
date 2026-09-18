@@ -1,7 +1,7 @@
 // 顧客向けの空き状況計算（氏名などの個人情報は一切返さない）
 import type { GlobalSetting, Store } from '@prisma/client';
 import { prisma } from './prisma';
-import { allBeds, capacityFor, capacityFromStaff, storeSessions } from './settings';
+import { allBeds, capacitiesFor, capacityFor, storeSessions, type DayCapacity } from './settings';
 import { cellKey, computeAvailability, isOccupiedText, type AvailabilityInput, type SlotStatus } from './availability';
 import { addDays, datesOfMonth, nowJst } from './time';
 import { NOON, isJpHoliday } from './hours';
@@ -32,7 +32,7 @@ export async function buildInput(
   setting: GlobalSetting,
   date: string,
   kind: Kind,
-  opts: { closed?: boolean; cells?: { time: number; bed: number; text: string }[]; capacity?: number } = {},
+  opts: { closed?: boolean; cells?: { time: number; bed: number; text: string }[]; capacity?: DayCapacity } = {},
 ): Promise<AvailabilityInput> {
   const { date: today, minutes } = nowJst();
   const sessions = storeSessions(store, setting, date, opts.closed);
@@ -43,7 +43,8 @@ export async function buildInput(
     sessions,
     slotMinutes: setting.slotMinutes,
     beds: allBeds(store),
-    capacity: opts.capacity ?? (await capacityFor(store, date)),
+    capacityAm: (opts.capacity ?? (await capacityFor(store, date))).am,
+    capacityPm: (opts.capacity ?? (await capacityFor(store, date))).pm,
     occupied,
     neededSlots: neededSlots(setting, kind),
     phoneMarkRemaining: setting.phoneMarkRemaining,
@@ -73,23 +74,20 @@ export async function slotsForCustomer(store: Store, setting: GlobalSetting, dat
 export async function calendarForCustomer(store: Store, setting: GlobalSetting, ym: string, kind: Kind) {
   const { date: today } = nowJst();
   const dates = datesOfMonth(ym);
-  const [days, cells, staffRows] = await Promise.all([
+  const [days, cells] = await Promise.all([
     prisma.dayStatus.findMany({ where: { storeId: store.id, date: { in: dates } } }),
     prisma.cell.findMany({ where: { storeId: store.id, date: { in: dates }, bed: { gt: 0 } }, select: { date: true, time: true, bed: true, text: true } }),
-    prisma.staffDay.findMany({ where: { storeId: store.id, date: { in: dates }, role: 'THERAPIST' } }),
   ]);
   const dayMap = new Map(days.map((d) => [d.date, d]));
   const cellsByDate = new Map<string, typeof cells>();
   for (const c of cells) (cellsByDate.get(c.date) ?? cellsByDate.set(c.date, []).get(c.date)!).push(c);
-  const staffByDate = new Map<string, string[]>();
-  for (const r of staffRows) (staffByDate.get(r.date) ?? staffByDate.set(r.date, []).get(r.date)!).push(r.name);
+  const caps = await capacitiesFor(store, dates, new Map(days.map((d) => [d.date, { capacityAm: d.capacityAm, capacityPm: d.capacityPm }])));
 
   const result: { date: string; mark: DayMark }[] = [];
   for (const date of dates) {
     const day = dayMap.get(date);
     if (!isPublished(store, date, today, day?.published)) { result.push({ date, mark: 'unpublished' }); continue; }
-    const capacity = capacityFromStaff(store, staffByDate.get(date) ?? []);
-    const input = await buildInput(store, setting, date, kind, { closed: day?.closed, cells: cellsByDate.get(date) ?? [], capacity });
+    const input = await buildInput(store, setting, date, kind, { closed: day?.closed, cells: cellsByDate.get(date) ?? [], capacity: caps.get(date)! });
     if (input.sessions.length === 0) { result.push({ date, mark: 'closed' }); continue; }
     const slots = computeAvailability(input);
     const any = slots.some((s) => s.status !== 'closed');
@@ -104,16 +102,14 @@ export type DayLabel = '定休日' | '祝日' | '休診' | '受付終了' | '受
 export async function weekForCustomer(store: Store, setting: GlobalSetting, weekStart: string, kind: Kind) {
   const { date: today } = nowJst();
   const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  const [days, cells, staffRows] = await Promise.all([
+  const [days, cells] = await Promise.all([
     prisma.dayStatus.findMany({ where: { storeId: store.id, date: { in: dates } } }),
     prisma.cell.findMany({ where: { storeId: store.id, date: { in: dates }, bed: { gt: 0 } }, select: { date: true, time: true, bed: true, text: true } }),
-    prisma.staffDay.findMany({ where: { storeId: store.id, date: { in: dates }, role: 'THERAPIST' } }),
   ]);
   const dayMap = new Map(days.map((d) => [d.date, d]));
   const cellsByDate = new Map<string, typeof cells>();
   for (const c of cells) (cellsByDate.get(c.date) ?? cellsByDate.set(c.date, []).get(c.date)!).push(c);
-  const staffByDate = new Map<string, string[]>();
-  for (const r of staffRows) (staffByDate.get(r.date) ?? staffByDate.set(r.date, []).get(r.date)!).push(r.name);
+  const caps = await capacitiesFor(store, dates, new Map(days.map((d) => [d.date, { capacityAm: d.capacityAm, capacityPm: d.capacityPm }])));
 
   const out: { date: string; label: DayLabel; slots: { time: number; status: SlotStatus }[] }[] = [];
   for (const date of dates) {
@@ -124,8 +120,7 @@ export async function weekForCustomer(store: Store, setting: GlobalSetting, week
     else if (date < today) label = '受付終了';
     else if (!isPublished(store, date, today, day?.published)) label = '受付期間外';
     if (label) { out.push({ date, label, slots: [] }); continue; }
-    const capacity = capacityFromStaff(store, staffByDate.get(date) ?? []);
-    const input = await buildInput(store, setting, date, kind, { closed: day?.closed, cells: cellsByDate.get(date) ?? [], capacity });
+    const input = await buildInput(store, setting, date, kind, { closed: day?.closed, cells: cellsByDate.get(date) ?? [], capacity: caps.get(date)! });
     out.push({ date, label: null, slots: computeAvailability(input).map((s) => ({ time: s.time, status: s.status })) });
   }
   return { today, weekStart, publishDaysAhead: store.publishDaysAhead, days: out };

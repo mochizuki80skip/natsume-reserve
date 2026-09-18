@@ -20,6 +20,7 @@ model GlobalSetting {
   phoneCutoffMinutes Int      @default(15) // 開始N分前までは電話対応（それ以降は受付終了）
   phoneMarkRemaining Int      @default(1)  // 残り枠がこの数以下なら〇の代わりに電話マーク
   closeOnHolidays    Boolean  @default(true) // 祝日は休診
+  adminExtraSlots    Int      @default(1)  // 管理側の予約表に、顧客受付終了後も追加で表示する枠数（12:00 / 19:30）
   retentionDays      Int      @default(60) // 個人情報の保持日数（2ヶ月）
   // 営業時間。期間ごとに曜日別の営業セッションを持つ（詳細は docs/SPEC.md）
   hours              Json
@@ -44,6 +45,8 @@ model Store {
 
   accounts     AdminAccount[]
   days         DayStatus[]
+  members      StaffMember[]
+  shifts       Shift[]
   staff        StaffDay[]
   bedStatuses  BedStatus[]
   cells        Cell[]
@@ -71,12 +74,43 @@ model DayStatus {
   published Boolean? // null = 既定（publishDaysAhead 以内なら公開）
   closed    Boolean  @default(false) // 臨時休診
   memo      String?
+  capacityAm Int?    // 顧客に見せる枠数の手動調整（午前）。null = シフトから自動計算
+  capacityPm Int?    // 同（午後）
   updatedAt DateTime @updatedAt
 
   @@unique([storeId, date])
 }
 
-// 日付ごとのシフト（施術者・受付の氏名）。施術者の人数 ＝ 顧客に見せる稼働枠数
+// スタッフ一覧（店舗設定で管理）。role = THERAPIST（施術者）| RECEPTION（受付）
+model StaffMember {
+  id      String  @id @default(cuid())
+  storeId String
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name    String
+  role    String  @default("THERAPIST")
+  order   Int     @default(0)
+  active  Boolean @default(true)
+  shifts  Shift[]
+
+  @@index([storeId])
+}
+
+// 月間シフト表。行が無い日は「〇」（終日勤務）扱い
+// status: WORK(〇) | OFF(休) | AM_OFF(前休) | PM_OFF(後休) | PAID(有給) | AM_PAID(前有) | PM_PAID(後有)
+model Shift {
+  id      String      @id @default(cuid())
+  storeId String
+  store   Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  staffId String
+  staff   StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date    String
+  status  String
+
+  @@unique([staffId, date])
+  @@index([storeId, date])
+}
+
+// （旧）日付ごとの施術者名入力。現在は StaffMember + Shift で稼働数を決めるため未使用
 model StaffDay {
   id      String @id @default(cuid())
   storeId String

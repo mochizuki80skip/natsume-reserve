@@ -13,7 +13,8 @@ export interface AvailabilityInput {
   sessions: ResolvedSession[];
   slotMinutes: number;
   beds: number[];                // 物理ベッド番号（1..beds）。管理側はどのベッドにも入力できる
-  capacity: number;              // 顧客に見せる枠数（＝その日の施術者数）
+  capacityAm: number;            // 顧客に見せる枠数（午前 ＝ 午前に勤務する施術者数）
+  capacityPm: number;            // 同（午後）
   occupied: Set<string>;         // "time:bed" が埋まっている
   neededSlots: number;           // 必要な連続枠数（初回 2 / 通院中 1）
   phoneMarkRemaining: number;    // 残りがこの数以下なら電話マーク
@@ -25,6 +26,11 @@ export interface AvailabilityInput {
 
 export const cellKey = (time: number, bed: number) => `${time}:${bed}`;
 
+const NOON_MIN = 12 * 60;
+export function capacityAt(input: Pick<AvailabilityInput, 'capacityAm' | 'capacityPm'>, time: number): number {
+  return time < NOON_MIN ? input.capacityAm : input.capacityPm;
+}
+
 /** そのベッドが time から neededSlots 枠連続で空いているか */
 export function bedFreeAt(
   input: Pick<AvailabilityInput, 'sessions' | 'slotMinutes' | 'occupied' | 'neededSlots'>,
@@ -35,7 +41,7 @@ export function bedFreeAt(
   if (!session) return false;
   for (let k = 0; k < input.neededSlots; k++) {
     const t = time + k * input.slotMinutes;
-    if (t > session.lastStart) return false; // 次の枠が営業時間外
+    if (t > session.lastAdmin) return false; // 2枠目以降は管理側の追加枠（12:00 など）まで使える
     if (input.occupied.has(cellKey(t, bed))) return false;
   }
   return true;
@@ -61,7 +67,8 @@ export function remainingAt(input: AvailabilityInput, time: number): number {
   if (free === 0) return 0;
   let byCapacity = Infinity;
   for (let k = 0; k < input.neededSlots; k++) {
-    byCapacity = Math.min(byCapacity, input.capacity - occupiedCountAt(input, time + k * input.slotMinutes));
+    const t = time + k * input.slotMinutes;
+    byCapacity = Math.min(byCapacity, capacityAt(input, time) - occupiedCountAt(input, t));
   }
   return Math.max(0, Math.min(free, byCapacity));
 }

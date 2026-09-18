@@ -9,6 +9,8 @@ const Body = z.object({
   published: z.boolean().nullable().optional(),
   closed: z.boolean().optional(),
   memo: z.string().max(500).optional(),
+  capacityAm: z.number().int().min(0).max(20).nullable().optional(),
+  capacityPm: z.number().int().min(0).max(20).nullable().optional(),
 });
 
 /** 日付の公開/非公開・臨時休診・メモ */
@@ -21,7 +23,7 @@ export async function PUT(req: Request) {
   const row = await prisma.dayStatus.upsert({
     where: { storeId_date: { storeId: ctx.store.id, date } },
     update: rest,
-    create: { storeId: ctx.store.id, date, published: rest.published ?? null, closed: rest.closed ?? false, memo: rest.memo },
+    create: { storeId: ctx.store.id, date, published: rest.published ?? null, closed: rest.closed ?? false, memo: rest.memo, capacityAm: rest.capacityAm ?? null, capacityPm: rest.capacityPm ?? null },
   });
   return NextResponse.json({ ok: true, day: row });
 }

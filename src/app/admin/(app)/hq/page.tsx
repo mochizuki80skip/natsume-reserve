@@ -19,7 +19,7 @@ export default async function HqPage() {
       setting={{
         slotMinutes: setting.slotMinutes, newVisitSlots: setting.newVisitSlots, returnVisitSlots: setting.returnVisitSlots,
         webCutoffMinutes: setting.webCutoffMinutes, phoneCutoffMinutes: setting.phoneCutoffMinutes, phoneMarkRemaining: setting.phoneMarkRemaining,
-        closeOnHolidays: setting.closeOnHolidays, retentionDays: setting.retentionDays, hours: JSON.stringify(setting.hours, null, 2),
+        closeOnHolidays: setting.closeOnHolidays, adminExtraSlots: setting.adminExtraSlots, retentionDays: setting.retentionDays, hours: JSON.stringify(setting.hours, null, 2),
       }}
     />
   );

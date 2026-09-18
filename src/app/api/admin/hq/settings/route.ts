@@ -12,6 +12,7 @@ const Body = z.object({
   phoneCutoffMinutes: z.number().int().min(0).max(1440),
   phoneMarkRemaining: z.number().int().min(0).max(20),
   closeOnHolidays: z.boolean(),
+  adminExtraSlots: z.number().int().min(0).max(8),
   retentionDays: z.number().int().min(7).max(3650),
   hours: z.unknown(),
 });

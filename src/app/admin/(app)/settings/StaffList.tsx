@@ -1,0 +1,68 @@
+'use client';
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+
+interface Member { id: string; name: string; role: string; active: boolean }
+
+export default function StaffList({ members, maxTherapists, maxReception }: { members: Member[]; maxTherapists: number; maxReception: number }) {
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<'THERAPIST' | 'RECEPTION'>('THERAPIST');
+  const [msg, setMsg] = useState('');
+
+  async function call(method: string, body: object) {
+    const r = await fetch('/api/admin/staff-members', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    setMsg(r.ok ? '' : j.error ?? '失敗しました');
+    if (r.ok) router.refresh();
+    return r.ok;
+  }
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    if (await call('POST', { name, role })) setName('');
+  }
+
+  const th = members.filter((m) => m.role === 'THERAPIST');
+  const rc = members.filter((m) => m.role === 'RECEPTION');
+  const Row = ({ m }: { m: Member }) => (
+    <li className={`flex items-center gap-2 py-1 ${m.active ? '' : 'text-slate-400'}`}>
+      <input defaultValue={m.name} onBlur={(e) => e.target.value.trim() && e.target.value !== m.name && call('PUT', { id: m.id, name: e.target.value.trim() })} className="w-36 rounded border px-2 py-1" />
+      <button type="button" onClick={() => call('PUT', { id: m.id, move: 'up' })} className="rounded border px-2" title="上へ">↑</button>
+      <button type="button" onClick={() => call('PUT', { id: m.id, move: 'down' })} className="rounded border px-2" title="下へ">↓</button>
+      <button type="button" onClick={() => call('PUT', { id: m.id, active: !m.active })} className="rounded border px-2">{m.active ? '休職/停止' : '復帰'}</button>
+      <button type="button" onClick={() => confirm(`${m.name} を削除しますか？シフトも消えます。`) && call('DELETE', { id: m.id })} className="rounded border border-red-300 px-2 text-red-700">削除</button>
+    </li>
+  );
+
+  return (
+    <section className="mb-6 rounded border bg-white p-4 text-sm">
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        <h2 className="font-bold">スタッフ・シフト</h2>
+        <Link href="/admin/shifts" className="rounded bg-brand px-3 py-1 text-white">月間シフト表を開く</Link>
+        <span className="text-xs text-slate-500">シフト表の施術者の人数（午前／午後）が、顧客に見える枠数になります。</span>
+      </div>
+      {msg && <p className="mb-2 rounded bg-red-50 px-3 py-1 text-red-700">{msg}</p>}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <div className="mb-1 text-xs text-slate-500">施術者（{th.filter((m) => m.active).length}／最大 {maxTherapists} 名）</div>
+          <ul>{th.map((m) => <Row key={m.id} m={m} />)}</ul>
+          {th.length === 0 && <p className="text-xs text-slate-400">未登録（既定の施術者数を使用中）</p>}
+        </div>
+        <div>
+          <div className="mb-1 text-xs text-slate-500">受付（{rc.filter((m) => m.active).length}／最大 {maxReception} 名）</div>
+          <ul>{rc.map((m) => <Row key={m.id} m={m} />)}</ul>
+          {rc.length === 0 && <p className="text-xs text-slate-400">未登録</p>}
+        </div>
+      </div>
+      <form onSubmit={add} className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+        <select value={role} onChange={(e) => setRole(e.target.value as 'THERAPIST' | 'RECEPTION')} className="rounded border px-2 py-1">
+          <option value="THERAPIST">施術者</option>
+          <option value="RECEPTION">受付</option>
+        </select>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="氏名" required className="w-40 rounded border px-2 py-1" />
+        <button type="submit" className="rounded border px-3 py-1">追加</button>
+      </form>
+    </section>
+  );
+}

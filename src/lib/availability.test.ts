@@ -4,10 +4,11 @@ import { DEFAULT_HOURS, sessionsForDate, slotTimes } from './hours';
 import { nowJst, formatDateJa } from './time';
 
 const base = (over: Partial<AvailabilityInput> = {}): AvailabilityInput => ({
-  sessions: [{ start: 540, lastStart: 705 }, { start: 900, lastStart: 1155 }],
+  sessions: [{ start: 540, lastStart: 705, lastAdmin: 720 }, { start: 900, lastStart: 1155, lastAdmin: 1170 }],
   slotMinutes: 15,
   beds: [1, 2, 3, 4, 5, 6, 7, 8],
-  capacity: 3,
+  capacityAm: 3,
+  capacityPm: 3,
   occupied: new Set(),
   neededSlots: 1,
   phoneMarkRemaining: 1,
@@ -20,10 +21,15 @@ const base = (over: Partial<AvailabilityInput> = {}): AvailabilityInput => ({
 describe('hours', () => {
   it('平日は 9:00-11:45 / 15:00-19:15、土曜は午後 14:00-18:15', () => {
     const wed = sessionsForDate(DEFAULT_HOURS, '2026-10-21', { closeOnHolidays: true });
-    expect(wed).toEqual([{ start: 540, lastStart: 705 }, { start: 900, lastStart: 1155 }]);
+    expect(wed).toEqual([{ start: 540, lastStart: 705, lastAdmin: 705 }, { start: 900, lastStart: 1155, lastAdmin: 1155 }]);
     const sat = sessionsForDate(DEFAULT_HOURS, '2026-10-24', { closeOnHolidays: true });
-    expect(sat[1]).toEqual({ start: 840, lastStart: 1095 });
+    expect(sat[1]).toEqual({ start: 840, lastStart: 1095, lastAdmin: 1095 });
     expect(slotTimes(wed, 15)).toHaveLength(12 + 18);
+    // 管理側は 12:00 / 19:30 まで表示
+    const adm = sessionsForDate(DEFAULT_HOURS, '2026-10-21', { closeOnHolidays: true, adminExtraSlots: 1, slotMinutes: 15 });
+    expect(adm.map((x) => x.lastAdmin)).toEqual([720, 1170]);
+    expect(slotTimes(adm, 15, true)).toHaveLength(13 + 19);
+    expect(slotTimes(adm, 15)).toHaveLength(12 + 18);
   });
   it('木・日・祝日は休診', () => {
     expect(sessionsForDate(DEFAULT_HOURS, '2026-10-22', { closeOnHolidays: true })).toEqual([]); // 木
@@ -48,8 +54,15 @@ describe('availability', () => {
     const r = computeAvailability(base({ occupied: occ, neededSlots: 2 }));
     expect(freeBedsAt(base({ occupied: occ, neededSlots: 2 }), 540)).toEqual([2, 3, 4, 5, 6, 7, 8]);
     expect(r.find((s) => s.time === 540)).toMatchObject({ status: 'open', remaining: 2 });
-    expect(r.find((s) => s.time === 705)).toMatchObject({ status: 'closed', remaining: 0 }); // 11:45 は次枠なし
+    expect(r.find((s) => s.time === 705)).toMatchObject({ status: 'open', remaining: 3 });   // 11:45 は管理側の 12:00 枠を 2 枠目に使える
     expect(r.find((s) => s.time === 690)).toMatchObject({ status: 'open', remaining: 3 });   // 11:30 は 11:45 と連続
+    const noExtra = computeAvailability(base({ occupied: occ, neededSlots: 2, sessions: [{ start: 540, lastStart: 705, lastAdmin: 705 }] }));
+    expect(noExtra.find((s) => s.time === 705)).toMatchObject({ status: 'closed', remaining: 0 }); // 追加枠が無ければ不可
+  });
+  it('午前と午後で施術者数が違う（前休＝午前 1 人減）', () => {
+    const r = computeAvailability(base({ capacityAm: 1, capacityPm: 3 }));
+    expect(r.find((s) => s.time === 540)).toMatchObject({ status: 'phone', remaining: 1 });
+    expect(r.find((s) => s.time === 900)).toMatchObject({ status: 'open', remaining: 3 });
   });
   it('当日は 30 分前まで WEB、15 分前までは電話、それ以降は×', () => {
     const r = computeAvailability(base({ nowMinutes: 600 })); // 10:00
@@ -63,7 +76,7 @@ describe('availability', () => {
     expect(r.every((s) => s.status === 'closed')).toBe(true);
   });
   it('施術者が 0 人（枠数 0）なら×', () => {
-    const r = computeAvailability(base({ capacity: 0 }));
+    const r = computeAvailability(base({ capacityAm: 0, capacityPm: 0 }));
     expect(r.every((s) => s.status === 'closed')).toBe(true);
   });
   it('管理側が施術者数を超えて入力した時刻は、物理ベッドが空いていても残り 0', () => {

@@ -36,7 +36,8 @@ export const DEFAULT_HOURS: HoursConfig = {
 
 export interface ResolvedSession {
   start: number;     // 分
-  lastStart: number; // 最終枠の開始（分）
+  lastStart: number; // 顧客が予約できる最終枠の開始（分）
+  lastAdmin: number; // 管理側の予約表に表示する最終枠の開始（分）。初回の2枠目もここまで使える
 }
 
 /** 設定 JSON を検証して HoursConfig にする（不正なら null） */
@@ -89,22 +90,23 @@ export function isJpHoliday(date: string): boolean {
 export function sessionsForDate(
   config: HoursConfig,
   date: string,
-  opts: { closeOnHolidays: boolean; closed?: boolean },
+  opts: { closeOnHolidays: boolean; closed?: boolean; adminExtraSlots?: number; slotMinutes?: number },
 ): ResolvedSession[] {
   if (opts.closed) return [];
   if (opts.closeOnHolidays && isJpHoliday(date)) return [];
   const p = periodForDate(config, date);
   if (!p) return [];
   const sessions = p.byWeekday[String(weekdayOf(date))] ?? [];
+  const extra = (opts.adminExtraSlots ?? 0) * (opts.slotMinutes ?? 15);
   return sessions
-    .map(([a, b]) => ({ start: hmToMin(a), lastStart: hmToMin(b) }))
+    .map(([a, b]) => ({ start: hmToMin(a), lastStart: hmToMin(b), lastAdmin: hmToMin(b) + extra }))
     .sort((x, y) => x.start - y.start);
 }
 
-/** セッション内の枠開始時刻を列挙 */
-export function slotTimes(sessions: ResolvedSession[], slotMinutes: number): number[] {
+/** セッション内の枠開始時刻を列挙。admin = true なら管理側の追加枠（12:00 など）も含める */
+export function slotTimes(sessions: ResolvedSession[], slotMinutes: number, admin = false): number[] {
   const out: number[] = [];
-  for (const s of sessions) for (let t = s.start; t <= s.lastStart; t += slotMinutes) out.push(t);
+  for (const s of sessions) for (let t = s.start; t <= (admin ? s.lastAdmin : s.lastStart); t += slotMinutes) out.push(t);
   return out;
 }
 
