@@ -52,14 +52,14 @@ export default function StaffList({ members, maxTherapists, maxReception }: { me
   );
 
   return (
-    <section className="mb-6 rounded border bg-white p-4 text-sm">
+    <section className="order-first rounded border bg-white p-4 text-sm xl:order-none">
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <h2 className="font-bold">スタッフ・シフト</h2>
         <Link href="/admin/shifts" className="rounded bg-brand px-3 py-1 text-white">月間シフト表を開く</Link>
         <span className="text-xs text-slate-500">シフト表の施術者の人数（午前／午後）が、顧客に見える枠数になります。</span>
       </div>
       {msg && <p className="mb-2 rounded bg-red-50 px-3 py-1 text-red-700">{msg}</p>}
-      <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-y-4">
         <List list={th} label="施術者" max={maxTherapists} />
         <List list={rc} label="受付" max={maxReception} />
       </div>
