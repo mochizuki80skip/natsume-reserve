@@ -4,7 +4,7 @@ import { prisma } from './prisma';
 import { allBeds, capacityFor, capacityFromStaff, storeSessions } from './settings';
 import { cellKey, computeAvailability, isOccupiedText, type AvailabilityInput, type SlotStatus } from './availability';
 import { addDays, datesOfMonth, nowJst } from './time';
-import { NOON } from './hours';
+import { NOON, isJpHoliday } from './hours';
 
 export type Kind = 'NEW' | 'RETURN';
 
@@ -96,4 +96,37 @@ export async function calendarForCustomer(store: Store, setting: GlobalSetting, 
     result.push({ date, mark: any ? 'open' : 'full' });
   }
   return result;
+}
+
+export type DayLabel = '定休日' | '祝日' | '休診' | '受付終了' | '受付期間外' | null;
+
+/** 1 週間分（weekStart から 7 日）の枠状態。氏名は含まない */
+export async function weekForCustomer(store: Store, setting: GlobalSetting, weekStart: string, kind: Kind) {
+  const { date: today } = nowJst();
+  const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const [days, cells, staffRows] = await Promise.all([
+    prisma.dayStatus.findMany({ where: { storeId: store.id, date: { in: dates } } }),
+    prisma.cell.findMany({ where: { storeId: store.id, date: { in: dates }, bed: { gt: 0 } }, select: { date: true, time: true, bed: true, text: true } }),
+    prisma.staffDay.findMany({ where: { storeId: store.id, date: { in: dates }, role: 'THERAPIST' } }),
+  ]);
+  const dayMap = new Map(days.map((d) => [d.date, d]));
+  const cellsByDate = new Map<string, typeof cells>();
+  for (const c of cells) (cellsByDate.get(c.date) ?? cellsByDate.set(c.date, []).get(c.date)!).push(c);
+  const staffByDate = new Map<string, string[]>();
+  for (const r of staffRows) (staffByDate.get(r.date) ?? staffByDate.set(r.date, []).get(r.date)!).push(r.name);
+
+  const out: { date: string; label: DayLabel; slots: { time: number; status: SlotStatus }[] }[] = [];
+  for (const date of dates) {
+    const day = dayMap.get(date);
+    const sessions = storeSessions(store, setting, date, day?.closed);
+    let label: DayLabel = null;
+    if (sessions.length === 0) label = day?.closed ? '休診' : setting.closeOnHolidays && isJpHoliday(date) ? '祝日' : '定休日';
+    else if (date < today) label = '受付終了';
+    else if (!isPublished(store, date, today, day?.published)) label = '受付期間外';
+    if (label) { out.push({ date, label, slots: [] }); continue; }
+    const capacity = capacityFromStaff(store, staffByDate.get(date) ?? []);
+    const input = await buildInput(store, setting, date, kind, { closed: day?.closed, cells: cellsByDate.get(date) ?? [], capacity });
+    out.push({ date, label: null, slots: computeAvailability(input).map((s) => ({ time: s.time, status: s.status })) });
+  }
+  return { today, weekStart, publishDaysAhead: store.publishDaysAhead, days: out };
 }

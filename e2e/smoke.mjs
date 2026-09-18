@@ -12,18 +12,23 @@ const page = await ctx.newPage();
 // --- 顧客サイト
 await page.goto(`${BASE}/s/S001`);
 ok('顧客ページ表示', (await page.textContent('h1')).includes('WEB予約'));
-await page.getByRole('button', { name: /はじめての方/ }).click();
-await page.waitForSelector('text=〇', { timeout: 15000 });
-const openDay = page.locator('button:has-text("〇")').first();
-const dayNum = (await openDay.textContent()).replace('〇', '').trim();
-await openDay.click();
+await page.getByRole('button', { name: /はじめての方/ }).first().click();
+await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+// 〇 が無い週なら翌週へ進む
+let openSlot = page.locator('td.o button').first();
+for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) {
+  await page.getByRole('button', { name: '翌週 ›' }).click();
+  await page.waitForTimeout(800);
+  openSlot = page.locator('td.o button').first();
+}
+ok('週間一覧に〇がある', (await openSlot.count()) > 0);
+ok('凡例が日付行の上にある', (await page.locator('.wk-head .wk-legend').count()) === 1);
+const slotLabel = await openSlot.getAttribute('aria-label');
+await openSlot.click();
+await page.getByRole('button', { name: 'この日時で予約へ進む' }).click();
 await page.waitForSelector('h2');
 const dateTitle = await page.textContent('h2');
-ok('日付選択', /年.*月.*日/.test(dateTitle), dateTitle);
-const openSlot = page.locator('button:has-text("〇")').first();
-await openSlot.waitFor({ timeout: 15000 });
-const slotLabel = (await openSlot.textContent()).trim();
-await openSlot.click();
+ok('日時選択', /年.*月.*日/.test(dateTitle), `${dateTitle} (${slotLabel})`);
 await page.fill('input[placeholder*="山田"]', 'テスト 太郎');
 await page.fill('input[type="tel"]', '09012345678');
 await page.getByRole('button', { name: 'この内容で予約する' }).click();

@@ -11,6 +11,37 @@ body { @apply bg-slate-50 text-slate-800; }
 }
 .grid-cell input:focus { @apply bg-yellow-50 ring-2 ring-brand; }
 
+ /* 顧客サイト 週間一覧 */
+.wk-head { position: sticky; top: 0; z-index: 5; background: #f8fafc; padding-bottom: 6px; }
+.wk-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; font-size: 11.5px; margin-top: 8px; padding: 6px 10px; border: 1px solid #dbe3e7; border-radius: 8px; background: #fff; color: #1c2a30; }
+.wk-legend .o { color: #1f6f8b; font-size: 14px; font-weight: 700; }
+.wk-legend .p { color: #9a6400; }
+.wk-legend .x { color: #a3aeb5; font-weight: 700; }
+.wk-legend .sw { display: inline-block; width: 14px; height: 12px; vertical-align: -2px; background: #eef1f3; border: 1px solid #dbe3e7; border-radius: 2px; }
+.wk-wrap { background: #fff; border: 1px solid #dbe3e7; border-radius: 10px; overflow: hidden; margin-top: 8px; }
+.wk { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.wk th, .wk td { border-right: 1px solid #dbe3e7; border-bottom: 1px solid #dbe3e7; text-align: center; padding: 0; height: 27px; font-size: 13px; }
+.wk th:last-child, .wk td:last-child { border-right: 0; }
+.wk thead th { position: sticky; top: var(--wk-head-h, 150px); z-index: 4; background: #fff; font-weight: 500; height: 40px; line-height: 1.15; font-size: 12px; }
+.wk thead th .d { display: block; font-size: 14px; font-weight: 700; }
+.wk thead th.sun { color: #c8373e; } .wk thead th.sat { color: #2c63b8; }
+.wk th.time, .wk td.time { width: 44px; position: sticky; left: 0; z-index: 3; background: #fff; font-size: 11.5px; color: #6b7a82; font-weight: 500; border-right: 2px solid #dbe3e7; }
+.wk thead th.time { z-index: 6; }
+.wk tr.band td { height: 20px; background: #eef1f3; color: #6b7a82; font-size: 10.5px; letter-spacing: .08em; text-align: left; padding-left: 8px; }
+.wk tr.band td.time { text-align: center; padding-left: 0; }
+.wk td.closedcol { background: #eef1f3; color: #a3aeb5; vertical-align: middle; }
+.wk td.closedcol .v { display: inline-block; line-height: 1.6; font-size: 12px; font-weight: 500; }
+.wk td.blank { background: #eef1f3; }
+.wk td.slot button { all: unset; display: block; width: 100%; height: 100%; text-align: center; cursor: pointer; }
+.wk td.slot button:focus-visible { outline: 2px solid #1f6f8b; outline-offset: -2px; }
+.wk td.o button { color: #1f6f8b; font-weight: 700; font-size: 15px; }
+.wk td.o button:hover { background: #e4f1f5; }
+.wk td.p { background: #fff4dc; } .wk td.p button { color: #9a6400; font-size: 13px; }
+.wk td.x { color: #a3aeb5; background: #eef1f3; font-size: 12px; }
+.wk td.sel, .wk td.sel button { background: #1f6f8b !important; color: #fff !important; }
+.wk tr.pmstart td { border-top: 3px solid #dbe3e7; }
+.wk-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #fff; border-top: 1px solid #dbe3e7; box-shadow: 0 -6px 24px rgba(28,42,48,.12); padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+
 @media print {
   body { background: white; }
   .no-print { display: none !important; }

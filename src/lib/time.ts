@@ -76,3 +76,8 @@ export function datesOfMonth(ym: string): string[] {
 export function isValidMonth(s: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(s);
 }
+
+/** その週の月曜日（YYYY-MM-DD） */
+export function mondayOf(date: string): string {
+  return addDays(date, -((weekdayOf(date) + 6) % 7));
+}
