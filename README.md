@@ -52,7 +52,8 @@ npm test          # 営業時間・祝日・空き判定のユニットテスト
 
 ## Vercel へのデプロイ
 
-1. Vercel → Add New → Project → このリポジトリを選択、**Root Directory を `booking`** にする
+1. Vercel → Add New → Project → このリポジトリ（`natsume-booking`、予約システム単体）を選択。Root Directory は空欄のまま
+   （`--mochizuki` リポジトリ内の `booking/` から使う場合は Root Directory を `booking` にする）
 2. Supabase でプロジェクトを作り、Connect から 2 種類の URI を取得して環境変数に設定
    - `DATABASE_URL`：Transaction pooler（ポート 6543）の URI の末尾に `?pgbouncer=true&connection_limit=1` を付ける
    - `DIRECT_URL`：Direct connection（ポート 5432）の URI（テーブル作成用）
