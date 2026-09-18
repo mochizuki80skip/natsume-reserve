@@ -6,6 +6,7 @@ import type { DayData } from '@/lib/dayData';
 import { addDays, formatDateJa, minToHm } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
+import { planPaste } from '@/lib/paste';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string }
 
@@ -64,19 +65,24 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
     if (e.key === 'ArrowRight' && el.selectionStart === el.value.length) { e.preventDefault(); focusCell(r, c + 1); }
   }
 
-  /** Excel からの複数セル貼り付け（タブ区切り・改行区切り） */
+  const [pasteInfo, setPasteInfo] = useState('');
+
+  /** Excel / スプレッドシートからの複数セル貼り付け。時間列付き・結合セルにも対応（lib/paste.ts） */
   function onPaste(e: React.ClipboardEvent<HTMLInputElement>, r: number, c: number) {
     const text = e.clipboardData.getData('text/plain');
     if (!text.includes('\n') && !text.includes('\t')) return; // 単一セルは通常の貼り付け
     e.preventDefault();
-    const lines = text.replace(/\r/g, '').split('\n');
-    if (lines[lines.length - 1] === '') lines.pop();
-    lines.forEach((line, dr) => {
-      line.split('\t').forEach((v, dc) => {
-        const rr = r + dr, cc = c + dc;
-        if (rr < rows.length && cc < cols.length) setCell(rows[rr], cols[cc], v.trim());
-      });
-    });
+    const plan = planPaste(text, rows, r);
+    let n = 0;
+    for (const cell of plan.cells) {
+      const cc = c + cell.col;
+      if (cell.row < rows.length && cc < cols.length) { setCell(rows[cell.row], cols[cc], cell.text); n++; }
+    }
+    const notes = [`${n} セルを貼り付けました`];
+    if (plan.timeAligned) notes.push('時間列で行を合わせました');
+    if (plan.mergedCollapsed) notes.push('結合セル（2列=1ベッド）を1列にまとめました');
+    if (plan.skippedTimes.length) notes.push(`予約表に無い時刻は飛ばしました：${plan.skippedTimes.join('、')}`);
+    setPasteInfo(notes.join('。'));
   }
 
   async function saveCapacity(which: 'capacityAm' | 'capacityPm', raw: string) {
@@ -170,6 +176,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
         </div>
       </div>
 
+      {pasteInfo && <p className="no-print mb-2 rounded bg-brand-light px-3 py-1 text-xs text-brand-dark">{pasteInfo}</p>}
       {rows.length === 0 ? (
         <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日・臨時休診）のため予約表はありません。営業する場合は「臨時休診」を外すか、店舗設定の営業時間を確認してください。</p>
       ) : (
@@ -223,7 +230,8 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
         </label>
       </div>
       <p className="no-print mt-2 text-xs text-slate-500">
-        セルに氏名を入力すると自動保存されます。Excel からコピーした複数セルをそのまま貼り付けできます。矢印キー／Enter／Tab で移動。
+        セルに氏名を入力すると自動保存されます。Excel／スプレッドシートからの貼り付けは、<b>時間の列を含めて</b>（例：B7:L36）コピーし、9:00 のベッド1 のセルで Ctrl+V。
+        時刻で行を合わせ、結合セル（2列で1ベッド）は自動で1列にまとめます。矢印キー／Enter／Tab で移動。
         薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。初回の 2 枠目は「〃」。「〃」「✖」は人数に数えません。
         施術者数を超える列（灰色）にも入力できますが、顧客には施術者数ぶんの枠しか空きとして見えません。
         黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません（初回30分の2枠目としては使われます）。

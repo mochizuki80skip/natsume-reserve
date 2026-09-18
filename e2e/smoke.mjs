@@ -116,6 +116,37 @@ await ap.waitForSelector('table');
 const r4 = await ap.locator('table tbody tr').nth(4).locator('input').nth(1).inputValue();
 const r5 = await ap.locator('table tbody tr').nth(5).locator('input').nth(0).inputValue();
 ok('複数セル貼り付け', r4 === '高橋' && r5 === '田中', `${r4}/${r5}`);
+// Excel の B7:L36 相当（時間列＋結合セル5ベッド、12:00 行なし）を 9:00 ベッド1 に貼り付け
+{
+  const am = Array.from({ length: 12 }, (_, i) => 540 + i * 15), pm = Array.from({ length: 18 }, (_, i) => 900 + i * 15);
+  const hm = (m) => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`;
+  const lines = [...am, ...pm].map((t) => {
+    const beds = ['', '', '', '✖', '✖'];
+    if (t === 540) beds[0] = 'エクセル太郎';
+    if (t === 705) beds[1] = '十一時四十五分';
+    if (t === 900) beds[2] = '十五時ちょうど';
+    if (t === 1095) beds[0] = '十八時十五分';
+    return [hm(t), ...beds.flatMap((b) => [b, ''])].join('\t');
+  });
+  const tsv = lines.join('\r\n') + '\r\n';
+  const rowOf0 = (t) => ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${hm(t)}$`) }) });
+  const noonBefore = await rowOf0(720).locator('input').nth(2).inputValue();
+  const first = ap.locator('table tbody tr').nth(0).locator('input').nth(0);
+  await first.focus();
+  await ap.evaluate((text) => {
+    const dt = new DataTransfer(); dt.setData('text/plain', text);
+    document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, tsv);
+  await ap.waitForSelector('text=保存しました', { timeout: 10000 });
+  await ap.reload(); await ap.waitForSelector('table');
+  const rowOf = (t) => ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${hm(t)}$`) }) });
+  const v = async (t, bed) => rowOf(t).locator('input').nth(bed - 1).inputValue();
+  ok('Excel貼付: 9:00 ベッド1', (await v(540, 1)) === 'エクセル太郎', await v(540, 1));
+  ok('Excel貼付: 結合セル→ベッド2に入る', (await v(705, 2)) === '十一時四十五分', await v(705, 2));
+  ok('Excel貼付: 12:00行を飛ばして15:00に入る（12:00は変わらない）', (await v(900, 3)) === '十五時ちょうど' && (await v(720, 3)) === noonBefore, `${await v(900, 3)} / 12:00='${await v(720, 3)}'`);
+  ok('Excel貼付: 18:15 ベッド1（午後の後半）', (await v(1095, 1)) === '十八時十五分', await v(1095, 1));
+  ok('Excel貼付: ✖ はベッド4に入る', (await v(555, 4)) === '✖' && (await v(555, 6)) === '', `${await v(555, 4)} / bed6='${await v(555, 6)}'`);
+}
 await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
 
 // 顧客API に個人情報が含まれない
