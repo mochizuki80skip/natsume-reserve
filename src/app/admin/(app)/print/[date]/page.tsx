@@ -39,6 +39,19 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
       {d.times.length === 0 ? <p>休診日</p> : (
         <table className="w-full border-collapse">
           <thead>
+            {(() => {
+              const lo = Math.min(d.capacity.am, d.capacity.pm), hi = Math.max(d.capacity.am, d.capacity.pm), n = cols.length;
+              const g: { span: number; label: string }[] = [];
+              if (lo > 0) g.push({ span: Math.min(lo, n), label: '予約サイトに表示' });
+              if (hi > lo && lo < n) g.push({ span: Math.min(hi, n) - lo, label: d.capacity.am > d.capacity.pm ? '午前のみ表示' : '午後のみ表示' });
+              if (hi < n) g.push({ span: n - hi, label: '非表示（管理側のみ）' });
+              return (
+                <tr className="text-[9px]">
+                  <th className="border border-black" />
+                  {g.map((x, i) => <th key={i} colSpan={x.span} className="border border-black px-1 font-normal">{x.label}</th>)}
+                </tr>
+              );
+            })()}
             <tr>
               <th className="w-14 border border-black px-1">時間</th>
               {cols.map((b) => <th key={b} className={`border border-black px-1 ${b > Math.max(d.capacity.am, d.capacity.pm) ? 'bg-slate-200' : ''}`}>{b}</th>)}

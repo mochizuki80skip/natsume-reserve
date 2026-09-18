@@ -105,6 +105,7 @@ describe('helpers', () => {
   it('氏名セルの判定', () => {
     expect(isPatientText('山田')).toBe(true);
     expect(isPatientText('〃')).toBe(false);
+    expect(isPatientText('上記初診対応')).toBe(false);
     expect(isPatientText('✖')).toBe(false);
     expect(isPatientText('  ')).toBe(false);
   });

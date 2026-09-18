@@ -56,7 +56,7 @@ await ap.waitForSelector('table');
 const inputs = ap.locator('table tbody input');
 const values = await inputs.evaluateAll((els) => els.map((e) => e.value));
 ok('予約表に氏名（初）が入る', values.includes('テスト 太郎（初）'));
-ok('2枠目に〃が入る', values.includes('〃'));
+ok('2枠目に「上記初診対応」が入る', values.includes('上記初診対応'));
 // スタッフ登録 → シフト（前休）→ 顧客に見える枠数が午前/午後で変わる
 await ap.goto(`${BASE}/admin/settings`);
 for (const n of ['山本', '佐々木', '田村']) {
@@ -86,7 +86,7 @@ const wk = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?st
 const dayW = wk.days.find((x) => x.date === date);
 ok('顧客側は11:45まで', dayW && !dayW.slots.some((s) => s.time === 720) && dayW.slots.some((s) => s.time === 705));
 ok('枠外列が無い', (await ap.locator('table thead th').allTextContents()).every((t) => !t.includes('枠外')));
-ok('ベッド8列', (await ap.locator('table thead th').count()) === 9);
+ok('ベッド8列', (await ap.locator('table thead tr').last().locator('th').count()) === 9);
 const countText = await ap.locator('text=午前').first().textContent();
 ok('人数カウント表示', /名/.test(countText), countText);
 
@@ -154,7 +154,10 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   const d2 = '2026-09-25';
   const r1 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'NEW', date: d, time: 600, name: '取消太郎', phone: '09011112222' }) })).json(), d2);
   ok('取消テスト用の予約作成', r1.ok === true, JSON.stringify(r1));
+  await ap.goto(`${BASE}/admin/reservations`); await ap.waitForSelector('table');
+  ok('WEB予約一覧に表示される', (await ap.locator('table').textContent()).includes('取消太郎'));
   await ap.goto(`${BASE}/admin/day/${d2}`); await ap.waitForSelector('table');
+  ok('ベッド番号の上に表示範囲の見出し', (await ap.locator('table thead').textContent()).includes('予約サイトに表示') && (await ap.locator('table thead').textContent()).includes('非表示'));
   const rowOf = (t) => ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${t}$`) }) });
   ap.once('dialog', (dlg) => dlg.accept());
   await rowOf('10:00').locator('button[aria-label="WEB予約を取り消す"]').click();
@@ -162,7 +165,7 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   await ap.reload(); await ap.waitForSelector('table');
   const v1 = await rowOf('10:00').locator('input').nth(0).inputValue();
   const v2 = await rowOf('10:15').locator('input').nth(0).inputValue();
-  ok('取消ボタンで氏名と〃が消える', v1 === '' && v2 === '', `'${v1}' / '${v2}'`);
+  ok('取消ボタンで氏名と2枠目が消える', v1 === '' && v2 === '', `'${v1}' / '${v2}'`);
   const wk2 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), d2);
   const slot = wk2.days.find((x) => x.date === d2)?.slots.find((s) => s.time === 600);
   ok('取消後は顧客側で空きに戻る', slot && slot.status !== 'closed', JSON.stringify(slot));
@@ -170,8 +173,9 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   const c = rowOf('10:30').locator('input').nth(1);
   await c.fill('すぐ消す'); await c.press('Tab'); await ap.waitForSelector('text=保存しました', { timeout: 10000 });
   await c.click(); await ap.keyboard.press('Control+A'); await ap.keyboard.press('Delete');
-  await ap.waitForTimeout(150);
+  await ap.waitForTimeout(100);
   await ap.reload(); await ap.waitForSelector('table');
+  await ap.waitForTimeout(500); await ap.reload(); await ap.waitForSelector('table'); // 直前送信分の反映を待って再表示
   ok('消した直後に再読み込みしても消えたまま', (await rowOf('10:30').locator('input').nth(1).inputValue()) === '');
 }
 

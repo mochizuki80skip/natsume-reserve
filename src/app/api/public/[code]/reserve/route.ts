@@ -68,7 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
       for (let k = 0; k < input.neededSlots; k++) {
         cellData.push({
           storeId: store.id, date: body.date, time: body.time + k * setting.slotMinutes, bed,
-          text: k === 0 ? (body.kind === 'NEW' ? `${body.name}（初）` : body.name) : '〃',
+          text: k === 0 ? (body.kind === 'NEW' ? `${body.name}（初）` : body.name) : '上記初診対応',
           reservationId: reservation.id,
         });
       }

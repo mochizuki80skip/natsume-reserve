@@ -44,7 +44,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
 
   const schedule = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, 300);
+    timer.current = setTimeout(flush, 200);
   }, [flush]);
 
   // 画面を離れるとき（別ページ・再読み込み・タブを閉じる）に未保存分を送る
@@ -60,7 +60,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
     };
   }, [flush]);
 
-  /** WEB予約の取消：氏名と〃のセルをまとめて削除し、予約を取消扱いにする */
+  /** WEB予約の取消：氏名と2枠目のセルをまとめて削除し、予約を取消扱いにする */
   async function cancelReservation(id: string, name: string) {
     if (!confirm(`WEB予約「${name}」を取り消しますか？\n予約表から削除され、顧客側では空き枠に戻ります。`)) return;
     const r = await fetch('/api/admin/reservations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
@@ -211,6 +211,20 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
         <div className="overflow-x-auto rounded border bg-white">
           <table className="w-full border-collapse text-sm">
             <thead>
+              {(() => {
+                // ベッド番号の上に「予約サイトに表示されている範囲／されていない範囲」を表示
+                const lo = Math.min(cap.am, cap.pm), hi = Math.max(cap.am, cap.pm), n = cols.length;
+                const groups: { span: number; label: string; cls: string }[] = [];
+                if (lo > 0) groups.push({ span: Math.min(lo, n), label: `予約サイトに表示（午前 ${cap.am} 枠／午後 ${cap.pm} 枠）`, cls: 'bg-green-50 text-green-800' });
+                if (hi > lo && lo < n) groups.push({ span: Math.min(hi, n) - lo, label: cap.am > cap.pm ? '午前のみ表示' : '午後のみ表示', cls: 'bg-amber-50 text-amber-800' });
+                if (hi < n) groups.push({ span: n - hi, label: '予約サイトに非表示（管理側のみ入力可）', cls: 'bg-slate-100 text-slate-500' });
+                return (
+                  <tr className="text-[11px]">
+                    <th className="border bg-slate-50" />
+                    {groups.map((g, i) => <th key={i} colSpan={g.span} className={`border px-1 py-0.5 font-normal ${g.cls}`}>{g.label}</th>)}
+                  </tr>
+                );
+              })()}
               <tr className="bg-slate-100">
                 <th className="w-16 border px-1 py-1">時間</th>
                 {cols.map((b) => (
@@ -245,7 +259,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
                             />
                             {web && (cells.get(k) ?? '') !== '' && (
                               <button type="button" tabIndex={-1} onClick={() => cancelReservation(web.id, cells.get(k) ?? '')}
-                                title="WEB予約を取り消す（氏名と〃をまとめて削除）" aria-label="WEB予約を取り消す"
+                                title="WEB予約を取り消す（氏名と2枠目をまとめて削除）" aria-label="WEB予約を取り消す"
                                 className="no-print absolute right-0 top-0 h-full w-5 text-xs text-slate-400 hover:bg-red-100 hover:text-red-700">×</button>
                             )}
                           </div>
@@ -268,8 +282,8 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
       <p className="no-print mt-2 text-xs text-slate-500">
         セルに氏名を入力すると自動保存されます。Excel／スプレッドシートからの貼り付けは、<b>時間の列を含めて</b>（例：B7:L36）コピーし、9:00 のベッド1 のセルで Ctrl+V。
         時刻で行を合わせ、結合セル（2列で1ベッド）は自動で1列にまとめます。矢印キー／Enter／Tab で移動。
-        薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。セル右端の「×」でその予約（氏名と〃）をまとめて取り消せます。文字を消して保存しても同じく空き枠に戻ります。
-        初回の 2 枠目は「〃」。「〃」「✖」は人数に数えません。
+        薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。セル右端の「×」でその予約（氏名と2枠目）をまとめて取り消せます。文字を消して保存しても同じく空き枠に戻ります。
+        初診・再来（①はじめての方）の 2 枠目は「上記初診対応」。「上記初診対応」「〃」「✖」は人数に数えません。
         施術者数を超える列（灰色）にも入力できますが、顧客には施術者数ぶんの枠しか空きとして見えません。
         黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません（初回30分の2枠目としては使われます）。
       </p>
