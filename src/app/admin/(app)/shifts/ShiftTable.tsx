@@ -89,7 +89,7 @@ export default function ShiftTable({ month, dates, closedDates, members, shifts 
             <tr className="bg-brand-light font-bold">
               <td className="sticky left-0 z-10 whitespace-nowrap border bg-brand-light px-2 py-0.5">枠数 午前／午後</td>
               {dates.map((d) => (
-                <td key={d} className="border px-0.5 py-0.5 text-center text-xs tabular-nums">
+                <td key={d} className="whitespace-nowrap border px-0.5 py-0.5 text-center text-xs tabular-nums">
                   {closed.has(d) ? '－' : `${capFor(d, true)}／${capFor(d, false)}`}
                 </td>
               ))}
