@@ -52,6 +52,16 @@ const inputs = ap.locator('table tbody input');
 const values = await inputs.evaluateAll((els) => els.map((e) => e.value));
 ok('予約表に氏名（初）が入る', values.includes('テスト 太郎（初）'));
 ok('2枠目に〃が入る', values.includes('〃'));
+// シフト入力 → 顧客に見える枠数が施術者数になる
+const th1 = ap.locator('input[placeholder="施術者1"]');
+await th1.fill('山本'); await th1.press('Tab');
+await ap.locator('input[placeholder="施術者2"]').fill('佐々木'); await ap.locator('input[placeholder="施術者2"]').press('Tab');
+await ap.waitForTimeout(800);
+await ap.reload(); await ap.waitForSelector('table');
+const capText = await ap.locator('text=顧客に見える枠数').first().textContent();
+ok('施術者数が枠数に反映', /2/.test(capText), capText);
+ok('枠外列が無い', (await ap.locator('table thead th').allTextContents()).every((t) => !t.includes('枠外')));
+ok('ベッド8列', (await ap.locator('table thead th').count()) === 9);
 const countText = await ap.locator('text=午前').first().textContent();
 ok('人数カウント表示', /名/.test(countText), countText);
 

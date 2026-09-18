@@ -20,7 +20,11 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
   const cell = new Map(d.cells.map((c) => [`${c.time}:${c.bed}`, c.text]));
   let am = 0, pm = 0;
   for (const c of d.cells) if (isPatientText(c.text)) { if (c.time < NOON) am++; else pm++; }
-  const cols = [...d.beds.map((b) => b.bed), 0];
+  const cols = d.beds;
+  const staffLine = (label: string, names: string[]) => {
+    const n = names.filter((x) => x.trim());
+    return n.length ? `${label}：${n.join('・')}` : `${label}：－`;
+  };
 
   return (
     <main className="mx-auto max-w-[190mm] bg-white p-4 text-[11px] print:p-0">
@@ -29,14 +33,17 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
         <h1 className="text-lg font-bold">《予約表》 {store.name}</h1>
         <div className="text-sm">午前 <b>{am}</b> 名　午後 <b>{pm}</b> 名　合計 <b>{am + pm}</b> 名</div>
       </div>
-      <div className="mb-2 text-base font-bold">{formatDateJa(date)}</div>
+      <div className="mb-1 text-base font-bold">{formatDateJa(date)}</div>
+      <div className="mb-2 flex flex-wrap gap-x-4 text-[10px] text-slate-700">
+        <span>{staffLine('施術者', d.therapists)}（{d.capacity} 枠）</span>
+        <span>{staffLine('受付', d.reception)}</span>
+      </div>
       {d.times.length === 0 ? <p>休診日</p> : (
         <table className="w-full border-collapse">
           <thead>
             <tr>
               <th className="w-14 border border-black px-1">時間</th>
-              {d.beds.map((b) => <th key={b.bed} className={`border border-black px-1 ${b.active ? '' : 'bg-slate-200'}`}>{b.bed}{b.label ? ` ${b.label}` : ''}{b.active ? '' : '（休）'}</th>)}
-              <th className="border border-black px-1">枠外</th>
+              {cols.map((b) => <th key={b} className={`border border-black px-1 ${b > d.capacity ? 'bg-slate-200' : ''}`}>{b}</th>)}
             </tr>
           </thead>
           <tbody>

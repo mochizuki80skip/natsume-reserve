@@ -13,11 +13,12 @@ export async function GET(req: Request) {
   }
   const setting = await getGlobalSetting();
   const cutoff = addDays(nowJst().date, -setting.retentionDays);
-  const [cells, reservations, days, beds] = await prisma.$transaction([
+  const [cells, reservations, days, beds, staff] = await prisma.$transaction([
     prisma.cell.deleteMany({ where: { date: { lt: cutoff } } }),
     prisma.reservation.deleteMany({ where: { date: { lt: cutoff } } }),
     prisma.dayStatus.deleteMany({ where: { date: { lt: cutoff } } }),
     prisma.bedStatus.deleteMany({ where: { date: { lt: cutoff } } }),
+    prisma.staffDay.deleteMany({ where: { date: { lt: cutoff } } }),
   ]);
-  return NextResponse.json({ ok: true, cutoff, deleted: { cells: cells.count, reservations: reservations.count, days: days.count, beds: beds.count } });
+  return NextResponse.json({ ok: true, cutoff, deleted: { cells: cells.count, reservations: reservations.count, days: days.count, beds: beds.count, staff: staff.count } });
 }

@@ -31,8 +31,10 @@ model Store {
   code              String   @unique // 店舗コード（ログインID・顧客URLにも使用）
   name              String
   phone             String   // 電話マーク・SMS に表示する電話番号
-  beds              Int      @default(5) // 用意するベッド数（列数）
-  defaultActiveBeds Int      @default(3) // 日別設定が無い日に稼働とみなすベッド数
+  beds              Int      @default(8) // 用意するベッド数（列数）
+  defaultActiveBeds Int      @default(3) // シフト未入力の日に顧客へ見せる枠数（施術者数の既定値）
+  maxTherapists     Int      @default(6) // シフトに入力できる施術者の最大人数
+  maxReception      Int      @default(4) // シフトに入力できる受付の最大人数
   publishDaysAhead  Int      @default(30) // 何日先まで顧客に公開するか（個別の非公開設定が優先）
   hoursOverride     Json?    // null = 全店共通の営業時間を使う
   notifyPhone       String?  // 新規予約を店舗にSMS通知する番号（任意）
@@ -42,6 +44,7 @@ model Store {
 
   accounts     AdminAccount[]
   days         DayStatus[]
+  staff        StaffDay[]
   bedStatuses  BedStatus[]
   cells        Cell[]
   reservations Reservation[]
@@ -73,7 +76,21 @@ model DayStatus {
   @@unique([storeId, date])
 }
 
-// 日付×ベッドの稼働（チェック）状態。行が無い日は defaultActiveBeds 台が稼働
+// 日付ごとのシフト（施術者・受付の氏名）。施術者の人数 ＝ 顧客に見せる稼働枠数
+model StaffDay {
+  id      String @id @default(cuid())
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  date    String
+  role    String // THERAPIST（施術者）| RECEPTION（受付）
+  slot    Int    // 1..maxTherapists / 1..maxReception
+  name    String
+
+  @@unique([storeId, date, role, slot])
+  @@index([storeId, date])
+}
+
+// （旧）日付×ベッドの稼働状態。現在はシフト（StaffDay）で稼働数を決めるため未使用
 model BedStatus {
   id      String  @id @default(cuid())
   storeId String

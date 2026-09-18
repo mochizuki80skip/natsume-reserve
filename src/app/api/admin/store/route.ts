@@ -11,6 +11,8 @@ const Body = z.object({
   phone: z.string().trim().min(1).max(20),
   beds: z.number().int().min(1).max(20),
   defaultActiveBeds: z.number().int().min(0).max(20),
+  maxTherapists: z.number().int().min(1).max(20),
+  maxReception: z.number().int().min(0).max(20),
   publishDaysAhead: z.number().int().min(0).max(365),
   notifyPhone: z.string().trim().max(20).optional(),
   hoursOverride: z.unknown().nullable(),
@@ -30,7 +32,7 @@ export async function PUT(req: Request) {
   }
   await prisma.store.update({
     where: { id: ctx.store.id },
-    data: { name: b.name, phone: b.phone, beds: b.beds, defaultActiveBeds: Math.min(b.defaultActiveBeds, b.beds), publishDaysAhead: b.publishDaysAhead, notifyPhone: b.notifyPhone || null, hoursOverride: hoursOverride ?? Prisma.JsonNull },
+    data: { name: b.name, phone: b.phone, beds: b.beds, defaultActiveBeds: Math.min(b.defaultActiveBeds, b.beds), maxTherapists: b.maxTherapists, maxReception: b.maxReception, publishDaysAhead: b.publishDaysAhead, notifyPhone: b.notifyPhone || null, hoursOverride: hoursOverride ?? Prisma.JsonNull },
   });
   return NextResponse.json({ ok: true });
 }

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { computeAvailability, freeBedsAt, isPatientText, type AvailabilityInput } from './availability';
+import { computeAvailability, freeBedsAt, remainingAt, isPatientText, type AvailabilityInput } from './availability';
 import { DEFAULT_HOURS, sessionsForDate, slotTimes } from './hours';
 import { nowJst, formatDateJa } from './time';
 
 const base = (over: Partial<AvailabilityInput> = {}): AvailabilityInput => ({
   sessions: [{ start: 540, lastStart: 705 }, { start: 900, lastStart: 1155 }],
   slotMinutes: 15,
-  activeBeds: [1, 2, 3],
+  beds: [1, 2, 3, 4, 5, 6, 7, 8],
+  capacity: 3,
   occupied: new Set(),
   neededSlots: 1,
   phoneMarkRemaining: 1,
@@ -42,10 +43,11 @@ describe('availability', () => {
     expect(r.find((s) => s.time === 570)).toMatchObject({ status: 'open', remaining: 3 });
   });
   it('初回は同じベッドで 2 枠連続が必要。午前最終枠は取れない', () => {
-    // ベッド1: 9:15 埋まり → 9:00 は不可。ベッド2,3 は空き
+    // ベッド1: 9:15 埋まり → 9:00 からの 2 枠はベッド 2〜8 で可能。ただし施術者 3 人なので 9:15 の残りは 2
     const occ = new Set(['555:1']);
     const r = computeAvailability(base({ occupied: occ, neededSlots: 2 }));
-    expect(freeBedsAt(base({ occupied: occ, neededSlots: 2 }), 540)).toEqual([2, 3]);
+    expect(freeBedsAt(base({ occupied: occ, neededSlots: 2 }), 540)).toEqual([2, 3, 4, 5, 6, 7, 8]);
+    expect(r.find((s) => s.time === 540)).toMatchObject({ status: 'open', remaining: 2 });
     expect(r.find((s) => s.time === 705)).toMatchObject({ status: 'closed', remaining: 0 }); // 11:45 は次枠なし
     expect(r.find((s) => s.time === 690)).toMatchObject({ status: 'open', remaining: 3 });   // 11:30 は 11:45 と連続
   });
@@ -60,9 +62,23 @@ describe('availability', () => {
     const r = computeAvailability(base({ nowMinutes: Infinity }));
     expect(r.every((s) => s.status === 'closed')).toBe(true);
   });
-  it('稼働ベッドが 0 台なら×', () => {
-    const r = computeAvailability(base({ activeBeds: [] }));
+  it('施術者が 0 人（枠数 0）なら×', () => {
+    const r = computeAvailability(base({ capacity: 0 }));
     expect(r.every((s) => s.status === 'closed')).toBe(true);
+  });
+  it('管理側が施術者数を超えて入力した時刻は、物理ベッドが空いていても残り 0', () => {
+    // 施術者 3 人、9:00 にベッド 4,5,6 に入力（8 床のうち 3 床埋まり）
+    const occ = new Set(['540:4', '540:5', '540:6']);
+    expect(remainingAt(base({ occupied: occ }), 540)).toBe(0);
+    // 9:15 は 2 床だけ埋まり → 残り 1 → 電話マーク
+    const occ2 = new Set(['555:7', '555:8']);
+    expect(computeAvailability(base({ occupied: occ2 })).find((s) => s.time === 555)).toMatchObject({ status: 'phone', remaining: 1 });
+  });
+  it('初回は 2 枠とも施術者数の範囲内で空いている必要がある', () => {
+    // 9:15 が施術者数いっぱい → 9:00 の初回は不可、9:00 の通院中は可
+    const occ = new Set(['555:1', '555:2', '555:3']);
+    expect(remainingAt(base({ occupied: occ, neededSlots: 2 }), 540)).toBe(0);
+    expect(remainingAt(base({ occupied: occ, neededSlots: 1 }), 540)).toBe(3);
   });
 });
 

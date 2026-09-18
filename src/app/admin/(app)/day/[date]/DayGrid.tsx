@@ -15,15 +15,16 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
   const router = useRouter();
   const [cells, setCells] = useState<Map<string, string>>(() => new Map(data.cells.map((c) => [key(c.time, c.bed), c.text])));
   const webInfo = useMemo(() => new Map(data.cells.filter((c) => c.web).map((c) => [key(c.time, c.bed), c.web!])), [data.cells]);
-  const [beds, setBeds] = useState(data.beds);
+  const [therapists, setTherapists] = useState(data.therapists);
+  const [reception, setReception] = useState(data.reception);
   const [day, setDay] = useState(data.day);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const dirty = useRef(new Map<string, string>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef(new Map<string, HTMLInputElement>());
 
-  // 列：ベッド 1..N ＋ 枠外(0)
-  const cols = useMemo(() => [...beds.map((b) => b.bed), 0], [beds]);
+  // 列：物理ベッド 1..N（管理側は施術者数に関係なくどのベッドにも入力できる）
+  const cols = data.beds;
   const rows = data.times;
 
   const flush = useCallback(async () => {
@@ -80,14 +81,12 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
     });
   }
 
-  async function toggleBed(bed: number, active: boolean) {
-    setBeds((bs) => bs.map((b) => (b.bed === bed ? { ...b, active } : b)));
-    await fetch('/api/admin/beds', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, beds: [{ bed, active }] }) });
+  async function saveStaff(role: 'THERAPIST' | 'RECEPTION', slot: number, name: string) {
+    const list = role === 'THERAPIST' ? therapists : reception;
+    if ((list[slot - 1] ?? '') === name) return;
+    (role === 'THERAPIST' ? setTherapists : setReception)((l) => l.map((v, i) => (i === slot - 1 ? name : v)));
+    await fetch('/api/admin/staff', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, role, slot, name }) });
     router.refresh();
-  }
-  async function saveLabel(bed: number, label: string) {
-    const b = beds.find((x) => x.bed === bed)!;
-    await fetch('/api/admin/beds', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, beds: [{ bed, active: b.active, label }] }) });
   }
   async function updateDay(patch: Partial<typeof day>) {
     const next = { ...day, ...patch };
@@ -97,7 +96,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
   }
 
   function copyAll() {
-    const header = ['時間', ...beds.map((b) => `ベッド${b.bed}${b.label ? `(${b.label})` : ''}`), '枠外'].join('\t');
+    const header = ['時間', ...cols.map((b) => `ベッド${b}`)].join('\t');
     const body = rows.map((t) => [minToHm(t), ...cols.map((b) => cells.get(key(t, b)) ?? '')].join('\t')).join('\n');
     navigator.clipboard.writeText(`${header}\n${body}`);
   }
@@ -112,7 +111,9 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
     return { am, pm, total: am + pm };
   }, [cells]);
 
-  const activeCount = beds.filter((b) => b.active).length;
+  // 顧客に見せる枠数 ＝ 施術者の人数（1 人も入力が無い日は既定値）
+  const entered = therapists.filter((n) => n.trim()).length;
+  const capacity = entered > 0 ? Math.min(entered, cols.length) : data.defaultCapacity;
 
   return (
     <div>
@@ -138,7 +139,31 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
           <label className="flex items-center gap-1"><input type="checkbox" checked={day.published === true} onChange={(e) => updateDay({ published: e.target.checked ? true : null })} />公開する</label>
           <label className="flex items-center gap-1"><input type="checkbox" checked={day.published === false} onChange={(e) => updateDay({ published: e.target.checked ? false : null })} />非公開にする</label>
           <label className="flex items-center gap-1"><input type="checkbox" checked={day.closed} onChange={(e) => updateDay({ closed: e.target.checked })} />臨時休診</label>
-          <span className="text-slate-500">稼働 {activeCount} 台 ＝ 顧客に見える空き枠数</span>
+        </div>
+      </div>
+
+      <div className="no-print mb-3 rounded border bg-white p-3">
+        <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <span className="font-bold">本日のシフト</span>
+          <span className="text-slate-600">顧客に見える枠数：<b className="text-lg text-brand-dark">{capacity}</b> 枠（施術者の人数）{entered === 0 && <span className="ml-1 text-xs text-slate-400">※未入力のため既定値</span>}</span>
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          <div>
+            <div className="mb-1 text-xs text-slate-500">施術者（最大 {therapists.length} 名）</div>
+            <div className="flex flex-wrap gap-1">
+              {therapists.map((n, i) => (
+                <input key={i} defaultValue={n} placeholder={`施術者${i + 1}`} onBlur={(e) => saveStaff('THERAPIST', i + 1, e.target.value.trim())} className="w-24 rounded border px-2 py-1 text-sm" />
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-slate-500">受付（最大 {reception.length} 名）</div>
+            <div className="flex flex-wrap gap-1">
+              {reception.map((n, i) => (
+                <input key={i} defaultValue={n} placeholder={`受付${i + 1}`} onBlur={(e) => saveStaff('RECEPTION', i + 1, e.target.value.trim())} className="w-24 rounded border px-2 py-1 text-sm" />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -150,16 +175,11 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
             <thead>
               <tr className="bg-slate-100">
                 <th className="w-16 border px-1 py-1">時間</th>
-                {beds.map((b) => (
-                  <th key={b.bed} className={`border px-1 py-1 font-normal ${b.active ? '' : 'bg-slate-200 text-slate-400'}`}>
-                    <label className="flex items-center justify-center gap-1 font-bold">
-                      <input type="checkbox" checked={b.active} onChange={(e) => toggleBed(b.bed, e.target.checked)} className="no-print" />
-                      {b.bed}
-                    </label>
-                    <input defaultValue={b.label} placeholder="施術者" onBlur={(e) => saveLabel(b.bed, e.target.value)} className="mt-0.5 w-full rounded border px-1 text-center text-xs" />
+                {cols.map((b) => (
+                  <th key={b} className={`border px-1 py-1 ${b > capacity ? 'bg-slate-100 text-slate-500' : ''}`} title={b > capacity ? '施術者数を超える列（管理側のみ入力可）' : undefined}>
+                    ベッド{b}
                   </th>
                 ))}
-                <th className="border bg-amber-50 px-1 py-1">枠外</th>
               </tr>
             </thead>
             <tbody>
@@ -170,11 +190,9 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
                     <td className="border bg-slate-50 px-1 text-center font-mono">{minToHm(t)}</td>
                     {cols.map((b, c) => {
                       const k = key(t, b);
-                      const bedInfo = beds.find((x) => x.bed === b);
-                      const inactive = b !== 0 && bedInfo && !bedInfo.active;
                       const web = webInfo.get(k);
                       return (
-                        <td key={b} className={`grid-cell border p-0 ${b === 0 ? 'bg-amber-50' : inactive ? 'bg-slate-100' : ''} ${web ? 'bg-sky-50' : ''}`}
+                        <td key={b} className={`grid-cell border p-0 ${b > capacity ? 'bg-slate-50' : ''} ${web ? 'bg-sky-50' : ''}`}
                           title={web ? `WEB予約（${web.kind === 'NEW' ? '初回' : '通院中'}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
                           <input
                             ref={(el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k); }}
@@ -203,6 +221,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
       <p className="no-print mt-2 text-xs text-slate-500">
         セルに氏名を入力すると自動保存されます。Excel からコピーした複数セルをそのまま貼り付けできます。矢印キー／Enter／Tab で移動。
         薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。初回の 2 枠目は「〃」。「〃」「✖」は人数に数えません。
+        施術者数を超える列（灰色）にも入力できますが、顧客には施術者数ぶんの枠しか空きとして見えません。
       </p>
     </div>
   );

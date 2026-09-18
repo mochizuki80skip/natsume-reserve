@@ -1,7 +1,7 @@
 // 顧客向けの空き状況計算（氏名などの個人情報は一切返さない）
 import type { GlobalSetting, Store } from '@prisma/client';
 import { prisma } from './prisma';
-import { activeBedsFor, storeSessions } from './settings';
+import { allBeds, capacityFor, capacityFromStaff, storeSessions } from './settings';
 import { cellKey, computeAvailability, isOccupiedText, type AvailabilityInput, type SlotStatus } from './availability';
 import { addDays, datesOfMonth, nowJst } from './time';
 import { NOON } from './hours';
@@ -32,7 +32,7 @@ export async function buildInput(
   setting: GlobalSetting,
   date: string,
   kind: Kind,
-  opts: { closed?: boolean; cells?: { time: number; bed: number; text: string }[]; activeBeds?: number[] } = {},
+  opts: { closed?: boolean; cells?: { time: number; bed: number; text: string }[]; capacity?: number } = {},
 ): Promise<AvailabilityInput> {
   const { date: today, minutes } = nowJst();
   const sessions = storeSessions(store, setting, date, opts.closed);
@@ -42,7 +42,8 @@ export async function buildInput(
   return {
     sessions,
     slotMinutes: setting.slotMinutes,
-    activeBeds: opts.activeBeds ?? (await activeBedsFor(store, date)),
+    beds: allBeds(store),
+    capacity: opts.capacity ?? (await capacityFor(store, date)),
     occupied,
     neededSlots: neededSlots(setting, kind),
     phoneMarkRemaining: setting.phoneMarkRemaining,
@@ -72,30 +73,23 @@ export async function slotsForCustomer(store: Store, setting: GlobalSetting, dat
 export async function calendarForCustomer(store: Store, setting: GlobalSetting, ym: string, kind: Kind) {
   const { date: today } = nowJst();
   const dates = datesOfMonth(ym);
-  const [days, cells, bedRows] = await Promise.all([
+  const [days, cells, staffRows] = await Promise.all([
     prisma.dayStatus.findMany({ where: { storeId: store.id, date: { in: dates } } }),
     prisma.cell.findMany({ where: { storeId: store.id, date: { in: dates }, bed: { gt: 0 } }, select: { date: true, time: true, bed: true, text: true } }),
-    prisma.bedStatus.findMany({ where: { storeId: store.id, date: { in: dates } } }),
+    prisma.staffDay.findMany({ where: { storeId: store.id, date: { in: dates }, role: 'THERAPIST' } }),
   ]);
   const dayMap = new Map(days.map((d) => [d.date, d]));
   const cellsByDate = new Map<string, typeof cells>();
   for (const c of cells) (cellsByDate.get(c.date) ?? cellsByDate.set(c.date, []).get(c.date)!).push(c);
-  const bedsByDate = new Map<string, typeof bedRows>();
-  for (const b of bedRows) (bedsByDate.get(b.date) ?? bedsByDate.set(b.date, []).get(b.date)!).push(b);
+  const staffByDate = new Map<string, string[]>();
+  for (const r of staffRows) (staffByDate.get(r.date) ?? staffByDate.set(r.date, []).get(r.date)!).push(r.name);
 
   const result: { date: string; mark: DayMark }[] = [];
   for (const date of dates) {
     const day = dayMap.get(date);
     if (!isPublished(store, date, today, day?.published)) { result.push({ date, mark: 'unpublished' }); continue; }
-    const rows = bedsByDate.get(date) ?? [];
-    let activeBeds: number[];
-    if (rows.length === 0) activeBeds = Array.from({ length: Math.min(store.defaultActiveBeds, store.beds) }, (_, i) => i + 1);
-    else {
-      const m = new Map(rows.map((r) => [r.bed, r.active]));
-      activeBeds = [];
-      for (let b = 1; b <= store.beds; b++) if (m.has(b) ? m.get(b)! : b <= store.defaultActiveBeds) activeBeds.push(b);
-    }
-    const input = await buildInput(store, setting, date, kind, { closed: day?.closed, cells: cellsByDate.get(date) ?? [], activeBeds });
+    const capacity = capacityFromStaff(store, staffByDate.get(date) ?? []);
+    const input = await buildInput(store, setting, date, kind, { closed: day?.closed, cells: cellsByDate.get(date) ?? [], capacity });
     if (input.sessions.length === 0) { result.push({ date, mark: 'closed' }); continue; }
     const slots = computeAvailability(input);
     const any = slots.some((s) => s.status !== 'closed');

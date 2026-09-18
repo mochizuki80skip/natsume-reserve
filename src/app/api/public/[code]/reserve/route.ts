@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { buildInput } from '@/lib/public';
-import { freeBedsAt, statusFor } from '@/lib/availability';
+import { freeBedsAt, remainingAt, statusFor } from '@/lib/availability';
 import { isPublished } from '@/lib/public';
 import { isValidDate, nowJst, formatDateJa, minToHm } from '@/lib/time';
 import { normalizeJpPhone, sendSms } from '@/lib/sms';
@@ -53,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
       const cells = await tx.cell.findMany({ where: { storeId: store.id, date: body.date, bed: { gt: 0 } } });
       const input = await buildInput(store, setting, body.date, body.kind, { closed: day?.closed, cells });
       const free = freeBedsAt(input, body.time);
-      const status = statusFor(input, body.time, free.length);
+      const status = statusFor(input, body.time, remainingAt(input, body.time));
       if (status !== 'open') {
         throw new Error(status === 'phone' ? 'この時間はお電話でのみ受付しております' : 'この時間は空きがなくなりました。別の時間をお選びください');
       }

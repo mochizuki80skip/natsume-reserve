@@ -27,18 +27,20 @@ export function storeSessions(
   return sessionsForDate(hoursForStore(store, setting), date, { closeOnHolidays: setting.closeOnHolidays, closed });
 }
 
-/** 日付の稼働ベッド番号（BedStatus が無ければ既定台数） */
-export async function activeBedsFor(store: Pick<Store, 'id' | 'beds' | 'defaultActiveBeds'>, date: string): Promise<number[]> {
-  const rows = await prisma.bedStatus.findMany({ where: { storeId: store.id, date } });
-  if (rows.length === 0) {
-    return Array.from({ length: Math.min(store.defaultActiveBeds, store.beds) }, (_, i) => i + 1);
-  }
-  const map = new Map(rows.map((r) => [r.bed, r.active]));
-  const out: number[] = [];
-  for (let b = 1; b <= store.beds; b++) {
-    // 行が無いベッドは既定台数の範囲内なら稼働扱い
-    const active = map.has(b) ? map.get(b)! : b <= store.defaultActiveBeds;
-    if (active) out.push(b);
-  }
-  return out;
+/** 物理ベッド番号の一覧 1..beds */
+export function allBeds(store: Pick<Store, 'beds'>): number[] {
+  return Array.from({ length: store.beds }, (_, i) => i + 1);
+}
+
+/** シフトの施術者名一覧から、顧客に見せる枠数を求める。シフト未入力の日は既定値 */
+export function capacityFromStaff(store: Pick<Store, 'defaultActiveBeds' | 'beds'>, therapistNames: string[]): number {
+  const entered = therapistNames.filter((n) => n.trim().length > 0).length;
+  const cap = therapistNames.length === 0 ? store.defaultActiveBeds : entered;
+  return Math.min(cap, store.beds);
+}
+
+/** 日付の顧客向け枠数（＝施術者数） */
+export async function capacityFor(store: Pick<Store, 'id' | 'beds' | 'defaultActiveBeds'>, date: string): Promise<number> {
+  const rows = await prisma.staffDay.findMany({ where: { storeId: store.id, date, role: 'THERAPIST' } });
+  return capacityFromStaff(store, rows.map((r) => r.name));
 }

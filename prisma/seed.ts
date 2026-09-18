@@ -26,7 +26,7 @@ async function main() {
       { code: 'S002', name: 'サンプル駅前院', phone: '055-000-0002' },
     ];
     for (const s of samples) {
-      const store = await prisma.store.create({ data: s });
+      const store = await prisma.store.create({ data: { ...s, beds: 8 } });
       await prisma.adminAccount.create({
         data: { code: s.code, role: 'store', storeId: store.id, passwordHash: await bcrypt.hash('password', 10) },
       });
