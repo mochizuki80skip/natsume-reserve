@@ -8,6 +8,6 @@ export async function loadStore(code: string) {
   return { store, setting };
 }
 
-export function parseKind(v: string | null): 'NEW' | 'RETURN' {
-  return v === 'NEW' ? 'NEW' : 'RETURN';
+export function parseKind(v: string | null): 'NEW' | 'REVISIT' | 'RETURN' {
+  return v === 'NEW' ? 'NEW' : v === 'REVISIT' ? 'REVISIT' : 'RETURN';
 }

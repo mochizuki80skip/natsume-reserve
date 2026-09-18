@@ -246,7 +246,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
                       const web = webInfo.get(k);
                       return (
                         <td key={b} className={`grid-cell border p-0 ${b > capacityAt(t) ? 'bg-slate-50' : ''} ${adminOnly ? 'bg-amber-50/40' : ''} ${web ? 'bg-sky-50' : ''}`}
-                          title={web ? `WEB予約（${web.kind === 'NEW' ? '初回' : '通院中'}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
+                          title={web ? `WEB予約（${web.kind === 'NEW' ? '初診' : web.kind === 'REVISIT' ? '再来' : '通院中'}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
                           <div className="relative">
                             <input
                               ref={(el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k); }}
@@ -283,7 +283,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
         セルに氏名を入力すると自動保存されます。Excel／スプレッドシートからの貼り付けは、<b>時間の列を含めて</b>（例：B7:L36）コピーし、9:00 のベッド1 のセルで Ctrl+V。
         時刻で行を合わせ、結合セル（2列で1ベッド）は自動で1列にまとめます。矢印キー／Enter／Tab で移動。
         薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。セル右端の「×」でその予約（氏名と2枠目）をまとめて取り消せます。文字を消して保存しても同じく空き枠に戻ります。
-        初診・再来（①はじめての方）の 2 枠目は「上記初診対応」。「上記初診対応」「〃」「✖」は人数に数えません。
+        初診の 2 枠目は「上記初診対応」、再来（1ヶ月以上ぶり）は「氏名（再）」＋「上記再来対応」。これらと「〃」「✖」は人数に数えません。
         施術者数を超える列（灰色）にも入力できますが、顧客には施術者数ぶんの枠しか空きとして見えません。
         黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません（初回30分の2枠目としては使われます）。
       </p>

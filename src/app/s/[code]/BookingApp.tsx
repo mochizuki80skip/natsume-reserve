@@ -14,6 +14,9 @@ const KIND_LABEL: Record<Kind, string> = {
 export default function BookingApp({ store, smsEnabled }: Props) {
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [kind, setKind] = useState<Kind>('NEW');
+  // ①はじめての方／1ヶ月以上ご来院の無い方 の内訳（NEW=初診, REVISIT=再来）
+  const [firstSub, setFirstSub] = useState<'NEW' | 'REVISIT'>('NEW');
+  const submitKind: 'NEW' | 'REVISIT' | 'RETURN' = kind === 'NEW' ? firstSub : 'RETURN';
   const [sel, setSel] = useState<Selection | null>(null);
   const [form, setForm] = useState({ cardNo: '', name: '', phone: '' });
   const [loading, setLoading] = useState(false);
@@ -30,7 +33,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
     try {
       const r = await fetch(api('/reserve'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, date: sel.date, time: sel.time, ...form }),
+        body: JSON.stringify({ kind: submitKind, date: sel.date, time: sel.time, ...form }),
       });
       const j = await r.json();
       if (!r.ok) { setError(j.error ?? '予約に失敗しました'); if (r.status === 409) { setStep(2); setSel(null); setGridKey((k) => k + 1); } return; }
@@ -80,9 +83,17 @@ export default function BookingApp({ store, smsEnabled }: Props) {
         <form onSubmit={submit}>
           <h2 className="mb-1 font-bold">{formatDateJa(sel.date)} {minToHm(sel.time)}〜</h2>
           <p className="mb-4 text-xs text-slate-500">{KIND_LABEL[kind]}</p>
-          {kind === 'RETURN' && (
+          {kind === 'NEW' && (
+            <fieldset className="mb-3 rounded border bg-white p-3 text-sm">
+              <legend className="px-1 text-xs text-slate-500">当院のご利用は</legend>
+              <label className="mb-1 flex items-center gap-2"><input type="radio" name="firstSub" checked={firstSub === 'NEW'} onChange={() => setFirstSub('NEW')} />はじめて来院する</label>
+              <label className="flex items-center gap-2"><input type="radio" name="firstSub" checked={firstSub === 'REVISIT'} onChange={() => setFirstSub('REVISIT')} />以前来院したことがある（1ヶ月以上ぶり・診察券あり）</label>
+            </fieldset>
+          )}
+          {submitKind !== 'NEW' && (
             <label className="mb-3 block text-sm">診察券番号<span className="ml-1 text-red-500">*</span>
               <input required inputMode="numeric" value={form.cardNo} onChange={(e) => setForm({ ...form, cardNo: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" />
+              {submitKind === 'REVISIT' && <span className="mt-1 block text-xs text-slate-500">診察券が見当たらない場合は「はじめて来院する」をお選びください。</span>}
             </label>
           )}
           <label className="mb-3 block text-sm">氏名<span className="ml-1 text-red-500">*</span>
@@ -107,7 +118,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
           {done.smsStatus === 'SENT'
             ? <p className="mt-3 text-sm">確認のSMSをお送りしました。</p>
             : <p className="mt-3 text-sm text-slate-600">この画面を保存（スクリーンショット）しておいてください。</p>}
-          {kind === 'NEW' && <p className="mt-3 text-sm">初めての方は10分前にお越しください。</p>}
+          {kind === 'NEW' && <p className="mt-3 text-sm">初めての方・久しぶりの方は10分前にお越しください。</p>}
           <p className="mt-3 text-sm">変更・キャンセルはお電話（{phoneLink}）へお願いいたします。</p>
           <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
         </section>

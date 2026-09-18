@@ -12,7 +12,7 @@ import { loadStore } from '../_store';
 export const dynamic = 'force-dynamic';
 
 const Body = z.object({
-  kind: z.enum(['NEW', 'RETURN']),
+  kind: z.enum(['NEW', 'REVISIT', 'RETURN']), // 初診 / 再来（1ヶ月以上・診察券あり）/ 通院中
   date: z.string().refine(isValidDate, '日付が不正です'),
   time: z.number().int().min(0).max(24 * 60),
   name: z.string().trim().min(1, 'お名前を入力してください').max(40),
@@ -34,7 +34,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? '入力内容を確認してください' }, { status: 400 });
   }
   const body = parsed.data;
-  if (body.kind === 'RETURN' && !body.cardNo) {
+  if (body.kind !== 'NEW' && !body.cardNo) {
     return NextResponse.json({ error: '診察券番号を入力してください' }, { status: 400 });
   }
   const phone = normalizeJpPhone(body.phone);
@@ -61,14 +61,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
       const reservation = await tx.reservation.create({
         data: {
           storeId: store.id, date: body.date, time: body.time, bed, kind: body.kind,
-          cardNo: body.kind === 'RETURN' ? body.cardNo : null, name: body.name, phone,
+          cardNo: body.kind !== 'NEW' ? body.cardNo : null, name: body.name, phone,
         },
       });
       const cellData = [];
       for (let k = 0; k < input.neededSlots; k++) {
         cellData.push({
           storeId: store.id, date: body.date, time: body.time + k * setting.slotMinutes, bed,
-          text: k === 0 ? (body.kind === 'NEW' ? `${body.name}（初）` : body.name) : '上記初診対応',
+          text: k === 0
+            ? (body.kind === 'NEW' ? `${body.name}（初）` : body.kind === 'REVISIT' ? `${body.name}（再）` : body.name)
+            : (body.kind === 'REVISIT' ? '上記再来対応' : '上記初診対応'),
           reservationId: reservation.id,
         });
       }
@@ -79,13 +81,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
     const smsBody =
       `【${store.name}】ご予約を承りました。\n` +
       `${formatDateJa(body.date, false)} ${minToHm(body.time)}〜\n` +
-      (body.kind === 'NEW' ? '初めての方は10分前にお越しください。\n' : '') +
+      (body.kind !== 'RETURN' ? '初めての方・久しぶりの方は10分前にお越しください。\n' : '') +
       `変更・キャンセルはお電話（${store.phone}）へお願いします。`;
     const smsStatus = await sendSms(phone, smsBody);
     await prisma.reservation.update({ where: { id: result.id }, data: { smsStatus } });
     if (store.notifyPhone) {
       const to = normalizeJpPhone(store.notifyPhone);
-      if (to) await sendSms(to, `【WEB予約】${formatDateJa(body.date, false)} ${minToHm(body.time)} ${body.kind === 'NEW' ? '初回' : '通院中'} ${body.name} 様`);
+      if (to) await sendSms(to, `【WEB予約】${formatDateJa(body.date, false)} ${minToHm(body.time)} ${body.kind === 'NEW' ? '初診' : body.kind === 'REVISIT' ? '再来' : '通院中'} ${body.name} 様`);
     }
     return NextResponse.json({ ok: true, id: result.id, date: body.date, time: body.time, smsStatus });
   } catch (e) {

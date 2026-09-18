@@ -179,6 +179,18 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   ok('消した直後に再読み込みしても消えたまま', (await rowOf('10:30').locator('input').nth(1).inputValue()) === '');
 }
 
+// 再来（1ヶ月以上ぶり・診察券あり）→ 予約表に「（再）」と「上記再来対応」
+{
+  const d3 = '2026-09-26';
+  const r = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'REVISIT', date: d, time: 600, name: '再来花子', phone: '09033334444', cardNo: '1234' }) })).json(), d3);
+  ok('再来の予約作成', r.ok === true, JSON.stringify(r));
+  const r0 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'REVISIT', date: d, time: 660, name: '番号なし', phone: '09033334445' }) })).json(), d3);
+  ok('再来は診察券番号が必須', r0.ok !== true && /診察券/.test(r0.error ?? ''), JSON.stringify(r0));
+  await ap.goto(`${BASE}/admin/day/${d3}`); await ap.waitForSelector('table');
+  const vals = await ap.locator('table tbody input').evaluateAll((els) => els.map((e) => e.value));
+  ok('予約表に「再来花子（再）」と「上記再来対応」', vals.includes('再来花子（再）') && vals.includes('上記再来対応'));
+}
+
 // 顧客API に個人情報が含まれない
 const slotsJson = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/slots?date=${d}&kind=RETURN`)).text(), date);
 ok('顧客APIに氏名なし', !slotsJson.includes('太郎') && !slotsJson.includes('鈴木') && !slotsJson.includes('0901'));

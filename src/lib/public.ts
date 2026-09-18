@@ -6,12 +6,12 @@ import { cellKey, computeAvailability, isOccupiedText, type AvailabilityInput, t
 import { addDays, datesOfMonth, nowJst } from './time';
 import { isAm, isJpHoliday } from './hours';
 
-export type Kind = 'NEW' | 'RETURN';
+export type Kind = 'NEW' | 'REVISIT' | 'RETURN'; // 初診 / 再来（1ヶ月以上）/ 通院中
 
 export type DayMark = 'open' | 'full' | 'closed' | 'unpublished';
 
 export function neededSlots(setting: GlobalSetting, kind: Kind): number {
-  return kind === 'NEW' ? setting.newVisitSlots : setting.returnVisitSlots;
+  return kind === 'RETURN' ? setting.returnVisitSlots : setting.newVisitSlots; // 再来は初診と同じ枠数
 }
 
 /** 日付を顧客に公開するか（DayStatus と店舗の既定公開日数から判定） */

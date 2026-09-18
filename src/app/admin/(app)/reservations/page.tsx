@@ -6,7 +6,7 @@ import { addDays, formatDateShort, isValidDate, minToHm, nowJst } from '@/lib/ti
 export const dynamic = 'force-dynamic';
 
 const STATUS_JA: Record<string, string> = { BOOKED: '予約中', CANCELLED: '取消' };
-const KIND_JA: Record<string, string> = { NEW: '初診・再来', RETURN: '通院中' };
+const KIND_JA: Record<string, string> = { NEW: '初診', REVISIT: '再来', RETURN: '通院中' };
 /** +81901234xxxx → 090-1234-xxxx */
 function jpPhone(p: string): string {
   const d = p.startsWith('+81') ? `0${p.slice(3)}` : p;
