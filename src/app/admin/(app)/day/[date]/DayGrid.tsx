@@ -28,22 +28,50 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
 
   const flush = useCallback(async () => {
     if (dirty.current.size === 0) return;
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
     const batch = Array.from(dirty.current.entries()).map(([k, text]) => {
       const [time, bed] = k.split(':').map(Number);
       return { time, bed, text };
     });
     dirty.current.clear();
     setSaveState('saving');
-    const r = await fetch('/api/admin/cells', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: batch }) });
-    setSaveState(r.ok ? 'saved' : 'error');
+    try {
+      // keepalive: ページ移動・再読み込みの直前でも送信が完了するようにする
+      const r = await fetch('/api/admin/cells', { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: batch }) });
+      setSaveState(r.ok ? 'saved' : 'error');
+    } catch { setSaveState('error'); }
   }, [data.date]);
 
   const schedule = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, 500);
+    timer.current = setTimeout(flush, 300);
   }, [flush]);
 
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  // 画面を離れるとき（別ページ・再読み込み・タブを閉じる）に未保存分を送る
+  useEffect(() => {
+    const onLeave = () => { void flush(); };
+    window.addEventListener('pagehide', onLeave);
+    window.addEventListener('beforeunload', onLeave);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') onLeave(); });
+    return () => {
+      window.removeEventListener('pagehide', onLeave);
+      window.removeEventListener('beforeunload', onLeave);
+      void flush();
+    };
+  }, [flush]);
+
+  /** WEB予約の取消：氏名と〃のセルをまとめて削除し、予約を取消扱いにする */
+  async function cancelReservation(id: string, name: string) {
+    if (!confirm(`WEB予約「${name}」を取り消しますか？\n予約表から削除され、顧客側では空き枠に戻ります。`)) return;
+    const r = await fetch('/api/admin/reservations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    if (!r.ok) { alert('取消に失敗しました'); return; }
+    setCells((m) => {
+      const n = new Map(m);
+      for (const [k, w] of webInfo) if (w.id === id) n.set(k, '');
+      return n;
+    });
+    router.refresh();
+  }
 
   function setCell(time: number, bed: number, text: string) {
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), text); return n; });
@@ -205,14 +233,22 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
                       return (
                         <td key={b} className={`grid-cell border p-0 ${b > capacityAt(t) ? 'bg-slate-50' : ''} ${adminOnly ? 'bg-amber-50/40' : ''} ${web ? 'bg-sky-50' : ''}`}
                           title={web ? `WEB予約（${web.kind === 'NEW' ? '初回' : '通院中'}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
-                          <input
-                            ref={(el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k); }}
-                            value={cells.get(k) ?? ''}
-                            onChange={(e) => setCell(t, b, e.target.value)}
-                            onKeyDown={(e) => onKeyDown(e, r, c)}
-                            onPaste={(e) => onPaste(e, r, c)}
-                            onBlur={flush}
-                          />
+                          <div className="relative">
+                            <input
+                              ref={(el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k); }}
+                              value={cells.get(k) ?? ''}
+                              onChange={(e) => setCell(t, b, e.target.value)}
+                              onKeyDown={(e) => onKeyDown(e, r, c)}
+                              onPaste={(e) => onPaste(e, r, c)}
+                              onBlur={flush}
+                              className={web && (cells.get(k) ?? '') !== '' ? 'pr-5' : ''}
+                            />
+                            {web && (cells.get(k) ?? '') !== '' && (
+                              <button type="button" tabIndex={-1} onClick={() => cancelReservation(web.id, cells.get(k) ?? '')}
+                                title="WEB予約を取り消す（氏名と〃をまとめて削除）" aria-label="WEB予約を取り消す"
+                                className="no-print absolute right-0 top-0 h-full w-5 text-xs text-slate-400 hover:bg-red-100 hover:text-red-700">×</button>
+                            )}
+                          </div>
                         </td>
                       );
                     })}
@@ -232,7 +268,8 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
       <p className="no-print mt-2 text-xs text-slate-500">
         セルに氏名を入力すると自動保存されます。Excel／スプレッドシートからの貼り付けは、<b>時間の列を含めて</b>（例：B7:L36）コピーし、9:00 のベッド1 のセルで Ctrl+V。
         時刻で行を合わせ、結合セル（2列で1ベッド）は自動で1列にまとめます。矢印キー／Enter／Tab で移動。
-        薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。初回の 2 枠目は「〃」。「〃」「✖」は人数に数えません。
+        薄い青のセルは WEB 予約（カーソルを合わせると電話番号を表示）。セル右端の「×」でその予約（氏名と〃）をまとめて取り消せます。文字を消して保存しても同じく空き枠に戻ります。
+        初回の 2 枠目は「〃」。「〃」「✖」は人数に数えません。
         施術者数を超える列（灰色）にも入力できますが、顧客には施術者数ぶんの枠しか空きとして見えません。
         黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません（初回30分の2枠目としては使われます）。
       </p>
