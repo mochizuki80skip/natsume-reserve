@@ -73,6 +73,15 @@ await ap.waitForSelector('table');
 const capText = await ap.locator('text=顧客に見える枠数').first().locator('..').textContent();
 ok('シフト(前休)が枠数に反映（午前2/午後3）', /シフトから 2/.test(capText) && /シフトから 3/.test(capText), capText);
 ok('管理側に12:00の行がある', (await ap.locator('table tbody td', { hasText: /^12:00$/ }).count()) === 1);
+{
+  const before = (await ap.locator('text=午前').first().textContent()).match(/午前\s*(\d+)/)[1];
+  const row12 = ap.locator('table tbody tr').filter({ has: ap.locator('td', { hasText: /^12:00$/ }) });
+  const c = row12.locator('input').nth(2);
+  await c.fill('正午さん'); await c.press('Enter');
+  await ap.waitForSelector('text=保存しました', { timeout: 10000 });
+  const after = (await ap.locator('text=午前').first().textContent()).match(/午前\s*(\d+)/)[1];
+  ok('12:00 の入力は午前の人数に入る', Number(after) === Number(before) + 1, `${before}→${after}`);
+}
 const wk = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), date);
 const dayW = wk.days.find((x) => x.date === date);
 ok('顧客側は11:45まで', dayW && !dayW.slots.some((s) => s.time === 720) && dayW.slots.some((s) => s.time === 705));

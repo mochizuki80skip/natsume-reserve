@@ -4,7 +4,7 @@ import { getGlobalSetting } from '@/lib/settings';
 import { loadDay } from '@/lib/dayData';
 import { formatDateJa, isValidDate, minToHm } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
-import { NOON } from '@/lib/hours';
+import { isAm } from '@/lib/hours';
 import PrintButton from './PrintButton';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,7 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
   const d = await loadDay(store, setting, date);
   const cell = new Map(d.cells.map((c) => [`${c.time}:${c.bed}`, c.text]));
   let am = 0, pm = 0;
-  for (const c of d.cells) if (isPatientText(c.text)) { if (c.time < NOON) am++; else pm++; }
+  for (const c of d.cells) if (isPatientText(c.text)) { if (isAm(d.sessions, c.time)) am++; else pm++; }
   const cols = d.beds;
   const names = (n: string[]) => (n.length ? n.join('・') : '－');
 
@@ -46,7 +46,7 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
           </thead>
           <tbody>
             {d.times.map((t, r) => (
-              <tr key={t} className={r > 0 && d.times[r - 1] < NOON && t >= NOON ? 'border-t-2 border-t-black' : ''}>
+              <tr key={t} className={r > 0 && isAm(d.sessions, d.times[r - 1]) && !isAm(d.sessions, t) ? 'border-t-2 border-t-black' : ''}>
                 <td className={`border border-black px-1 text-center font-mono ${d.customerTimes.includes(t) ? '' : 'bg-slate-100'}`}>{minToHm(t)}</td>
                 {cols.map((b) => <td key={b} className="h-[5.2mm] border border-black px-1">{cell.get(`${t}:${b}`) ?? ''}</td>)}
               </tr>

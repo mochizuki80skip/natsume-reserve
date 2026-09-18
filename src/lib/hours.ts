@@ -110,5 +110,14 @@ export function slotTimes(sessions: ResolvedSession[], slotMinutes: number, admi
   return out;
 }
 
-/** 午前/午後の境界。12:00 より前に始まる枠を午前とする */
+/** 午前/午後の境界（営業セッションが分からない場合の目安） */
 export const NOON = 12 * 60;
+
+/**
+ * その時刻が午前ブロックかどうか。
+ * 12:00 の追加枠のように正午以降でも「午前のセッション」に属する枠は午前扱いにする。
+ */
+export function isAm(sessions: ResolvedSession[], t: number): boolean {
+  const s = sessions.find((x) => t >= x.start && t <= x.lastAdmin);
+  return s ? s.start < NOON : t < NOON;
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeAvailability, freeBedsAt, remainingAt, isPatientText, type AvailabilityInput } from './availability';
-import { DEFAULT_HOURS, sessionsForDate, slotTimes } from './hours';
+import { DEFAULT_HOURS, isAm, sessionsForDate, slotTimes } from './hours';
 import { nowJst, formatDateJa } from './time';
 
 const base = (over: Partial<AvailabilityInput> = {}): AvailabilityInput => ({
@@ -96,6 +96,12 @@ describe('availability', () => {
 });
 
 describe('helpers', () => {
+  it('12:00 の追加枠は午前扱い、14:00 は午後', () => {
+    const sess = [{ start: 540, lastStart: 705, lastAdmin: 720 }, { start: 840, lastStart: 1095, lastAdmin: 1110 }];
+    expect(isAm(sess, 720)).toBe(true);
+    expect(isAm(sess, 840)).toBe(false);
+    expect(isAm(sess, 1110)).toBe(false);
+  });
   it('氏名セルの判定', () => {
     expect(isPatientText('山田')).toBe(true);
     expect(isPatientText('〃')).toBe(false);

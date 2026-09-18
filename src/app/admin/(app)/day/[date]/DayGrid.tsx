@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { DayData } from '@/lib/dayData';
 import { addDays, formatDateJa, minToHm } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
-import { NOON } from '@/lib/hours';
+import { isAm } from '@/lib/hours';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string }
 
@@ -102,13 +102,14 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
     for (const [k, v] of cells) {
       if (!isPatientText(v)) continue;
       const time = Number(k.split(':')[0]);
-      if (time < NOON) am++; else pm++;
+      if (isAm(data.sessions, time)) am++; else pm++;
     }
     return { am, pm, total: am + pm };
-  }, [cells]);
+  }, [cells, data.sessions]);
 
   const cap = data.capacity;
-  const capacityAt = (t: number) => (t < NOON ? cap.am : cap.pm);
+  const am = (t: number) => isAm(data.sessions, t);
+  const capacityAt = (t: number) => (am(t) ? cap.am : cap.pm);
   const customerSet = useMemo(() => new Set(data.customerTimes), [data.customerTimes]);
   const shiftLabel: Record<string, string> = { WORK: '〇', OFF: '休', AM_OFF: '前休', PM_OFF: '後休', PAID: '有給', AM_PAID: '前有', PM_PAID: '後有' };
 
@@ -186,7 +187,7 @@ export default function DayGrid({ data, storeName, published, today }: Props) {
             </thead>
             <tbody>
               {rows.map((t, r) => {
-                const isPmStart = r > 0 && rows[r - 1] < NOON && t >= NOON;
+                const isPmStart = r > 0 && am(rows[r - 1]) && !am(t);
                 const adminOnly = !customerSet.has(t);
                 return (
                   <tr key={t} className={`${isPmStart ? 'border-t-4 border-t-slate-300' : ''}`}>

@@ -4,7 +4,7 @@ import { prisma } from './prisma';
 import { allBeds, capacitiesFor, capacityFor, storeSessions, type DayCapacity } from './settings';
 import { cellKey, computeAvailability, isOccupiedText, type AvailabilityInput, type SlotStatus } from './availability';
 import { addDays, datesOfMonth, nowJst } from './time';
-import { NOON, isJpHoliday } from './hours';
+import { isAm, isJpHoliday } from './hours';
 
 export type Kind = 'NEW' | 'RETURN';
 
@@ -65,7 +65,7 @@ export async function slotsForCustomer(store: Store, setting: GlobalSetting, dat
     slots: computeAvailability(input).map((s) => ({
       time: s.time,
       status: s.status as SlotStatus,
-      period: s.time < NOON ? 'AM' : 'PM',
+      period: isAm(input.sessions, s.time) ? 'AM' : 'PM',
     })),
   };
 }

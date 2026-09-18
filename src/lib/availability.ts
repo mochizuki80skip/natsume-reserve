@@ -1,5 +1,5 @@
 // 空き状況の判定（純粋関数。DB に依存しない）
-import type { ResolvedSession } from './hours';
+import { isAm, type ResolvedSession } from './hours';
 
 export type SlotStatus = 'open' | 'phone' | 'closed';
 
@@ -26,9 +26,8 @@ export interface AvailabilityInput {
 
 export const cellKey = (time: number, bed: number) => `${time}:${bed}`;
 
-const NOON_MIN = 12 * 60;
-export function capacityAt(input: Pick<AvailabilityInput, 'capacityAm' | 'capacityPm'>, time: number): number {
-  return time < NOON_MIN ? input.capacityAm : input.capacityPm;
+export function capacityAt(input: Pick<AvailabilityInput, 'capacityAm' | 'capacityPm' | 'sessions'>, time: number): number {
+  return isAm(input.sessions, time) ? input.capacityAm : input.capacityPm;
 }
 
 /** そのベッドが time から neededSlots 枠連続で空いているか */
