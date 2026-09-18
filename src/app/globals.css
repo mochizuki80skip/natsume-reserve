@@ -18,7 +18,7 @@ body { @apply bg-slate-50 text-slate-800; }
 .wk-legend .p { color: #9a6400; }
 .wk-legend .x { color: #a3aeb5; font-weight: 700; }
 .wk-legend .sw { display: inline-block; width: 14px; height: 12px; vertical-align: -2px; background: #eef1f3; border: 1px solid #dbe3e7; border-radius: 2px; }
-.wk-wrap { background: #fff; border: 1px solid #dbe3e7; border-radius: 10px; overflow: hidden; margin-top: 8px; }
+.wk-wrap { background: #fff; border: 1px solid #dbe3e7; border-radius: 10px; overflow: clip; margin-top: 8px; } /* overflow:hidden だと sticky が効かない */
 .wk { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
 .wk th, .wk td { border-right: 1px solid #dbe3e7; border-bottom: 1px solid #dbe3e7; text-align: center; padding: 0; height: 27px; font-size: 13px; }
 .wk th:last-child, .wk td:last-child { border-right: 0; }
