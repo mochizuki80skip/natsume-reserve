@@ -102,5 +102,10 @@ npm i -D playwright                    # 初回のみ
 node e2e/smoke.mjs                     # BASE_URL / HQ_PASSWORD で上書き可
 ```
 
+## 本番環境
+
+- URL：https://natsume-group-reserve.vercel.app（Vercel プロジェクト名 `natsume-group-reserve`、GitHub の natsume-reserve リポジトリ main ブランチから自動デプロイ）
+- 患者様用：`/s/<店舗コード>`、店舗の管理画面：`/admin/login/<店舗コード>`、本部：`/admin/login`
+
 ## 更新履歴
-- 2026-09-19: natsume-reserve リポジトリ単体での本番デプロイを開始
+- 2026-09-19: natsume-reserve リポジトリ単体での本番デプロイを開始。Vercel のプロジェクト名を natsume-group-reserve に変更
