@@ -172,6 +172,7 @@ model CancelLog {
   reservationId String?
   byCode        String   // 登録したログインID（店舗コード or HQ）
   memo          String?
+  nextDate      String?  // 次回予約が取れている場合の日付（YYYY-MM-DD）
   createdAt     DateTime @default(now())
 
   @@index([storeId, date])

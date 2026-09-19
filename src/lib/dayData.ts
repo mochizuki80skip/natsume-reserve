@@ -5,7 +5,7 @@ import { allBeds, capacityFromShifts, storeSessions } from './settings';
 import { slotTimes } from './hours';
 
 export interface GridCell { time: number; bed: number; text: string; visited: boolean; web?: { id: string; kind: string; phone: string; cardNo: string | null } }
-export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; createdAt: string }
+export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; createdAt: string }
 
 export async function loadDay(store: Store, setting: GlobalSetting, date: string) {
   const [day, members, shifts, cells, cancels] = await Promise.all([
@@ -37,7 +37,7 @@ export async function loadDay(store: Store, setting: GlobalSetting, date: string
       time: c.time, bed: c.bed, text: c.text, visited: c.visited,
       web: c.reservation ? { id: c.reservation.id, kind: c.reservation.kind, phone: c.reservation.phone, cardNo: c.reservation.cardNo } : undefined,
     })),
-    cancels: cancels.map<CancelRow>((c) => ({ id: c.id, time: c.time, bed: c.bed, name: c.name, contText: c.contText, kind: c.kind, source: c.source, byCode: c.byCode, memo: c.memo, createdAt: fmt.format(c.createdAt) })),
+    cancels: cancels.map<CancelRow>((c) => ({ id: c.id, time: c.time, bed: c.bed, name: c.name, contText: c.contText, kind: c.kind, source: c.source, byCode: c.byCode, memo: c.memo, nextDate: c.nextDate, createdAt: fmt.format(c.createdAt) })),
   };
 }
 

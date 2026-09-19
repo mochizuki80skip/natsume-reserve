@@ -7,6 +7,7 @@ import { isPublished } from '@/lib/public';
 import { isValidDate, nowJst, formatDateJa, minToHm } from '@/lib/time';
 import { normalizeJpPhone, sendSms } from '@/lib/sms';
 import { clientIp, rateLimit } from '@/lib/ratelimit';
+import { isSameName } from '@/lib/format';
 import { loadStore } from '../_store';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +51,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
     const result = await prisma.$transaction(async (tx) => {
       // 同じ店舗・同じ日の予約処理を直列化して二重予約を防ぐ
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${store.id}:${body.date}`}))`;
+      // 同じ電話番号＋同じ氏名の予約がその日にすでにあれば二重予約として断る。
+      // 同じ電話番号でも氏名が違えば（親がお子さんの分を予約するなど）受け付ける
+      const samePhone = await tx.reservation.findMany({ where: { storeId: store.id, date: body.date, phone, status: 'BOOKED' }, select: { name: true, time: true } });
+      const dup = samePhone.find((r) => isSameName(r.name, body.name));
+      if (dup) {
+        throw new Error(`同じお名前・電話番号でのご予約が ${formatDateJa(body.date, false)} ${minToHm(dup.time)}〜 にすでに入っています。変更はお電話（${store.phone}）へお願いします。`);
+      }
       const cells = await tx.cell.findMany({ where: { storeId: store.id, date: body.date, bed: { gt: 0 } } });
       const input = await buildInput(store, setting, body.date, body.kind, { closed: day?.closed, cells });
       const free = freeBedsAt(input, body.time);

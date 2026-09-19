@@ -8,6 +8,7 @@ import { isContinuationText, isTwoSlotName } from '@/lib/attendance';
 const Create = z.object({
   date: z.string().refine(isValidDate), time: z.number().int(), bed: z.number().int().min(1),
   kind: z.enum(['ADVANCE', 'NOSHOW']), memo: z.string().max(200).optional(),
+  nextDate: z.string().refine((v) => v === '' || isValidDate(v)).optional(), // 次回予約が取れている場合の日付
 });
 
 /** セルの予約をキャンセル名簿へ移す（セルは空になり、枠が空く） */
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
   if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   const parsed = Create.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'bad request' }, { status: 400 });
-  const { date, time, bed, kind, memo } = parsed.data;
+  const { date, time, bed, kind, memo, nextDate } = parsed.data;
   const storeId = ctx.store.id;
   const setting = await prisma.globalSetting.findUnique({ where: { id: 1 } });
   const step = setting?.slotMinutes ?? 15;
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
     const l = await tx.cancelLog.create({
       data: {
         storeId, date, time, bed, name: cell.text, contText: cont?.text ?? null, kind,
-        source: cell.reservationId ? 'WEB' : 'MANUAL', reservationId: cell.reservationId, byCode: ctx.session.code, memo: memo || null,
+        source: cell.reservationId ? 'WEB' : 'MANUAL', reservationId: cell.reservationId, byCode: ctx.session.code, memo: memo || null, nextDate: nextDate || null,
       },
     });
     await tx.cell.delete({ where: { id: cell.id } });
@@ -64,13 +65,20 @@ export async function DELETE(req: Request) {
   return NextResponse.json({ ok: true });
 }
 
-/** 名簿のメモ更新 */
+/** 名簿のメモ・次回予約日の更新（送られてきた項目だけ更新する） */
 export async function PATCH(req: Request) {
   const ctx = await apiContext();
   if (!ctx) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
-  const { id, memo } = await req.json().catch(() => ({}));
-  const log = await prisma.cancelLog.findFirst({ where: { id: String(id), storeId: ctx.store.id } });
+  const body = await req.json().catch(() => ({}));
+  const log = await prisma.cancelLog.findFirst({ where: { id: String(body.id), storeId: ctx.store.id } });
   if (!log) return NextResponse.json({ error: 'not found' }, { status: 404 });
-  await prisma.cancelLog.update({ where: { id: log.id }, data: { memo: String(memo ?? '').slice(0, 200) || null } });
+  const data: { memo?: string | null; nextDate?: string | null } = {};
+  if ('memo' in body) data.memo = String(body.memo ?? '').slice(0, 200) || null;
+  if ('nextDate' in body) {
+    const v = String(body.nextDate ?? '');
+    if (v && !isValidDate(v)) return NextResponse.json({ error: '日付の形式が正しくありません' }, { status: 400 });
+    data.nextDate = v || null;
+  }
+  await prisma.cancelLog.update({ where: { id: log.id }, data });
   return NextResponse.json({ ok: true });
 }

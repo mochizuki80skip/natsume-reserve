@@ -8,6 +8,8 @@ import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { planPaste } from '@/lib/paste';
 import { categorizeCell, cellState, isContinuationText, type CellState } from '@/lib/attendance';
+import { formatJpPhone } from '@/lib/format';
+import NextDateInput from '../../NextDateInput';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string }
 
@@ -109,14 +111,19 @@ export default function DayGrid({ data, published, today }: Props) {
     const r = await fetch('/api/admin/visit', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, visited: next }) });
     if (!r.ok) { setVisited((s) => { const n = new Set(s); if (next) n.delete(k); else n.add(k); return n; }); alert('来院チェックの保存に失敗しました'); }
   }
+  // キャンセル：メモと次回予約日を入力する小さなダイアログを出してから名簿へ移す
+  const [cancelDlg, setCancelDlg] = useState<{ time: number; bed: number; kind: 'ADVANCE' | 'NOSHOW'; name: string; memo: string; nextDate: string } | null>(null);
   async function cancelCell(time: number, bed: number, kind: 'ADVANCE' | 'NOSHOW') {
     setMenu(null);
     await flush();
-    const name = cells.get(key(time, bed)) ?? '';
-    const memo = prompt(`「${name}」を${kind === 'ADVANCE' ? 'キャンセル（連絡あり）' : '無断キャンセル'}としてキャンセル名簿に移します。\nメモがあれば入力してください（空欄可）。`);
-    if (memo === null) return;
-    const r = await fetch('/api/admin/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, kind, memo }) });
+    setCancelDlg({ time, bed, kind, name: cells.get(key(time, bed)) ?? '', memo: '', nextDate: '' });
+  }
+  async function submitCancel() {
+    if (!cancelDlg) return;
+    const { time, bed, kind, memo, nextDate } = cancelDlg;
+    const r = await fetch('/api/admin/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, kind, memo, nextDate }) });
     if (!r.ok) { alert((await r.json()).error ?? 'キャンセルに失敗しました'); return; }
+    setCancelDlg(null);
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); return n; });
     router.refresh();
   }
@@ -342,6 +349,9 @@ export default function DayGrid({ data, published, today }: Props) {
                               </div>
                             )}
                           </div>
+                          {web && hasName && (
+                            <div className="no-print px-1 pb-0.5 text-[7px] leading-none tabular-nums text-slate-500" title="WEB予約の電話番号（印刷には出ません）">{formatJpPhone(web.phone)}</div>
+                          )}
                         </td>
                       );
                     })}
@@ -356,7 +366,7 @@ export default function DayGrid({ data, published, today }: Props) {
       <h2 className="mt-4 flex items-center gap-2 text-base font-bold">キャンセル名簿 <span className="text-xs font-normal text-slate-500">この日にキャンセルになった予約。セルからは外れているので枠は空いています。</span></h2>
       <div className="mt-1 overflow-x-auto rounded border bg-white">
         <table className="w-full text-sm">
-          <thead><tr className="bg-slate-100 text-left text-xs"><th className="px-2 py-1">時刻</th><th className="px-2 py-1">ベッド</th><th className="px-2 py-1">氏名</th><th className="px-2 py-1">区分</th><th className="px-2 py-1">種別</th><th className="px-2 py-1">登録</th><th className="px-2 py-1">メモ</th><th className="no-print"></th></tr></thead>
+          <thead><tr className="bg-slate-100 text-left text-xs"><th className="px-2 py-1">時刻</th><th className="px-2 py-1">ベッド</th><th className="px-2 py-1">氏名</th><th className="px-2 py-1">区分</th><th className="px-2 py-1">種別</th><th className="px-2 py-1">登録</th><th className="px-2 py-1">次回予約</th><th className="px-2 py-1">メモ</th><th className="no-print"></th></tr></thead>
           <tbody>
             {data.cancels.map((c) => (
               <tr key={c.id} className="border-t">
@@ -366,14 +376,34 @@ export default function DayGrid({ data, published, today }: Props) {
                 <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${c.kind === 'ADVANCE' ? 'bg-brand-light text-brand-dark' : 'bg-red-100 text-red-800'}`}>{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</span></td>
                 <td className="px-2 py-1 text-xs">{c.source === 'WEB' ? 'WEB予約' : '電話・窓口'}</td>
                 <td className="px-2 py-1 text-xs text-slate-500">{c.createdAt} {c.byCode}</td>
+                <td className="whitespace-nowrap px-2 py-1"><NextDateInput key={c.id + (c.nextDate ?? '')} id={c.id} value={c.nextDate} /></td>
                 <td className="px-2 py-1"><input defaultValue={c.memo ?? ''} onBlur={(e) => e.target.value !== (c.memo ?? '') && saveMemo(c.id, e.target.value)} placeholder="メモ" className="w-full rounded border px-1 text-xs" /></td>
                 <td className="no-print px-2 py-1 text-right"><button type="button" onClick={() => restore(c.id)} className="text-xs text-brand underline">予約表に戻す</button></td>
               </tr>
             ))}
-            {data.cancels.length === 0 && <tr><td colSpan={8} className="px-2 py-2 text-xs text-slate-400">キャンセルはありません</td></tr>}
+            {data.cancels.length === 0 && <tr><td colSpan={9} className="px-2 py-2 text-xs text-slate-400">キャンセルはありません</td></tr>}
           </tbody>
         </table>
       </div>
+
+      {cancelDlg && (
+        <div className="no-print fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setCancelDlg(null)}>
+          <div className="w-full max-w-md rounded-lg border bg-white p-4 text-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold">{cancelDlg.kind === 'ADVANCE' ? 'キャンセル（連絡あり）' : '無断キャンセル'}</h3>
+            <p className="mt-1 text-slate-600">「{cancelDlg.name}」（{minToHm(cancelDlg.time)} ベッド{cancelDlg.bed}）をキャンセル名簿に移します。枠は空きます。</p>
+            <label className="mt-3 block">次回予約が取れている場合はその日付<span className="ml-1 text-xs text-slate-500">（無ければ空欄）</span>
+              <input type="date" value={cancelDlg.nextDate} onChange={(e) => setCancelDlg({ ...cancelDlg, nextDate: e.target.value })} className="mt-1 block rounded border px-2 py-1" />
+            </label>
+            <label className="mt-3 block">メモ<span className="ml-1 text-xs text-slate-500">（空欄可）</span>
+              <input value={cancelDlg.memo} onChange={(e) => setCancelDlg({ ...cancelDlg, memo: e.target.value })} maxLength={200} className="mt-1 w-full rounded border px-2 py-1" placeholder="例）体調不良のため" />
+            </label>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setCancelDlg(null)} className="rounded border px-3 py-1">やめる</button>
+              <button type="button" onClick={submitCancel} className="rounded bg-brand px-3 py-1 text-white">名簿へ移す</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-3">
         <label className="block text-sm text-slate-600">メモ（電話・とびこみ など）

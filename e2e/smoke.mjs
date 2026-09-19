@@ -166,8 +166,8 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   ok('ベッド番号の上に表示範囲の見出し', (await ap.locator('#grid thead').textContent()).includes('予約サイトに表示') && (await ap.locator('#grid thead').textContent()).includes('非表示'));
   const rowOf = (t) => ap.locator('#grid tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${t}$`) }) });
   await rowOf('10:00').locator('button[aria-label="メニュー"]').first().click();
-  ap.once('dialog', (dlg) => dlg.accept(''));
   await ap.getByRole('button', { name: /キャンセル（連絡あり）/ }).click();
+  await ap.getByRole('button', { name: '名簿へ移す' }).click(); // メモ・次回予約日は空のまま
   await ap.waitForTimeout(800);
   await ap.reload(); await ap.waitForSelector('table');
   const v1 = await rowOf('10:00').locator('input').nth(0).inputValue();
@@ -214,14 +214,18 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   ok('来院チェック済みは2枠目も緑', (await rowOf('15:15').locator('td.bg-green-100').count()) === 1);
   // 名簿へ
   await rowOf('15:00').locator('button[aria-label="メニュー"]').first().click();
-  ap.once('dialog', (dlg) => dlg.accept('体調不良'));
   await ap.getByRole('button', { name: /キャンセル（連絡あり）/ }).click();
+  await ap.locator('input[placeholder="例）体調不良のため"]').fill('体調不良');
+  await ap.locator('input[type="date"]').last().fill('2026-10-01'); // 次回予約日（ダイアログ内）
+  await ap.getByRole('button', { name: '名簿へ移す' }).click();
   await ap.waitForTimeout(800);
   await ap.reload(); await ap.waitForSelector('table');
   ok('名簿へ移すとセルが空く', (await rowOf('15:00').locator('input').nth(0).inputValue()) === '' && (await rowOf('15:15').locator('input').nth(0).inputValue()) === '');
   const listText = await ap.locator('h2:has-text("キャンセル名簿")').locator('..').textContent();
   const memoVal = await ap.locator('input[placeholder="メモ"]').first().inputValue();
   ok('キャンセル名簿に載る', /来院確認/.test(listText) && /事前連絡/.test(listText) && /WEB予約/.test(listText) && memoVal === '体調不良', memoVal);
+  const nextVal = await ap.locator('h2:has-text("キャンセル名簿") + div input[type="date"]').first().inputValue();
+  ok('キャンセル名簿に次回予約日が載る', nextVal === '2026-10-01', nextVal);
   const wk3 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), d4);
   ok('名簿へ移した枠は顧客側で空き', wk3.days.find((x) => x.date === d4)?.slots.find((s) => s.time === 900)?.status !== 'closed');
   await ap.goto(`${BASE}/admin/reservations?tab=cancel`); await ap.waitForSelector('table');

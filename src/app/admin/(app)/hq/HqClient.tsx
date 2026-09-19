@@ -48,7 +48,7 @@ export default function HqClient({ stores, setting }: { stores: StoreRow[]; sett
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold">本部管理</h1>
+      <div className="flex flex-wrap items-center gap-3"><h1 className="text-xl font-bold">本部管理</h1><a href="/admin/hq/overview" className="rounded border bg-white px-3 py-1 text-sm text-brand">全店状況（今日の予約・来院）を見る →</a></div>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
 
       <section className="rounded border bg-white p-4">

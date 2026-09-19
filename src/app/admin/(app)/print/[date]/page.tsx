@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { requireSession, resolveStore } from '@/lib/admin';
 import { getGlobalSetting } from '@/lib/settings';
 import { loadDay } from '@/lib/dayData';
-import { formatDateJa, isValidDate, minToHm } from '@/lib/time';
+import { formatDateJa, formatDateShort, isValidDate, minToHm } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { categorizeCell, isContinuationText } from '@/lib/attendance';
@@ -102,10 +102,10 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
           <div className="text-[9px] font-bold">キャンセル名簿</div>
           {d.cancels.length === 0 ? <div className="border border-black px-1 py-0.5 text-[9px] text-slate-500">なし</div> : (
             <table className="w-full border-collapse text-[9px]">
-              <thead><tr><th className="border border-black px-1 text-left">時刻</th><th className="border border-black px-1">ベッド</th><th className="border border-black px-1 text-left">氏名</th><th className="border border-black px-1">区分</th><th className="border border-black px-1">種別</th><th className="border border-black px-1 text-left">メモ</th></tr></thead>
+              <thead><tr><th className="border border-black px-1 text-left">時刻</th><th className="border border-black px-1">ベッド</th><th className="border border-black px-1 text-left">氏名</th><th className="border border-black px-1">区分</th><th className="border border-black px-1">種別</th><th className="border border-black px-1">次回予約</th><th className="border border-black px-1 text-left">メモ</th></tr></thead>
               <tbody>
                 {d.cancels.map((c) => (
-                  <tr key={c.id}><td className="border border-black px-1 font-mono">{minToHm(c.time)}</td><td className="border border-black px-1 text-center">{c.bed}</td><td className="border border-black px-1">{c.name}</td><td className="border border-black px-1 text-center">{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</td><td className="border border-black px-1 text-center">{c.source === 'WEB' ? 'WEB' : '電話'}</td><td className="border border-black px-1">{c.memo ?? ''}</td></tr>
+                  <tr key={c.id}><td className="border border-black px-1 font-mono">{minToHm(c.time)}</td><td className="border border-black px-1 text-center">{c.bed}</td><td className="border border-black px-1">{c.name}</td><td className="border border-black px-1 text-center">{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</td><td className="border border-black px-1 text-center">{c.source === 'WEB' ? 'WEB' : '電話'}</td><td className="border border-black px-1 text-center">{c.nextDate ? formatDateShort(c.nextDate) : ''}</td><td className="border border-black px-1">{c.memo ?? ''}</td></tr>
                 ))}
               </tbody>
             </table>
