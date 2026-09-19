@@ -5,7 +5,7 @@ import { loadDay } from '@/lib/dayData';
 import { formatDateJa, isValidDate, minToHm } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
-import { isContinuationText } from '@/lib/attendance';
+import { categorizeCell, isContinuationText } from '@/lib/attendance';
 import PrintButton from './PrintButton';
 
 export const dynamic = 'force-dynamic';
@@ -20,12 +20,16 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
   const setting = await getGlobalSetting();
   const d = await loadDay(store, setting, date);
   const cell = new Map(d.cells.map((c) => [`${c.time}:${c.bed}`, c]));
-  const cnt = { rAm: 0, rPm: 0, vAm: 0, vPm: 0 };
+  const cnt = { rAm: 0, rPm: 0, vAm: 0, vPm: 0, nAm: 0, nPm: 0, reAm: 0, rePm: 0, jAm: 0, jPm: 0 };
   for (const c of d.cells) {
     if (!isPatientText(c.text)) continue;
     const a = isAm(d.sessions, c.time);
     if (a) cnt.rAm++; else cnt.rPm++;
     if (c.visited) { if (a) cnt.vAm++; else cnt.vPm++; }
+    const cat = categorizeCell(c.text);
+    if (cat.isNew) { if (a) cnt.nAm++; else cnt.nPm++; }
+    if (cat.isRevisit) { if (a) cnt.reAm++; else cnt.rePm++; }
+    if (cat.isJibai) { if (a) cnt.jAm++; else cnt.jPm++; }
   }
   const cols = d.beds;
   const names = (n: string[]) => (n.length ? n.join('・') : '－');
@@ -43,7 +47,10 @@ export default async function PrintPage({ params }: { params: Promise<{ date: st
       <PrintButton />
       <div className="mb-1 flex items-end justify-between">
         <h1 className="text-base font-bold">《予約表》 {store.name}　{formatDateJa(date)}</h1>
-        <div className="text-[11px]">予約 午前 <b>{cnt.rAm}</b>／午後 <b>{cnt.rPm}</b>／計 <b>{cnt.rAm + cnt.rPm}</b>　来院 午前 <b>{cnt.vAm}</b>／午後 <b>{cnt.vPm}</b>／計 <b>{cnt.vAm + cnt.vPm}</b></div>
+        <div className="text-right text-[11px]">
+          <div>予約 午前 <b>{cnt.rAm}</b>／午後 <b>{cnt.rPm}</b>／計 <b>{cnt.rAm + cnt.rPm}</b>　来院 午前 <b>{cnt.vAm}</b>／午後 <b>{cnt.vPm}</b>／計 <b>{cnt.vAm + cnt.vPm}</b></div>
+          <div className="text-[10px]">初診 <b>{cnt.nAm}</b>／<b>{cnt.nPm}</b>／計 <b>{cnt.nAm + cnt.nPm}</b>　再来 <b>{cnt.reAm}</b>／<b>{cnt.rePm}</b>／計 <b>{cnt.reAm + cnt.rePm}</b>　自賠 <b>{cnt.jAm}</b>／<b>{cnt.jPm}</b>／計 <b>{cnt.jAm + cnt.jPm}</b></div>
+        </div>
       </div>
       <div className="mb-1 flex flex-wrap gap-x-4 text-[9px] text-slate-700">
         <span>午前：{names(d.capacity.namesAm)}（{d.capacity.am} 枠）</span>

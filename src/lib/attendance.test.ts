@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellState, isContinuationText, isTwoSlotName } from './attendance';
+import { categorizeCell, cellState, isContinuationText, isTwoSlotName } from './attendance';
 
 describe('attendance', () => {
   it('当日：時刻前は none、過ぎたら pending、+30分で noshow、チェック済みは visited', () => {
@@ -20,5 +20,15 @@ describe('attendance', () => {
     expect(isTwoSlotName('山田（初）')).toBe(true);
     expect(isTwoSlotName('山田（再）')).toBe(true);
     expect(isTwoSlotName('山田')).toBe(false);
+  });
+  it('内訳（初診・再来・自賠）の判定', () => {
+    expect(categorizeCell('山田（初）')).toEqual({ isNew: true, isRevisit: false, isJibai: false });
+    expect(categorizeCell('山田(初)')).toEqual({ isNew: true, isRevisit: false, isJibai: false });
+    expect(categorizeCell('佐藤（再）')).toEqual({ isNew: false, isRevisit: true, isJibai: false });
+    expect(categorizeCell('鈴木 自賠')).toEqual({ isNew: false, isRevisit: false, isJibai: true });
+    expect(categorizeCell('鈴木（事故）')).toEqual({ isNew: false, isRevisit: false, isJibai: true });
+    expect(categorizeCell('高橋（初）自賠')).toEqual({ isNew: true, isRevisit: false, isJibai: true });
+    expect(categorizeCell('田中')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
+    expect(categorizeCell('')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
   });
 });

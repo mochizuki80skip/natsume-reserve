@@ -55,7 +55,8 @@ export default async function ReservationsPage({ searchParams }: { searchParams:
             <option value="">すべて</option><option value="BOOKED">予約中</option><option value="CANCELLED">取消</option>
           </select>
         </label>
-        <label>氏名・電話・診察券<input name="q" defaultValue={q} className="ml-1 w-40 rounded border px-2 py-1" /></label>
+        <label>氏名で検索<input name="q" defaultValue={q} placeholder="氏名の一部でも可" className="ml-1 w-40 rounded border px-2 py-1" />
+          <span className="ml-1 text-xs text-slate-500">（電話番号・診察券番号でも可）</span></label>
         <button type="submit" className="rounded bg-brand px-3 py-1 text-white">絞り込む</button>
         <span className="text-xs text-slate-500">{tab === 'cancel' ? cancels.length : rows.length} 件（最大 500 件表示）。個人情報は保持期間（既定 60 日）を過ぎると自動削除されます。</span>
       </form>

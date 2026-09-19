@@ -77,7 +77,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
   const phoneHref = `tel:${phone.replace(/[^\d+]/g, '')}`;
 
   return (
-    <div className="pb-24">
+    <div className={sel ? 'pb-28' : ''}>
       <div className="wk-head" ref={headRef}>
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="来院区分">
           {(['NEW', 'RETURN'] as Kind[]).map((k) => (

@@ -42,10 +42,19 @@ export default function BookingApp({ store, smsEnabled }: Props) {
     } catch { setError('通信に失敗しました'); } finally { setLoading(false); }
   }
 
-  const phoneLink = <a href={`tel:${store.phone.replace(/[^\d+]/g, '')}`} className="font-bold text-brand underline">{store.phone}</a>;
+  const phoneHref = `tel:${store.phone.replace(/[^\d+]/g, '')}`;
+  const phoneLink = <a href={phoneHref} className="font-bold text-brand underline">{store.phone}</a>;
+  // 電話番号バナー（週間一覧の直下・入力／完了画面の下に表示）
+  const phoneBanner = (
+    <a href={phoneHref} className="mt-3 block rounded-xl border-2 border-brand bg-brand-light px-4 py-3 text-center no-underline shadow-sm">
+      <span className="block text-xs font-semibold text-brand-dark">お電話でのご予約・変更・キャンセル</span>
+      <span className="mt-0.5 block text-[26px] font-bold tabular-nums tracking-wide text-brand-dark">📞 {store.phone}</span>
+      <span className="block text-[11px] text-slate-600">{store.name}</span>
+    </a>
+  );
 
   return (
-    <main className="mx-auto max-w-lg px-3 pb-16 pt-4">
+    <main className="mx-auto max-w-lg px-3 pb-6 pt-4">
       <header className="mb-3">
         <h1 className="text-lg font-bold">{store.name}　WEB予約</h1>
         <ol className="mt-2 flex gap-1 text-xs text-slate-500">
@@ -69,6 +78,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
           {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone}
             onProceed={(s) => { setSel(s); setStep(2); setError(''); }} />
+          {phoneBanner}
         </section>
       )}
 
@@ -117,7 +127,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
         </section>
       )}
 
-      <footer className="mt-10 text-center text-xs text-slate-400">お電話でのご予約：{phoneLink}</footer>
+      {step !== 1 && phoneBanner}
     </main>
   );
 }
