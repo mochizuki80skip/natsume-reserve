@@ -102,3 +102,6 @@ npm run build && npm start &          # 3002 番で起動（seed 済みの DB �
 npm i -D playwright                    # 初回のみ
 node e2e/smoke.mjs                     # BASE_URL / HQ_PASSWORD で上書き可
 ```
+
+## 更新履歴
+- 2026-09-19: natsume-reserve リポジトリ単体での本番デプロイを開始
