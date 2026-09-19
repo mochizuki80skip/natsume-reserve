@@ -32,7 +32,6 @@ Excel の予約表（1日1シート・5ベッド×15分枠）を Web に置き�
 ## ローカルで動かす
 
 ```bash
-cd booking
 npm install
 cp .env.example .env      # DATABASE_URL などを設定
 npm run db:push           # テーブル作成
