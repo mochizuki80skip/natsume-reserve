@@ -1,5 +1,9 @@
 # 接骨院 WEB予約システム（24店舗対応）
 
+> **2026-09-25 以降の本番は Xserver レンタルサーバー（PHP + MySQL）版に移行中です。**
+> 設置手順・更新方法は [xserver/README.md](xserver/README.md) を参照してください。
+> このファイルの以下の説明は Vercel + Supabase で動かしていた旧構成（Next.js）のもので、機能・画面・URL は同じです。
+
 Excel の予約表（1日1シート・5ベッド×15分枠）を Web に置き換え、患者様が空き状況（〇／📞／×）を見て
 予約できるようにするシステム。店舗コードでログインする管理画面は Excel 風の表で、コピー＆ペーストで
 直接入力できる。仕様の詳細は [docs/SPEC.md](docs/SPEC.md)。
@@ -110,3 +114,4 @@ node e2e/smoke.mjs                     # BASE_URL / HQ_PASSWORD で上書き可
 
 ## 更新履歴
 - 2026-09-19: natsume-reserve リポジトリ単体での本番デプロイを開始。Vercel のプロジェクト名を natsume-group-reserve に変更
+- 2026-09-25: Vercel を使わない方針となり、Xserver レンタルサーバーで動く PHP + MySQL 版（xserver/）を追加。サーバー側を作り直し、画面は React を流用

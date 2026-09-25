@@ -1,0 +1,28 @@
+# 接骨院 WEB予約システム（Xserver 用）
+# 実在するファイル（画像・JS・CSS）はそのまま返し、それ以外はすべて index.php に渡す
+RewriteEngine On
+RewriteBase /
+
+# app フォルダを public_html の中に置いた場合でも外から読めないようにする
+RewriteRule ^app/ - [F,L]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+RewriteRule ^ index.php [L]
+
+# セキュリティ関連のヘッダー
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Robots-Tag "noindex, nofollow"
+</IfModule>
+
+# ビルド済みの JS/CSS はファイル名にハッシュが付くので長くキャッシュしてよい
+<IfModule mod_expires.c>
+  ExpiresActive On
+  <FilesMatch "\.(js|css|woff2?)$">
+    ExpiresDefault "access plus 30 days"
+  </FilesMatch>
+</IfModule>

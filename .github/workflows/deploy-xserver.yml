@@ -1,0 +1,61 @@
+# Xserver 版：画面をビルドし、配布用 zip を作る。Secrets が登録されていれば SSH で Xserver にも反映する
+name: Deploy to Xserver
+
+on:
+  push:
+    branches: [main]
+    paths: ['xserver/**', '.github/workflows/deploy-xserver.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SSH: ${{ secrets.XSERVER_HOST != '' && secrets.XSERVER_SSH_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: xserver/frontend/package-lock.json
+      - name: Install and test frontend
+        working-directory: xserver/frontend
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - name: PHP syntax check
+        run: |
+          sudo apt-get install -y -qq php-cli > /dev/null
+          find xserver/app xserver/public -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+      - name: Make zip
+        run: |
+          cd xserver
+          rm -f app/config.php
+          zip -qr ../natsume-reserve-xserver.zip app public -x 'app/config.php'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: natsume-reserve-xserver
+          path: natsume-reserve-xserver.zip
+          retention-days: 30
+      - name: Deploy over SSH (only when secrets are set)
+        if: env.HAS_SSH == 'true'
+        env:
+          HOST: ${{ secrets.XSERVER_HOST }}
+          USER: ${{ secrets.XSERVER_USER }}
+          KEY: ${{ secrets.XSERVER_SSH_KEY }}
+          DIR: ${{ secrets.XSERVER_DIR }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_xserver
+          chmod 600 ~/.ssh/id_xserver
+          ssh-keyscan -p 10022 -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          SSH="ssh -p 10022 -i ~/.ssh/id_xserver -o StrictHostKeyChecking=yes"
+          $SSH "$USER@$HOST" "mkdir -p '$DIR/app' '$DIR/public_html'"
+          # config.php はサーバー側のものを残す
+          rsync -az --delete --exclude 'config.php' -e "$SSH" xserver/app/ "$USER@$HOST:$DIR/app/"
+          rsync -az --delete --exclude 'app/' -e "$SSH" xserver/public/ "$USER@$HOST:$DIR/public_html/"
+          echo "deployed to $HOST:$DIR"
