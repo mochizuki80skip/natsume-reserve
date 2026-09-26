@@ -29,6 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/calendar" className="hover:underline">カレンダー</Link>
             <Link href="/admin/shifts" className="hover:underline">シフト</Link>
             <Link href="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
+            <Link href="/admin/story" className="hover:underline">ストーリー画像</Link>
             <Link href="/admin/settings" className="hover:underline">店舗設定</Link>
             {session.role === 'hq' && <Link href="/admin/hq/overview" className="hover:underline">全店状況</Link>}
             {session.role === 'hq' && <Link href="/admin/hq" className="hover:underline">本部</Link>}

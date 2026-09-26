@@ -40,6 +40,7 @@ export default function AdminLayout() {
             <Link to="/admin/calendar" className="hover:underline">カレンダー</Link>
             <Link to="/admin/shifts" className="hover:underline">シフト</Link>
             <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
+            <Link to="/admin/story" className="hover:underline">ストーリー画像</Link>
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
             {me.session.role === 'hq' && <Link to="/admin/hq/overview" className="hover:underline">全店状況</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq" className="hover:underline">本部</Link>}
