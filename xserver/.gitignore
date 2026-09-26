@@ -4,3 +4,4 @@ frontend/dist
 public/index.html
 public/assets/
 e2e/out-*.png
+public/tesseract/

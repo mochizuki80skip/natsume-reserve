@@ -6,6 +6,7 @@ require_once __DIR__ . '/handlers/public.php';
 require_once __DIR__ . '/handlers/admin.php';
 require_once __DIR__ . '/handlers/hq.php';
 require_once __DIR__ . '/handlers/misc.php';
+require_once __DIR__ . '/handlers/jibai.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -51,6 +52,14 @@ function route_table(): array
         ['POST', '#^/api/admin/hq/stores$#', 'hq_stores_post'],
         ['PUT', '#^/api/admin/hq/stores$#', 'hq_stores_put'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
+        // 自賠責請求の速報集計
+        ['GET', '#^/api/admin/jibai$#', 'jibai_get'],
+        ['PUT', '#^/api/admin/jibai/claims$#', 'jibai_claims_put'],
+        ['DELETE', '#^/api/admin/jibai/claims$#', 'jibai_claims_delete'],
+        ['POST', '#^/api/admin/jibai/submit$#', 'jibai_submit'],
+        ['PUT', '#^/api/admin/jibai/verify$#', 'jibai_verify'],
+        ['GET', '#^/api/admin/hq/jibai$#', 'hq_jibai'],
+        ['PUT', '#^/api/admin/hq/jibai/settings$#', 'hq_jibai_settings_put'],
         // 自動削除・初期設定
         ['GET', '#^/api/cron/cleanup$#', 'cron_cleanup'],
         ['GET', '#^/install$#', 'install_page'],

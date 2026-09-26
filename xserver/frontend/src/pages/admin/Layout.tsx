@@ -40,8 +40,10 @@ export default function AdminLayout() {
             <Link to="/admin/calendar" className="hover:underline">カレンダー</Link>
             <Link to="/admin/shifts" className="hover:underline">シフト</Link>
             <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
+            <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
             {me.session.role === 'hq' && <Link to="/admin/hq/overview" className="hover:underline">全店状況</Link>}
+            {me.session.role === 'hq' && <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq" className="hover:underline">本部</Link>}
             {store && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer" className="text-slate-500 hover:underline">顧客ページ↗</a>}
             <form action="/api/admin/logout" method="post"><button className="text-slate-500 hover:underline">ログアウト（{me.session.code}）</button></form>

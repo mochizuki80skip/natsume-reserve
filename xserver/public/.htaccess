@@ -22,7 +22,7 @@ RewriteRule ^ index.php [L]
 # ビルド済みの JS/CSS はファイル名にハッシュが付くので長くキャッシュしてよい
 <IfModule mod_expires.c>
   ExpiresActive On
-  <FilesMatch "\.(js|css|woff2?)$">
+  <FilesMatch "\.(js|css|woff2?|gz)$">
     ExpiresDefault "access plus 30 days"
   </FilesMatch>
 </IfModule>

@@ -11,7 +11,8 @@ function cleanup_run(): array
     foreach (['cell', 'reservation', 'day_status', 'shift', 'cancel_log'] as $t) {
         $deleted[$t] = Db::exec("DELETE FROM `$t` WHERE date < ?", [$cutoff]);
     }
-    return ['ok' => true, 'cutoff' => $cutoff, 'deleted' => $deleted];
+    $jibai = Jibai::cleanupNames(); // 自賠請求の氏名も保持期間を過ぎたら消す（金額は残す）
+    return ['ok' => true, 'cutoff' => $cutoff, 'deleted' => $deleted, 'jibai' => $jibai];
 }
 
 /** /api/cron/cleanup?token=CRON_SECRET（または Authorization: Bearer） */

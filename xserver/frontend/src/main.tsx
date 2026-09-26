@@ -15,6 +15,8 @@ import SettingsPage from './pages/admin/SettingsPage';
 import PrintPage from './pages/admin/PrintPage';
 import HqPage from './pages/admin/HqPage';
 import OverviewPage from './pages/admin/OverviewPage';
+import JibaiPage from './pages/admin/JibaiPage';
+import JibaiHqPage from './pages/admin/JibaiHqPage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -32,8 +34,10 @@ createRoot(document.getElementById('root')!).render(
           <Route path="shifts" element={<ShiftsPage />} />
           <Route path="reservations" element={<ReservationsPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="jibai" element={<JibaiPage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
+          <Route path="hq/jibai" element={<JibaiHqPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
