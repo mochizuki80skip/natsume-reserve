@@ -32,7 +32,7 @@ export default function JibaiHqPage() {
 
   async function saveDays(e: React.FormEvent) {
     e.preventDefault();
-    const r = await fetch('/api/admin/hq/jibai/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nameRetentionDays: Number(days) }) });
+    const r = await fetch('/api/admin/hq/jibai/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nameRetentionDays: Number(days ?? data!.setting.nameRetentionDays) }) });
     setMsg(r.ok ? '保存しました' : (await r.json()).error ?? '保存に失敗しました');
     if (r.ok) { setDays(null); reload(); }
   }
@@ -134,7 +134,7 @@ export default function JibaiHqPage() {
             <span>日を過ぎたら氏名を自動で消す</span>
             <button type="submit" className="rounded bg-brand px-3 py-1 text-white">保存</button>
           </form>
-          <p className="mt-2 text-xs text-slate-500">患者番号・金額・確認結果は残り、氏名だけが消えます。毎日の自動削除（Cron）で実行されます。経理の照合が終わるまでの期間より長めにしてください。</p>
+          <p className="mt-2 text-xs text-slate-500">患者番号・実日数・金額・確認結果は残り、氏名だけが消えます。住所・生年月日はそもそも読み取らず、保存もしません。毎日の自動削除（Cron）で実行されます。経理の照合が終わるまでの期間より長めにしてください。</p>
           {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1 text-sm">{msg}</p>}
         </section>
       </div>

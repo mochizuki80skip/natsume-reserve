@@ -14,7 +14,7 @@ export interface ParsedInvoice {
   amount: number | null;
   /** 合計金額の数字だけを読み直すための領域（画像座標）。無ければ右下の既定領域を使う */
   amountRect: Rect | null;
-  /** 患者番号・氏名の行の領域（確認用サムネイル） */
+  /** 患者番号と氏名の範囲（確認用サムネイル。住所・生年月日は含めない） */
   headerRect: Rect | null;
   /** 患者番号の単語だけを英数字限定で読み直すための領域 */
   patientNoRect: Rect | null;
@@ -110,10 +110,12 @@ export function findPatient(lines: OcrLine[], imgH: number): { patientNo: string
   }
   const name = parts.join('').replace(/\s+/g, ' ').trim();
   const w0 = line.words[idx];
+  // 確認用の切り抜きは患者番号と氏名の範囲だけ（右隣の住所や、下の生年月日は含めない）
+  const nameEnd = prev.x1;
   return {
     patientNo: no,
     patientName: name === '' ? null : name,
-    headerRect: { x0: Math.max(0, line.x0 - h), y0: Math.max(0, line.y0 - h * 0.6), x1: line.x1 + h, y1: line.y1 + h * 0.6 },
+    headerRect: { x0: Math.max(0, w0.x0 - h * 0.5), y0: Math.max(0, line.y0 - h * 0.3), x1: nameEnd + h * 0.5, y1: line.y1 + h * 0.3 },
     patientNoRect: { x0: Math.max(0, w0.x0 - h * 0.5), y0: Math.max(0, w0.y0 - h * 0.4), x1: w0.x1 + h * 0.5, y1: w0.y1 + h * 0.4 },
   };
 }

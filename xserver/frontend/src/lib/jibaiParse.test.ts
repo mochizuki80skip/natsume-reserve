@@ -77,6 +77,9 @@ describe('parseInvoice（スクショの読み取り結果）', () => {
     expect(r.amountRect!.x1).toBe(W);
     expect(r.headerRect).not.toBeNull();
     expect(r.patientNoRect).not.toBeNull();
+    // 確認用の切り抜きは氏名の終わり（疹@182〜196）までで、住所（葬@241 以降）や生年月日の行（y=64）は含めない
+    expect(r.headerRect!.x1).toBeLessThan(241);
+    expect(r.headerRect!.y1).toBeLessThan(64);
   });
   it('生年月日の行を対象月と間違えない', () => {
     expect(findYm([sample[2]], H)).toBeNull();

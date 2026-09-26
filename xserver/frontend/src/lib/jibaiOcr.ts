@@ -141,7 +141,12 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   onProgress?.({ stage: 'read1', message: '画面全体を読み取り中…' });
   const pass1 = await jpn.recognize(canvas, {}, { blocks: true, text: true });
   const lines = toLines(pass1.data.blocks);
-  if (isDebug()) console.log('[jibai-ocr] pass1', JSON.stringify({ size: [canvas.width, canvas.height], blocks: pass1.data.blocks?.length ?? null, lines: lines.map((l) => `y=${l.y0}: ${l.words.map((w) => `${w.text}@${w.x0}`).join(' | ')}`) }));
+  if (isDebug()) {
+    // 調査用の出力にも住所・生年月日は出さない（患者番号の行は氏名まで、「生年」を含む行は省く）
+    const patientLine = lines.find((l) => l.words.some((w) => normalizePatientNo(w.text)));
+    const shown = lines.filter((l) => l !== patientLine && !l.words.some((w) => /生年|住所/.test(w.text)));
+    console.log('[jibai-ocr] pass1', JSON.stringify({ size: [canvas.width, canvas.height], blocks: pass1.data.blocks?.length ?? null, note: '患者番号の行と生年月日の行は出力しません', lines: shown.map((l) => `y=${l.y0}: ${l.words.map((w) => `${w.text}@${w.x0}`).join(' | ')}`) }));
+  }
   const parsed: ParsedInvoice = parseInvoice(lines, canvas.width, canvas.height);
 
   onProgress?.({ stage: 'read2', message: '合計金額を読み直し中…' });
@@ -150,7 +155,7 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   if (parsed.amountRect) {
     const r = await readDigits(eng, canvas, parsed.amountRect);
     const a2 = parseAmountText(r.text);
-    if (isDebug()) console.log('[jibai-ocr] pass2', JSON.stringify({ rect: parsed.amountRect, text: r.text, confidence: r.confidence, parsed }));
+    if (isDebug()) console.log('[jibai-ocr] pass2', JSON.stringify({ rect: parsed.amountRect, text: r.text, confidence: r.confidence, parsed: { ...parsed, patientName: parsed.patientName ? '（省略）' : null } }));
     if (a2 !== null && a2 > 0) {
       if (amount !== null && amount !== a2) warnings.push(`合計の読み取りが 2 通り（${amount.toLocaleString('ja-JP')} / ${a2.toLocaleString('ja-JP')}）。画像を見て確認してください`);
       else if (amount === null) warnings.push('合計は数字欄の読み直しだけで読めました。画像を見て確認してください');
@@ -181,7 +186,8 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   if (!patientNo) warnings.push('患者番号が読み取れませんでした');
   if (!parsed.ym) warnings.push('対象月（令和 年 月）が読み取れませんでした');
 
-  const headerImage = parsed.headerRect ? cropDataUrl(canvas, parsed.headerRect, 360) : null;
+  // 切り抜きは患者番号〜氏名と合計欄だけ。住所・生年月日・傷病名などの領域は画像にも文字にも残さない
+  const headerImage = parsed.headerRect ? cropDataUrl(canvas, parsed.headerRect, 300) : null;
   const amountImage = parsed.amountRect ? cropDataUrl(canvas, parsed.amountRect, 200) : null;
   onProgress?.({ stage: 'done', message: '完了' });
   return {

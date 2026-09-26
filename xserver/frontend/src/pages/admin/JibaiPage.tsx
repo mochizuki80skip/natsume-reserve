@@ -236,7 +236,7 @@ export default function JibaiPage() {
             <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、ここにドラッグ＆ドロップするか、Win + Shift + S で撮ったスクショを <b>Ctrl + V</b> で貼り付けてください。複数枚まとめて可。</span>
           </div>
           {(progress || queueLeft > 0) && <p className="mt-2 text-brand-dark">⏳ {progress ?? '読み取り待ち…'}{queueLeft > 0 ? `（残り ${queueLeft} 枚）` : ''}</p>}
-          <p className="mt-2 text-xs text-slate-500">読み取りはこのパソコンの中だけで行い、画像はどこにも送信・保存されません。読み取り後に金額と患者番号を目視で確認し、違っていれば直してから保存してください。</p>
+          <p className="mt-2 text-xs text-slate-500">読み取りはこのパソコンの中だけで行い、画像はどこにも送信・保存されません。取り出すのは患者番号・氏名・実日数・合計金額だけで、住所・生年月日・傷病名は読み取り対象外です（確認用の切り抜きにも含めません）。読み取り後に金額と患者番号を目視で確認し、違っていれば直してから保存してください。</p>
         </div>
       )}
       {!editable && <p className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-600">提出済みのため編集できません。修正が必要なときは「提出を取り消す」を押してください。</p>}
@@ -309,7 +309,7 @@ export default function JibaiPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={() => setRows((prev) => [...prev, { key: newKey(), id: null, patientNo: '', patientName: '', days: '', amount: '', source: 'MANUAL', dirty: true, saved: null, ocr: null }])} className="rounded border bg-white px-3 py-1.5 text-sm">＋ 手入力で追加</button>
           <button type="button" onClick={saveAll} disabled={saving || unsaved === 0} className="rounded bg-brand px-4 py-1.5 text-sm font-bold text-white disabled:opacity-50">{saving ? '保存中…' : `変更を保存${unsaved > 0 ? `（${unsaved} 件）` : ''}`}</button>
-          <span className="text-xs text-slate-500">保存してから「この月を提出する」を押すと本部の集計に反映されます。氏名は保存から約 {data.nameRetentionDays} 日後に自動で消え、金額は残ります。</span>
+          <span className="text-xs text-slate-500">保存してから「この月を提出する」を押すと本部の集計に反映されます。氏名は対象月の翌月から約 {data.nameRetentionDays} 日後に自動で消え、患者番号・実日数・金額は残ります。</span>
         </div>
       )}
 

@@ -119,7 +119,8 @@ const s001b = await page.locator('tbody tr', { hasText: 'S001' }).first().textCo
 ok('本部集計に確定合計と差額が出る', s001b.includes((total + 500).toLocaleString('ja-JP')) && s001b.includes('500'), s001b);
 
 // 氏名の保持期間の設定
-await page.locator('input[type="number"]').fill('30');
+const cur = await page.locator('input[type="number"]').inputValue();
+await page.locator('input[type="number"]').fill(cur === '45' ? '60' : '45');
 await page.getByRole('button', { name: '保存' }).click();
 await page.waitForSelector('text=保存しました');
 ok('氏名の保持期間を保存できる', true);
