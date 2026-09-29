@@ -117,6 +117,8 @@ function jibai_submit(): never
     if ($action === 'submit') {
         $n = (int)Db::one('SELECT COUNT(*) AS n FROM jibai_claim WHERE storeId = ? AND ym = ?', [$sid, $ym])['n'];
         if ($n === 0) Http::error('明細が 1 件もありません。自賠請求が無い月は「0 件で提出」を押してください', 400);
+        $missing = (int)Db::one('SELECT COUNT(*) AS n FROM jibai_claim WHERE storeId = ? AND ym = ? AND invoiceYm IS NULL', [$sid, $ym])['n'];
+        if ($missing > 0) Http::error("請求月が未選択の明細が {$missing} 件あります。何年何月分かを選んで保存してから提出してください", 400);
         Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy)',
             [Db::newId(), $sid, $ym, 'SUBMITTED', Time::nowJstDateTime(), $by]);
         $total = (int)Db::one('SELECT COALESCE(SUM(amount), 0) AS t FROM jibai_claim WHERE storeId = ? AND ym = ?', [$sid, $ym])['t'];

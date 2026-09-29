@@ -18,6 +18,10 @@ export async function POST(req: Request) {
     const agg = await prisma.jibaiClaim.aggregate({ where: { storeId: sid, ym }, _count: { _all: true }, _sum: { amount: true } });
     const n = agg._count._all;
     if (action === 'submit' && n === 0) return NextResponse.json({ error: '明細が 1 件もありません。自賠請求が無い月は「0 件で提出」を押してください' }, { status: 400 });
+    if (action === 'submit') {
+      const missing = await prisma.jibaiClaim.count({ where: { storeId: sid, ym, invoiceYm: null } });
+      if (missing > 0) return NextResponse.json({ error: `請求月が未選択の明細が ${missing} 件あります。何年何月分かを選んで保存してから提出してください` }, { status: 400 });
+    }
     if (action === 'submit_empty' && n > 0) return NextResponse.json({ error: '明細があるので通常の「提出」を押してください' }, { status: 400 });
     const data = { status: 'SUBMITTED', submittedAt: new Date(), submittedBy: by };
     await prisma.jibaiMonth.upsert({ where: key, update: data, create: { storeId: sid, ym, ...data } });

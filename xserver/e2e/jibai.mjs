@@ -42,9 +42,9 @@ if (SHOT) {
   const row = page.locator('tbody tr').first();
   const no = await row.locator('input').nth(0).inputValue();
   const name = await row.locator('input').nth(1).inputValue();
-  const invoiceYm = await row.locator('input[type="month"]').inputValue();
-  const days = await row.locator('input').nth(3).inputValue();
-  const amount = await row.locator('input').nth(4).inputValue();
+  const invoiceYm = await row.locator('select[aria-label="請求月"]').inputValue();
+  const days = await row.locator('input').nth(2).inputValue();
+  const amount = await row.locator('input').nth(3).inputValue();
   console.log('OCR:', { no, name, invoiceYm, days, amount, sec });
   ok('請求月（令和 年 月）を読み取れた', invoiceYm === (process.env.EXPECT_YM ?? '2026-09'), invoiceYm);
   ok('患者番号を読み取れた', no === EXPECT.patientNo, no);
@@ -58,15 +58,15 @@ if (SHOT) {
   const row = page.locator('tbody tr').first();
   await row.locator('input').nth(0).fill(EXPECT.patientNo);
   await row.locator('input').nth(1).fill('テスト 太郎');
-  await row.locator('input').nth(3).fill(EXPECT.days);
-  await row.locator('input').nth(4).fill(EXPECT.amount);
+  await row.locator('input').nth(2).fill(EXPECT.days);
+  await row.locator('input').nth(3).fill(EXPECT.amount);
 }
 // 手入力の 2 件目
 await page.getByRole('button', { name: '＋ 手入力で追加' }).click();
 const row2 = page.locator('tbody tr').nth(1);
 await row2.locator('input').nth(0).fill('000001');
 await row2.locator('input').nth(1).fill('テスト 花子');
-await row2.locator('input').nth(4).fill('12000');
+await row2.locator('input').nth(3).fill('12000');
 await page.getByRole('button', { name: /変更を保存/ }).click();
 await page.waitForSelector('text=保存しました', { timeout: 15000 });
 ok('保存できた', true, await page.locator('text=保存しました').textContent());
@@ -78,7 +78,7 @@ page.once('dialog', (d) => d.accept());
 await page.getByRole('button', { name: 'この月を提出する' }).click();
 await page.waitForSelector('text=提出済み', { timeout: 15000 });
 ok('提出できた', true);
-ok('提出後は入力欄が編集不可', await page.locator('tbody tr').first().locator('input').nth(4).isDisabled());
+ok('提出後は入力欄が編集不可', await page.locator('tbody tr').first().locator('input').nth(3).isDisabled());
 await page.screenshot({ path: 'e2e/out-jibai-submitted.png', fullPage: true });
 
 // 提出済みの月に店舗が保存しようとすると 409
@@ -126,6 +126,37 @@ await page.locator('input[type="number"]').fill(cur === '45' ? '60' : '45');
 await page.getByRole('button', { name: '保存' }).click();
 await page.waitForSelector('text=保存しました');
 ok('氏名の保持期間を保存できる', true);
+
+// --- 請求月が読み取れない画像：未選択のままでは保存・提出できず、選べば提出できる（S002 で確認）
+if (process.env.SHOT_NO_YM) {
+  await ctx.clearCookies();
+  await page.goto(`${BASE}/admin/login`);
+  await page.fill('input[autocomplete="username"]', 'S002');
+  await page.fill('input[type="password"]', 'password');
+  await page.getByRole('button', { name: 'ログイン' }).click();
+  await page.waitForURL(/\/admin\/day\//, { timeout: 15000 });
+  await page.goto(`${BASE}/admin/jibai?ym=${ym}`);
+  await page.waitForSelector('input[type="file"]', { state: 'attached' });
+  await page.setInputFiles('input[type="file"]', process.env.SHOT_NO_YM);
+  await page.waitForSelector('text=未保存', { timeout: 120000 });
+  await page.waitForFunction(() => !document.body.textContent.includes('読み取り中'), null, { timeout: 120000 });
+  const nrow = page.locator('tbody tr').first();
+  ok('請求月が読めない画像では未選択になる', (await nrow.locator('select[aria-label="請求月"]').inputValue()) === '');
+  ok('未選択の警告が出る', (await page.locator('text=請求月が未選択の明細が 1 件あります').count()) > 0);
+  await page.getByRole('button', { name: /変更を保存/ }).click();
+  await page.waitForSelector('text=何年何月分かを選んでから保存してください', { timeout: 5000 });
+  ok('未選択のままでは保存できない', true);
+  ok('未選択のままでは提出ボタンが押せない', await page.getByRole('button', { name: 'この月を提出する' }).isDisabled());
+  await nrow.locator('select[aria-label="請求月"]').selectOption(ym);
+  await page.getByRole('button', { name: /変更を保存/ }).click();
+  await page.waitForSelector('text=保存しました', { timeout: 15000 });
+  await page.waitForFunction(() => !document.body.textContent.includes('未保存'));
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'この月を提出する' }).click();
+  await page.waitForSelector('text=提出済み', { timeout: 15000 });
+  ok('請求月を選べば保存・提出できる', true);
+  await page.screenshot({ path: 'e2e/out-jibai-noym.png', fullPage: true });
+}
 
 await browser.close();
 console.log('done');
