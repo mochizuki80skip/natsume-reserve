@@ -118,7 +118,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
         </div>
         <div className="wk-legend" aria-label="記号の意味">
           <span><span className="o">〇</span> WEB予約できます</span>
-          <span><span className="p">📞</span> 残りわずか／直前のためお電話で</span>
+          <span><span className="p">📞</span> 残りわずか・直前はお電話で</span>
           <span><span className="x">×</span> 空きなし・受付終了</span>
           <span><span className="sw" /> 定休日・祝日</span>
         </div>
