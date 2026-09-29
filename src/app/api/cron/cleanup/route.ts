@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getGlobalSetting } from '@/lib/settings';
 import { addDays, nowJst } from '@/lib/time';
+import { cleanupJibaiNames } from '@/lib/jibaiServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,5 +23,6 @@ export async function GET(req: Request) {
     prisma.shift.deleteMany({ where: { date: { lt: cutoff } } }),
     prisma.cancelLog.deleteMany({ where: { date: { lt: cutoff } } }),
   ]);
-  return NextResponse.json({ ok: true, cutoff, deleted: { cells: cells.count, reservations: reservations.count, days: days.count, beds: beds.count, staff: staff.count, shifts: shifts.count, cancels: cancels.count } });
+  const jibai = await cleanupJibaiNames(); // 自賠請求の氏名も保持期間を過ぎたら消す（金額は残す）
+  return NextResponse.json({ ok: true, cutoff, deleted: { cells: cells.count, reservations: reservations.count, days: days.count, beds: beds.count, staff: staff.count, shifts: shifts.count, cancels: cancels.count }, jibai });
 }

@@ -14,6 +14,7 @@ final class Install
         foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
             if ($stmt !== '') $pdo->exec($stmt);
         }
+        Jibai::ensureTables(true);
         $log[] = 'テーブルを作成（または確認）しました';
 
         Settings::global();

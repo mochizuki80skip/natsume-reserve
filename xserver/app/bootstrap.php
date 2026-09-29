@@ -5,7 +5,7 @@ declare(strict_types=1);
 date_default_timezone_set('Asia/Tokyo');
 mb_internal_encoding('UTF-8');
 
-foreach (['Config', 'Time', 'Holidays', 'Hours', 'Availability', 'Text', 'Db', 'Http', 'Auth', 'RateLimit', 'Sms', 'Settings', 'PublicApi', 'DayData', 'Xlsx', 'Install'] as $lib) {
+foreach (['Config', 'Time', 'Holidays', 'Hours', 'Availability', 'Text', 'Db', 'Http', 'Auth', 'RateLimit', 'Sms', 'Settings', 'PublicApi', 'DayData', 'Xlsx', 'Jibai', 'Install'] as $lib) {
     require_once __DIR__ . '/lib/' . $lib . '.php';
 }
 

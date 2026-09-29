@@ -4,14 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "test": "vitest run"
+    "dev": "node scripts/prepare-ocr.mjs && vite",
+    "build": "node scripts/prepare-ocr.mjs && tsc --noEmit && vite build",
+    "test": "vitest run",
+    "prepare-ocr": "node scripts/prepare-ocr.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-router-dom": "^7.1.0"
+    "react-router-dom": "^7.1.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",
