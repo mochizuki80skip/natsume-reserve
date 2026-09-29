@@ -15,13 +15,24 @@ final class Jibai
         self::$ensured = true;
         if (!$force) {
             $exists = Db::one("SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'jibai_log'");
-            if ($exists) return;
+            if ($exists) { self::ensureColumns(); return; }
         }
         $sql = file_get_contents(dirname(__DIR__) . '/sql/jibai.sql');
         $sql = preg_replace('/^\s*--.*$/m', '', $sql);
         $pdo = Db::pdo();
         foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
             if ($stmt !== '') $pdo->exec($stmt);
+        }
+        self::ensureColumns();
+    }
+
+    /** 後から追加した列が無ければ足す（MySQL 8 は ADD COLUMN IF NOT EXISTS が使えないため自前で確認） */
+    private static function ensureColumns(): void
+    {
+        $added = [['jibai_claim', 'invoiceYm', 'ALTER TABLE `jibai_claim` ADD COLUMN `invoiceYm` CHAR(7) NULL AFTER `seq`']];
+        foreach ($added as [$table, $col, $ddl]) {
+            $r = Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $col]);
+            if (!$r) Db::pdo()->exec($ddl);
         }
     }
 
@@ -59,6 +70,7 @@ final class Jibai
             'days' => $r['days'] === null ? null : (int)$r['days'],
             'amount' => (int)$r['amount'],
             'source' => (string)$r['source'],
+            'invoiceYm' => $r['invoiceYm'] === null ? null : (string)$r['invoiceYm'],
             'verifiedAmount' => $r['verifiedAmount'] === null ? null : (int)$r['verifiedAmount'],
             'verifiedAt' => $r['verifiedAt'],
             'verifiedBy' => $r['verifiedBy'],

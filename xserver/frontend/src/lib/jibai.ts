@@ -1,7 +1,7 @@
 // 自賠請求（速報集計）で画面共通に使う型と小さな関数
 
 export interface JibaiClaim {
-  id: string; ym: string; patientNo: string; patientName: string | null; days: number | null; amount: number; source: 'OCR' | 'MANUAL';
+  id: string; ym: string; invoiceYm: string | null; patientNo: string; patientName: string | null; days: number | null; amount: number; source: 'OCR' | 'MANUAL';
   verifiedAmount: number | null; verifiedAt: string | null; verifiedBy: string | null; note: string; createdBy: string; createdAt: string; updatedAt: string;
 }
 export interface JibaiMonth { status: 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null }

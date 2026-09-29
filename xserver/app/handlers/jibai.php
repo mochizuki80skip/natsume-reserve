@@ -56,6 +56,7 @@ function jibai_claims_put(): never
         foreach ($rows as $r) {
             if (!is_array($r)) throw new HttpError(400, 'bad request');
             $patientNo = mb_substr(trim((string)($r['patientNo'] ?? '')), 0, 20);
+            $invoiceYm = isset($r['invoiceYm']) && is_string($r['invoiceYm']) && Jibai::isValidYm($r['invoiceYm']) ? $r['invoiceYm'] : null; // 請求書に印字された「令和 年 月」
             $patientName = isset($r['patientName']) && is_string($r['patientName']) ? mb_substr(trim($r['patientName']), 0, 40) : '';
             $days = ($r['days'] ?? null) === null || $r['days'] === '' ? null : Http::int($r, 'days', 0, 31);
             $amount = Http::int($r, 'amount', 0, Jibai::MAX_AMOUNT);
@@ -65,15 +66,15 @@ function jibai_claims_put(): never
                 $old = Db::one('SELECT * FROM jibai_claim WHERE id = ? AND storeId = ? AND ym = ?', [$id, $sid, $ym]);
                 if (!$old) throw new HttpError(404, '明細が見つかりません（他の端末で削除された可能性があります）');
                 if ($old['verifiedAmount'] !== null && !$isHq && (int)$old['amount'] !== $amount) throw new HttpError(409, '経理確認済みの明細の金額は店舗では変更できません');
-                Db::exec('UPDATE jibai_claim SET patientNo = ?, patientName = ?, days = ?, amount = ? WHERE id = ?', [$patientNo, $patientName === '' ? null : $patientName, $days, $amount, $id]);
+                Db::exec('UPDATE jibai_claim SET patientNo = ?, patientName = ?, days = ?, amount = ?, invoiceYm = ? WHERE id = ?', [$patientNo, $patientName === '' ? null : $patientName, $days, $amount, $invoiceYm, $id]);
                 if ((int)$old['amount'] !== $amount || (string)$old['patientNo'] !== $patientNo || ($old['days'] === null ? null : (int)$old['days']) !== $days) {
                     Jibai::log($sid, $ym, $id, 'update', sprintf('%s %s円 → %s %s円', $old['patientNo'], number_format((int)$old['amount']), $patientNo, number_format($amount)), $by);
                 }
                 $updated++;
             } else {
                 $id = Db::newId();
-                Db::exec('INSERT INTO jibai_claim (id, storeId, ym, seq, patientNo, patientName, days, amount, source, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [$id, $sid, $ym, ++$seq, $patientNo, $patientName === '' ? null : $patientName, $days, $amount, $source, $by]);
+                Db::exec('INSERT INTO jibai_claim (id, storeId, ym, seq, invoiceYm, patientNo, patientName, days, amount, source, createdBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [$id, $sid, $ym, ++$seq, $invoiceYm, $patientNo, $patientName === '' ? null : $patientName, $days, $amount, $source, $by]);
                 Jibai::log($sid, $ym, $id, 'add', sprintf('%s %s円（%s）', $patientNo, number_format($amount), $source === 'OCR' ? '読み取り' : '手入力'), $by);
                 $added++;
             }
@@ -173,7 +174,7 @@ function hq_jibai(): never
     if (!Jibai::isValidYm($ym)) $ym = Jibai::currentYm();
     $stores = Db::all('SELECT id, code, name, active FROM store WHERE active = 1 ORDER BY code ASC');
     $agg = [];
-    foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, SUM(CASE WHEN verifiedAmount IS NULL THEN 0 ELSE 1 END) AS vn, COALESCE(SUM(verifiedAmount), 0) AS vtotal, SUM(CASE WHEN source = ? THEN 1 ELSE 0 END) AS ocr FROM jibai_claim WHERE ym = ? GROUP BY storeId', ['OCR', $ym]) as $r) {
+    foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, SUM(CASE WHEN verifiedAmount IS NULL THEN 0 ELSE 1 END) AS vn, COALESCE(SUM(verifiedAmount), 0) AS vtotal, SUM(CASE WHEN source = ? THEN 1 ELSE 0 END) AS ocr, SUM(CASE WHEN invoiceYm IS NOT NULL AND invoiceYm <> ym THEN 1 ELSE 0 END) AS ymMismatch FROM jibai_claim WHERE ym = ? GROUP BY storeId', ['OCR', $ym]) as $r) {
         $agg[$r['storeId']] = $r;
     }
     $months = [];
@@ -191,6 +192,7 @@ function hq_jibai(): never
             'count' => $a ? (int)$a['n'] : 0,
             'total' => $a ? (int)$a['total'] : 0,
             'ocrCount' => $a ? (int)$a['ocr'] : 0,
+            'ymMismatch' => $a ? (int)$a['ymMismatch'] : 0,
             'verifiedCount' => $a ? (int)$a['vn'] : 0,
             'verifiedTotal' => $a ? (int)$a['vtotal'] : 0,
         ];

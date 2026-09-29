@@ -12,7 +12,7 @@ interface Resp {
 }
 
 interface Row {
-  key: string; id: string | null; patientNo: string; patientName: string; days: string; amount: string; source: 'OCR' | 'MANUAL';
+  key: string; id: string | null; patientNo: string; patientName: string; invoiceYm: string; days: string; amount: string; source: 'OCR' | 'MANUAL';
   dirty: boolean; saved: JibaiClaim | null;
   ocr: { headerImage: string | null; amountImage: string | null; warnings: string[]; elapsedMs: number; fileName: string } | null;
 }
@@ -21,7 +21,7 @@ let keySeq = 0;
 const newKey = () => `k${Date.now()}_${keySeq++}`;
 
 function rowFromClaim(c: JibaiClaim): Row {
-  return { key: c.id, id: c.id, patientNo: c.patientNo, patientName: c.patientName ?? '', days: c.days === null ? '' : String(c.days), amount: String(c.amount), source: c.source, dirty: false, saved: c, ocr: null };
+  return { key: c.id, id: c.id, patientNo: c.patientNo, patientName: c.patientName ?? '', invoiceYm: c.invoiceYm ?? '', days: c.days === null ? '' : String(c.days), amount: String(c.amount), source: c.source, dirty: false, saved: c, ocr: null };
 }
 
 async function send(url: string, method: string, body: unknown): Promise<unknown> {
@@ -78,9 +78,8 @@ export default function JibaiPage() {
           continue;
         }
         const warnings = [...r.warnings];
-        if (r.ym && ym && r.ym !== ym) warnings.push(`スクショの対象月は ${formatYm(r.ym)} です（この画面は ${formatYm(ym)}）`);
         setRows((prev) => [...prev, {
-          key: newKey(), id: null, patientNo: r.patientNo, patientName: r.patientName, days: r.days === null ? '' : String(r.days), amount: r.amount === null ? '' : String(r.amount),
+          key: newKey(), id: null, patientNo: r.patientNo, patientName: r.patientName, invoiceYm: r.ym ?? '', days: r.days === null ? '' : String(r.days), amount: r.amount === null ? '' : String(r.amount),
           source: 'OCR', dirty: true, saved: null, ocr: { headerImage: r.headerImage, amountImage: r.amountImage, warnings, elapsedMs: r.elapsedMs, fileName: item.name },
         }]);
       }
@@ -128,7 +127,7 @@ export default function JibaiPage() {
     try {
       const j = (await send('/api/admin/jibai/claims', 'PUT', {
         ym: data.ym,
-        claims: targets.map((r) => ({ id: r.id, patientNo: r.patientNo.trim(), patientName: r.patientName.trim(), days: r.days.trim() === '' ? null : Number(r.days), amount: Number(r.amount), source: r.source })),
+        claims: targets.map((r) => ({ id: r.id, patientNo: r.patientNo.trim(), patientName: r.patientName.trim(), invoiceYm: r.invoiceYm || null, days: r.days.trim() === '' ? null : Number(r.days), amount: Number(r.amount), source: r.source })),
       })) as { added: number; updated: number };
       setMsg({ text: `保存しました（追加 ${j.added} 件・更新 ${j.updated} 件）`, kind: 'ok' });
       setRows((prev) => prev.filter((r) => r.id)); // 新規行はサーバーの一覧に置き換わる
@@ -155,6 +154,7 @@ export default function JibaiPage() {
   async function submitMonth(action: 'submit' | 'submit_empty' | 'reopen') {
     if (!data) return;
     if (rows.some((r) => r.dirty || !r.id)) { setMsg({ text: '先に「変更を保存」を押してください', kind: 'err' }); return; }
+    if (action === 'submit' && ymMismatch > 0 && !confirm(`請求月が ${formatYm(data.ym)} と違う明細が ${ymMismatch} 件あります。このまま提出しますか？`)) return;
     const label = action === 'reopen' ? '提出を取り消して修正できるようにします。' : action === 'submit_empty' ? `${formatYm(data.ym)} は自賠請求 0 件として提出します。` : `${formatYm(data.ym)} の ${rows.length} 件・${yen(total)} を提出します。提出後は本部の集計に反映されます。`;
     if (!confirm(`${label}よろしいですか？`)) return;
     try {
@@ -184,6 +184,7 @@ export default function JibaiPage() {
   const verifiedTotal = rows.reduce((s, r) => s + (r.saved?.verifiedAmount ?? 0), 0);
   const verifiedCount = rows.filter((r) => r.saved?.verifiedAmount !== null && r.saved?.verifiedAmount !== undefined).length;
   const unsaved = rows.filter((r) => r.dirty || !r.id).length;
+  const ymMismatch = rows.filter((r) => r.invoiceYm && r.invoiceYm !== ym).length;
   const dupNos = new Set(rows.map((r) => r.patientNo.trim()).filter((n, i, a) => n !== '' && a.indexOf(n) !== i));
   const go = (m: string) => navigate(`/admin/jibai?ym=${m}`);
   const submitted = data.month?.status === 'SUBMITTED';
@@ -206,6 +207,7 @@ export default function JibaiPage() {
         <div><span className="text-xs text-slate-500">対象月</span><div className="text-lg font-bold">{formatYm(ym)}</div></div>
         <div><span className="text-xs text-slate-500">件数</span><div className="text-lg font-bold tabular-nums">{rows.length} 件</div></div>
         <div><span className="text-xs text-slate-500">速報合計</span><div className="text-lg font-bold tabular-nums text-brand-dark">{yen(total)}</div></div>
+        {ymMismatch > 0 && <div><span className="text-xs text-amber-700">請求月が違う明細</span><div className="text-lg font-bold tabular-nums text-amber-700">{ymMismatch} 件</div></div>}
         {(data.isHq || verifiedCount > 0) && <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-lg font-bold tabular-nums">{verifiedCount} 件 / {yen(verifiedTotal)}</div></div>}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {submitted ? (
@@ -248,6 +250,7 @@ export default function JibaiPage() {
               <th className="px-2 py-1">#</th>
               <th className="px-2 py-1">患者番号</th>
               <th className="px-2 py-1">氏名</th>
+              <th className="px-2 py-1">請求月</th>
               <th className="px-2 py-1 text-right">実日数</th>
               <th className="px-2 py-1 text-right">合計金額（円）</th>
               <th className="px-2 py-1">読み取り確認</th>
@@ -265,6 +268,13 @@ export default function JibaiPage() {
                   <td className="px-2 py-1 text-xs text-slate-500">{i + 1}{(r.dirty || !r.id) && <span className="ml-1 rounded bg-yellow-200 px-1 text-[10px] text-yellow-900">未保存</span>}</td>
                   <td className="px-2 py-1"><input value={r.patientNo} disabled={!editable} onChange={(e) => update(r.key, { patientNo: e.target.value })} className={`${inputCls} w-28 font-mono ${dup ? 'border-amber-500' : ''}`} placeholder="003862a" />{dup && <div className="text-[11px] text-amber-700">同じ番号が複数あります</div>}</td>
                   <td className="px-2 py-1"><input value={r.patientName} disabled={!editable} onChange={(e) => update(r.key, { patientName: e.target.value })} className={`${inputCls} w-36`} placeholder="氏名" /></td>
+                  <td className="px-2 py-1">
+                    <input type="month" value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} className={`${inputCls} w-36 ${r.invoiceYm && r.invoiceYm !== ym ? 'border-amber-500' : ''}`} title="請求書に印字された「令和 年 月」" />
+                    {r.invoiceYm && r.invoiceYm !== ym && (
+                      <div className="text-[11px] text-amber-700">この画面（{formatYm(ym)}）と違います。<button type="button" onClick={() => go(r.invoiceYm)} className="underline">{formatYm(r.invoiceYm)} の画面へ移動</button>{!r.id && '（未保存の行は持ち越します）'}</div>
+                    )}
+                    {!r.invoiceYm && r.ocr && <div className="text-[11px] text-amber-700">読み取れず。手で選んでください</div>}
+                  </td>
                   <td className="px-2 py-1"><input value={r.days} disabled={!editable} onChange={(e) => update(r.key, { days: e.target.value })} inputMode="numeric" className={`${inputCls} w-14 text-right`} /></td>
                   <td className="px-2 py-1"><input value={r.amount} disabled={!editable || lockAmount} onChange={(e) => update(r.key, { amount: e.target.value.replace(/[^\d]/g, '') })} inputMode="numeric" className={`${inputCls} w-28 text-right font-bold tabular-nums`} />{r.amount !== '' && <div className="text-right text-[11px] text-slate-500">{yen(Number(r.amount))}</div>}</td>
                   <td className="px-2 py-1 text-xs">
@@ -291,12 +301,12 @@ export default function JibaiPage() {
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={data.isHq ? 8 : 7} className="px-2 py-6 text-center text-slate-500">まだ明細がありません。{editable ? 'スクショを追加するか、「手入力で追加」を押してください。' : ''}</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={data.isHq ? 9 : 8} className="px-2 py-6 text-center text-slate-500">まだ明細がありません。{editable ? 'スクショを追加するか、「手入力で追加」を押してください。' : ''}</td></tr>}
           </tbody>
           {rows.length > 0 && (
             <tfoot>
               <tr className="border-t-2 bg-slate-50 font-bold">
-                <td className="px-2 py-1" colSpan={4}>合計（{rows.length} 件）</td>
+                <td className="px-2 py-1" colSpan={5}>合計（{rows.length} 件）</td>
                 <td className="px-2 py-1 text-right tabular-nums">{yen(total)}</td>
                 <td colSpan={data.isHq ? 3 : 2} className="px-2 py-1 text-xs font-normal text-slate-500">{data.isHq && verifiedCount > 0 ? `経理確認 ${verifiedCount} 件 / 確定 ${yen(verifiedTotal)}（速報との差 ${(verifiedTotal - rows.filter((x) => x.saved?.verifiedAmount !== null && x.saved?.verifiedAmount !== undefined).reduce((s, x) => s + (Number(x.amount) || 0), 0)).toLocaleString('ja-JP')}円）` : ''}</td>
               </tr>
@@ -307,7 +317,7 @@ export default function JibaiPage() {
 
       {editable && (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setRows((prev) => [...prev, { key: newKey(), id: null, patientNo: '', patientName: '', days: '', amount: '', source: 'MANUAL', dirty: true, saved: null, ocr: null }])} className="rounded border bg-white px-3 py-1.5 text-sm">＋ 手入力で追加</button>
+          <button type="button" onClick={() => setRows((prev) => [...prev, { key: newKey(), id: null, patientNo: '', patientName: '', invoiceYm: ym, days: '', amount: '', source: 'MANUAL', dirty: true, saved: null, ocr: null }])} className="rounded border bg-white px-3 py-1.5 text-sm">＋ 手入力で追加</button>
           <button type="button" onClick={saveAll} disabled={saving || unsaved === 0} className="rounded bg-brand px-4 py-1.5 text-sm font-bold text-white disabled:opacity-50">{saving ? '保存中…' : `変更を保存${unsaved > 0 ? `（${unsaved} 件）` : ''}`}</button>
           <span className="text-xs text-slate-500">保存してから「この月を提出する」を押すと本部の集計に反映されます。氏名は対象月の翌月から約 {data.nameRetentionDays} 日後に自動で消え、患者番号・実日数・金額は残ります。</span>
         </div>

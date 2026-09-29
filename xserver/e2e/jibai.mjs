@@ -42,9 +42,11 @@ if (SHOT) {
   const row = page.locator('tbody tr').first();
   const no = await row.locator('input').nth(0).inputValue();
   const name = await row.locator('input').nth(1).inputValue();
-  const days = await row.locator('input').nth(2).inputValue();
-  const amount = await row.locator('input').nth(3).inputValue();
-  console.log('OCR:', { no, name, days, amount, sec });
+  const invoiceYm = await row.locator('input[type="month"]').inputValue();
+  const days = await row.locator('input').nth(3).inputValue();
+  const amount = await row.locator('input').nth(4).inputValue();
+  console.log('OCR:', { no, name, invoiceYm, days, amount, sec });
+  ok('請求月（令和 年 月）を読み取れた', invoiceYm === (process.env.EXPECT_YM ?? '2026-09'), invoiceYm);
   ok('患者番号を読み取れた', no === EXPECT.patientNo, no);
   ok('実日数を読み取れた', days === EXPECT.days, days);
   ok('合計金額を読み取れた', amount === EXPECT.amount, amount);
@@ -56,15 +58,15 @@ if (SHOT) {
   const row = page.locator('tbody tr').first();
   await row.locator('input').nth(0).fill(EXPECT.patientNo);
   await row.locator('input').nth(1).fill('テスト 太郎');
-  await row.locator('input').nth(2).fill(EXPECT.days);
-  await row.locator('input').nth(3).fill(EXPECT.amount);
+  await row.locator('input').nth(3).fill(EXPECT.days);
+  await row.locator('input').nth(4).fill(EXPECT.amount);
 }
 // 手入力の 2 件目
 await page.getByRole('button', { name: '＋ 手入力で追加' }).click();
 const row2 = page.locator('tbody tr').nth(1);
 await row2.locator('input').nth(0).fill('000001');
 await row2.locator('input').nth(1).fill('テスト 花子');
-await row2.locator('input').nth(3).fill('12000');
+await row2.locator('input').nth(4).fill('12000');
 await page.getByRole('button', { name: /変更を保存/ }).click();
 await page.waitForSelector('text=保存しました', { timeout: 15000 });
 ok('保存できた', true, await page.locator('text=保存しました').textContent());
@@ -76,7 +78,7 @@ page.once('dialog', (d) => d.accept());
 await page.getByRole('button', { name: 'この月を提出する' }).click();
 await page.waitForSelector('text=提出済み', { timeout: 15000 });
 ok('提出できた', true);
-ok('提出後は入力欄が編集不可', await page.locator('tbody tr').first().locator('input').nth(3).isDisabled());
+ok('提出後は入力欄が編集不可', await page.locator('tbody tr').first().locator('input').nth(4).isDisabled());
 await page.screenshot({ path: 'e2e/out-jibai-submitted.png', fullPage: true });
 
 // 提出済みの月に店舗が保存しようとすると 409

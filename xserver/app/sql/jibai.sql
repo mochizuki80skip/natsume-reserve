@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS `jibai_claim` (
   `storeId` VARCHAR(32) NOT NULL,
   `ym` CHAR(7) NOT NULL,
   `seq` INT NOT NULL DEFAULT 0,
+  `invoiceYm` CHAR(7) NULL,
   `patientNo` VARCHAR(20) NOT NULL DEFAULT '',
   `patientName` VARCHAR(40) NULL,
   `days` INT NULL,

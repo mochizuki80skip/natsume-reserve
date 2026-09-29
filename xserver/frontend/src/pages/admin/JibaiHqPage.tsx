@@ -5,7 +5,7 @@ import { useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, yen } from '@/lib/jibai';
 import { useAdmin } from './Layout';
 
-interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; verifiedCount: number; verifiedTotal: number }
+interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; ymMismatch: number; verifiedCount: number; verifiedTotal: number }
 interface Resp {
   ym: string; currentYm: string; rows: Row[]; sum: { count: number; total: number; verifiedCount: number; verifiedTotal: number; submitted: number }; storeCount: number;
   trend: { ym: string; count: number; total: number; verifiedTotal: number }[]; setting: { nameRetentionDays: number };
@@ -75,7 +75,7 @@ export default function JibaiHqPage() {
             {rows.map((r) => (
               <tr key={r.code} className="border-t">
                 <td className="whitespace-nowrap px-2 py-1"><span className="mr-1 font-mono text-xs text-slate-500">{r.code}</span>{r.name}</td>
-                <td className="whitespace-nowrap px-2 py-1">{statusBadge(r)}{r.submittedAt && <span className="ml-1 text-xs text-slate-500">{formatDateTime(r.submittedAt)}</span>}</td>
+                <td className="whitespace-nowrap px-2 py-1">{statusBadge(r)}{r.submittedAt && <span className="ml-1 text-xs text-slate-500">{formatDateTime(r.submittedAt)}</span>}{r.ymMismatch > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 text-xs text-amber-800" title="請求書に印字された月がこの月と違う明細">請求月違い {r.ymMismatch}</span>}</td>
                 <td className={num}>{r.count}</td>
                 <td className={`${num} font-bold`}>{r.count > 0 ? r.total.toLocaleString('ja-JP') : ''}</td>
                 <td className={num}>{r.count > 0 ? `${r.verifiedCount} / ${r.count}` : ''}</td>
