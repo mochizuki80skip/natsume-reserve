@@ -29,8 +29,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/calendar" className="hover:underline">カレンダー</Link>
             <Link href="/admin/shifts" className="hover:underline">シフト</Link>
             <Link href="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
+            <Link href="/admin/jibai" className="hover:underline">自賠請求</Link>
             <Link href="/admin/settings" className="hover:underline">店舗設定</Link>
             {session.role === 'hq' && <Link href="/admin/hq/overview" className="hover:underline">全店状況</Link>}
+            {session.role === 'hq' && <Link href="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}
             {session.role === 'hq' && <Link href="/admin/hq" className="hover:underline">本部</Link>}
             {store && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer" className="text-slate-500 hover:underline">顧客ページ↗</a>}
             <form action="/api/admin/logout" method="post"><button className="text-slate-500 hover:underline">ログアウト（{session.code}）</button></form>

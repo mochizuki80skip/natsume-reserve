@@ -1,7 +1,7 @@
 // 自賠請求（速報集計）の一通りの確認：店舗でスクショを読み取り → 保存 → 提出 → 本部の集計・経理確認
-// 例：cd xserver && php -S 127.0.0.1:3003 -t public dev-router.php &  BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... SHOT=./sample.png node e2e/jibai.mjs
+// 例（Vercel 版）：npm run build && npm start &  BASE_URL=http://127.0.0.1:3002 HQ_PASSWORD=... SHOT=./sample.png node e2e/jibai.mjs
 import { createRequire } from 'node:module';
-const { chromium } = createRequire(new URL('../frontend/package.json', import.meta.url))('playwright');
+const { chromium } = createRequire(new URL('../xserver/frontend/package.json', import.meta.url))('playwright');
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3003';
 const HQ_PASSWORD = process.env.HQ_PASSWORD ?? 'hqpassword';
@@ -52,7 +52,7 @@ if (SHOT) {
   ok('合計金額を読み取れた', amount === EXPECT.amount, amount);
   ok('氏名が入っている（誤読は確認画面で直す前提）', name.length >= 2, name);
   ok('確認用の切り抜き画像が出る', (await row.locator('img').count()) >= 2);
-  await page.screenshot({ path: 'e2e/out-jibai-ocr.png', fullPage: true });
+  await page.screenshot({ path: 'e2e/out-vercel-jibai-ocr.png', fullPage: true });
 } else {
   await page.getByRole('button', { name: '＋ 手入力で追加' }).click();
   const row = page.locator('tbody tr').first();
@@ -79,7 +79,7 @@ await page.getByRole('button', { name: 'この月を提出する' }).click();
 await page.waitForSelector('text=提出済み', { timeout: 15000 });
 ok('提出できた', true);
 ok('提出後は入力欄が編集不可', await page.locator('tbody tr').first().locator('input').nth(4).isDisabled());
-await page.screenshot({ path: 'e2e/out-jibai-submitted.png', fullPage: true });
+await page.screenshot({ path: 'e2e/out-vercel-jibai-submitted.png', fullPage: true });
 
 // 提出済みの月に店舗が保存しようとすると 409
 const r409 = await page.evaluate(async (ym) => {
@@ -97,7 +97,7 @@ const s001 = page.locator('tbody tr', { hasText: 'S001' }).first();
 const s001Text = await s001.textContent();
 ok('本部集計に S001 の合計が出る', s001Text.includes(total.toLocaleString('ja-JP')) && s001Text.includes('提出済み'), s001Text);
 ok('全社合計が出る', (await page.locator('tfoot').textContent()).includes(total.toLocaleString('ja-JP')));
-await page.screenshot({ path: 'e2e/out-jibai-hq.png', fullPage: true });
+await page.screenshot({ path: 'e2e/out-vercel-jibai-hq.png', fullPage: true });
 
 await s001.getByRole('button', { name: '明細・経理確認' }).click();
 await page.waitForURL(/\/admin\/jibai/, { timeout: 15000 });
@@ -113,7 +113,7 @@ await vrow2.locator('input[placeholder="確定金額"]').fill('12500');
 await vrow2.getByRole('button', { name: '確認', exact: true }).click();
 await page.waitForSelector('text=差 +500円', { timeout: 15000 });
 ok('速報との差額が表示される', true);
-await page.screenshot({ path: 'e2e/out-jibai-verify.png', fullPage: true });
+await page.screenshot({ path: 'e2e/out-vercel-jibai-verify.png', fullPage: true });
 
 await page.goto(`${BASE}/admin/hq/jibai?ym=${ym}`);
 await page.waitForSelector('text=全店集計');

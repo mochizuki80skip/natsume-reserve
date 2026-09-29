@@ -52,6 +52,9 @@ model Store {
   bedStatuses  BedStatus[]
   cells        Cell[]
   reservations Reservation[]
+  jibaiMonths  JibaiMonth[]
+  jibaiClaims  JibaiClaim[]
+  jibaiLogs    JibaiLog[]
 }
 
 // 管理画面ログインアカウント。role = "store"（店舗）| "hq"（本部：全店舗横断）
@@ -198,4 +201,67 @@ model Reservation {
 
   @@index([storeId, date])
   @@index([createdAt])
+}
+
+// ---- 自賠責請求の速報集計（店舗が月末にレセコン画面のスクショから金額を登録し、本部が全店合計を見る）----
+
+// 全社設定（1行のみ。id = 1）
+model JibaiSetting {
+  id                Int      @id @default(1)
+  nameRetentionDays Int      @default(180) // 氏名を残す日数（対象月の翌月 1 日から）。金額などは残す
+  updatedAt         DateTime @updatedAt
+}
+
+// 店舗×対象月の提出状況。status: DRAFT（入力中）| SUBMITTED（提出済み）
+model JibaiMonth {
+  id          String    @id @default(cuid())
+  storeId     String
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  ym          String    // YYYY-MM
+  status      String    @default("DRAFT")
+  submittedAt DateTime?
+  submittedBy String?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([storeId, ym])
+}
+
+// 請求書 1 枚 = 1 行。source: OCR（スクショ読み取り）| MANUAL（手入力）
+model JibaiClaim {
+  id             String    @id @default(cuid())
+  storeId        String
+  store          Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  ym             String    // 登録した対象月（YYYY-MM）
+  seq            Int       @default(0) // 表示順
+  invoiceYm      String?   // 請求書に印字された「令和 年 月」（YYYY-MM）
+  patientNo      String    @default("")
+  patientName    String?   // 保持期間後に null にする
+  days           Int?      // 実日数
+  amount         Int       @default(0) // 合計金額（速報）
+  source         String    @default("MANUAL")
+  verifiedAmount Int?      // 経理が請求書コピーと照合して確定した金額
+  verifiedAt     DateTime?
+  verifiedBy     String?
+  note           String?
+  createdBy      String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([storeId, ym])
+  @@index([ym])
+}
+
+// 操作記録（追加・変更・削除・提出・経理確認）。氏名は残さない
+model JibaiLog {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  ym        String
+  claimId   String?
+  action    String
+  detail    String?
+  byCode    String
+  createdAt DateTime @default(now())
+
+  @@index([storeId, ym])
 }

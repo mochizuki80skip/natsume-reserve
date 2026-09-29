@@ -3,14 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3002",
-    "build": "prisma generate && prisma db push --skip-generate && tsx prisma/seed.ts && next build",
+    "dev": "node scripts/prepare-ocr.mjs && next dev -p 3002",
+    "build": "node scripts/prepare-ocr.mjs && prisma generate && prisma db push --skip-generate && tsx prisma/seed.ts && next build",
     "postinstall": "prisma generate",
     "start": "next start -p 3002",
     "lint": "next lint",
     "test": "vitest run",
     "db:push": "prisma db push",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "prepare-ocr": "node scripts/prepare-ocr.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -23,6 +24,7 @@
     "next": "^15.5.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
