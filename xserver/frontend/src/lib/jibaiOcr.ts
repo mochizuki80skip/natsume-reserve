@@ -5,6 +5,7 @@
 // 2 段階目：合計金額・実日数・患者番号の欄だけを切り出し、白黒にして罫線を消してから
 //          数字限定で何通りかの方法で読み直し、多数決で決める
 import { createWorker, PSM, type Worker } from 'tesseract.js';
+import { INVOICE_ASPECT, MIN_INVOICE_HEIGHT_PX, requiredScreenFraction, screenPixelHeight, wari } from './jibai';
 import { chooseAmount, chooseDays, findAmount, findInvoiceRect, findSubtotalColumn, medianLineHeight, normalizePatientNo, parseAmountText, parseInvoice, type AmountCandidate, type OcrLine, type Rect } from './jibaiParse';
 
 export interface OcrProgress { stage: 'load' | 'read1' | 'read2' | 'done'; message: string }
@@ -84,8 +85,6 @@ export async function loadImageFile(file: Blob): Promise<HTMLImageElement> {
 
 /** 本文の行の高さの目標（px）。tesseract はこのくらいの大きさで最もよく読める */
 const TARGET_LH = 30;
-/** 正しく読める請求書の横幅（px）の下限。検証では 590px（拡大率 90%）以上で全項目が正しく読めた */
-export const MIN_INVOICE_WIDTH = 600;
 const MAX_CANVAS_W = 4200;
 const MAX_CANVAS_AREA = 18_000_000;
 
@@ -381,12 +380,18 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   }
   if (!patientNo) warnings.push('患者番号が読み取れませんでした');
   // 撮り直しの案内（読み取りを誤りやすい画像）
-  // 請求書の横幅（ピクセル）の目安。このレセコンの請求書は拡大率 100% で横幅 656px・文字の高さ約 11.3px
-  const estWidth = srcTextH !== null ? Math.round((srcTextH / 11.3) * 656) : null;
-  const tooSmall = estWidth !== null && estWidth < MIN_INVOICE_WIDTH;
-  const sizeHint = `請求書の横幅が ${MIN_INVOICE_WIDTH}px 以上になるよう、レセコンのプレビューを拡大（100% 以上）してから撮り直すと正確に読めます`;
-  if (page.kei < 3 && passes.every((p) => !findSubtotalColumn(p.lines))) warnings.push(`請求書の表をうまく読み取れませんでした。画像がぼやけていないか、請求書全体（下の合計まで）が写っているか確認してください。${tooSmall ? sizeHint : ''}`);
-  else if (tooSmall) warnings.push(`スクショが小さいため読み取りを誤りやすい状態です（請求書の横幅がおよそ ${estWidth}px）。${sizeHint}`);
+  // 撮った大きさの判定。このレセコンの請求書は拡大率 100% で横 656px・文字の高さ約 11.3px。
+  // スクショ上の請求書の縦の長さを推定し、目安（縦 860px）に足りなければ「画面の縦の何割」で撮り直しを案内する
+  const estHeight = srcTextH !== null ? Math.round((srcTextH / 11.3) * 656 * INVOICE_ASPECT) : null;
+  const tooSmall = estHeight !== null && estHeight < MIN_INVOICE_HEIGHT_PX;
+  const screenH = screenPixelHeight();
+  const need = requiredScreenFraction(screenH);
+  const sizeHint = need !== null && need > 1
+    ? 'このパソコンの画面は小さいため、請求書を画面いっぱいに表示して撮ってください（それでも誤読することがあるので、必ず画像と見比べて確認してください）'
+    : `請求書の縦の長さが画面の縦の ${need === null ? '8割' : wari(need)} 以上になるよう大きく表示して撮り直してください（ウィンドウは全画面でも左右半分でも構いません）`;
+  const nowText = estHeight !== null && screenH ? `今の画像は画面の縦の約 ${Math.max(1, Math.min(10, Math.round((estHeight / screenH) * 10)))}割 の大きさです。` : '';
+  if (page.kei < 3 && passes.every((p) => !findSubtotalColumn(p.lines))) warnings.push(`請求書の表をうまく読み取れませんでした。画像がぼやけていないか、請求書全体（下の合計まで）が写っているか確認してください。${tooSmall ? nowText + sizeHint : ''}`);
+  else if (tooSmall) warnings.push(`スクショの請求書が小さいため、読み取りを誤りやすい状態です。${nowText}${sizeHint}`);
   if (!parsed.ym) warnings.push('請求月（令和 年 月）が読み取れませんでした');
 
   // 切り抜きは患者番号〜氏名と合計欄だけ。住所・生年月日・傷病名などの領域は画像にも文字にも残さない

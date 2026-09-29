@@ -45,4 +45,29 @@ export function ymOptions(baseYm: string, extra: string[] = []): string[] {
   return Array.from(new Set([...list, ...extra.filter((x) => /^\d{4}-\d{2}$/.test(x))])).sort().reverse();
 }
 
+// ---- スクショの大きさの目安（現場向けに「画面の縦の何割」で案内する）----
+// このレセコンの請求書は縦長（横:縦 ≒ 656:940）。検証では横幅 590px 以上で全項目が正しく読めたため、
+// 余裕をみて横 600px ＝ 縦 860px 以上をスクショ上の目安にする。
+// 読み取りに効くのは請求書の「縦の長さ」なので、ウィンドウが全画面か左右半分かは問わない。
+export const MIN_INVOICE_HEIGHT_PX = 860;
+export const INVOICE_ASPECT = 940 / 656;
+
+/** このパソコンの画面の縦の実ピクセル数（Windows の表示スケールを含む。スクショはこの解像度で撮られる） */
+export function screenPixelHeight(): number | null {
+  try {
+    if (typeof window === 'undefined' || !window.screen?.height) return null;
+    return Math.round(window.screen.height * (window.devicePixelRatio || 1));
+  } catch { return null; }
+}
+
+/** 0.8 → "8割"。1 以上は "10割"（画面いっぱい） */
+export function wari(f: number): string {
+  return `${Math.min(10, Math.max(1, Math.ceil(f * 10 - 0.05)))}割`;
+}
+
+/** この画面で、請求書が画面の縦の何割以上に写っていればよいか（1 を超えるならこの画面では足りない） */
+export function requiredScreenFraction(screenH = screenPixelHeight()): number | null {
+  return screenH ? MIN_INVOICE_HEIGHT_PX / screenH : null;
+}
+
 export const LOG_ACTION_JA: Record<string, string> = { add: '追加', update: '変更', delete: '削除', submit: '提出', reopen: '提出取消', verify: '経理確認', unverify: '経理確認の取消' };

@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, formatYmWithEra, LOG_ACTION_JA, ymOptions, yen, type JibaiClaim, type JibaiLog, type JibaiMonth } from '@/lib/jibai';
 import { readInvoiceImage, warmUpOcr, type InvoiceReadResult, type OcrProgress } from '@/lib/jibaiOcr';
+import JibaiSizeGuide from '@/components/JibaiSizeGuide';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -240,8 +241,9 @@ export default function JibaiPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => fileInput.current?.click()} className="rounded bg-brand px-4 py-1.5 font-bold text-white">スクショを選ぶ</button>
             <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => { addFiles(Array.from(e.target.files ?? []).map((f) => ({ file: f, name: f.name }))); e.target.value = ''; }} />
-            <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、ここにドラッグ＆ドロップするか、Win + Shift + S で撮ったスクショを <b>Ctrl + V</b> で貼り付けてください。複数枚まとめて可。<br /><span className="text-xs text-slate-500">きれいに読むコツ：請求書の横幅が 600 ピクセル以上で写るように撮ってください（レセコンのプレビューを拡大率 100% 以上で表示すれば足ります）。上の「令和 年 月」から下の「合計」まで入れてください。画面全体を撮っても構いません。</span></span>
+            <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、ここにドラッグ＆ドロップするか、Win + Shift + S で撮ったスクショを <b>Ctrl + V</b> で貼り付けてください。複数枚まとめて可。</span>
           </div>
+          <JibaiSizeGuide />
           {(progress || queueLeft > 0) && <p className="mt-2 text-brand-dark">⏳ {progress ?? '読み取り待ち…'}{queueLeft > 0 ? `（残り ${queueLeft} 枚）` : ''}</p>}
           <p className="mt-2 text-xs text-slate-500">読み取りはこのパソコンの中だけで行い、画像はどこにも送信・保存されません。取り出すのは患者番号・氏名・実日数・合計金額だけで、住所・生年月日・傷病名は読み取り対象外です（確認用の切り抜きにも含めません）。読み取り後に金額と患者番号を目視で確認し、違っていれば直してから保存してください。</p>
         </div>
@@ -281,7 +283,7 @@ export default function JibaiPage() {
                   <td className="px-2 py-1"><input value={r.patientNo} disabled={!editable} onChange={(e) => update(r.key, { patientNo: e.target.value })} className={`${inputCls} w-28 font-mono ${dup ? 'border-amber-500' : ''}`} placeholder="003862a" />{dup && <div className="text-[11px] text-amber-700">同じ番号が複数あります</div>}</td>
                   <td className="px-2 py-1"><input value={r.patientName} disabled={!editable} onChange={(e) => update(r.key, { patientName: e.target.value })} className={`${inputCls} w-36`} placeholder="氏名" /></td>
                   <td className="px-2 py-1">
-                    <select value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} aria-label="請求月" title="請求書に印字された「令和 年 月」" className={`${inputCls} w-44 ${!r.invoiceYm ? 'border-2 border-red-500 bg-red-50' : r.invoiceYm !== ym ? 'border-amber-500' : ''}`}>
+                    <select value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} aria-label="請求月" title="請求書に印字された「令和 年 月」" className={`${inputCls} min-w-[11.5rem] ${!r.invoiceYm ? 'border-2 border-red-500 bg-red-50' : r.invoiceYm !== ym ? 'border-amber-500' : ''}`}>
                       <option value="">— 何年何月分？ —</option>
                       {ymOptions(data.currentYm, [ym, r.invoiceYm]).map((m) => <option key={m} value={m}>{formatYmWithEra(m)}</option>)}
                     </select>
