@@ -57,11 +57,12 @@ export async function listLogs(storeId: string, ym: string, limit = 50) {
 /** データがある月の一覧（新しい順） */
 export async function monthsWithData(storeId: string | null, limit = 24): Promise<string[]> {
   const where = storeId ? { storeId } : {};
-  const [a, b] = await Promise.all([
+  const [a, b, c] = await Promise.all([
     prisma.jibaiClaim.findMany({ where, select: { ym: true }, distinct: ['ym'] }),
     prisma.jibaiMonth.findMany({ where, select: { ym: true }, distinct: ['ym'] }),
+    prisma.jibaiClaim.findMany({ where: { ...where, NOT: { invoiceYm: null } }, select: { invoiceYm: true }, distinct: ['invoiceYm'] }),
   ]);
-  return Array.from(new Set([...a, ...b].map((r) => r.ym))).sort().reverse().slice(0, limit);
+  return Array.from(new Set([...a.map((r) => r.ym), ...b.map((r) => r.ym), ...c.map((r) => r.invoiceYm!)])).sort().reverse().slice(0, limit);
 }
 
 /** 保持期間を過ぎた月の氏名を消す（金額などの集計値は残す）。対象月の翌月 1 日から nameRetentionDays 日を過ぎた月が対象 */

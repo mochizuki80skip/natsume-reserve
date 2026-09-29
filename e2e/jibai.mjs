@@ -158,5 +158,43 @@ if (process.env.SHOT_NO_YM) {
   await page.screenshot({ path: 'e2e/out-vercel-jibai-noym.png', fullPage: true });
 }
 
+// --- 別の月の画面で登録した明細は、請求月の合計に入る（S002：翌月の画面で当月分を登録）
+if (process.env.SHOT_NO_YM) {
+  const [yy, mm] = ym.split('-').map(Number);
+  const nextYm = mm === 12 ? `${yy + 1}-01` : `${yy}-${String(mm + 1).padStart(2, '0')}`;
+  const fmt = (m) => `${Number(m.split('-')[0])}年${Number(m.split('-')[1])}月`;
+  await page.goto(`${BASE}/admin/jibai?ym=${nextYm}`);
+  await page.waitForSelector('text=自賠請求（速報）');
+  await page.getByRole('button', { name: '＋ 手入力で追加' }).click();
+  const lr = page.locator('tbody tr').first();
+  await lr.locator('input').nth(0).fill('000777');
+  await lr.locator('input').nth(1).fill('テスト 遅延');
+  await lr.locator('select[aria-label="請求月"]').selectOption(ym);
+  await lr.locator('input').nth(3).fill('30000');
+  ok('請求月が違う行に「○月の合計に入ります」と出る', (await lr.textContent()).includes(`${fmt(ym)}分として、${fmt(ym)}の合計に入ります`));
+  await page.getByRole('button', { name: /変更を保存/ }).click();
+  await page.waitForSelector('text=保存しました', { timeout: 15000 });
+  await page.waitForFunction(() => !document.body.textContent.includes('未保存'));
+  const panel = await page.locator('text=この画面の請求月別の内訳').locator('..').textContent();
+  ok('請求月別の内訳に「○月分 何件 何円」が出る', panel.includes(`${fmt(ym)}分`) && panel.includes('1 件') && panel.includes('30,000円'), panel);
+  ok('翌月分の合計には含めない', (await page.locator(`text=${fmt(nextYm)}分の合計（請求月で集計）`).locator('..').textContent()).includes('0 件'));
+  await page.screenshot({ path: 'e2e/out-vercel-jibai-othermonth.png', fullPage: true });
+  await page.goto(`${BASE}/admin/jibai?ym=${ym}`);
+  await page.waitForSelector(`text=他の月の画面で登録された${fmt(ym)}分`);
+  const head = await page.locator(`text=${fmt(ym)}分の合計（請求月で集計）`).locator('..').textContent();
+  ok('当月の画面で、別の画面で登録した分を当月の合計に含める', head.includes('2 件') && head.includes((Number(EXPECT.amount) + 30000).toLocaleString('ja-JP')), head);
+  // 本部の集計も請求月で合算
+  await ctx.clearCookies();
+  await login('HQ', HQ_PASSWORD);
+  await page.goto(`${BASE}/admin/hq/jibai?ym=${ym}`);
+  await page.waitForSelector('text=全店集計');
+  const s002 = await page.locator('tbody tr', { hasText: 'S002' }).first().textContent();
+  ok('本部集計で、別の画面で登録した分が請求月に合算される', s002.includes((Number(EXPECT.amount) + 30000).toLocaleString('ja-JP')) && s002.includes('他の月の画面で登録 1件'), s002);
+  await page.goto(`${BASE}/admin/hq/jibai?ym=${nextYm}`);
+  await page.waitForSelector('text=全店集計');
+  const s002n = await page.locator('tbody tr', { hasText: 'S002' }).first().textContent();
+  ok('翌月の本部集計には入らず「別の月分」と出る', s002n.includes('別の月分 1件') && !s002n.includes('30,000'), s002n);
+}
+
 await browser.close();
 console.log('done');
