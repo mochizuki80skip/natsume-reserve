@@ -32,4 +32,17 @@ export function formatDateTime(dt: string | null | undefined): string {
   return `${Number(m[2])}/${Number(m[3])} ${m[4]}:${m[5]}`;
 }
 
+/** "2026-09" → "2026年9月（令和8年）" */
+export function formatYmWithEra(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  const era = y >= 2019 ? `令和${y - 2018 === 1 ? '元' : y - 2018}年` : `平成${y - 1988}年`;
+  return `${y}年${m}月（${era}）`;
+}
+
+/** 請求月の選択肢：基準月の 2 か月先から 24 か月前まで（新しい順）＋ 指定の月 */
+export function ymOptions(baseYm: string, extra: string[] = []): string[] {
+  const list = Array.from({ length: 27 }, (_, i) => addMonths(baseYm, 2 - i));
+  return Array.from(new Set([...list, ...extra.filter((x) => /^\d{4}-\d{2}$/.test(x))])).sort().reverse();
+}
+
 export const LOG_ACTION_JA: Record<string, string> = { add: '追加', update: '変更', delete: '削除', submit: '提出', reopen: '提出取消', verify: '経理確認', unverify: '経理確認の取消' };

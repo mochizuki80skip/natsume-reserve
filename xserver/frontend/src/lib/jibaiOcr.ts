@@ -184,7 +184,7 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
     days = parseDaysText(r.text);
   }
   if (!patientNo) warnings.push('患者番号が読み取れませんでした');
-  if (!parsed.ym) warnings.push('対象月（令和 年 月）が読み取れませんでした');
+  if (!parsed.ym) warnings.push('請求月（令和 年 月）が読み取れませんでした');
 
   // 切り抜きは患者番号〜氏名と合計欄だけ。住所・生年月日・傷病名などの領域は画像にも文字にも残さない
   const headerImage = parsed.headerRect ? cropDataUrl(canvas, parsed.headerRect, 300) : null;

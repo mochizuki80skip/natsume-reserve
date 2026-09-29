@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, useFetch } from '@/lib/api';
-import { addMonths, formatDateTime, formatYm, LOG_ACTION_JA, yen, type JibaiClaim, type JibaiLog, type JibaiMonth } from '@/lib/jibai';
+import { addMonths, formatDateTime, formatYm, formatYmWithEra, LOG_ACTION_JA, ymOptions, yen, type JibaiClaim, type JibaiLog, type JibaiMonth } from '@/lib/jibai';
 import { readInvoiceImage, warmUpOcr, type InvoiceReadResult, type OcrProgress } from '@/lib/jibaiOcr';
 import { useAdmin } from './Layout';
 
@@ -119,6 +119,8 @@ export default function JibaiPage() {
     if (!data) return;
     const targets = rows.filter((r) => r.dirty || !r.id);
     if (targets.length === 0) { setMsg({ text: '保存する変更はありません', kind: 'ok' }); return; }
+    const noYm = targets.filter((r) => !r.invoiceYm);
+    if (noYm.length > 0) { setMsg({ text: `請求月が未選択の明細が ${noYm.length} 件あります（赤枠の行）。何年何月分かを選んでから保存してください`, kind: 'err' }); return; }
     for (const r of targets) {
       if (!/^\d+$/.test(r.amount.trim())) { setMsg({ text: `「${r.patientNo || '（患者番号なし）'}」の合計金額を数字で入力してください`, kind: 'err' }); return; }
       if (r.days.trim() !== '' && !/^\d{1,2}$/.test(r.days.trim())) { setMsg({ text: `「${r.patientNo || '（患者番号なし）'}」の実日数は 0〜31 の数字で入力してください`, kind: 'err' }); return; }
@@ -154,6 +156,7 @@ export default function JibaiPage() {
   async function submitMonth(action: 'submit' | 'submit_empty' | 'reopen') {
     if (!data) return;
     if (rows.some((r) => r.dirty || !r.id)) { setMsg({ text: '先に「変更を保存」を押してください', kind: 'err' }); return; }
+    if (action === 'submit' && ymMissing > 0) { setMsg({ text: `請求月が未選択の明細が ${ymMissing} 件あります。何年何月分かを選んで保存してから提出してください`, kind: 'err' }); return; }
     if (action === 'submit' && ymMismatch > 0 && !confirm(`請求月が ${formatYm(data.ym)} と違う明細が ${ymMismatch} 件あります。このまま提出しますか？`)) return;
     const label = action === 'reopen' ? '提出を取り消して修正できるようにします。' : action === 'submit_empty' ? `${formatYm(data.ym)} は自賠請求 0 件として提出します。` : `${formatYm(data.ym)} の ${rows.length} 件・${yen(total)} を提出します。提出後は本部の集計に反映されます。`;
     if (!confirm(`${label}よろしいですか？`)) return;
@@ -185,6 +188,8 @@ export default function JibaiPage() {
   const verifiedCount = rows.filter((r) => r.saved?.verifiedAmount !== null && r.saved?.verifiedAmount !== undefined).length;
   const unsaved = rows.filter((r) => r.dirty || !r.id).length;
   const ymMismatch = rows.filter((r) => r.invoiceYm && r.invoiceYm !== ym).length;
+  const ymMissing = rows.filter((r) => !r.invoiceYm).length;
+  const fillMissingYm = () => setRows((prev) => prev.map((r) => (r.invoiceYm ? r : { ...r, invoiceYm: ym, dirty: true })));
   const dupNos = new Set(rows.map((r) => r.patientNo.trim()).filter((n, i, a) => n !== '' && a.indexOf(n) !== i));
   const go = (m: string) => navigate(`/admin/jibai?ym=${m}`);
   const submitted = data.month?.status === 'SUBMITTED';
@@ -218,7 +223,7 @@ export default function JibaiPage() {
           ) : rows.length === 0 && unsaved === 0 ? (
             <button type="button" onClick={() => submitMonth('submit_empty')} className="rounded border bg-white px-3 py-1 text-sm">0 件で提出（自賠請求なし）</button>
           ) : (
-            <button type="button" onClick={() => submitMonth('submit')} disabled={unsaved > 0} className="rounded bg-brand px-4 py-1.5 text-sm font-bold text-white disabled:opacity-50" title={unsaved > 0 ? '先に「変更を保存」を押してください' : ''}>この月を提出する</button>
+            <button type="button" onClick={() => submitMonth('submit')} disabled={unsaved > 0 || ymMissing > 0} className="rounded bg-brand px-4 py-1.5 text-sm font-bold text-white disabled:opacity-50" title={ymMissing > 0 ? '請求月が未選択の明細があります' : unsaved > 0 ? '先に「変更を保存」を押してください' : ''}>この月を提出する</button>
           )}
         </div>
       </div>
@@ -239,6 +244,13 @@ export default function JibaiPage() {
           </div>
           {(progress || queueLeft > 0) && <p className="mt-2 text-brand-dark">⏳ {progress ?? '読み取り待ち…'}{queueLeft > 0 ? `（残り ${queueLeft} 枚）` : ''}</p>}
           <p className="mt-2 text-xs text-slate-500">読み取りはこのパソコンの中だけで行い、画像はどこにも送信・保存されません。取り出すのは患者番号・氏名・実日数・合計金額だけで、住所・生年月日・傷病名は読み取り対象外です（確認用の切り抜きにも含めません）。読み取り後に金額と患者番号を目視で確認し、違っていれば直してから保存してください。</p>
+        </div>
+      )}
+      {ymMissing > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded border-2 border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <b>請求月が未選択の明細が {ymMissing} 件あります。</b>
+          <span>画像から何年何月分か読み取れなかった行です。赤枠の「請求月」で選ぶと保存・提出できます。</span>
+          {editable && <button type="button" onClick={fillMissingYm} className="rounded border border-red-400 bg-white px-2 py-0.5">未選択の行をすべて {formatYm(ym)} 分にする</button>}
         </div>
       )}
       {!editable && <p className="rounded bg-slate-100 px-3 py-2 text-sm text-slate-600">提出済みのため編集できません。修正が必要なときは「提出を取り消す」を押してください。</p>}
@@ -269,11 +281,16 @@ export default function JibaiPage() {
                   <td className="px-2 py-1"><input value={r.patientNo} disabled={!editable} onChange={(e) => update(r.key, { patientNo: e.target.value })} className={`${inputCls} w-28 font-mono ${dup ? 'border-amber-500' : ''}`} placeholder="003862a" />{dup && <div className="text-[11px] text-amber-700">同じ番号が複数あります</div>}</td>
                   <td className="px-2 py-1"><input value={r.patientName} disabled={!editable} onChange={(e) => update(r.key, { patientName: e.target.value })} className={`${inputCls} w-36`} placeholder="氏名" /></td>
                   <td className="px-2 py-1">
-                    <input type="month" value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} className={`${inputCls} w-36 ${r.invoiceYm && r.invoiceYm !== ym ? 'border-amber-500' : ''}`} title="請求書に印字された「令和 年 月」" />
+                    <select value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} aria-label="請求月" title="請求書に印字された「令和 年 月」" className={`${inputCls} w-44 ${!r.invoiceYm ? 'border-2 border-red-500 bg-red-50' : r.invoiceYm !== ym ? 'border-amber-500' : ''}`}>
+                      <option value="">— 何年何月分？ —</option>
+                      {ymOptions(data.currentYm, [ym, r.invoiceYm]).map((m) => <option key={m} value={m}>{formatYmWithEra(m)}</option>)}
+                    </select>
                     {r.invoiceYm && r.invoiceYm !== ym && (
                       <div className="text-[11px] text-amber-700">この画面（{formatYm(ym)}）と違います。<button type="button" onClick={() => go(r.invoiceYm)} className="underline">{formatYm(r.invoiceYm)} の画面へ移動</button>{!r.id && '（未保存の行は持ち越します）'}</div>
                     )}
-                    {!r.invoiceYm && r.ocr && <div className="text-[11px] text-amber-700">読み取れず。手で選んでください</div>}
+                    {!r.invoiceYm && (
+                      <div className="text-[11px] font-bold text-red-700">{r.ocr ? '請求月を読み取れませんでした。' : ''}何年何月分かを選んでください<br /><button type="button" disabled={!editable} onClick={() => update(r.key, { invoiceYm: ym })} className="font-normal underline">{formatYm(ym)} 分にする</button></div>
+                    )}
                   </td>
                   <td className="px-2 py-1"><input value={r.days} disabled={!editable} onChange={(e) => update(r.key, { days: e.target.value })} inputMode="numeric" className={`${inputCls} w-14 text-right`} /></td>
                   <td className="px-2 py-1"><input value={r.amount} disabled={!editable || lockAmount} onChange={(e) => update(r.key, { amount: e.target.value.replace(/[^\d]/g, '') })} inputMode="numeric" className={`${inputCls} w-28 text-right font-bold tabular-nums`} />{r.amount !== '' && <div className="text-right text-[11px] text-slate-500">{yen(Number(r.amount))}</div>}</td>
