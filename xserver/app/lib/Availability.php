@@ -81,7 +81,7 @@ final class Availability
             $lead = $time - $in['nowMinutes'];
             if ($lead < $in['phoneCutoffMinutes']) return 'closed';
             if ($remaining <= 0) return 'closed';
-            if ($lead < $in['webCutoffMinutes']) return 'phone';
+            if ($lead <= $in['webCutoffMinutes']) return 'phone'; // 開始 30 分前（ちょうどを含む）からは電話マーク
         }
         if ($remaining <= 0) return 'closed';
         if ($remaining <= $in['phoneMarkRemaining']) return 'phone';

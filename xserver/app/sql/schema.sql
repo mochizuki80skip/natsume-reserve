@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS `global_setting` (
   `newVisitSlots` INT NOT NULL DEFAULT 2,
   `returnVisitSlots` INT NOT NULL DEFAULT 1,
   `webCutoffMinutes` INT NOT NULL DEFAULT 30,
-  `phoneCutoffMinutes` INT NOT NULL DEFAULT 15,
+  `phoneCutoffMinutes` INT NOT NULL DEFAULT 0,
   `phoneMarkRemaining` INT NOT NULL DEFAULT 1,
   `closeOnHolidays` TINYINT(1) NOT NULL DEFAULT 1,
   `adminExtraSlots` INT NOT NULL DEFAULT 1,

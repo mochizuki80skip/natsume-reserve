@@ -3,7 +3,22 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { WEEKDAY_JA, addDays, diffDays, minToHm, weekdayOf } from '@/lib/time';
 import { NOON } from '@/lib/hours';
 
-export type Kind = 'NEW' | 'RETURN';
+// 来院区分。NEW=はじめて（ケガ・痛み・不調）、ACCIDENT=はじめて（交通事故）、RETURN=現在通院中、REVISIT=1ヶ月以上ご来院の無い方
+export type Kind = 'NEW' | 'ACCIDENT' | 'RETURN' | 'REVISIT';
+export type Group = 'FIRST' | 'VISITED';
+export const groupOf = (k: Kind): Group => (k === 'NEW' || k === 'ACCIDENT' ? 'FIRST' : 'VISITED');
+export const KIND_TEXT: Record<Kind, string> = {
+  NEW: 'はじめての方（ケガ・痛み・不調）',
+  ACCIDENT: 'はじめての方（交通事故のケガ・痛み）',
+  RETURN: 'ご通院したことがある方（現在通院中）',
+  REVISIT: 'ご通院したことがある方（1ヶ月以上ご来院の無い方）',
+};
+/** 予約に使う時間（初めての方と1ヶ月以上ぶりの方は30分、通院中は15分） */
+export const kindMinutes = (k: Kind) => (k === 'RETURN' ? 15 : 30);
+const GROUP_LABEL: Record<Group, { title: string; sub: string; kinds: [Kind, string][] }> = {
+  FIRST: { title: 'はじめての方', sub: '30分枠', kinds: [['NEW', 'ケガ・痛み・不調'], ['ACCIDENT', '交通事故のケガ・痛み']] },
+  VISITED: { title: 'ご通院したことがある方', sub: '診察券番号をご用意ください', kinds: [['RETURN', '現在通院中'], ['REVISIT', '1ヶ月以上ご来院の無い方']] },
+};
 type SlotStatus = 'open' | 'phone' | 'closed';
 export interface WeekDay { date: string; label: string | null; slots: { time: number; status: SlotStatus }[] }
 export interface WeekData { today: string; weekStart: string; publishDaysAhead: number; days: WeekDay[] }
@@ -17,7 +32,6 @@ interface Props {
   phone: string;
 }
 
-const KIND_LABEL: Record<Kind, string> = { NEW: '① はじめての方', RETURN: '② ご通院中の方' };
 
 function md(date: string) { return `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`; }
 
@@ -79,11 +93,19 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
     <div className={sel ? 'pb-28' : ''}>
       <div className="wk-head" ref={headRef}>
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="来院区分">
-          {(['NEW', 'RETURN'] as Kind[]).map((k) => (
-            <button key={k} type="button" aria-pressed={kind === k} onClick={() => onKindChange(k)}
-              className={`rounded-lg border-2 border-brand px-1.5 py-2 text-[12.5px] font-semibold leading-tight ${kind === k ? 'bg-brand text-white' : 'bg-white text-brand-dark'}`}>
-              {KIND_LABEL[k]}
-              <span className="block text-[10.5px] font-normal opacity-85">{k === 'NEW' ? '1ヶ月以上ご来院の無い方・30分枠' : '診察券番号をご用意ください'}</span>
+          {(['FIRST', 'VISITED'] as Group[]).map((g) => (
+            <button key={g} type="button" aria-pressed={groupOf(kind) === g} onClick={() => groupOf(kind) !== g && onKindChange(GROUP_LABEL[g].kinds[0][0])}
+              className={`rounded-lg border-2 border-brand px-1.5 py-2 text-[12.5px] font-semibold leading-tight ${groupOf(kind) === g ? 'bg-brand text-white' : 'bg-white text-brand-dark'}`}>
+              {GROUP_LABEL[g].title}
+              <span className="block text-[10.5px] font-normal opacity-85">{GROUP_LABEL[g].sub}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-1.5 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="ご来院の内容">
+          {GROUP_LABEL[groupOf(kind)].kinds.map(([k, label]) => (
+            <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => onKindChange(k)}
+              className={`rounded-md border px-1.5 py-1.5 text-[12px] font-semibold leading-tight ${kind === k ? 'border-brand bg-brand-light text-brand-dark ring-2 ring-brand' : 'border-slate-300 bg-white text-slate-700'}`}>
+              {kind === k ? '● ' : '○ '}{label}
             </button>
           ))}
         </div>
@@ -96,7 +118,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
         </div>
         <div className="wk-legend" aria-label="記号の意味">
           <span><span className="o">〇</span> WEB予約できます</span>
-          <span><span className="p">📞</span> 残りわずか／直前のためお電話で</span>
+          <span><span className="p">📞</span> 残りわずか・直前はお電話で</span>
           <span><span className="x">×</span> 空きなし・受付終了</span>
           <span><span className="sw" /> 定休日・祝日</span>
         </div>
@@ -136,7 +158,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
           <div className="mx-auto flex max-w-lg items-center gap-3">
             <div className="min-w-0 flex-1">
               <b className="block text-base">{md(sel.date)}（{WEEKDAY_JA[weekdayOf(sel.date)]}）{minToHm(sel.time)}〜</b>
-              <span className="text-xs text-slate-500">{sel.status === 'open' ? (kind === 'NEW' ? '① はじめての方（30分）' : '② ご通院中の方（15分）') : '残りわずか／直前のためお電話でご予約ください'}</span>
+              <span className="text-xs text-slate-500">{sel.status === 'open' ? `${KIND_TEXT[kind]}（${kindMinutes(kind)}分）` : '残りわずか／直前のためお電話でご予約ください'}</span>
             </div>
             {sel.status === 'open'
               ? <button type="button" onClick={() => onProceed(sel)} className="whitespace-nowrap rounded-lg bg-brand px-4 py-3 text-sm font-bold text-white">この日時で予約へ進む</button>

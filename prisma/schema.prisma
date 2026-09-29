@@ -17,11 +17,12 @@ model GlobalSetting {
   newVisitSlots      Int      @default(2)  // ①初回に必要な連続枠数（2 = 30分）
   returnVisitSlots   Int      @default(1)  // ②通院中に必要な枠数
   webCutoffMinutes   Int      @default(30) // 開始N分前までWEB予約可
-  phoneCutoffMinutes Int      @default(15) // 開始N分前までは電話対応（それ以降は受付終了）
+  phoneCutoffMinutes Int      @default(0)  // 開始N分前までは電話対応（それ以降は受付終了）。0 = 開始時刻まで電話マーク
   phoneMarkRemaining Int      @default(1)  // 残り枠がこの数以下なら〇の代わりに電話マーク
   closeOnHolidays    Boolean  @default(true) // 祝日は休診
   adminExtraSlots    Int      @default(1)  // 管理側の予約表に、顧客受付終了後も追加で表示する枠数（12:00 / 19:30）
   retentionDays      Int      @default(60) // 個人情報の保持日数（2ヶ月）
+  settingsVersion    Int      @default(0)  // 既存の設定を一度だけ新しい既定値に移すための番号（seed が使う）
   // 営業時間。期間ごとに曜日別の営業セッションを持つ（詳細は docs/SPEC.md）
   hours              Json
   updatedAt          DateTime @updatedAt

@@ -13,7 +13,8 @@ body { @apply bg-slate-50 text-slate-800; }
 
  /* 顧客サイト 週間一覧 */
 .wk-head { position: sticky; top: 0; z-index: 5; background: #f8fafc; padding-bottom: 6px; }
-.wk-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; font-size: 11.5px; margin-top: 8px; padding: 6px 10px; border: 1px solid #dbe3e7; border-radius: 8px; background: #fff; color: #1c2a30; }
+.wk-legend { display: grid; grid-template-columns: auto auto; justify-content: space-between; gap: 3px 8px; font-size: clamp(10px, 3.1vw, 11.5px); margin-top: 8px; padding: 6px 10px; border: 1px solid #dbe3e7; border-radius: 8px; background: #fff; color: #1c2a30; }
+.wk-legend > span { white-space: nowrap; } /* 凡例は各項目 1 行で表示 */
 .wk-legend .o { color: #1f6f8b; font-size: 14px; font-weight: 700; }
 .wk-legend .p { color: #9a6400; }
 .wk-legend .x { color: #a3aeb5; font-weight: 700; }

@@ -4,9 +4,31 @@ declare(strict_types=1);
 
 final class PublicApi
 {
+    /** 来院区分：NEW=はじめて（ケガ・痛み・不調）/ ACCIDENT=はじめて（交通事故）/ RETURN=現在通院中 / REVISIT=1ヶ月以上ご来院の無い方 */
+    public const KINDS = ['NEW', 'ACCIDENT', 'RETURN', 'REVISIT'];
+
+    /** 予約表の 1 枠目に書く文字 */
+    public static function cellName(string $kind, string $name): string
+    {
+        return match ($kind) {
+            'NEW' => "{$name}（初診）",
+            'ACCIDENT' => "{$name}（初自）",
+            'REVISIT' => "{$name}（再）",
+            default => $name,
+        };
+    }
+
+    /** 予約表の 2 枠目に書く文字 */
+    public static function contText(string $kind): string
+    {
+        return $kind === 'REVISIT' ? '上記再来対応' : '上記初診対応';
+    }
+
+    public const KIND_JA = ['NEW' => '初診', 'ACCIDENT' => '初診（交通事故）', 'REVISIT' => '再来', 'RETURN' => '通院中'];
+
     public static function parseKind(?string $v): string
     {
-        return $v === 'NEW' ? 'NEW' : ($v === 'REVISIT' ? 'REVISIT' : 'RETURN');
+        return in_array($v, self::KINDS, true) ? $v : 'RETURN';
     }
 
     public static function neededSlots(array $setting, string $kind): int

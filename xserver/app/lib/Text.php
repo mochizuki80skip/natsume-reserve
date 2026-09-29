@@ -14,17 +14,17 @@ final class Text
     /** 1枠目の文字が初診・再来（2枠使う予約）か */
     public static function isTwoSlotName(?string $text): bool
     {
-        return (bool)preg_match('/（初）|（再）$/u', trim($text ?? ''));
+        return (bool)preg_match('/[（(](初|初診|初自|再)[）)]/u', trim($text ?? ''));
     }
 
-    /** 内訳判定：初診「（初）」・再来「（再）」・自賠「自賠」「事故」 */
+    /** 内訳判定：初診「（初診）（初自）（初）」・再来「（再）」・自賠「（初自）」「自賠」「事故」 */
     public static function categorize(?string $text): array
     {
         $t = trim($text ?? '');
         return [
-            'isNew' => (bool)preg_match('/[（(]初[）)]/u', $t),
+            'isNew' => (bool)preg_match('/[（(]初(診|自)?[）)]/u', $t),
             'isRevisit' => (bool)preg_match('/[（(]再[）)]/u', $t),
-            'isJibai' => (bool)preg_match('/自賠|事故/u', $t),
+            'isJibai' => (bool)preg_match('/自賠|事故|[（(]初自[）)]/u', $t),
         ];
     }
 

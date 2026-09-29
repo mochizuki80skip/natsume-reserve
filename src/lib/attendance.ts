@@ -11,7 +11,7 @@ export function isContinuationText(text: string | null | undefined): boolean {
 
 /** 1枠目の文字が初診・再来（2枠使う予約）か */
 export function isTwoSlotName(text: string | null | undefined): boolean {
-  return /（初）|（再）$/.test((text ?? '').trim());
+  return /[（(](初|初診|初自|再)[）)]/.test((text ?? '').trim());
 }
 
 /** 予約表の内訳集計に使う区分。1 つのセルが複数に該当することがある（例：初診かつ自賠） */
@@ -19,16 +19,16 @@ export interface CellCategories { isNew: boolean; isRevisit: boolean; isJibai: b
 
 /**
  * セルの文字から内訳を判定する。
- * - 初診：「（初）」を含む（WEB予約の初診、または手入力）。半角括弧も可
+ * - 初診：「（初診）」「（初自）」「（初）」を含む（WEB予約の初めての方、または手入力）。半角括弧も可
  * - 再来：「（再）」を含む
- * - 自賠：「自賠」または「事故」を含む（手入力。例：山田 自賠、鈴木（事故））
+ * - 自賠：「（初自）」（WEB予約の交通事故）、または「自賠」「事故」を含む
  */
 export function categorizeCell(text: string | null | undefined): CellCategories {
   const t = (text ?? '').trim();
   return {
-    isNew: /[（(]初[）)]/.test(t),
+    isNew: /[（(]初(診|自)?[）)]/.test(t),
     isRevisit: /[（(]再[）)]/.test(t),
-    isJibai: /自賠|事故/.test(t),
+    isJibai: /自賠|事故|[（(]初自[）)]/.test(t),
   };
 }
 
