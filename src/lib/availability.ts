@@ -78,7 +78,7 @@ export function statusFor(input: AvailabilityInput, time: number, remaining: num
     const lead = time - input.nowMinutes;
     if (lead < input.phoneCutoffMinutes) return 'closed';
     if (remaining <= 0) return 'closed';
-    if (lead < input.webCutoffMinutes) return 'phone';
+    if (lead <= input.webCutoffMinutes) return 'phone'; // 開始 30 分前（ちょうどを含む）からは電話マーク
   }
   if (remaining <= 0) return 'closed';
   if (remaining <= input.phoneMarkRemaining) return 'phone';

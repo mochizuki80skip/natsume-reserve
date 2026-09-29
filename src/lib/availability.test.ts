@@ -14,7 +14,7 @@ const base = (over: Partial<AvailabilityInput> = {}): AvailabilityInput => ({
   phoneMarkRemaining: 1,
   nowMinutes: null,
   webCutoffMinutes: 30,
-  phoneCutoffMinutes: 15,
+  phoneCutoffMinutes: 0,
   ...over,
 });
 
@@ -64,11 +64,12 @@ describe('availability', () => {
     expect(r.find((s) => s.time === 540)).toMatchObject({ status: 'phone', remaining: 1 });
     expect(r.find((s) => s.time === 900)).toMatchObject({ status: 'open', remaining: 3 });
   });
-  it('当日は 30 分前まで WEB、15 分前までは電話、それ以降は×', () => {
+  it('当日は 30 分前（ちょうどを含む）から開始時刻まで電話、過ぎたら×', () => {
     const r = computeAvailability(base({ nowMinutes: 600 })); // 10:00
-    expect(r.find((s) => s.time === 600)!.status).toBe('closed');  // 0 分前
+    expect(r.find((s) => s.time === 600)!.status).toBe('phone');   // 0 分前
     expect(r.find((s) => s.time === 615)!.status).toBe('phone');   // 15 分前
-    expect(r.find((s) => s.time === 630)!.status).toBe('open');    // 30 分前
+    expect(r.find((s) => s.time === 630)!.status).toBe('phone');   // 30 分前
+    expect(r.find((s) => s.time === 645)!.status).toBe('open');    // 45 分前
     expect(r.find((s) => s.time === 585)!.status).toBe('closed');  // 過去
   });
   it('過去日はすべて×', () => {

@@ -9,8 +9,11 @@ async function main() {
   await prisma.globalSetting.upsert({
     where: { id: 1 },
     update: {},
-    create: { id: 1, hours: DEFAULT_HOURS as object },
+    create: { id: 1, hours: DEFAULT_HOURS as object, settingsVersion: 1 },
   });
+  // 2026-09-29：当日は開始 30 分前から開始時刻まで電話マークにする（電話受付の締切 15 分 → 0 分）。既存の設定に一度だけ適用
+  const moved = await prisma.globalSetting.updateMany({ where: { id: 1, settingsVersion: { lt: 1 } }, data: { phoneCutoffMinutes: 0, settingsVersion: 1 } });
+  if (moved.count) console.log('電話受付の締切を 0 分（開始時刻まで電話マーク）に更新しました');
 
   const hqPassword = process.env.HQ_PASSWORD || 'hq-pass';
   await prisma.adminAccount.upsert({
