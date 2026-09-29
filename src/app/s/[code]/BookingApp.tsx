@@ -1,23 +1,17 @@
 'use client';
 
+
 import { useState } from 'react';
 import { formatDateJa, minToHm } from '@/lib/time';
-import WeekGrid, { type Kind, type Selection } from './WeekGrid';
+import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
 
 interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean }
-
-const KIND_LABEL: Record<Kind, string> = {
-  NEW: 'はじめての方／1ヶ月以上ご来院の無い方',
-  RETURN: 'ご通院中の方',
-};
 
 export default function BookingApp({ store, smsEnabled }: Props) {
   // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=完了
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [kind, setKind] = useState<Kind>('NEW');
-  // ①はじめての方／1ヶ月以上ご来院の無い方 の内訳（NEW=初診, REVISIT=再来）
-  const [firstSub, setFirstSub] = useState<'NEW' | 'REVISIT'>('NEW');
-  const submitKind: 'NEW' | 'REVISIT' | 'RETURN' = kind === 'NEW' ? firstSub : 'RETURN';
+  const submitKind = kind;
   const [sel, setSel] = useState<Selection | null>(null);
   const [form, setForm] = useState({ cardNo: '', name: '', phone: '' });
   const [loading, setLoading] = useState(false);
@@ -74,7 +68,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
 
       {step === 1 && (
         <section>
-          <p className="mb-2 text-xs text-slate-600">上の「①はじめての方／②ご通院中の方」を選んでから、ご希望の日時の〇を押してください。</p>
+          <p className="mb-2 text-xs text-slate-600">上で「はじめての方」か「ご通院したことがある方」を選び、内容を選んでから、ご希望の日時の〇を押してください。</p>
           {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone}
             onProceed={(s) => { setSel(s); setStep(2); setError(''); }} />
@@ -85,15 +79,8 @@ export default function BookingApp({ store, smsEnabled }: Props) {
       {step === 2 && sel && (
         <form onSubmit={submit}>
           <h2 className="mb-1 font-bold">{formatDateJa(sel.date)} {minToHm(sel.time)}〜</h2>
-          <p className="mb-4 text-xs text-slate-500">{KIND_LABEL[kind]}</p>
-          {kind === 'NEW' && (
-            <fieldset className="mb-3 rounded border bg-white p-3 text-sm">
-              <legend className="px-1 text-xs text-slate-500">当院のご利用は</legend>
-              <label className="mb-1 flex items-center gap-2"><input type="radio" name="firstSub" checked={firstSub === 'NEW'} onChange={() => setFirstSub('NEW')} />はじめて来院する</label>
-              <label className="flex items-center gap-2"><input type="radio" name="firstSub" checked={firstSub === 'REVISIT'} onChange={() => setFirstSub('REVISIT')} />以前来院したことがある（1ヶ月以上ぶり・診察券あり）</label>
-            </fieldset>
-          )}
-          {submitKind !== 'NEW' && (
+          <p className="mb-4 text-xs text-slate-500">{KIND_TEXT[kind]}</p>
+          {(submitKind === 'RETURN' || submitKind === 'REVISIT') && (
             <label className="mb-3 block text-sm">診察券番号{submitKind === 'RETURN' ? <span className="ml-1 text-red-500">*</span> : <span className="ml-1 text-xs text-slate-500">（分かれば）</span>}
               <input required={submitKind === 'RETURN'} inputMode="numeric" value={form.cardNo} onChange={(e) => setForm({ ...form, cardNo: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" />
               {submitKind === 'REVISIT' && <span className="mt-1 block text-xs text-slate-500">診察券が手元に無い・番号が分からない場合は空欄のままで大丈夫です。</span>}
@@ -121,7 +108,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
           {done.smsStatus === 'SENT'
             ? <p className="mt-3 text-sm">確認のSMSをお送りしました。</p>
             : <p className="mt-3 text-sm text-slate-600">この画面を保存（スクリーンショット）しておいてください。</p>}
-          {kind === 'NEW' && <p className="mt-3 text-sm">初めての方・久しぶりの方は10分前にお越しください。</p>}
+          {kind !== 'RETURN' && <p className="mt-3 text-sm">初めての方・久しぶりの方は10分前にお越しください。</p>}
           <p className="mt-3 text-sm">変更・キャンセルはお電話（{phoneLink}）へお願いいたします。</p>
           <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
         </section>

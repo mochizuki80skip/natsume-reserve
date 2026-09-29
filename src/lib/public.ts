@@ -6,7 +6,19 @@ import { cellKey, computeAvailability, isBlockMark, isOccupiedText, type Availab
 import { addDays, datesOfMonth, nowJst } from './time';
 import { isAm, isJpHoliday } from './hours';
 
-export type Kind = 'NEW' | 'REVISIT' | 'RETURN'; // 初診 / 再来（1ヶ月以上）/ 通院中
+// 来院区分：NEW=はじめて（ケガ・痛み・不調）/ ACCIDENT=はじめて（交通事故）/ RETURN=現在通院中 / REVISIT=1ヶ月以上ご来院の無い方
+export type Kind = 'NEW' | 'ACCIDENT' | 'REVISIT' | 'RETURN';
+export const KINDS: Kind[] = ['NEW', 'ACCIDENT', 'REVISIT', 'RETURN'];
+
+/** 予約表の 1 枠目に書く文字 */
+export function cellName(kind: Kind, name: string): string {
+  return kind === 'NEW' ? `${name}（初診）` : kind === 'ACCIDENT' ? `${name}（初自）` : kind === 'REVISIT' ? `${name}（再）` : name;
+}
+/** 予約表の 2 枠目に書く文字 */
+export function contText(kind: Kind): string {
+  return kind === 'REVISIT' ? '上記再来対応' : '上記初診対応';
+}
+export const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 
 export type DayMark = 'open' | 'full' | 'closed' | 'unpublished';
 

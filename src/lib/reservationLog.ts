@@ -48,4 +48,4 @@ export async function findCancels(store: Pick<Store, 'id'>, f: LogFilter, take =
 }
 
 export const STATUS_JA: Record<string, string> = { BOOKED: '予約中', CANCELLED: '取消' };
-export const KIND_JA: Record<string, string> = { NEW: '初診', REVISIT: '再来', RETURN: '通院中' };
+export { KIND_JA } from './public';

@@ -1,3 +1,4 @@
+import { KINDS, type Kind } from '@/lib/public';
 import { prisma } from '@/lib/prisma';
 import { getGlobalSetting } from '@/lib/settings';
 
@@ -7,6 +8,6 @@ export async function loadStore(code: string) {
   return { store, setting };
 }
 
-export function parseKind(v: string | null): 'NEW' | 'REVISIT' | 'RETURN' {
-  return v === 'NEW' ? 'NEW' : v === 'REVISIT' ? 'REVISIT' : 'RETURN';
+export function parseKind(v: string | null): Kind {
+  return KINDS.includes(v as Kind) ? (v as Kind) : 'RETURN';
 }

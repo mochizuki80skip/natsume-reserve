@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { buildInput } from '@/lib/public';
 import { freeBedsAt, remainingAt, statusFor } from '@/lib/availability';
-import { isPublished } from '@/lib/public';
+import { cellName, contText, isPublished, KIND_JA } from '@/lib/public';
 import { isValidDate, nowJst, formatDateJa, minToHm } from '@/lib/time';
 import { normalizeJpPhone, sendSms } from '@/lib/sms';
 import { clientIp, rateLimit } from '@/lib/ratelimit';
@@ -13,7 +13,7 @@ import { loadStore } from '../_store';
 export const dynamic = 'force-dynamic';
 
 const Body = z.object({
-  kind: z.enum(['NEW', 'REVISIT', 'RETURN']), // 初診 / 再来（1ヶ月以上・診察券あり）/ 通院中
+  kind: z.enum(['NEW', 'ACCIDENT', 'REVISIT', 'RETURN']), // はじめて / はじめて（交通事故）/ 1ヶ月以上ぶり / 通院中
   date: z.string().refine(isValidDate, '日付が不正です'),
   time: z.number().int().min(0).max(24 * 60),
   name: z.string().trim().min(1, 'お名前を入力してください').max(40),
@@ -69,7 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
       const reservation = await tx.reservation.create({
         data: {
           storeId: store.id, date: body.date, time: body.time, bed, kind: body.kind,
-          cardNo: body.kind !== 'NEW' ? body.cardNo : null, name: body.name, phone,
+          cardNo: (body.kind === 'RETURN' || body.kind === 'REVISIT') && body.cardNo ? body.cardNo : null, name: body.name, phone,
         },
       });
       const cellData = [];
@@ -77,8 +77,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
         cellData.push({
           storeId: store.id, date: body.date, time: body.time + k * setting.slotMinutes, bed,
           text: k === 0
-            ? (body.kind === 'NEW' ? `${body.name}（初）` : body.kind === 'REVISIT' ? `${body.name}（再）` : body.name)
-            : (body.kind === 'REVISIT' ? '上記再来対応' : '上記初診対応'),
+            ? cellName(body.kind, body.name)
+            : contText(body.kind),
           reservationId: reservation.id,
         });
       }
@@ -95,7 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ code: s
     await prisma.reservation.update({ where: { id: result.id }, data: { smsStatus } });
     if (store.notifyPhone) {
       const to = normalizeJpPhone(store.notifyPhone);
-      if (to) await sendSms(to, `【WEB予約】${formatDateJa(body.date, false)} ${minToHm(body.time)} ${body.kind === 'NEW' ? '初診' : body.kind === 'REVISIT' ? '再来' : '通院中'} ${body.name} 様`);
+      if (to) await sendSms(to, `【WEB予約】${formatDateJa(body.date, false)} ${minToHm(body.time)} ${KIND_JA[body.kind]} ${body.name} 様`);
     }
     return NextResponse.json({ ok: true, id: result.id, date: body.date, time: body.time, smsStatus });
   } catch (e) {

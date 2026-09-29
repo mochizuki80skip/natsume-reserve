@@ -5,6 +5,22 @@ const BASE = process.env.BASE_URL ?? 'http://localhost:3002';
 const results = [];
 const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', name, extra]); console.log(cond ? 'PASS' : 'FAIL', name, extra); if (!cond) process.exitCode = 1; };
 
+async function pickBusinessDays(n) {
+  const out = [];
+  let start = new Date(); start.setDate(start.getDate() + 3);
+  for (let w = 0; w < 6 && out.length < n; w++) {
+    const s = start.toISOString().slice(0, 10);
+    const j = await (await fetch(`${BASE}/api/public/S001/week?start=${s}&kind=NEW`)).json();
+    for (const d of j.days) {
+      if (out.length >= n) break;
+      if (d.label === null && d.date >= s && d.slots.some((x) => x.time === 600 && x.status === 'open') && d.slots.some((x) => x.time === 900 && x.status === 'open')) out.push(d.date);
+    }
+    start.setDate(start.getDate() + 7);
+  }
+  return out;
+}
+const [D2, D3, D4] = await pickBusinessDays(3);
+
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 const ctx = await browser.newContext({ viewport: { width: 420, height: 860 } });
 const page = await ctx.newPage();
@@ -24,9 +40,12 @@ for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) {
 ok('週間一覧に〇がある', (await openSlot.count()) > 0);
 ok('凡例が日付行の上にある', (await page.locator('.wk-head .wk-legend').count()) === 1);
 // 来院区分は週間一覧の上で切り替え
-await page.getByRole('button', { name: /ご通院中の方/ }).click(); await page.waitForTimeout(600);
-ok('②に切り替えられる', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('ご通院中'));
-await page.getByRole('button', { name: /はじめての方/ }).click(); await page.waitForTimeout(800);
+await page.getByRole('button', { name: /ご通院したことがある方/ }).click(); await page.waitForTimeout(600);
+ok('「ご通院したことがある方」に切り替えられる', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('ご通院したことがある方'));
+ok('内容の選択肢（現在通院中／1ヶ月以上ご来院の無い方）', (await page.locator('.wk-head [role="radio"]').allTextContents()).join('/').includes('1ヶ月以上ご来院の無い方'));
+await page.getByRole('button', { name: /はじめての方/ }).click(); await page.waitForTimeout(600);
+ok('はじめての方の選択肢（ケガ・痛み・不調／交通事故）', (await page.locator('.wk-head [role="radio"]').allTextContents()).join('/').includes('交通事故のケガ・痛み'));
+await page.getByRole('radio', { name: /ケガ・痛み・不調/ }).click(); await page.waitForTimeout(800);
 openSlot = page.locator('td.o button').first();
 for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); openSlot = page.locator('td.o button').first(); }
 const slotLabel = await openSlot.getAttribute('aria-label');
@@ -61,7 +80,7 @@ await ap.goto(`${BASE}/admin/day/${date}`);
 await ap.waitForSelector('table');
 const inputs = ap.locator('#grid tbody input');
 const values = await inputs.evaluateAll((els) => els.map((e) => e.value));
-ok('予約表に氏名（初）が入る', values.includes('テスト 太郎（初）'));
+ok('予約表に「氏名（初診）」が入る', values.includes('テスト 太郎（初診）'));
 ok('2枠目に「上記初診対応」が入る', values.includes('上記初診対応'));
 // スタッフ登録 → シフト（前休）→ 顧客に見える枠数が午前/午後で変わる
 await ap.goto(`${BASE}/admin/settings`);
@@ -157,7 +176,7 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
 
 // WEB予約の取消ボタン → 両セルが消え、顧客側で空きに戻る。消した直後の再読み込みでも保存される
 {
-  const d2 = '2026-09-25';
+  const d2 = D2;
   const r1 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'NEW', date: d, time: 600, name: '取消太郎', phone: '09011112222' }) })).json(), d2);
   ok('取消テスト用の予約作成', r1.ok === true, JSON.stringify(r1));
   await ap.goto(`${BASE}/admin/reservations`); await ap.waitForSelector('table');
@@ -188,7 +207,7 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
 
 // 再来（1ヶ月以上ぶり・診察券あり）→ 予約表に「（再）」と「上記再来対応」
 {
-  const d3 = '2026-09-26';
+  const d3 = D3;
   const r = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'REVISIT', date: d, time: 600, name: '再来花子', phone: '09033334444', cardNo: '1234' }) })).json(), d3);
   ok('再来の予約作成', r.ok === true, JSON.stringify(r));
   const r0 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'REVISIT', date: d, time: 660, name: '番号なし', phone: '09033334445' }) })).json(), d3);
@@ -198,11 +217,18 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   await ap.goto(`${BASE}/admin/day/${d3}`); await ap.waitForSelector('table');
   const vals = await ap.locator('#grid tbody input').evaluateAll((els) => els.map((e) => e.value));
   ok('予約表に「再来花子（再）」と「上記再来対応」', vals.includes('再来花子（再）') && vals.includes('上記再来対応'));
+  const ra = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'ACCIDENT', date: d, time: 960, name: '事故次郎', phone: '09077776666' }) })).json(), d3);
+  ok('交通事故（初自）の予約作成', ra.ok === true, JSON.stringify(ra));
+  await ap.reload(); await ap.waitForSelector('table');
+  const vals2 = await ap.locator('#grid tbody input').evaluateAll((els) => els.map((e) => e.value));
+  ok('予約表に「事故次郎（初自）」', vals2.includes('事故次郎（初自）'));
+  const jibai = await ap.locator('tr:has(td:text-is("自賠")) td').nth(3).textContent();
+  ok('（初自）は自賠の人数に入る', jibai.trim() === '1', jibai);
 }
 
 // 来院チェック → 来院人数、キャンセル名簿へ移動 → 枠が空く → 戻す
 {
-  const d4 = '2026-09-30';
+  const d4 = D4;
   await ap.evaluate(async (d) => (await fetch(`/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'NEW', date: d, time: 900, name: '来院確認', phone: '09055556666' }) })).json(), d4);
   await ap.goto(`${BASE}/admin/day/${d4}`); await ap.waitForSelector('table');
   const rowOf = (t) => ap.locator('#grid tbody tr').filter({ has: ap.locator('td', { hasText: new RegExp(`^${t}$`) }) });
@@ -234,7 +260,7 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   await ap.getByRole('button', { name: '予約表に戻す' }).first().click();
   await ap.waitForTimeout(800);
   await ap.reload(); await ap.waitForSelector('table');
-  ok('名簿から予約表に戻せる', (await rowOf('15:00').locator('input').nth(0).inputValue()) === '来院確認（初）' && (await rowOf('15:15').locator('input').nth(0).inputValue()) === '上記初診対応');
+  ok('名簿から予約表に戻せる', (await rowOf('15:00').locator('input').nth(0).inputValue()) === '来院確認（初診）' && (await rowOf('15:15').locator('input').nth(0).inputValue()) === '上記初診対応');
 }
 
 // 顧客API に個人情報が含まれない
