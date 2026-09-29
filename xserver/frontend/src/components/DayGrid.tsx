@@ -13,7 +13,7 @@ import NextDateInput from './NextDateInput';
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
 const key = (time: number, bed: number) => `${time}:${bed}`;
-const KIND_JA: Record<string, string> = { NEW: '初診', REVISIT: '再来', RETURN: '通院中' };
+const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 const STATE_BG: Record<CellState, string> = { visited: 'bg-green-100', noshow: 'bg-red-100', pending: 'bg-yellow-100', none: '' };
 
 export default function DayGrid({ data, published, today, onRefresh }: Props) {
@@ -164,7 +164,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
   // ---------- 集計 ----------
   const counts = useMemo(() => {
-    // 予約／来院の人数に加えて、内訳（初診＝（初）、再来＝（再）、自賠＝「自賠」「事故」の手入力）を数える
+    // 予約／来院の人数に加えて、内訳（初診＝（初診）（初自）（初）、再来＝（再）、自賠＝（初自）または「自賠」「事故」の手入力）を数える
     const c = { rAm: 0, rPm: 0, vAm: 0, vPm: 0, nAm: 0, nPm: 0, reAm: 0, rePm: 0, jAm: 0, jPm: 0 };
     for (const [k, v] of cells) {
       if (!isPatientText(v)) continue;
@@ -218,7 +218,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             <tr><td className="pr-2 text-slate-500">来院</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vPm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm + counts.vPm}</td></tr>
           </tbody>
         </table>
-        <table className="text-sm" title="内訳。初診＝「（初）」、再来＝「（再）」、自賠＝「自賠」または「事故」を含むセル（手入力可）">
+        <table className="text-sm" title="内訳。初診＝「（初診）」「（初自）」「（初）」、再来＝「（再）」、自賠＝「（初自）」または「自賠」「事故」を含むセル（手入力可）">
           <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
           <tbody>
             <tr><td className="pr-2 text-slate-500">初診</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nPm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm + counts.nPm}</td></tr>

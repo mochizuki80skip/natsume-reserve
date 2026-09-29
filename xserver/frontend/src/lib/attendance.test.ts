@@ -20,6 +20,8 @@ describe('attendance', () => {
     expect(isTwoSlotName('山田（初）')).toBe(true);
     expect(isTwoSlotName('山田（再）')).toBe(true);
     expect(isTwoSlotName('山田')).toBe(false);
+    expect(isTwoSlotName('山田（初診）')).toBe(true);
+    expect(isTwoSlotName('山田（初自）')).toBe(true);
   });
   it('内訳（初診・再来・自賠）の判定', () => {
     expect(categorizeCell('山田（初）')).toEqual({ isNew: true, isRevisit: false, isJibai: false });
@@ -28,6 +30,8 @@ describe('attendance', () => {
     expect(categorizeCell('鈴木 自賠')).toEqual({ isNew: false, isRevisit: false, isJibai: true });
     expect(categorizeCell('鈴木（事故）')).toEqual({ isNew: false, isRevisit: false, isJibai: true });
     expect(categorizeCell('高橋（初）自賠')).toEqual({ isNew: true, isRevisit: false, isJibai: true });
+    expect(categorizeCell('山田（初診）')).toEqual({ isNew: true, isRevisit: false, isJibai: false });
+    expect(categorizeCell('山田（初自）')).toEqual({ isNew: true, isRevisit: false, isJibai: true });
     expect(categorizeCell('田中')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
     expect(categorizeCell('')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
   });

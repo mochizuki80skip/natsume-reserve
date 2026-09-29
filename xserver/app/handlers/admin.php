@@ -287,7 +287,7 @@ function adm_reservations_delete(): never
     Http::json(['ok' => true]);
 }
 
-const ADM_KIND_JA = ['NEW' => '初診', 'REVISIT' => '再来', 'RETURN' => '通院中'];
+const ADM_KIND_JA = PublicApi::KIND_JA;
 const ADM_STATUS_JA = ['BOOKED' => '予約中', 'CANCELLED' => '取消'];
 
 /** CSV / Excel 書き出し */

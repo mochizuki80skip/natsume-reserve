@@ -50,7 +50,7 @@ function pub_reserve(array $p): never
     Http::requireJson();
     $b = Http::body();
     $kind = $b['kind'] ?? '';
-    if (!in_array($kind, ['NEW', 'REVISIT', 'RETURN'], true)) Http::error('入力内容を確認してください', 400);
+    if (!in_array($kind, PublicApi::KINDS, true)) Http::error('入力内容を確認してください', 400);
     $date = $b['date'] ?? '';
     if (!is_string($date) || !Time::isValidDate($date)) Http::error('日付が不正です', 400);
     $time = Http::int($b, 'time', 0, 24 * 60);
@@ -90,11 +90,9 @@ function pub_reserve(array $p): never
             $bed = $free[0];
             $rid = Db::newId();
             Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [$rid, $store['id'], $date, $time, $bed, $kind, $kind !== 'NEW' && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', Time::nowJstDateTime()]);
+                [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', Time::nowJstDateTime()]);
             for ($k = 0; $k < $in['neededSlots']; $k++) {
-                $text = $k === 0
-                    ? ($kind === 'NEW' ? "{$name}（初）" : ($kind === 'REVISIT' ? "{$name}（再）" : $name))
-                    : ($kind === 'REVISIT' ? '上記再来対応' : '上記初診対応');
+                $text = $k === 0 ? PublicApi::cellName($kind, $name) : PublicApi::contText($kind);
                 Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)',
                     [Db::newId(), $store['id'], $date, $time + $k * $setting['slotMinutes'], $bed, $text, $rid]);
             }
@@ -111,7 +109,7 @@ function pub_reserve(array $p): never
     Db::exec('UPDATE reservation SET smsStatus = ? WHERE id = ?', [$smsStatus, $result['id']]);
     if (!empty($store['notifyPhone'])) {
         $to = Text::normalizeJpPhone($store['notifyPhone']);
-        if ($to) Sms::send($to, '【WEB予約】' . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . ' ' . ($kind === 'NEW' ? '初診' : ($kind === 'REVISIT' ? '再来' : '通院中')) . " {$name} 様");
+        if ($to) Sms::send($to, '【WEB予約】' . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . ' ' . PublicApi::KIND_JA[$kind] . " {$name} 様");
     }
     Http::json(['ok' => true, 'id' => $result['id'], 'date' => $date, 'time' => $time, 'smsStatus' => $smsStatus]);
 }

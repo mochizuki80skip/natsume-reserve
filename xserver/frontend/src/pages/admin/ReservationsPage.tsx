@@ -7,7 +7,7 @@ import NextDateInput from '@/components/NextDateInput';
 import { useAdmin } from './Layout';
 
 const STATUS_JA: Record<string, string> = { BOOKED: '予約中', CANCELLED: '取消' };
-const KIND_JA: Record<string, string> = { NEW: '初診', REVISIT: '再来', RETURN: '通院中' };
+const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 
 interface Filter { tab: 'web' | 'cancel'; from: string; to: string; status: string; q: string }
 interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string }
