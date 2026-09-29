@@ -84,6 +84,8 @@ export async function loadImageFile(file: Blob): Promise<HTMLImageElement> {
 
 /** 本文の行の高さの目標（px）。tesseract はこのくらいの大きさで最もよく読める */
 const TARGET_LH = 30;
+/** 正しく読める請求書の横幅（px）の下限。検証では 590px（拡大率 90%）以上で全項目が正しく読めた */
+export const MIN_INVOICE_WIDTH = 600;
 const MAX_CANVAS_W = 4200;
 const MAX_CANVAS_AREA = 18_000_000;
 
@@ -379,8 +381,12 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   }
   if (!patientNo) warnings.push('患者番号が読み取れませんでした');
   // 撮り直しの案内（読み取りを誤りやすい画像）
-  if (page.kei < 3 && passes.every((p) => !findSubtotalColumn(p.lines))) warnings.push('請求書の表をうまく読み取れませんでした。画像がぼやけていないか、請求書全体（下の合計まで）が写っているか確認してください');
-  else if (srcTextH !== null && srcTextH < 9.5) warnings.push('スクショの文字が小さいため読み取りを誤りやすい状態です。レセコンのプレビューを拡大（100% 以上）してから撮り直すと正確に読めます');
+  // 請求書の横幅（ピクセル）の目安。このレセコンの請求書は拡大率 100% で横幅 656px・文字の高さ約 11.3px
+  const estWidth = srcTextH !== null ? Math.round((srcTextH / 11.3) * 656) : null;
+  const tooSmall = estWidth !== null && estWidth < MIN_INVOICE_WIDTH;
+  const sizeHint = `請求書の横幅が ${MIN_INVOICE_WIDTH}px 以上になるよう、レセコンのプレビューを拡大（100% 以上）してから撮り直すと正確に読めます`;
+  if (page.kei < 3 && passes.every((p) => !findSubtotalColumn(p.lines))) warnings.push(`請求書の表をうまく読み取れませんでした。画像がぼやけていないか、請求書全体（下の合計まで）が写っているか確認してください。${tooSmall ? sizeHint : ''}`);
+  else if (tooSmall) warnings.push(`スクショが小さいため読み取りを誤りやすい状態です（請求書の横幅がおよそ ${estWidth}px）。${sizeHint}`);
   if (!parsed.ym) warnings.push('請求月（令和 年 月）が読み取れませんでした');
 
   // 切り抜きは患者番号〜氏名と合計欄だけ。住所・生年月日・傷病名などの領域は画像にも文字にも残さない
