@@ -44,7 +44,7 @@ await page.getByRole('button', { name: /ご通院したことがある方/ }).cl
 ok('「ご通院したことがある方」に切り替えられる', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('ご通院したことがある方'));
 ok('内容の選択肢（現在通院中／1ヶ月以上ご来院の無い方）', (await page.locator('.wk-head [role="radio"]').allTextContents()).join('/').includes('1ヶ月以上ご来院の無い方'));
 await page.getByRole('button', { name: /はじめての方/ }).click(); await page.waitForTimeout(600);
-ok('はじめての方の選択肢（ケガ・痛み・不調／交通事故）', (await page.locator('.wk-head [role="radio"]').allTextContents()).join('/').includes('交通事故のケガ・痛み'));
+ok('はじめての方の選択肢（ケガ・痛み・不調など／交通事故による痛み）', (await page.locator('.wk-head [role="radio"]').allTextContents()).join('/').includes('交通事故による痛み'));
 await page.getByRole('radio', { name: /ケガ・痛み・不調/ }).click(); await page.waitForTimeout(800);
 openSlot = page.locator('td.o button').first();
 for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); openSlot = page.locator('td.o button').first(); }
