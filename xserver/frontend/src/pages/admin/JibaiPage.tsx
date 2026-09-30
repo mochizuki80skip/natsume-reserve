@@ -10,6 +10,8 @@ import { useAdmin } from './Layout';
 interface Resp {
   ym: string; currentYm: string; store: { code: string; name: string }; isHq: boolean; month: JibaiMonth | null;
   claims: JibaiClaim[]; total: number; verifiedTotal: number; months: string[]; logs: JibaiLog[]; nameRetentionDays: number;
+  /** 他の月の画面で登録された、この月分（請求月＝この月）の明細 */
+  otherScreens?: { screenYm: string; count: number; total: number }[];
 }
 
 interface Row {
@@ -158,8 +160,9 @@ export default function JibaiPage() {
     if (!data) return;
     if (rows.some((r) => r.dirty || !r.id)) { setMsg({ text: '先に「変更を保存」を押してください', kind: 'err' }); return; }
     if (action === 'submit' && ymMissing > 0) { setMsg({ text: `請求月が未選択の明細が ${ymMissing} 件あります。何年何月分かを選んで保存してから提出してください`, kind: 'err' }); return; }
-    if (action === 'submit' && ymMismatch > 0 && !confirm(`請求月が ${formatYm(data.ym)} と違う明細が ${ymMismatch} 件あります。このまま提出しますか？`)) return;
-    const label = action === 'reopen' ? '提出を取り消して修正できるようにします。' : action === 'submit_empty' ? `${formatYm(data.ym)} は自賠請求 0 件として提出します。` : `${formatYm(data.ym)} の ${rows.length} 件・${yen(total)} を提出します。提出後は本部の集計に反映されます。`;
+    const others = breakdown.filter((b) => b.ym !== ym);
+    const label = action === 'reopen' ? '提出を取り消して修正できるようにします。' : action === 'submit_empty' ? `${formatYm(data.ym)} は自賠請求 0 件として提出します。`
+      : `${formatYm(data.ym)} の画面の明細 ${rows.length} 件・${yen(total)} を提出します。${others.length ? `\nうち ${others.map((b) => `${formatYm(b.ym)}分 ${b.count}件 ${yen(b.total)}`).join('、')} は、それぞれの請求月の合計に入ります。` : ''}\n提出後は本部の集計に反映されます。`;
     if (!confirm(`${label}よろしいですか？`)) return;
     try {
       await send('/api/admin/jibai/submit', 'POST', { ym: data.ym, action });
@@ -188,7 +191,18 @@ export default function JibaiPage() {
   const verifiedTotal = rows.reduce((s, r) => s + (r.saved?.verifiedAmount ?? 0), 0);
   const verifiedCount = rows.filter((r) => r.saved?.verifiedAmount !== null && r.saved?.verifiedAmount !== undefined).length;
   const unsaved = rows.filter((r) => r.dirty || !r.id).length;
-  const ymMismatch = rows.filter((r) => r.invoiceYm && r.invoiceYm !== ym).length;
+  // 請求月ごとの内訳（この画面の明細。未保存の行も含む）。合計は請求月で集計する
+  const breakdown = Array.from(rows.reduce((m, r) => {
+    if (!r.invoiceYm) return m;
+    const cur = m.get(r.invoiceYm) ?? { ym: r.invoiceYm, count: 0, total: 0 };
+    cur.count += 1; cur.total += Number(r.amount) || 0;
+    return m.set(r.invoiceYm, cur);
+  }, new Map<string, { ym: string; count: number; total: number }>()).values()).sort((a, b) => (a.ym === ym ? -1 : b.ym === ym ? 1 : b.ym.localeCompare(a.ym)));
+  const thisMonth = breakdown.find((b) => b.ym === ym) ?? { ym, count: 0, total: 0 };
+  const otherScreens = data.otherScreens ?? [];
+  const monthCount = thisMonth.count + otherScreens.reduce((a, o) => a + o.count, 0);
+  const monthTotal = thisMonth.total + otherScreens.reduce((a, o) => a + o.total, 0);
+  const hasOtherMonths = breakdown.some((b) => b.ym !== ym);
   const ymMissing = rows.filter((r) => !r.invoiceYm).length;
   const fillMissingYm = () => setRows((prev) => prev.map((r) => (r.invoiceYm ? r : { ...r, invoiceYm: ym, dirty: true })));
   const dupNos = new Set(rows.map((r) => r.patientNo.trim()).filter((n, i, a) => n !== '' && a.indexOf(n) !== i));
@@ -211,9 +225,8 @@ export default function JibaiPage() {
 
       <div className="flex flex-wrap items-center gap-3 rounded border bg-white px-4 py-3">
         <div><span className="text-xs text-slate-500">対象月</span><div className="text-lg font-bold">{formatYm(ym)}</div></div>
-        <div><span className="text-xs text-slate-500">件数</span><div className="text-lg font-bold tabular-nums">{rows.length} 件</div></div>
-        <div><span className="text-xs text-slate-500">速報合計</span><div className="text-lg font-bold tabular-nums text-brand-dark">{yen(total)}</div></div>
-        {ymMismatch > 0 && <div><span className="text-xs text-amber-700">請求月が違う明細</span><div className="text-lg font-bold tabular-nums text-amber-700">{ymMismatch} 件</div></div>}
+        <div><span className="text-xs text-slate-500">{formatYm(ym)}分の合計（請求月で集計）</span><div className="text-lg font-bold tabular-nums text-brand-dark">{monthCount} 件　{yen(monthTotal)}</div></div>
+        {(hasOtherMonths || otherScreens.length > 0 || ymMissing > 0) && <div><span className="text-xs text-slate-500">この画面の明細（提出する分）</span><div className="text-lg font-bold tabular-nums">{rows.length} 件　{yen(total)}</div></div>}
         {(data.isHq || verifiedCount > 0) && <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-lg font-bold tabular-nums">{verifiedCount} 件 / {yen(verifiedTotal)}</div></div>}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {submitted ? (
@@ -228,6 +241,31 @@ export default function JibaiPage() {
           )}
         </div>
       </div>
+
+      {(hasOtherMonths || otherScreens.length > 0) && (
+        <div className="rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm">
+          {hasOtherMonths && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <b className="text-amber-900">この画面の請求月別の内訳：</b>
+              {breakdown.map((b) => (
+                <span key={b.ym} className={`tabular-nums ${b.ym === ym ? '' : 'font-bold text-amber-900'}`}>
+                  {formatYm(b.ym)}分　{b.count} 件　{yen(b.total)}{b.ym !== ym && <span className="ml-1 text-xs font-normal">（{formatYm(b.ym)}の合計に入ります）</span>}
+                </span>
+              ))}
+              {ymMissing > 0 && <span className="text-red-700">請求月未選択　{ymMissing} 件</span>}
+            </div>
+          )}
+          {otherScreens.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <b className="text-amber-900">他の月の画面で登録された{formatYm(ym)}分：</b>
+              {otherScreens.map((o) => (
+                <span key={o.screenYm} className="tabular-nums">{o.count} 件　{yen(o.total)}（<button type="button" onClick={() => go(o.screenYm)} className="underline">{formatYm(o.screenYm)}の画面</button>）</span>
+              ))}
+              <span className="text-xs text-slate-600">→ 上の「{formatYm(ym)}分の合計」に含めています</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {msg && <p className={`rounded px-3 py-2 text-sm ${msg.kind === 'ok' ? 'bg-brand-light' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
 
@@ -288,7 +326,7 @@ export default function JibaiPage() {
                       {ymOptions(data.currentYm, [ym, r.invoiceYm]).map((m) => <option key={m} value={m}>{formatYmWithEra(m)}</option>)}
                     </select>
                     {r.invoiceYm && r.invoiceYm !== ym && (
-                      <div className="text-[11px] text-amber-700">この画面（{formatYm(ym)}）と違います。<button type="button" onClick={() => go(r.invoiceYm)} className="underline">{formatYm(r.invoiceYm)} の画面へ移動</button>{!r.id && '（未保存の行は持ち越します）'}</div>
+                      <div className="text-[11px] text-amber-700">この画面（{formatYm(ym)}）と違う月です。<b>{formatYm(r.invoiceYm)}分として、{formatYm(r.invoiceYm)}の合計に入ります</b>（このまま保存・提出して大丈夫です）</div>
                     )}
                     {!r.invoiceYm && (
                       <div className="text-[11px] font-bold text-red-700">{r.ocr ? '請求月を読み取れませんでした。' : ''}何年何月分かを選んでください<br /><button type="button" disabled={!editable} onClick={() => update(r.key, { invoiceYm: ym })} className="font-normal underline">{formatYm(ym)} 分にする</button></div>
@@ -325,7 +363,7 @@ export default function JibaiPage() {
           {rows.length > 0 && (
             <tfoot>
               <tr className="border-t-2 bg-slate-50 font-bold">
-                <td className="px-2 py-1" colSpan={5}>合計（{rows.length} 件）</td>
+                <td className="px-2 py-1" colSpan={5}>この画面の合計（{rows.length} 件）{hasOtherMonths && <span className="ml-2 text-xs font-normal text-amber-800">請求月別：{breakdown.map((b) => `${formatYm(b.ym)}分 ${b.count}件 ${yen(b.total)}`).join(' ／ ')}</span>}</td>
                 <td className="px-2 py-1 text-right tabular-nums">{yen(total)}</td>
                 <td colSpan={data.isHq ? 3 : 2} className="px-2 py-1 text-xs font-normal text-slate-500">{data.isHq && verifiedCount > 0 ? `経理確認 ${verifiedCount} 件 / 確定 ${yen(verifiedTotal)}（速報との差 ${(verifiedTotal - rows.filter((x) => x.saved?.verifiedAmount !== null && x.saved?.verifiedAmount !== undefined).reduce((s, x) => s + (Number(x.amount) || 0), 0)).toLocaleString('ja-JP')}円）` : ''}</td>
               </tr>

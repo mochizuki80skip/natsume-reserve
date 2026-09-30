@@ -115,7 +115,7 @@ final class Jibai
     {
         $where = $storeId === null ? '' : 'WHERE storeId = ?';
         $params = $storeId === null ? [] : [$storeId, $storeId];
-        $rows = Db::all("SELECT ym FROM jibai_claim $where UNION SELECT ym FROM jibai_month $where ORDER BY ym DESC LIMIT $limit", $params);
+        $rows = Db::all("SELECT ym FROM jibai_claim $where UNION SELECT ym FROM jibai_month $where UNION SELECT invoiceYm AS ym FROM jibai_claim " . ($storeId === null ? 'WHERE invoiceYm IS NOT NULL' : 'WHERE storeId = ? AND invoiceYm IS NOT NULL') . " ORDER BY ym DESC LIMIT $limit", $storeId === null ? [] : [$storeId, $storeId, $storeId]);
         return array_values(array_unique(array_map(fn($r) => $r['ym'], $rows)));
     }
 

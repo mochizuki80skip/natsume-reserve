@@ -21,6 +21,9 @@ function jibai_get(): never
         'total' => array_sum(array_map(fn($c) => $c['amount'], $claims)),
         'verifiedTotal' => array_sum(array_map(fn($c) => $c['verifiedAmount'] ?? 0, $claims)),
         'months' => Jibai::monthsWithData($sid),
+        // 他の月の画面で登録された、この月分（請求月＝この月）の明細。この月の合計に含める
+        'otherScreens' => array_map(fn($r) => ['screenYm' => $r['ym'], 'count' => (int)$r['n'], 'total' => (int)$r['total']],
+            Db::all('SELECT ym, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total FROM jibai_claim WHERE storeId = ? AND invoiceYm = ? AND ym <> ? GROUP BY ym ORDER BY ym', [$sid, $ym, $ym])),
         'logs' => Jibai::logs($sid, $ym),
         'nameRetentionDays' => Jibai::setting()['nameRetentionDays'],
     ]);
@@ -175,10 +178,14 @@ function hq_jibai(): never
     $ym = Http::query('ym', '');
     if (!Jibai::isValidYm($ym)) $ym = Jibai::currentYm();
     $stores = Db::all('SELECT id, code, name, active FROM store WHERE active = 1 ORDER BY code ASC');
+    // 合計は請求月（請求書に印字された月。未設定なら登録した画面の月）で集計する
     $agg = [];
-    foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, SUM(CASE WHEN verifiedAmount IS NULL THEN 0 ELSE 1 END) AS vn, COALESCE(SUM(verifiedAmount), 0) AS vtotal, SUM(CASE WHEN source = ? THEN 1 ELSE 0 END) AS ocr, SUM(CASE WHEN invoiceYm IS NOT NULL AND invoiceYm <> ym THEN 1 ELSE 0 END) AS ymMismatch FROM jibai_claim WHERE ym = ? GROUP BY storeId', ['OCR', $ym]) as $r) {
+    foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, SUM(CASE WHEN verifiedAmount IS NULL THEN 0 ELSE 1 END) AS vn, COALESCE(SUM(verifiedAmount), 0) AS vtotal, SUM(CASE WHEN source = ? THEN 1 ELSE 0 END) AS ocr, SUM(CASE WHEN ym <> ? THEN 1 ELSE 0 END) AS late, COALESCE(SUM(CASE WHEN ym <> ? THEN amount ELSE 0 END), 0) AS lateTotal FROM jibai_claim WHERE COALESCE(invoiceYm, ym) = ? GROUP BY storeId', ['OCR', $ym, $ym, $ym]) as $r) {
         $agg[$r['storeId']] = $r;
     }
+    // この月の画面で登録したが、別の月分として集計される明細（件数）
+    $out = [];
+    foreach (Db::all('SELECT storeId, COUNT(*) AS n FROM jibai_claim WHERE ym = ? AND invoiceYm IS NOT NULL AND invoiceYm <> ym GROUP BY storeId', [$ym]) as $r) $out[$r['storeId']] = (int)$r['n'];
     $months = [];
     foreach (Db::all('SELECT * FROM jibai_month WHERE ym = ?', [$ym]) as $r) $months[$r['storeId']] = $r;
     $rows = [];
@@ -194,7 +201,9 @@ function hq_jibai(): never
             'count' => $a ? (int)$a['n'] : 0,
             'total' => $a ? (int)$a['total'] : 0,
             'ocrCount' => $a ? (int)$a['ocr'] : 0,
-            'ymMismatch' => $a ? (int)$a['ymMismatch'] : 0,
+            'lateCount' => $a ? (int)$a['late'] : 0,
+            'lateTotal' => $a ? (int)$a['lateTotal'] : 0,
+            'movedOut' => $out[$s['id']] ?? 0,
             'verifiedCount' => $a ? (int)$a['vn'] : 0,
             'verifiedTotal' => $a ? (int)$a['vtotal'] : 0,
         ];
@@ -207,7 +216,7 @@ function hq_jibai(): never
     }
     // 過去 12 か月の全社合計（推移）
     $trend = array_map(fn($r) => ['ym' => $r['ym'], 'count' => (int)$r['n'], 'total' => (int)$r['total'], 'verifiedTotal' => (int)$r['vtotal']],
-        Db::all('SELECT ym, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, COALESCE(SUM(verifiedAmount), 0) AS vtotal FROM jibai_claim GROUP BY ym ORDER BY ym DESC LIMIT 12'));
+        Db::all('SELECT COALESCE(invoiceYm, ym) AS ym, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, COALESCE(SUM(verifiedAmount), 0) AS vtotal FROM jibai_claim GROUP BY COALESCE(invoiceYm, ym) ORDER BY 1 DESC LIMIT 12'));
     Http::json([
         'ym' => $ym,
         'currentYm' => Jibai::currentYm(),

@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useFetch } from '@/lib/clientApi';
 import { addMonths, formatDateTime, formatYm, yen } from '@/lib/jibai';
 
-interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; ymMismatch: number; verifiedCount: number; verifiedTotal: number }
+interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; lateCount: number; lateTotal: number; movedOut: number; verifiedCount: number; verifiedTotal: number }
 interface Resp {
   ym: string; currentYm: string; rows: Row[]; sum: { count: number; total: number; verifiedCount: number; verifiedTotal: number; submitted: number }; storeCount: number;
   trend: { ym: string; count: number; total: number; verifiedTotal: number }[]; setting: { nameRetentionDays: number };
@@ -49,7 +49,7 @@ export default function JibaiHqClient() {
       </div>
 
       <div className="flex flex-wrap items-center gap-6 rounded border bg-white px-4 py-3">
-        <div><span className="text-xs text-slate-500">{formatYm(ym)} 全社速報合計</span><div className="text-2xl font-bold tabular-nums text-brand-dark">{yen(sum.total)}</div></div>
+        <div><span className="text-xs text-slate-500">{formatYm(ym)}分 全社速報合計（請求月で集計）</span><div className="text-2xl font-bold tabular-nums text-brand-dark">{yen(sum.total)}</div></div>
         <div><span className="text-xs text-slate-500">件数</span><div className="text-xl font-bold tabular-nums">{sum.count} 件</div></div>
         <div><span className="text-xs text-slate-500">提出済み店舗</span><div className="text-xl font-bold tabular-nums">{sum.submitted} / {data.storeCount}</div></div>
         <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-xl font-bold tabular-nums">{sum.verifiedCount} 件 / {yen(sum.verifiedTotal)}</div></div>
@@ -73,7 +73,7 @@ export default function JibaiHqClient() {
             {rows.map((r) => (
               <tr key={r.code} className="border-t">
                 <td className="whitespace-nowrap px-2 py-1"><span className="mr-1 font-mono text-xs text-slate-500">{r.code}</span>{r.name}</td>
-                <td className="whitespace-nowrap px-2 py-1">{statusBadge(r)}{r.submittedAt && <span className="ml-1 text-xs text-slate-500">{formatDateTime(r.submittedAt)}</span>}{r.ymMismatch > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 text-xs text-amber-800" title="請求書に印字された月がこの月と違う明細">請求月違い {r.ymMismatch}</span>}</td>
+                <td className="whitespace-nowrap px-2 py-1">{statusBadge(r)}{r.submittedAt && <span className="ml-1 text-xs text-slate-500">{formatDateTime(r.submittedAt)}</span>}{r.lateCount > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 text-xs text-amber-800" title="他の月の画面で登録された、この月分の明細（この月の合計に含む）">他の月の画面で登録 {r.lateCount}件 {yen(r.lateTotal)}</span>}{r.movedOut > 0 && <span className="ml-1 rounded bg-slate-100 px-1.5 text-xs text-slate-600" title="この月の画面で登録したが、請求月が別の月の明細（その月の合計に含む）">別の月分 {r.movedOut}件</span>}</td>
                 <td className={num}>{r.count}</td>
                 <td className={`${num} font-bold`}>{r.count > 0 ? r.total.toLocaleString('ja-JP') : ''}</td>
                 <td className={num}>{r.count > 0 ? `${r.verifiedCount} / ${r.count}` : ''}</td>
@@ -104,7 +104,7 @@ export default function JibaiHqClient() {
           )}
         </table>
       </div>
-      <p className="text-xs text-slate-500">速報合計は店舗がスクショから登録した金額の合計（提出前の入力中の分も含む）。確定合計は経理が請求書コピーと照合して登録した金額。差額は全件の経理確認が終わった店舗だけ表示します。「明細・経理確認」を押すとその店舗に切り替えて明細を開きます。</p>
+      <p className="text-xs text-slate-500">件数・速報合計は請求月（請求書に印字された「令和 ○年 ○月」）で集計しています。別の月の画面で登録・提出された明細も、請求月がこの月ならここに入ります（「他の月の画面で登録」の表示）。速報合計は店舗がスクショから登録した金額の合計（提出前の入力中の分も含む）。確定合計は経理が請求書コピーと照合して登録した金額。差額は全件の経理確認が終わった店舗だけ表示します。「明細・経理確認」を押すとその店舗に切り替えて明細を開きます。</p>
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded border bg-white p-4">
