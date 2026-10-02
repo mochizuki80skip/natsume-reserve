@@ -23,6 +23,10 @@ return [
     'TWILIO_AUTH_TOKEN' => '',
     'TWILIO_FROM' => '',
 
+    // 予約システムの正式な URL（例：https://yoyaku.hachimaru-80skip.com）。
+    // これ以外の URL から開かれたら正式な URL に転送する（WordPress 側のフォルダ経由で開かれるのを防ぐ）。空なら転送しない
+    'APP_URL' => '',
+
     // 'development' にすると画面にエラーを表示する（本番では 'production'）
     'APP_ENV' => 'production',
 ];

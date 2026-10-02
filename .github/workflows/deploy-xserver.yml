@@ -32,10 +32,13 @@ jobs:
           sudo apt-get install -y -qq php-cli > /dev/null
           find xserver/app xserver/public -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
       - name: Make zip
+        # zip の中身＝サブドメインのフォルダにそのまま置く形（public の中身＋app フォルダ）。config.php は入れない
         run: |
-          cd xserver
-          rm -f app/config.php
-          zip -qr ../natsume-reserve-xserver.zip app public -x 'app/config.php'
+          rm -rf site && mkdir -p site/natsume-reserve-xserver
+          cp -a xserver/public/. site/natsume-reserve-xserver/
+          cp -a xserver/app site/natsume-reserve-xserver/app
+          rm -f site/natsume-reserve-xserver/app/config.php
+          (cd site && zip -qr ../natsume-reserve-xserver.zip natsume-reserve-xserver)
       - uses: actions/upload-artifact@v4
         with:
           name: natsume-reserve-xserver
@@ -47,15 +50,23 @@ jobs:
           HOST: ${{ secrets.XSERVER_HOST }}
           USER: ${{ secrets.XSERVER_USER }}
           KEY: ${{ secrets.XSERVER_SSH_KEY }}
-          DIR: ${{ secrets.XSERVER_DIR }}
+          DIR: ${{ secrets.XSERVER_DIR }}   # 予約システムのフォルダ（例：/home/main80skip/hachimaru-80skip.com/public_html/yoyaku.hachimaru-80skip.com）
         run: |
+          # 更新先は「…/public_html/予約システム専用フォルダ」の形だけ許可する（空欄や public_html そのものは中止）
+          case "$DIR" in
+            /home/*/public_html/?*) ;;
+            *) echo "XSERVER_DIR が正しくありません（例：/home/main80skip/hachimaru-80skip.com/public_html/yoyaku.hachimaru-80skip.com）" >&2; exit 1;;
+          esac
           mkdir -p ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/id_xserver
           chmod 600 ~/.ssh/id_xserver
           ssh-keyscan -p 10022 -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           SSH="ssh -p 10022 -i ~/.ssh/id_xserver -o StrictHostKeyChecking=yes"
-          $SSH "$USER@$HOST" "mkdir -p '$DIR/app' '$DIR/public_html'"
-          # config.php はサーバー側のものを残す
+          # 安全確認：WordPress のフォルダ（wp-config.php などがある所）には絶対に反映しない
+          $SSH "$USER@$HOST" "set -e; case '$DIR' in */public_html|*/public_html/) echo 'XSERVER_DIR がドメイン直下の public_html です。予約システム専用のフォルダを指定してください' >&2; exit 1;; esac; \
+            for f in wp-config.php wp-login.php wp-settings.php; do if [ -e '$DIR'/\$f ]; then echo \"WordPress のファイル（\$f）があるため中止しました\" >&2; exit 1; fi; done; \
+            mkdir -p '$DIR/app'"
+          # 予約システムのフォルダの中だけを更新する（config.php はサーバー側のものを残す）
           rsync -az --delete --exclude 'config.php' -e "$SSH" xserver/app/ "$USER@$HOST:$DIR/app/"
-          rsync -az --delete --exclude 'app/' -e "$SSH" xserver/public/ "$USER@$HOST:$DIR/public_html/"
+          rsync -az --delete --exclude '/app/' -e "$SSH" xserver/public/ "$USER@$HOST:$DIR/"
           echo "deployed to $HOST:$DIR"

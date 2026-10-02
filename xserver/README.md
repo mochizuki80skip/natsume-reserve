@@ -11,7 +11,7 @@ xserver/
 │   ├─ handlers/           API の処理
 │   ├─ sql/schema.sql      テーブル定義（sql/jibai.sql は自賠請求の速報集計用）
 │   └─ cron/cleanup.php    古い個人情報の自動削除（毎日）
-├─ public/     公開フォルダ（public_html にそのまま置く）
+├─ public/     公開フォルダ（予約システム専用のフォルダにそのまま置く）
 │   ├─ index.php  入口（/api は PHP、それ以外は画面）
 │   ├─ .htaccess  URL の振り分け
 │   ├─ tessdata/  自賠請求のスクショ読み取り（OCR）の言語データ
@@ -40,15 +40,29 @@ xserver/
 - GitHub の Actions ページで「Deploy to Xserver」の実行結果を開くと、**natsume-reserve-xserver.zip** がダウンロードできます（ビルド済み）。
 - 手元でビルドする場合：`cd xserver/frontend && npm ci && npm run build` で `public/index.html` と `public/assets/` ができます。
 
-Xserver の「ファイルマネージャ」または FTP ソフトで、次のように置きます（`〇〇.jp` はドメイン）。
+zip を展開すると `natsume-reserve-xserver` フォルダができます。**その中身を、予約システム専用のフォルダにそのまま置きます。**
+
+おすすめは、ホームページ（WordPress など）と分けて**サブドメイン**を作る形です（サーバーパネル →「サブドメイン設定」、ドキュメントルートは初期のまま）。
+例：`yoyaku.hachimaru-80skip.com` を作った場合
 
 ```
-/home/xsXXXXXX/〇〇.jp/
-├─ app/          ← zip の app フォルダをここへ（public_html の「外」）
-└─ public_html/  ← zip の public フォルダの中身をここへ（index.php, .htaccess, index.html, assets/）
+/home/main80skip/hachimaru-80skip.com/public_html/
+├─ （WordPress のファイル）            ← 触らない
+└─ yoyaku.hachimaru-80skip.com/        ← 予約システム専用のフォルダ。ここに zip の中身を置く
+    ├─ index.php / .htaccess / index.html / assets/ / tesseract/ / tessdata/
+    └─ app/
+        └─ config.php                  ← 手順 3 で作る
 ```
 
-`app` を public_html の外に置けない場合は `public_html/app/` に置いても動きます（`.htaccess` で外部から読めないようにしてあります）。
+WordPress と同じドメインの中に置いても、お互いに影響しない作りにしてあります。
+
+- 予約システムは、自分のフォルダの `app` だけを使います（1 つ上の WordPress 側に `app` という名前のフォルダがあっても読みません）。
+- 自分のフォルダの `.htaccess` で URL の振り分けをするので、WordPress の `.htaccess` の書き換え規則は効きません。
+  WordPress 側や Xserver の「ブラウザキャッシュ」「XPageSpeed」の設定が引き継がれても、画面と空き状況はキャッシュされません。
+- `config.php` の `APP_URL` に正式な URL を入れておくと、WordPress 側のフォルダ経由（例：`https://hachimaru-80skip.com/yoyaku.hachimaru-80skip.com/`）で開かれたときに正式な URL へ転送します。
+- 自動更新（手順 6-A）は予約システム専用のフォルダの中だけを書き換え、WordPress のファイルがある場所には反映しません。
+
+ドメインのフォルダ直下（public_html の外）に `app` を置く以前の形（`/home/xsXXXXXX/〇〇.jp/app/` ＋ `public_html/` に画面）でも動きます。
 
 アップロードのコツ：
 
@@ -68,6 +82,7 @@ Xserver の「ファイルマネージャ」または FTP ソフトで、次の�
 | INSTALL_TOKEN | 初期設定ページ用の合言葉（適当な英数字） |
 | CRON_SECRET | 自動削除用の合言葉（適当な英数字） |
 | TWILIO_* | SMS を使う場合のみ。使わなければ空のまま |
+| APP_URL | 予約システムの正式な URL（例：`https://yoyaku.hachimaru-80skip.com`）。それ以外の URL で開かれたら転送する |
 
 ## 4. 初期設定（テーブル作成）
 
@@ -160,19 +175,22 @@ GitHub のリポジトリ設定 → Secrets and variables → Actions に次を�
 | XSERVER_HOST | サーバー番号のホスト名（例：`svXXXX.xserver.jp`） |
 | XSERVER_USER | サーバー ID（例：`xsXXXXXX`） |
 | XSERVER_SSH_KEY | SSH 秘密鍵の中身（サーバーパネルの SSH設定で登録した鍵と対） |
-| XSERVER_DIR | ドメインのフォルダ（例：`/home/xsXXXXXX/〇〇.jp`） |
+| XSERVER_DIR | **予約システム専用のフォルダ**（例：`/home/main80skip/hachimaru-80skip.com/public_html/yoyaku.hachimaru-80skip.com`） |
 
-`config.php` は上書きしません。
+- 書き換えるのは `XSERVER_DIR` の中だけです。`config.php` は上書きしません。
+- 安全のため、`XSERVER_DIR` が空欄・`public_html` そのもの・WordPress のファイル（wp-config.php など）がある場所のときは、何もせずに中止します。
 
 ### B. 手動
 
-Actions の zip をダウンロードして、`app/` と `public_html/` の中身を入れ替えます（`config.php` は残す）。
+Actions の zip をダウンロードして展開し、`natsume-reserve-xserver` の中身で**予約システム専用のフォルダの中だけ**を上書きします。
+`app/config.php` は zip に入っていないので、上書きしても消えません。WordPress のフォルダ（public_html 直下）には何も置かないでください。
 新しい版で増えたテーブルや列（自賠請求の請求月など）は、更新後の最初のアクセスで自動で追加されるので、`/install` の再実行やデータベースの手作業は不要です。
 
 ### 動作確認済みの環境
 
 Xserver と同じ構成（Apache 2.4 ＋ `.htaccess` 有効、PHP 8.3、MariaDB 10.11、`app/` を public_html の外に配置）に Actions と同じ手順で作った zip を置き、
 初期設定・予約システム全体の確認（57 項目）・自賠請求の確認（29 項目）・毎日の自動削除・旧版からの更新（列の自動追加）がすべて通ることを確認しています。
+また、WordPress のある public_html の中にサブドメインのフォルダを作る構成（1 つ上に別の `app` フォルダがある状態）でも、予約システム全体（57 項目）・自賠請求（12 項目）・正式 URL への転送・自動更新で WordPress 側が変わらないことを確認しています（サブドメイン構成）。
 
 ## 7. ローカルで動かす（開発者向け）
 

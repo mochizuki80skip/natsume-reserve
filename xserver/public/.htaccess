@@ -2,6 +2,7 @@
 # 実在するファイル（画像・JS・CSS）はそのまま返し、それ以外はすべて index.php に渡す
 RewriteEngine On
 RewriteBase /
+# ここで RewriteEngine On としているので、親フォルダ（WordPress の public_html）の書き換え規則は引き継がれない
 
 # app フォルダを public_html の中に置いた場合でも外から読めないようにする
 RewriteRule ^app/ - [F,L]
@@ -19,10 +20,19 @@ RewriteRule ^ index.php [L]
   Header always set X-Robots-Tag "noindex, nofollow"
 </IfModule>
 
-# ビルド済みの JS/CSS はファイル名にハッシュが付くので長くキャッシュしてよい
+# ビルド済みの JS/CSS はファイル名にハッシュが付くので長くキャッシュしてよい。
+# 画面（HTML）と API の応答はキャッシュしない（WordPress 側や Xserver の「ブラウザキャッシュ設定」で
+# 親フォルダに入るキャッシュ設定が引き継がれても、予約の空き状況が古いまま表示されないようにする）
 <IfModule mod_expires.c>
   ExpiresActive On
+  ExpiresByType text/html "access plus 0 seconds"
+  ExpiresByType application/json "access plus 0 seconds"
   <FilesMatch "\.(js|css|woff2?|gz)$">
     ExpiresDefault "access plus 30 days"
   </FilesMatch>
+</IfModule>
+
+# Xserver の「XPageSpeed」（ページの自動書き換え）がドメインで有効でも、予約システムには使わない
+<IfModule pagespeed_module>
+  ModPagespeed off
 </IfModule>

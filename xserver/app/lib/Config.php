@@ -12,13 +12,13 @@ final class Config
         $file = dirname(__DIR__) . '/config.php';
         $cfg = is_file($file) ? (require $file) : [];
         $keys = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASS', 'SESSION_SECRET', 'HQ_PASSWORD', 'INSTALL_TOKEN', 'CRON_SECRET',
-            'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'APP_ENV'];
+            'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'APP_ENV', 'APP_URL'];
         foreach ($keys as $k) {
             $env = getenv($k);
             if (($cfg[$k] ?? '') === '' && $env !== false) $cfg[$k] = $env;
         }
         $cfg += ['DB_HOST' => 'localhost', 'DB_PORT' => 3306, 'DB_NAME' => '', 'DB_USER' => '', 'DB_PASS' => '', 'SESSION_SECRET' => '', 'HQ_PASSWORD' => '',
-            'INSTALL_TOKEN' => '', 'CRON_SECRET' => '', 'TWILIO_ACCOUNT_SID' => '', 'TWILIO_AUTH_TOKEN' => '', 'TWILIO_FROM' => '', 'APP_ENV' => 'production'];
+            'INSTALL_TOKEN' => '', 'CRON_SECRET' => '', 'TWILIO_ACCOUNT_SID' => '', 'TWILIO_AUTH_TOKEN' => '', 'TWILIO_FROM' => '', 'APP_ENV' => 'production', 'APP_URL' => ''];
         return self::$cfg = $cfg;
     }
 
