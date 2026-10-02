@@ -25,7 +25,7 @@ export default function AdminLayout() {
     <div className="min-h-screen">
       <header className="no-print border-b bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
-          <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{store ? store.name : '店舗未選択'}</Link>
+          <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {me.session.role === 'hq' && (
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
               <input type="hidden" name="back" value={location.pathname + location.search} />

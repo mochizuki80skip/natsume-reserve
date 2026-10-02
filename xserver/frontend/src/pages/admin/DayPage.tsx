@@ -17,7 +17,8 @@ export default function DayPage() {
   if (!data) return <p className="text-sm text-slate-500">{loading ? '読み込み中…' : ''}</p>;
   return (
     <DayGrid
-      key={`${me.store.id}:${date}`}
+      // 読み込み済みデータの日付で作り直す（URL の日付だと、前の日のデータのまま表が作られて氏名が出なくなる）
+      key={`${me.store.id}:${data.data.date}`}
       data={data.data}
       storeName={data.storeName}
       published={data.published}

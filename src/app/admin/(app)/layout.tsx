@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="min-h-screen">
       <header className="no-print border-b bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
-          <Link href={`/admin/day/${today}`} className="font-bold text-brand-dark">{store ? store.name : '店舗未選択'}</Link>
+          <Link href={`/admin/day/${today}`} className="font-bold text-brand-dark">{session.role === 'hq' ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {session.role === 'hq' && (
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
               <select name="store" defaultValue={store?.code ?? ''} className="rounded border px-2 py-1">
