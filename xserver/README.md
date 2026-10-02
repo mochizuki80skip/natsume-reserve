@@ -58,7 +58,8 @@ WordPress と同じドメインの中に置いても、お互いに影響しな�
 
 - 予約システムは、自分のフォルダの `app` だけを使います（1 つ上の WordPress 側に `app` という名前のフォルダがあっても読みません）。
 - 自分のフォルダの `.htaccess` で URL の振り分けをするので、WordPress の `.htaccess` の書き換え規則は効きません。
-  WordPress 側や Xserver の「ブラウザキャッシュ」「XPageSpeed」の設定が引き継がれても、画面と空き状況はキャッシュされません。
+  空き状況などの API の応答は PHP 側で `Cache-Control: no-store` を付けるので、キャッシュされません。
+- Xserver では `.htaccess` に `Header`・`Expires`・`ModPagespeed` などを書くと 500 エラーになったため、`.htaccess` は URL の振り分けだけにしています（セキュリティ用のヘッダーは `index.php` で付けます）。
 - `config.php` の `APP_URL` に正式な URL を入れておくと、WordPress 側のフォルダ経由（例：`https://hachimaru-80skip.com/yoyaku.hachimaru-80skip.com/`）で開かれたときに正式な URL へ転送します。
 - 自動更新（手順 6-A）は予約システム専用のフォルダの中だけを書き換え、WordPress のファイルがある場所には反映しません。
 

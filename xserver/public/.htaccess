@@ -1,5 +1,7 @@
 # 接骨院 WEB予約システム（Xserver 用）
 # 実在するファイル（画像・JS・CSS）はそのまま返し、それ以外はすべて index.php に渡す
+# ※ Xserver ではキャッシュ・ヘッダー系の指定を書くと 500 エラーになったため、振り分けだけにしている
+#   （セキュリティ用のヘッダーとキャッシュ無効化は index.php 側で付ける）
 RewriteEngine On
 RewriteBase /
 # ここで RewriteEngine On としているので、親フォルダ（WordPress の public_html）の書き換え規則は引き継がれない
@@ -11,28 +13,3 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 RewriteRule ^ index.php [L]
-
-# セキュリティ関連のヘッダー
-<IfModule mod_headers.c>
-  Header always set X-Content-Type-Options "nosniff"
-  Header always set X-Frame-Options "SAMEORIGIN"
-  Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set X-Robots-Tag "noindex, nofollow"
-</IfModule>
-
-# ビルド済みの JS/CSS はファイル名にハッシュが付くので長くキャッシュしてよい。
-# 画面（HTML）と API の応答はキャッシュしない（WordPress 側や Xserver の「ブラウザキャッシュ設定」で
-# 親フォルダに入るキャッシュ設定が引き継がれても、予約の空き状況が古いまま表示されないようにする）
-<IfModule mod_expires.c>
-  ExpiresActive On
-  ExpiresByType text/html "access plus 0 seconds"
-  ExpiresByType application/json "access plus 0 seconds"
-  <FilesMatch "\.(js|css|woff2?|gz)$">
-    ExpiresDefault "access plus 30 days"
-  </FilesMatch>
-</IfModule>
-
-# Xserver の「XPageSpeed」（ページの自動書き換え）がドメインで有効でも、予約システムには使わない
-<IfModule pagespeed_module>
-  ModPagespeed off
-</IfModule>

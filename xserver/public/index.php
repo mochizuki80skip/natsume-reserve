@@ -2,6 +2,12 @@
 // 入口：/api/... は PHP で処理し、それ以外は画面（index.html）を返す
 declare(strict_types=1);
 
+// セキュリティ関連のヘッダー（.htaccess では指定できないサーバーがあるため PHP で付ける）
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: SAMEORIGIN');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+header('X-Robots-Tag: noindex, nofollow');
+
 // プログラム本体（app フォルダ）を探す。同じフォルダの app を最優先にする。
 // サブドメインの場合、1 つ上は WordPress などの public_html なので、そこにある別の app を読まないよう
 // 「この予約システムの app か」（app/bootstrap.php と app/routes.php があるか）を確かめてから使う
