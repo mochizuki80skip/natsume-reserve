@@ -65,16 +65,16 @@ final class Settings
         return range(1, max(1, (int)$store['beds']));
     }
 
-    public const SHIFT_STATUSES = ['WORK', 'OFF', 'AM_OFF', 'PM_OFF', 'PAID', 'AM_PAID', 'PM_PAID'];
+    public const SHIFT_STATUSES = ['WORK', 'OFF', 'AM_OFF', 'PM_OFF', 'PAID', 'AM_PAID', 'PM_PAID', 'HELP', 'AM_HELP', 'PM_HELP']; // HELP＝他店へ応援（この店舗の枠に数えない）
 
     public static function worksAm(?string $status): bool
     {
-        return !$status || $status === 'WORK' || $status === 'PM_OFF' || $status === 'PM_PAID';
+        return !$status || $status === 'WORK' || $status === 'PM_OFF' || $status === 'PM_PAID' || $status === 'PM_HELP';
     }
 
     public static function worksPm(?string $status): bool
     {
-        return !$status || $status === 'WORK' || $status === 'AM_OFF' || $status === 'AM_PAID';
+        return !$status || $status === 'WORK' || $status === 'AM_OFF' || $status === 'AM_PAID' || $status === 'AM_HELP';
     }
 
     /**

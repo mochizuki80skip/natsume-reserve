@@ -38,7 +38,7 @@ export default function ShiftTable({ month, dates, closedDates, members, shifts 
             const v = map.get(`${m.id}:${d}`) ?? 'WORK';
             const isClosed = closed.has(d);
             return (
-              <td key={d} className={`border p-0 ${isClosed ? 'bg-slate-200' : v === 'WORK' ? '' : v.startsWith('AM') || v.startsWith('PM') ? 'bg-amber-50' : 'bg-red-50'}`}>
+              <td key={d} className={`border p-0 ${isClosed ? 'bg-slate-200' : v === 'WORK' ? '' : v.endsWith('HELP') ? 'bg-sky-50' : v.startsWith('AM') || v.startsWith('PM') ? 'bg-amber-50' : 'bg-red-50'}`}>
                 {isClosed ? <span className="block text-center text-[10px] text-slate-400">休診</span> : (
                   <select value={v} onChange={(e) => save(m.id, d, e.target.value)} aria-label={`${m.name} ${d}`}
                     className="h-7 w-full appearance-none bg-transparent text-center text-xs outline-none focus:bg-yellow-50">
@@ -64,7 +64,7 @@ export default function ShiftTable({ month, dates, closedDates, members, shifts 
         <span className="ml-auto text-xs text-slate-500">{state === 'saving' ? '保存中…' : state === 'saved' ? '保存しました' : state === 'error' ? '保存に失敗しました' : '選ぶと自動保存されます'}</span>
       </div>
       <p className="mb-2 text-xs text-slate-600">
-        未入力＝〇（終日勤務）。前休・前有＝午前の枠を1つ減らす／後休・後有＝午後の枠を1つ減らす／休・有給＝終日減らす。
+        未入力＝〇（終日勤務）。前休・前有＝午前の枠を1つ減らす／後休・後有＝午後の枠を1つ減らす／休・有給＝終日減らす。ヘルプ（他店へ応援）も同じで、前ヘルプ＝午前／後ヘルプ＝午後／ヘルプ＝終日減らす。
         一番下の行が、顧客に見える枠数（午前／午後）です。
       </p>
       <div className="overflow-x-auto rounded border bg-white">
