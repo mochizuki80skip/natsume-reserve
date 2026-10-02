@@ -160,7 +160,7 @@ export function drawStory(canvas: HTMLCanvasElement, input: StoryInput): void {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 44px ${FONT}`;
-  ctx.fillText('WEB予約はプロフィールのリンクから', STORY_W / 2, 1650);
+  ctx.fillText('WEB予約はリンクからどうぞ', STORY_W / 2, 1650);
   ctx.font = `bold 40px ${FONT}`;
   ctx.fillStyle = C.brand;
   ctx.fillText(`📞 ${input.phone}`, STORY_W / 2, 1710);

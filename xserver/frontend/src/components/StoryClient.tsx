@@ -43,6 +43,14 @@ export default function StoryClient({ store, date }: Props) {
     } catch { setCanShare(false); }
   }, []);
 
+  // ストーリーズのリンクスタンプに貼る予約ページの URL
+  const bookingUrl = `${location.origin}/s/${encodeURIComponent(store.code)}`;
+  const [copied, setCopied] = useState(false);
+  async function copyUrl() {
+    try { await navigator.clipboard.writeText(bookingUrl); setCopied(true); setTimeout(() => setCopied(false), 3000); }
+    catch { setCopied(false); window.prompt('このURLをコピーしてください', bookingUrl); }
+  }
+
   const fileName = `${store.code}_${date}_story.png`;
   const toFile = () => new Promise<File>((resolve, reject) => {
     canvasRef.current?.toBlob((b) => (b ? resolve(new File([b], fileName, { type: 'image/png' })) : reject(new Error('画像を作れませんでした'))), 'image/png');
@@ -52,7 +60,7 @@ export default function StoryClient({ store, date }: Props) {
     try {
       const file = await toFile();
       await navigator.share({ files: [file], title: `${store.name} 本日の空き状況` });
-      setMsg('共有画面で Instagram を選び、「ストーリーズ」に投稿してください。');
+      setMsg('Instagram で「ストーリーズ」を選んだら、手順3のリンクのスタンプを付けてください。');
     } catch (e) {
       if ((e as Error).name !== 'AbortError') setMsg('共有できませんでした。「画像を保存」から投稿してください。');
     }
@@ -64,7 +72,7 @@ export default function StoryClient({ store, date }: Props) {
     const a = document.createElement('a');
     a.href = url; a.download = fileName; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    setMsg('保存した画像を Instagram アプリの「ストーリーズ」から選んで投稿してください。');
+    setMsg('保存しました。Instagram アプリの「＋」→「ストーリーズ」で保存した画像を選び、手順3へ進んでください。');
   }
 
   return (
@@ -75,24 +83,67 @@ export default function StoryClient({ store, date }: Props) {
         <div className="rounded-lg border bg-white p-2 shadow-sm">
           <canvas ref={canvasRef} className="block h-auto w-[270px]" aria-label="ストーリー画像のプレビュー" />
         </div>
-        <div className="flex-1 space-y-2 text-sm">
+        <div className="min-w-[260px] flex-1 space-y-3 text-sm">
           {state === 'loading' && <p className="text-slate-500">作成中…</p>}
           {state === 'error' && <p className="text-red-700">空き状況を取得できませんでした。<button type="button" className="ml-2 underline" onClick={() => setTick((t) => t + 1)}>再試行</button></p>}
-          {canShare && <button type="button" disabled={state !== 'ready'} onClick={share} className="block w-full rounded-lg bg-brand px-4 py-3 font-bold text-white disabled:opacity-50">Instagram へ共有</button>}
-          <button type="button" disabled={state !== 'ready'} onClick={download} className="block w-full rounded-lg border bg-white px-4 py-3 font-bold disabled:opacity-50">画像を保存</button>
+
+          <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-900">📱 投稿は<b>スマホ</b>でこの画面を開いて行うのがかんたんです（スマホのブラウザで管理画面にログイン →「ストーリー画像」）。</p>
+
+          <ol className="space-y-3">
+            <Step n={1} title="予約ページのURLをコピー">
+              <div className="mt-1 flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded border bg-slate-50 px-2 py-1.5 text-xs">{bookingUrl}</code>
+                <button type="button" onClick={copyUrl} className="shrink-0 rounded-lg bg-brand px-3 py-1.5 font-bold text-white">{copied ? 'コピーしました' : 'コピー'}</button>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">あとでリンクのスタンプに貼り付けます。</p>
+            </Step>
+            <Step n={2} title="画像を Instagram へ">
+              <div className="mt-1 space-y-2">
+                {canShare && <button type="button" disabled={state !== 'ready'} onClick={share} className="block w-full rounded-lg bg-brand px-4 py-3 font-bold text-white disabled:opacity-50">Instagram へ共有</button>}
+                <button type="button" disabled={state !== 'ready'} onClick={download} className="block w-full rounded-lg border bg-white px-4 py-2.5 font-bold disabled:opacity-50">画像を保存</button>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                「Instagram へ共有」→ 共有画面で <b>Instagram</b> →「<b>ストーリーズ</b>」を選びます。
+                共有のボタンが無い・Instagram が出ない場合は「画像を保存」し、Instagram アプリの「＋」→「ストーリーズ」で保存した画像を選びます。
+              </p>
+            </Step>
+            <Step n={3} title="リンクのスタンプを付ける">
+              <p className="mt-1 text-xs">
+                画面上の <b>スタンプのマーク</b>（四角い顔の絵）を押す →「<b>リンク</b>」を選ぶ →
+                URL の欄を長押しして「<b>ペースト</b>」（手順1でコピーしたURL）。
+              </p>
+            </Step>
+            <Step n={4} title="スタンプの文字を変えて置く">
+              <p className="mt-1 text-xs">
+                「スタンプのテキストをカスタマイズ」で <b>WEB予約はこちら</b> と入力 →「完了」。
+                スタンプは指で動かして、<b>下の紺色の帯（WEB予約の案内）の上</b>に重ねて置きます。時間の表には重ねないでください（一番下は返信欄に隠れるので避けます）。
+              </p>
+            </Step>
+            <Step n={5} title="ストーリーズに投稿">
+              <p className="mt-1 text-xs">左下の「<b>ストーリーズ</b>」（自分のアイコン）を押して完了です。投稿後、スタンプを押して予約ページが開くか確認しましょう。</p>
+            </Step>
+          </ol>
+
           <button type="button" onClick={() => setTick((t) => t + 1)} className="block w-full rounded-lg border bg-white px-4 py-2 text-slate-600">最新の空き状況で作り直す</button>
           {msg && <p className="rounded bg-brand-light px-3 py-2 text-brand-dark">{msg}</p>}
-          <div className="rounded border bg-white p-3 text-xs text-slate-600">
-            <p className="mb-1 font-bold">投稿のしかた</p>
-            <ol className="list-decimal space-y-1 pl-4">
-              <li>スマホなら「Instagram へ共有」→ 共有画面で Instagram →「ストーリーズ」を選ぶ。出てこない場合は「画像を保存」。</li>
-              <li>Instagram アプリでストーリーズを開き、保存した画像を選ぶ。</li>
-              <li>リンクのスタンプで予約ページ（/s/{store.code}）の URL を付けると、そのまま予約に進めます。</li>
-              <li>記号：〇 どなたでも／△ ご通院中の方のみ（30分枠が取れない時間）／📞 お電話で／× 空きなし</li>
-            </ol>
-          </div>
+          <p className="rounded border bg-white p-3 text-xs text-slate-600">
+            記号：〇 どなたでも／△ ご通院中の方のみ（30分枠が取れない時間）／📞 お電話で／× 空きなし。
+            投稿後に予約が入っても画像は変わりません。空き状況が大きく変わったら、作り直して投稿し直してください。
+          </p>
         </div>
       </div>
     </div>
+  );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-3 rounded-lg border bg-white p-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand text-sm font-bold text-white">{n}</span>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold">{title}</p>
+        {children}
+      </div>
+    </li>
   );
 }
