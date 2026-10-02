@@ -19,7 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           {session.role === 'hq' && (
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
               <select name="store" defaultValue={store?.code ?? ''} className="rounded border px-2 py-1">
-                {stores.map((s) => <option key={s.code} value={s.code}>{s.code} {s.name}{s.active ? '' : '（停止）'}</option>)}
+                {stores.map((s) => <option key={s.code} value={s.code}>{s.name}{s.active ? '' : '（停止）'}</option>)}
               </select>
               <button type="submit" className="rounded border px-2 py-1">切替</button>
             </form>
