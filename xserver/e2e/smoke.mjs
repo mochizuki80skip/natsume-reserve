@@ -60,6 +60,15 @@ const dateTitle = await page.textContent('h2');
 ok('日時選択', /年.*月.*日/.test(dateTitle), `${dateTitle} (${slotLabel})`);
 await page.fill('input[placeholder*="山田"]', 'テスト 太郎');
 await page.fill('input[type="tel"]', '09012345678');
+// 入力後はまず確認画面（この時点ではまだ予約しない）
+await page.getByRole('button', { name: '入力内容を確認する' }).click();
+await page.waitForSelector('text=以下の内容でお間違いありませんか');
+const confirmText = await page.textContent('main');
+ok('確認画面', confirmText.includes('テスト 太郎') && confirmText.includes('090-1234-5678') && !confirmText.includes('ご予約が確定しました'));
+// 修正に戻っても入力内容が残っている
+await page.getByRole('button', { name: '入力画面に戻って修正する' }).click();
+ok('確認→入力に戻る', (await page.inputValue('input[placeholder*="山田"]')) === 'テスト 太郎');
+await page.getByRole('button', { name: '入力内容を確認する' }).click();
 await page.getByRole('button', { name: 'この内容で予約する' }).click();
 await page.waitForSelector('text=ご予約が確定しました', { timeout: 15000 });
 ok('予約確定', true, `${dateTitle} ${slotLabel}`);
