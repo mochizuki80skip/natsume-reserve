@@ -362,13 +362,39 @@ function adm_shifts_get(): never
     $setting = Settings::global();
     $dates = Time::datesOfMonth($ym);
     $in = Db::inList($dates);
-    $members = Db::all('SELECT id, name, role FROM staff_member WHERE storeId = ? AND active = 1 ORDER BY sortOrder ASC', [$store['id']]);
+    // その月に 1 日でも所属している人だけ出す（入社前・異動後の月には出さない）
+    $first = $dates[0];
+    $last = $dates[count($dates) - 1];
+    $members = Db::all('SELECT id, name, role, startDate, endDate, joinType FROM staff_member WHERE storeId = ? AND active = 1
+        AND (startDate IS NULL OR startDate <= ?) AND (endDate IS NULL OR endDate >= ?) ORDER BY sortOrder ASC', [$store['id'], $last, $first]);
     $shifts = Db::all("SELECT staffId, date, status FROM shift WHERE storeId = ? AND date IN ($in)", array_merge([$store['id']], $dates));
+    $helpIn = Db::all("SELECT date, status, name FROM help_in WHERE storeId = ? AND date IN ($in)", array_merge([$store['id']], $dates));
     $days = Db::all("SELECT date, closed FROM day_status WHERE storeId = ? AND date IN ($in)", array_merge([$store['id']], $dates));
     $closedMap = [];
     foreach ($days as $d) $closedMap[$d['date']] = (bool)$d['closed'];
     $closedDates = array_values(array_filter($dates, fn($d) => count(Settings::storeSessions($store, $setting, $d, $closedMap[$d] ?? false)) === 0));
-    Http::json(['month' => $ym, 'dates' => $dates, 'closedDates' => $closedDates, 'members' => $members, 'shifts' => $shifts]);
+    Http::json(['month' => $ym, 'dates' => $dates, 'closedDates' => $closedDates, 'members' => $members, 'shifts' => $shifts, 'helpIn' => $helpIn,
+        'hasTherapists' => (bool)Db::one('SELECT 1 AS x FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 LIMIT 1', [$store['id'], 'THERAPIST']),
+        'defaultActiveBeds' => min((int)$store['defaultActiveBeds'], (int)$store['beds']), 'beds' => (int)$store['beds']]);
+}
+
+/** 他店からの応援（1 日 1 行）の保存。status が空なら削除 */
+function adm_help_in_put(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    $status = (string)($b['status'] ?? '');
+    $name = mb_substr(trim((string)($b['name'] ?? '')), 0, 30);
+    if ($status !== '' && !in_array($status, Settings::HELP_IN_STATUSES, true)) Http::error('bad request', 400);
+    $sid = $ctx['store']['id'];
+    if ($status === '') {
+        Db::exec('DELETE FROM help_in WHERE storeId = ? AND date = ?', [$sid, $date]);
+    } else {
+        Db::exec('INSERT INTO help_in (id, storeId, date, status, name) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), name = VALUES(name)', [Db::newId(), $sid, $date, $status, $name]);
+    }
+    Http::json(['ok' => true]);
 }
 
 /** シフト 1 セルの保存。空または WORK なら行を削除 */
@@ -402,11 +428,13 @@ function adm_staff_post(): never
     if ($name === '' || mb_strlen($name) > 30 || !in_array($role, ['THERAPIST', 'RECEPTION'], true)) Http::error('氏名を入力してください', 400);
     $store = $ctx['store'];
     $max = $role === 'THERAPIST' ? (int)$store['maxTherapists'] : (int)$store['maxReception'];
-    $count = (int)Db::one('SELECT COUNT(*) AS n FROM staff_member WHERE storeId = ? AND role = ? AND active = 1', [$store['id'], $role])['n'];
+    // 異動などで所属が終わった人は数えない
+    $count = (int)Db::one('SELECT COUNT(*) AS n FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 AND (endDate IS NULL OR endDate >= ?)', [$store['id'], $role, Time::nowJst()['date']])['n'];
     if ($count >= $max) Http::error(($role === 'THERAPIST' ? '施術者' : '受付') . "は最大 {$max} 名です（店舗設定で変更できます）", 400);
     $last = Db::one('SELECT MAX(sortOrder) AS m FROM staff_member WHERE storeId = ?', [$store['id']]);
     $id = Db::newId();
-    Db::exec('INSERT INTO staff_member (id, storeId, name, role, sortOrder) VALUES (?, ?, ?, ?, ?)', [$id, $store['id'], $name, $role, (int)($last['m'] ?? 0) + 1]);
+    [$startDate, $endDate, $joinType] = staff_period_from($b, null);
+    Db::exec('INSERT INTO staff_member (id, storeId, name, role, sortOrder, startDate, endDate, joinType) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [$id, $store['id'], $name, $role, (int)($last['m'] ?? 0) + 1, $startDate, $endDate, $joinType]);
     Http::json(['ok' => true, 'member' => Db::one('SELECT * FROM staff_member WHERE id = ?', [$id])]);
 }
 
@@ -435,8 +463,34 @@ function adm_staff_put(): never
     if (isset($b['name'])) { $n = trim((string)$b['name']); if ($n === '' || mb_strlen($n) > 30) Http::error('bad request', 400); $set[] = 'name = ?'; $params[] = $n; }
     if (isset($b['role'])) { if (!in_array($b['role'], ['THERAPIST', 'RECEPTION'], true)) Http::error('bad request', 400); $set[] = 'role = ?'; $params[] = $b['role']; }
     if (array_key_exists('active', $b)) { $set[] = 'active = ?'; $params[] = Http::bool($b, 'active') ? 1 : 0; }
+    if (array_key_exists('startDate', $b) || array_key_exists('endDate', $b) || array_key_exists('joinType', $b)) {
+        [$sd, $ed, $jt] = staff_period_from($b, $m);
+        array_push($set, 'startDate = ?', 'endDate = ?', 'joinType = ?');
+        array_push($params, $sd, $ed, $jt);
+    }
     if ($set) Db::exec('UPDATE staff_member SET ' . implode(', ', $set) . ' WHERE id = ?', array_merge($params, [$m['id']]));
     Http::json(['ok' => true]);
+}
+
+/**
+ * 所属開始日・終了日・区分（新入社員／異動）を入力から取り出す。送られなかった項目は今の値のまま。
+ * @return array{0:?string,1:?string,2:?string}
+ */
+function staff_period_from(array $b, ?array $cur): array
+{
+    $date = function (string $k) use ($b, $cur): ?string {
+        if (!array_key_exists($k, $b)) return $cur[$k] ?? null;
+        $v = trim((string)($b[$k] ?? ''));
+        if ($v === '') return null;
+        if (!Time::isValidDate($v)) Http::error('日付が正しくありません', 400);
+        return $v;
+    };
+    $start = $date('startDate');
+    $end = $date('endDate');
+    if ($start && $end && $end < $start) Http::error('終了日は開始日より後にしてください', 400);
+    $jt = array_key_exists('joinType', $b) ? (string)($b['joinType'] ?? '') : (string)($cur['joinType'] ?? '');
+    if (!in_array($jt, ['', 'NEW', 'TRANSFER'], true)) Http::error('bad request', 400);
+    return [$start, $end, $jt === '' ? null : $jt];
 }
 
 function adm_staff_delete(): never
@@ -455,7 +509,7 @@ function adm_settings_get(): never
     $ctx = Auth::context();
     $store = $ctx['store'];
     $setting = Settings::global();
-    $members = Db::all('SELECT id, name, role, active FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$store['id']]);
+    $members = Db::all('SELECT id, name, role, active, startDate, endDate, joinType FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$store['id']]);
     Http::json([
         'store' => [
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
@@ -465,7 +519,7 @@ function adm_settings_get(): never
         'globalHours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         'canChangePassword' => $ctx['session']['role'] === 'store',
         'smsEnabled' => Sms::enabled(),
-        'members' => array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'role' => $m['role'], 'active' => (bool)$m['active']], $members),
+        'members' => array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'role' => $m['role'], 'active' => (bool)$m['active'], 'startDate' => $m['startDate'], 'endDate' => $m['endDate'], 'joinType' => $m['joinType']], $members),
     ]);
 }
 

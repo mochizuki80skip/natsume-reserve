@@ -8,7 +8,9 @@ final class DayData
     {
         $sid = $store['id'];
         $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$sid, $date]));
-        $members = Db::all('SELECT id, name, role FROM staff_member WHERE storeId = ? AND active = 1 ORDER BY sortOrder ASC', [$sid]);
+        $allMembers = Db::all('SELECT id, name, role, startDate, endDate FROM staff_member WHERE storeId = ? AND active = 1 ORDER BY sortOrder ASC', [$sid]);
+        $members = array_values(array_filter($allMembers, fn($m) => Settings::inPeriod($m, $date))); // 入社前・異動後の人は出さない
+        $helpIn = Db::one('SELECT status, name FROM help_in WHERE storeId = ? AND date = ?', [$sid, $date]);
         $shifts = Db::all('SELECT staffId, status FROM shift WHERE storeId = ? AND date = ?', [$sid, $date]);
         $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo
             FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date = ? AND c.bed > 0', [$sid, $date]);
@@ -18,9 +20,9 @@ final class DayData
         $sessions = Settings::storeSessions($store, $setting, $date, $closed);
         $statusByStaff = [];
         foreach ($shifts as $s) $statusByStaff[$s['staffId']] = $s['status'];
-        $therapists = array_values(array_filter($members, fn($m) => $m['role'] === 'THERAPIST'));
         $reception = array_values(array_filter($members, fn($m) => $m['role'] === 'RECEPTION'));
-        $cap = Settings::capacityFromShifts($store, $therapists, $statusByStaff, $day ? ['capacityAm' => $day['capacityAm'], 'capacityPm' => $day['capacityPm']] : null);
+        $allTherapists = array_values(array_filter($allMembers, fn($m) => $m['role'] === 'THERAPIST'));
+        $cap = Settings::capacityFromShifts($store, $allTherapists, $statusByStaff, $day ? ['capacityAm' => $day['capacityAm'], 'capacityPm' => $day['capacityPm']] : null, $date, $helpIn);
 
         return [
             'date' => $date,
@@ -31,7 +33,7 @@ final class DayData
             'slotMinutes' => $setting['slotMinutes'],
             'beds' => Settings::allBeds($store),
             'capacity' => $cap,
-            'hasStaff' => count($therapists) > 0,
+            'hasStaff' => count($allTherapists) > 0,
             'receptionNames' => array_map(fn($m) => $m['name'], $reception),
             'shiftLabels' => array_map(fn($m) => ['name' => $m['name'], 'role' => $m['role'], 'status' => $statusByStaff[$m['id']] ?? 'WORK'], $members),
             'cells' => array_map(fn($c) => [

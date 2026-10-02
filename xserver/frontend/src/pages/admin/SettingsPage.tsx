@@ -6,7 +6,7 @@ import { useAdmin } from './Layout';
 interface Resp {
   store: { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; notifyPhone: string; hoursOverride: string };
   globalHours: string; canChangePassword: boolean; smsEnabled: boolean;
-  members: { id: string; name: string; role: string; active: boolean }[];
+  members: { id: string; name: string; role: string; active: boolean; startDate: string | null; endDate: string | null; joinType: string | null }[];
 }
 
 export default function SettingsPage() {
@@ -22,7 +22,7 @@ export default function SettingsPage() {
       {/* 画面が広いときは 2 列（左：店舗設定、右：スタッフ・シフト）、半面では 1 列 */}
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
         <StoreSettingsForm store={data.store} globalHours={data.globalHours} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
-        <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
+        <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
       </div>
     </div>
   );

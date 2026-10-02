@@ -39,6 +39,7 @@ function route_table(): array
         ['GET', '#^/api/admin/calendar$#', 'adm_calendar_get'],
         ['GET', '#^/api/admin/shifts$#', 'adm_shifts_get'],
         ['PUT', '#^/api/admin/shifts$#', 'adm_shifts_put'],
+        ['PUT', '#^/api/admin/help-in$#', 'adm_help_in_put'],
         ['POST', '#^/api/admin/staff-members$#', 'adm_staff_post'],
         ['PUT', '#^/api/admin/staff-members$#', 'adm_staff_put'],
         ['DELETE', '#^/api/admin/staff-members$#', 'adm_staff_delete'],

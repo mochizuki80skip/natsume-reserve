@@ -19,7 +19,9 @@ final class Db
         ]);
         $pdo->exec("SET time_zone = '+09:00'");
         $pdo->exec("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
-        return self::$pdo = $pdo;
+        self::$pdo = $pdo;
+        Migrate::run($pdo);
+        return $pdo;
     }
 
     public static function q(string $sql, array $params = []): PDOStatement

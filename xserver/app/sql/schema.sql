@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS `staff_member` (
   `role` VARCHAR(10) NOT NULL DEFAULT 'THERAPIST',
   `sortOrder` INT NOT NULL DEFAULT 0,
   `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `startDate` CHAR(10) NULL,  -- 所属開始日（新入社員の入社日・異動してきた日）。空なら制限なし
+  `endDate` CHAR(10) NULL,    -- 所属終了日（異動で出ていく前日など）。空なら制限なし
+  `joinType` VARCHAR(10) NULL, -- NEW=新入社員 / TRANSFER=異動（開始日から 1 か月シフト表に印を出す）
   PRIMARY KEY (`id`),
   KEY `staff_store` (`storeId`),
   CONSTRAINT `fk_staff_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
@@ -88,6 +91,18 @@ CREATE TABLE IF NOT EXISTS `shift` (
   KEY `shift_store_date` (`storeId`, `date`),
   CONSTRAINT `fk_shift_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_shift_staff` FOREIGN KEY (`staffId`) REFERENCES `staff_member` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 他店からの応援（1 店舗 1 日 1 行。誰が来るか未定なら名前は空）
+CREATE TABLE IF NOT EXISTS `help_in` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `status` VARCHAR(12) NOT NULL,  -- HELP_IN=終日 / AM_HELP_IN=午前 / PM_HELP_IN=午後
+  `name` VARCHAR(30) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `help_in_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_help_in_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `reservation` (

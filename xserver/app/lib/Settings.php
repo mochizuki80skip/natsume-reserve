@@ -67,6 +67,17 @@ final class Settings
 
     public const SHIFT_STATUSES = ['WORK', 'OFF', 'AM_OFF', 'PM_OFF', 'PAID', 'AM_PAID', 'PM_PAID', 'HELP', 'AM_HELP', 'PM_HELP']; // HELP＝他店へ応援（この店舗の枠に数えない）
 
+    /** 他店からの応援（help_in.status） */
+    public const HELP_IN_STATUSES = ['HELP_IN', 'AM_HELP_IN', 'PM_HELP_IN'];
+
+    /** その日にこの店舗に所属しているか（所属開始日・終了日。空なら制限なし） */
+    public static function inPeriod(array $m, string $date): bool
+    {
+        $s = $m['startDate'] ?? null;
+        $e = $m['endDate'] ?? null;
+        return (!$s || $date >= $s) && (!$e || $date <= $e);
+    }
+
     public static function worksAm(?string $status): bool
     {
         return !$status || $status === 'WORK' || $status === 'PM_OFF' || $status === 'PM_PAID' || $status === 'PM_HELP';
@@ -82,13 +93,17 @@ final class Settings
      * @param array<int, array{id:string,name:string}> $members 稼働中の施術者
      * @param array<string,string> $statusByStaff その日のシフト（無い人は〇）
      * @param array{capacityAm:?int,capacityPm:?int}|null $override 手動上書き
+     * @param string|null $date 指定すると、その日に所属していない人（入社前・異動後）を数えない
+     * @param array{status:string,name:string}|null $helpIn その日の他店からの応援（枠を 1 増やす）
      */
-    public static function capacityFromShifts(array $store, array $members, array $statusByStaff, ?array $override = null): array
+    public static function capacityFromShifts(array $store, array $members, array $statusByStaff, ?array $override = null, ?string $date = null, ?array $helpIn = null): array
     {
+        $registered = count($members); // 登録が 1 人もいなければ既定の枠数を使う（期間外で 0 人の日は 0 枠）
+        if ($date !== null) $members = array_values(array_filter($members, fn($m) => self::inPeriod($m, $date)));
         $beds = (int)$store['beds'];
         $namesAm = [];
         $namesPm = [];
-        if (count($members) === 0) {
+        if ($registered === 0) {
             $autoAm = $autoPm = min((int)$store['defaultActiveBeds'], $beds);
         } else {
             foreach ($members as $m) {
@@ -98,6 +113,11 @@ final class Settings
             }
             $autoAm = min(count($namesAm), $beds);
             $autoPm = min(count($namesPm), $beds);
+        }
+        if ($helpIn) {
+            $label = '応援' . ($helpIn['name'] !== '' ? '（' . $helpIn['name'] . '）' : '');
+            if ($helpIn['status'] !== 'PM_HELP_IN') { $namesAm[] = $label; $autoAm = min($autoAm + 1, $beds); }
+            if ($helpIn['status'] !== 'AM_HELP_IN') { $namesPm[] = $label; $autoPm = min($autoPm + 1, $beds); }
         }
         $am = $override['capacityAm'] ?? $autoAm;
         $pm = $override['capacityPm'] ?? $autoPm;
@@ -111,14 +131,19 @@ final class Settings
      */
     public static function capacitiesFor(array $store, array $dates, array $overrides): array
     {
-        $members = Db::all('SELECT id, name FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 ORDER BY sortOrder ASC', [$store['id'], 'THERAPIST']);
+        $members = Db::all('SELECT id, name, startDate, endDate FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 ORDER BY sortOrder ASC', [$store['id'], 'THERAPIST']);
         $byDate = [];
-        if ($members && $dates) {
-            $rows = Db::all('SELECT staffId, date, status FROM shift WHERE storeId = ? AND date IN (' . Db::inList($dates) . ')', array_merge([$store['id']], $dates));
-            foreach ($rows as $r) $byDate[$r['date']][$r['staffId']] = $r['status'];
+        $help = [];
+        if ($dates) {
+            $params = array_merge([$store['id']], $dates);
+            if ($members) {
+                $rows = Db::all('SELECT staffId, date, status FROM shift WHERE storeId = ? AND date IN (' . Db::inList($dates) . ')', $params);
+                foreach ($rows as $r) $byDate[$r['date']][$r['staffId']] = $r['status'];
+            }
+            foreach (Db::all('SELECT date, status, name FROM help_in WHERE storeId = ? AND date IN (' . Db::inList($dates) . ')', $params) as $r) $help[$r['date']] = $r;
         }
         $out = [];
-        foreach ($dates as $d) $out[$d] = self::capacityFromShifts($store, $members, $byDate[$d] ?? [], $overrides[$d] ?? null);
+        foreach ($dates as $d) $out[$d] = self::capacityFromShifts($store, $members, $byDate[$d] ?? [], $overrides[$d] ?? null, $d, $help[$d] ?? null);
         return $out;
     }
 
