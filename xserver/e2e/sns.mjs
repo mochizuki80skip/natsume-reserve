@@ -35,7 +35,7 @@ ok('本部ログイン', true);
 await page.click('text=SNS投稿');
 await page.waitForURL(/\/admin\/sns$/);
 await page.waitForSelector('h1:has-text("確認待ち")');
-ok('SNS ホームが開く', (await page.textContent('body')).includes('承認待ちの下書き'));
+ok('SNS ホームが開く', (await page.textContent('body')).includes('確認待ちの下書き'));
 ok('本部メニューに SNS管理がある', (await page.locator('a:has-text("SNS管理（本部）")').count()) === 1);
 
 // 本部の SNS 管理
@@ -66,9 +66,17 @@ await page.click('button:has-text("Instagram の見本")');
 await page.waitForSelector('text=Instagram の見本（');
 ok('投稿文の見本が出る', (await page.textContent('pre')).includes('サンプル駅前院'));
 
-// ネタ
+// 画像ライブラリ：まとめて登録
+await page.goto(`${BASE}/admin/sns/media?store=S002`);
+await page.waitForSelector('h1:has-text("画像ライブラリ")');
+await page.locator('input[type="file"][multiple]').setInputFiles([{ name: 'a.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg() }, { name: 'b.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg() }]);
+await page.waitForSelector('text=2 枚を登録しました', { timeout: 30000 });
+ok('画像ライブラリにまとめて登録', (await page.locator('section img').count()) >= 2);
+
+// 定型投稿
 await page.goto(`${BASE}/admin/sns/topics?store=S002`);
 await page.waitForSelector('h1:has-text("定型投稿")');
+await page.locator('form:has(button:has-text("追加")) select').first().selectOption('ig'); // Instagram 用（{ハッシュタグ} は Google 用には使えない）
 await page.fill('form input[placeholder^="名前"]', TITLE);
 await page.fill('form textarea[placeholder^="投稿文"]', '{エリア}の{店舗名}です。E2E の本文です。温めて動かすことが大切です。\n\n{ハッシュタグ}');
 await page.click('form button:has-text("での見本")');
@@ -125,14 +133,20 @@ ok('投稿文は店舗名に置き換わる', (await page.textContent('pre')).in
 await page.fill('label:has-text("投稿文") textarea', 'E2E の本文です。必ず治ります。');
 ok('入力中に禁止語の警告が出る', (await page.textContent('body')).includes('広告規制で使わない語：必ず、治り'));
 await page.fill('label:has-text("投稿文") textarea', body0);
-if (await page.locator('button:has-text("承認する")').isDisabled()) { await page.click('button:has-text("保存")'); await page.waitForSelector('text=保存しました'); }
-await page.click('button:has-text("承認する")');
-await page.waitForSelector('text=承認しました');
-ok('承認できる', (await page.textContent('body')).includes('承認済み'));
-await page.click('button:has-text("投稿した（手動）")');
-await page.waitForSelector('text=投稿済みにしました');
-await page.waitForSelector('text=投稿日時', { timeout: 15000 });
-ok('手動で投稿した記録', true);
+if (await page.locator('button:has-text("作成者チェック")').isDisabled()) { await page.click('button:has-text("保存")'); await page.waitForSelector('text=保存しました'); }
+// 画像ライブラリから選び直す
+await page.click('button:has-text("画像ライブラリから選ぶ")');
+await page.waitForSelector('h3:has-text("画像ライブラリから選ぶ")');
+await page.locator('.fixed button:has(img)').first().click();
+await page.waitForSelector('text=ライブラリの画像を付けました');
+ok('下書きにライブラリの画像を付ける', (await page.textContent('body')).includes('ライブラリの画像'));
+await page.click('button:has-text("作成者チェック")');
+await page.waitForSelector('text=チェックしました');
+const afterCheck = await page.textContent('body');
+ok('1 人目のチェックができる', afterCheck.includes('1人目チェック済み'));
+ok('同じアカウントでは承認ボタンが出ない', (await page.locator('button:has-text("承認する（2 人目）")').count()) === 0 && afterCheck.includes('別のアカウント'));
+ok('チェック済みでは「投稿した（手動）」が出ない', (await page.locator('button:has-text("投稿した（手動）")').count()) === 0);
+const postUrl = page.url();
 
 // 分析
 await page.goto(`${BASE}/admin/sns/insights?detail=S001`);
@@ -150,6 +164,15 @@ await page.waitForURL(/\/admin\/day\//, { timeout: 15000 });
 await page.goto(`${BASE}/admin/sns`);
 await page.waitForSelector('h1:has-text("確認待ち")');
 ok('店舗には SNS管理（本部）が出ない', (await page.locator('a:has-text("SNS管理（本部）")').count()) === 0);
+await page.goto(postUrl);
+await page.waitForSelector('button:has-text("承認する（2 人目）")');
+await page.click('button:has-text("承認する（2 人目）")');
+await page.waitForSelector('text=承認しました');
+ok('別のアカウント（店舗）が 2 人目として承認できる', (await page.textContent('body')).includes('承認済み'));
+await page.click('button:has-text("投稿した（手動）")');
+await page.waitForSelector('text=投稿済みにしました');
+await page.waitForSelector('text=投稿日時', { timeout: 15000 });
+ok('手動で投稿した記録', true);
 await page.goto(`${BASE}/admin/sns/insights`);
 await page.waitForSelector('h1:has-text("分析")');
 const own = await page.textContent('body');

@@ -5,6 +5,7 @@ import { useFetch } from '@/lib/api';
 import { CHANNEL_JA, fileToJpegDataUrl, sendJson, type Channel, type Topic } from '@/lib/sns';
 import { addDays } from '@/lib/time';
 import SnsNav from '@/components/SnsNav';
+import SnsMediaPicker from '@/components/SnsMediaPicker';
 import { useAdmin } from '../Layout';
 
 interface VarHelp { key: string; label: string; builtin: boolean }
@@ -22,8 +23,9 @@ export default function SnsTopicsPage() {
   const [edit, setEdit] = useState<Topic | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [bc, setBc] = useState<{ id: string; channel: Channel; scheduledAt: string; approve: boolean } | null>(null);
+  const [bc, setBc] = useState<{ id: string; channel: Channel; scheduledAt: string } | null>(null);
   const [showVars, setShowVars] = useState(false);
+  const [pickFor, setPickFor] = useState<Topic | null>(null);
 
   async function run(fn: () => Promise<unknown>, ok: string) {
     setMsg('');
@@ -41,9 +43,9 @@ export default function SnsTopicsPage() {
   }
   async function broadcast() {
     if (!bc || !data) return;
-    if (!confirm(`この定型投稿を全店舗（${data.storeCount} 店舗）の ${bc.scheduledAt.replace('T', ' ')} の下書きにします。${bc.approve ? '承認済みにするので、そのまま投稿されます。' : '各店舗（または本部）が承認すると投稿されます。'}よろしいですか？`)) return;
+    if (!confirm(`この定型投稿を全店舗（${data.storeCount} 店舗）の ${bc.scheduledAt.replace('T', ' ')} の下書きにします。作成者のチェックと別のアカウントの承認がそろった店舗から投稿されます。よろしいですか？`)) return;
     await run(async () => {
-      const r = await sendJson<{ created: number; skipped: string[]; unfilled: string[] }>(`/api/admin/hq/sns/topics/${bc.id}/broadcast`, 'POST', { channel: bc.channel, scheduledAt: bc.scheduledAt, stores: 'all', approve: bc.approve });
+      const r = await sendJson<{ created: number; skipped: string[]; unfilled: string[] }>(`/api/admin/hq/sns/topics/${bc.id}/broadcast`, 'POST', { channel: bc.channel, scheduledAt: bc.scheduledAt, stores: 'all' });
       setBc(null);
       let m = `${r.created} 店舗分の下書きを作りました。`;
       if (r.skipped.length) m += `　作らなかった店舗：${r.skipped.join('、')}`;
@@ -65,6 +67,7 @@ export default function SnsTopicsPage() {
         文章と画像を作って保管しておくと、予定枠に合わせて自動で下書きになります（使った回数が少ないもの → 最後に使ってから長いもの、の順）。
         文章の中の <code className="rounded bg-slate-100 px-1">{'{店舗名}'}</code> <code className="rounded bg-slate-100 px-1">{'{エリア}'}</code> などの差し込み語は、投稿するときに店舗ごとの設定の値に置き換わります。
         値が無い店舗では <code className="rounded bg-slate-100 px-1">{'{…}'}</code> のまま残り、承認できません（その店舗の SNS 設定で値を入れてください）。
+        <span className="font-bold text-red-800">Google 用の文章には、GBP に載っている情報（電話番号・住所・営業時間・URL、差し込み語の {'{電話} {住所} {営業時間} {予約URL}'}）を入れません</span>（Google のルール。予約は投稿の「予約」ボタンが自動で付きます）。
         <button type="button" onClick={() => setShowVars((v) => !v)} className="ml-2 text-brand underline">使える差し込み語を{showVars ? '隠す' : '見る'}</button>
       </p>
       {showVars && (
@@ -90,7 +93,7 @@ export default function SnsTopicsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button className="rounded bg-brand px-3 py-1 text-white">追加</button>
           <button type="button" onClick={() => doPreview(nf.body, nf.standalone, nf.channel)} className="rounded border bg-white px-3 py-1">{data.store.name} での見本</button>
-          <span className="text-xs text-slate-500">画像は追加したあと、一覧の「画像を選ぶ」から登録します（JPEG に変換して 1080px に縮小）。</span>
+          <span className="text-xs text-slate-500">画像は追加したあと、一覧の「ライブラリから」または「アップロード」で付けます。画像が無い定型投稿には、下書きを作るときに画像ライブラリから自動で 1 枚付きます。</span>
         </div>
         {preview && (
           <div className="rounded border bg-slate-50 p-3">
@@ -131,7 +134,7 @@ export default function SnsTopicsPage() {
                   <td className="px-2 py-1">{canEdit(t) && <input type="checkbox" checked={sel.has(t.id)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(t.id); else n.delete(t.id); setSel(n); }} />}</td>
                   <td className="px-2 py-1">
                     {t.imageUrl ? <img src={t.imageUrl} alt="" className="h-16 w-16 rounded border object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed text-xs text-slate-400">なし</div>}
-                    {canEdit(t) && <div className="mt-1 flex gap-1 text-xs"><label className="cursor-pointer text-brand underline">{t.imageUrl ? '差し替え' : '画像を選ぶ'}<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(t, e.target.files[0])} /></label>{t.imageUrl && <button type="button" onClick={() => removeImage(t)} className="text-red-700 underline">外す</button>}</div>}
+                    {canEdit(t) && <div className="mt-1 flex flex-wrap gap-1 text-xs"><button type="button" onClick={() => setPickFor(t)} className="text-brand underline">ライブラリから</button><label className="cursor-pointer text-brand underline">アップロード<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(t, e.target.files[0])} /></label>{t.imageUrl && <button type="button" onClick={() => removeImage(t)} className="text-red-700 underline">外す</button>}</div>}
                   </td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs">{CH_LABEL[t.channel]}</td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs">{t.months ? t.months.split(',').map((m) => `${m}月`).join(' ') : '通年'}</td>
@@ -139,12 +142,12 @@ export default function SnsTopicsPage() {
                     <div className="font-bold">{t.title || '（名前なし）'}{!t.standalone && <span className="ml-2 rounded bg-slate-100 px-1 text-xs font-normal text-slate-600">型で囲む</span>}</div>
                     <div className="whitespace-pre-wrap text-xs text-slate-600">{t.body}</div>
                     {t.unknownPlaceholders.length > 0 && <div className="mt-1 text-xs text-red-700">未定義の差し込み語：{t.unknownPlaceholders.join(' ')}</div>}
-                    {t.channel !== 'gbp' && !t.imageUrl && <div className="mt-1 text-xs text-amber-700">Instagram には画像が必要です（下書きの画面でも付けられます）</div>}
+                    {t.channel !== 'gbp' && !t.imageUrl && <div className="mt-1 text-xs text-slate-500">画像なし：下書きを作るときに画像ライブラリから自動で付きます</div>}
                   </td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs tabular-nums">{t.useCount} 回{t.lastUsedAt && <div className="text-slate-400">{t.lastUsedAt.slice(0, 10)}</div>}</td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs">
                     {canEdit(t) && <><button type="button" onClick={() => setEdit(t)} className="text-brand underline">編集</button> <button type="button" onClick={() => toggle(t)} className="text-slate-600 underline">{t.active ? '使わない' : '使う'}</button> <button type="button" onClick={() => del(t)} className="text-red-700 underline">削除</button></>}
-                    {data.isHq && t.shared && <div className="mt-1"><button type="button" onClick={() => setBc({ id: t.id, channel: t.channel === 'gbp' ? 'gbp' : 'ig', scheduledAt: `${addDays(me.today, 1)}T18:00`, approve: false })} className="rounded border bg-white px-2 py-0.5">全店舗に一斉配信</button></div>}
+                    {data.isHq && t.shared && <div className="mt-1"><button type="button" onClick={() => setBc({ id: t.id, channel: t.channel === 'gbp' ? 'gbp' : 'ig', scheduledAt: `${addDays(me.today, 1)}T18:00` })} className="rounded border bg-white px-2 py-0.5">全店舗に一斉配信</button></div>}
                   </td>
                 </tr>
               ))}
@@ -155,11 +158,12 @@ export default function SnsTopicsPage() {
       ))}
 
       {bc && <BroadcastDialog bc={bc} setBc={setBc} topic={data.topics.find((t) => t.id === bc.id)!} storeCount={data.storeCount} onRun={broadcast} />}
+      {pickFor && <SnsMediaPicker storeQ={storeQ} channel={pickFor.channel === 'both' ? undefined : pickFor.channel} onClose={() => setPickFor(null)} onPick={(m) => { const t = pickFor; setPickFor(null); run(() => sendJson(`/api/admin/sns/topics/${t.id}/image?${storeQ}`, 'POST', { mediaId: m.id }), 'ライブラリの画像を付けました'); }} />}
     </div>
   );
 }
 
-function BroadcastDialog({ bc, setBc, topic, storeCount, onRun }: { bc: { id: string; channel: Channel; scheduledAt: string; approve: boolean }; setBc: (v: typeof bc | null) => void; topic: Topic; storeCount: number; onRun: () => void }) {
+function BroadcastDialog({ bc, setBc, topic, storeCount, onRun }: { bc: { id: string; channel: Channel; scheduledAt: string }; setBc: (v: typeof bc | null) => void; topic: Topic; storeCount: number; onRun: () => void }) {
   useEffect(() => { const h = (e: KeyboardEvent) => e.key === 'Escape' && setBc(null); window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h); }, [setBc]);
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4" onClick={() => setBc(null)}>
@@ -172,8 +176,8 @@ function BroadcastDialog({ bc, setBc, topic, storeCount, onRun }: { bc: { id: st
           </select>
           <input type="datetime-local" value={bc.scheduledAt} onChange={(e) => setBc({ ...bc, scheduledAt: e.target.value })} className="rounded border px-2 py-1" />
         </div>
-        <label className="flex items-start gap-2"><input type="checkbox" checked={bc.approve} onChange={(e) => setBc({ ...bc, approve: e.target.checked })} className="mt-1" /><span>承認済みにして予定時刻にそのまま投稿する<br /><span className="text-xs text-slate-500">差し込み語が埋まっていない店舗・禁止語がある Google・画像が無い Instagram は下書きのまま残ります。チェックを外すと各店舗（または本部）が確認して承認します。</span></span></label>
-        {bc.channel === 'ig' && !topic.imageUrl && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">この定型投稿には画像がありません。Instagram は画像が必須なので、各下書きで画像を付けるまで承認できません。</p>}
+        <p className="text-xs text-slate-600">作った下書きは、作成者のチェック（1 人目）と別のアカウントの承認（2 人目）がそろった店舗から予定時刻に投稿されます。ホームの「選択をチェック」「選択を承認」でまとめて進められます。</p>
+        {bc.channel === 'ig' && !topic.imageUrl && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">この定型投稿には画像がありません。各店舗の下書きには画像ライブラリから自動で 1 枚付きます（ライブラリが空なら画像なし）。</p>}
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setBc(null)} className="rounded border px-3 py-1">やめる</button><button type="button" onClick={onRun} className="rounded bg-brand px-3 py-1 text-white">下書きを作る</button></div>
       </div>
     </div>

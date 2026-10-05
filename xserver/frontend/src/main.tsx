@@ -25,6 +25,7 @@ import SnsTopicsPage from './pages/admin/sns/SnsTopicsPage';
 import SnsSettingsPage from './pages/admin/sns/SnsSettingsPage';
 import SnsInsightsPage from './pages/admin/sns/SnsInsightsPage';
 import SnsHqPage from './pages/admin/sns/SnsHqPage';
+import SnsMediaPage from './pages/admin/sns/SnsMediaPage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -48,6 +49,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="sns/posts" element={<SnsPostsPage />} />
           <Route path="sns/posts/:id" element={<SnsPostPage />} />
           <Route path="sns/topics" element={<SnsTopicsPage />} />
+          <Route path="sns/media" element={<SnsMediaPage />} />
           <Route path="sns/settings" element={<SnsSettingsPage />} />
           <Route path="sns/insights" element={<SnsInsightsPage />} />
           <Route path="hq/sns" element={<SnsHqPage />} />

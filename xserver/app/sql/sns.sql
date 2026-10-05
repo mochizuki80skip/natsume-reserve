@@ -78,7 +78,25 @@ CREATE TABLE IF NOT EXISTS `sns_topic` (
   CONSTRAINT `fk_st_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 投稿（下書き）。status: draft / approved / publishing / posted / failed
+-- 画像ライブラリ（量産した画像を保管。定型投稿や下書きに割り当てる。storeId NULL は全店共通）
+CREATE TABLE IF NOT EXISTS `sns_media` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NULL,
+  `path` VARCHAR(200) NOT NULL,              -- public/media/sns/ 以下のファイル名
+  `label` VARCHAR(100) NOT NULL DEFAULT '',  -- メモ（例：腰痛・冬）
+  `channel` VARCHAR(5) NOT NULL DEFAULT 'both', -- ig / gbp / both（自動割り当ての対象）
+  `width` INT NOT NULL DEFAULT 0,
+  `height` INT NOT NULL DEFAULT 0,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `useCount` INT NOT NULL DEFAULT 0,
+  `lastUsedAt` DATETIME NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `sm_store` (`storeId`),
+  CONSTRAINT `fk_sm_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 投稿（下書き）。status: draft → checked（作成者のチェック）→ approved（別の人の承認）→ publishing → posted／failed
 CREATE TABLE IF NOT EXISTS `sns_post` (
   `id` VARCHAR(32) NOT NULL,
   `storeId` VARCHAR(32) NOT NULL,
@@ -97,7 +115,9 @@ CREATE TABLE IF NOT EXISTS `sns_post` (
   `imageKind` VARCHAR(10) NOT NULL DEFAULT 'none', -- none / template / upload / topic（定型投稿の画像をコピー）
   `source` VARCHAR(10) NOT NULL DEFAULT 'auto',    -- auto（自動生成）/ manual（手で作成）
   `publishMode` VARCHAR(10) NOT NULL DEFAULT 'api', -- api / manual（Google の許可待ちなど）
-  `approvedAt` DATETIME NULL,
+  `checkedAt` DATETIME NULL,                -- 1 人目（作成者）のチェック
+  `checkedBy` VARCHAR(20) NULL,
+  `approvedAt` DATETIME NULL,               -- 2 人目の承認（checkedBy と別のアカウントだけができる）
   `approvedBy` VARCHAR(20) NULL,
   `postedAt` DATETIME NULL,
   `externalId` VARCHAR(200) NULL,

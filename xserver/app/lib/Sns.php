@@ -6,7 +6,8 @@ final class Sns
 {
     public const CHANNELS = ['ig', 'gbp'];
     public const CHANNEL_JA = ['ig' => 'Instagram', 'gbp' => 'Google'];
-    public const STATUSES = ['draft', 'approved', 'publishing', 'posted', 'failed'];
+    public const STATUSES = ['draft', 'checked', 'approved', 'publishing', 'posted', 'failed'];
+    public const EDITABLE = ['draft', 'checked', 'approved', 'failed']; // 内容を変えられる状態（変えるとチェック・承認は外れる）
     public const MAX_LEN = ['ig' => 2200, 'gbp' => 1500]; // Instagram のキャプション / Google の投稿本文の上限
     public const MEDIA_DIR = 'media/sns'; // public/ からの相対パス
 
@@ -40,7 +41,12 @@ final class Sns
             ['sns_topic', 'standalone', 'ALTER TABLE `sns_topic` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 1 AFTER `body`'],
             ['sns_topic', 'imagePath', 'ALTER TABLE `sns_topic` ADD COLUMN `imagePath` VARCHAR(200) NULL AFTER `standalone`'],
             ['sns_post', 'standalone', 'ALTER TABLE `sns_post` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 0 AFTER `patternIdx`'],
+            ['sns_post', 'checkedAt', 'ALTER TABLE `sns_post` ADD COLUMN `checkedAt` DATETIME NULL AFTER `publishMode`'],
+            ['sns_post', 'checkedBy', 'ALTER TABLE `sns_post` ADD COLUMN `checkedBy` VARCHAR(20) NULL AFTER `checkedAt`'],
         ];
+        if (!Db::one("SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sns_media'")) {
+            Db::pdo()->exec("CREATE TABLE IF NOT EXISTS `sns_media` (`id` VARCHAR(32) NOT NULL, `storeId` VARCHAR(32) NULL, `path` VARCHAR(200) NOT NULL, `label` VARCHAR(100) NOT NULL DEFAULT '', `channel` VARCHAR(5) NOT NULL DEFAULT 'both', `width` INT NOT NULL DEFAULT 0, `height` INT NOT NULL DEFAULT 0, `active` TINYINT(1) NOT NULL DEFAULT 1, `useCount` INT NOT NULL DEFAULT 0, `lastUsedAt` DATETIME NULL, `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), KEY `sm_store` (`storeId`), CONSTRAINT `fk_sm_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        }
         foreach ($added as [$table, $col, $ddl]) {
             $r = Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $col]);
             if (!$r) Db::pdo()->exec($ddl);
@@ -82,8 +88,8 @@ final class Sns
                     "{地域}で{キーワード}のことなら、{店舗名}までご相談ください。",
                 ],
                 'closings' => [
-                    "ご予約はWEB予約ページ（{予約URL}）またはお電話（{電話}）で承ります。",
-                    "WEB予約（{予約URL}）は24時間受付中です。お電話（{電話}）でもどうぞ。",
+                    "ご予約はこの投稿の「予約」ボタンからどうぞ。",
+                    "気になる症状があれば、お気軽にご相談ください。ご予約は「予約」ボタンから。",
                 ],
             ],
         ];
@@ -156,6 +162,8 @@ final class Sns
             foreach ($groups as $g => $list) {
                 $cur = $p[$ch][$g] ?? null;
                 $cur = is_array($cur) ? array_values(array_filter(array_map(fn($s) => is_string($s) ? trim($s) : '', $cur), fn($s) => $s !== '')) : [];
+                // Google の型に GBP に載っている情報（電話・URL など）が入っていたら使わない（以前の既定値からの移行）
+                if ($ch === 'gbp') $cur = array_values(array_filter($cur, fn($s) => !self::gbpForbiddenVarsIn($s) && !self::gbpInfoHits($s)));
                 $d[$ch][$g] = $cur ?: $list;
             }
         }
@@ -265,6 +273,35 @@ final class Sns
         return '毎月 第' . $s['nth'] . Time::WEEKDAY_JA[$s['weekday']] . '曜 ' . $t;
     }
 
+    // ---------- Google の投稿ルール（GBP に載っている情報を投稿文に入れない） ----------
+    public const GBP_FORBIDDEN_VARS = ['電話', '住所', '営業時間', '予約URL', 'ハッシュタグ'];
+
+    /**
+     * Google の投稿文に入れてはいけないもの（電話番号・URL・住所・営業時間）が含まれていれば、その説明を返す
+     * @return string[]
+     */
+    public static function gbpInfoHits(string $text, ?array $store = null, ?array $ss = null): array
+    {
+        $out = [];
+        if (preg_match('/(?<!\d)(0\d{1,4}[-‐－ー()（）\s]?\d{1,4}[-‐－ー()（）\s]?\d{3,4})(?!\d)/u', $text, $m)) $out[] = '電話番号（' . $m[1] . '）';
+        if (preg_match('#https?://\S+|www\.\S+#iu', $text, $m)) $out[] = 'URL（' . mb_substr($m[0], 0, 40) . '）';
+        if ($ss) {
+            if ($ss['address'] !== '' && str_contains($text, $ss['address'])) $out[] = '住所';
+            if ($ss['hoursText'] !== '' && str_contains($text, $ss['hoursText'])) $out[] = '営業時間';
+        }
+        if (preg_match('/(?:営業|診療|受付)時間\s*[:：]?\s*\d{1,2}[:：時]/u', $text)) $out[] = '営業時間の表記';
+        if (preg_match('/[都道府県].{1,8}[市区町村].{0,12}\d+(?:-\d+){1,2}/u', $text)) $out[] = '住所らしい表記';
+        return array_values(array_unique($out));
+    }
+
+    /** Google 用（または両方）の定型投稿に、GBP に載っている情報の差し込み語が使われていないか */
+    public static function gbpForbiddenVarsIn(string $text): array
+    {
+        $out = [];
+        foreach (self::GBP_FORBIDDEN_VARS as $k) if (str_contains($text, '{' . $k . '}')) $out[] = '{' . $k . '}';
+        return $out;
+    }
+
     // ---------- 広告規制チェック ----------
     /** @return string[] 見つかった禁止語（重複なし、出現順） */
     public static function complianceHits(string $text, ?array $words = null): array
@@ -369,6 +406,7 @@ final class Sns
         $idx = max(0, $idx);
         $kw = self::keywordFor($ss, $idx);
         $ph = self::placeholders($store, $ss, $scheduledAt, $kw);
+        if ($channel === 'gbp') foreach (self::GBP_FORBIDDEN_VARS as $k) unset($ph['{' . $k . '}']); // Google の投稿には GBP に載っている情報を入れない（置き換えずに残して気づけるようにする）
         if ($standalone) {
             // 定型投稿：本文をそのまま投稿文にする（差し込み語だけ置き換える）
             return ['fullText' => trim(self::fill(trim($body), $ph)), 'closing' => '', 'hashtags' => ''];
@@ -383,10 +421,8 @@ final class Sns
         } else {
             $hashtags = '';
             $kwLine = $kw !== '' ? self::fill($p['keywordLines'][$idx % count($p['keywordLines'])], $ph) : '';
-            $fixed = [];
-            if ($ss['hoursText'] !== '') $fixed[] = '■営業時間 ' . $ss['hoursText'];
-            if ($ss['address'] !== '') $fixed[] = '■住所 ' . $ss['address'];
-            $parts = [$opening, ($title !== '' ? "{$title}\n" : '') . $body, trim($kwLine . "\n" . $closing), implode("\n", $fixed)];
+            // 営業時間・住所などの定型ブロックは付けない（GBP に載っている情報は投稿文に入れないルール）
+            $parts = [$opening, ($title !== '' ? "{$title}\n" : '') . $body, trim($kwLine . "\n" . $closing)];
         }
         $full = implode("\n\n", array_filter(array_map('trim', $parts), fn($s) => $s !== ''));
         return ['fullText' => $full, 'closing' => $closing, 'hashtags' => $hashtags];
@@ -485,9 +521,31 @@ final class Sns
         $c = self::compose($channel, $store, $ss, $scheduledAt, $title, $body, $idx, null, null, $standalone);
         $id = Db::newId();
         [$imagePath, $imageKind] = self::copyTopicImage($topic, $id);
+        if ($imagePath === null) [$imagePath, $imageKind] = self::assignLibraryImage($store['id'], $channel, $id);
         Db::exec('INSERT INTO sns_post (id, storeId, channel, scheduledAt, status, topicId, title, body, closing, hashtags, postText, patternIdx, standalone, imagePath, imageKind, source, publishMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             $id, $store['id'], $channel, $scheduledAt, 'draft', $topic['id'] ?? null, $title, $body, $c['closing'], $c['hashtags'], $c['fullText'], $idx, $standalone ? 1 : 0, $imagePath, $imageKind, $source, self::publishModeFor($store, $channel)]);
         return $id;
+    }
+
+    /** 画像ライブラリから使用回数の少ない画像を 1 枚選んで下書き用にコピーする。@return array{0:?string,1:string} */
+    public static function assignLibraryImage(string $storeId, string $channel, string $postId, ?string $mediaId = null): array
+    {
+        $m = $mediaId
+            ? Db::one('SELECT * FROM sns_media WHERE id = ? AND (storeId IS NULL OR storeId = ?)', [$mediaId, $storeId])
+            : Db::one('SELECT * FROM sns_media WHERE active = 1 AND (storeId = ? OR storeId IS NULL) AND channel IN (?, ?) ORDER BY useCount ASC, lastUsedAt ASC, createdAt ASC LIMIT 1', [$storeId, $channel, 'both']);
+        if (!$m) return [null, 'none'];
+        $src = self::mediaDir() . '/' . basename($m['path']);
+        if (!is_file($src)) return [null, 'none'];
+        $name = $postId . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.jpg';
+        if (!@copy($src, self::mediaDir() . '/' . $name)) return [null, 'none'];
+        Db::exec('UPDATE sns_media SET useCount = useCount + 1, lastUsedAt = ? WHERE id = ?', [Time::nowJstDateTime(), $m['id']]);
+        return [$name, 'library'];
+    }
+
+    public static function mediaRow(array $m): array
+    {
+        return ['id' => $m['id'], 'shared' => $m['storeId'] === null, 'url' => self::mediaUrl($m['path']), 'label' => $m['label'], 'channel' => $m['channel'], 'width' => (int)$m['width'], 'height' => (int)$m['height'],
+            'active' => (bool)$m['active'], 'useCount' => (int)$m['useCount'], 'lastUsedAt' => $m['lastUsedAt'], 'createdAt' => $m['createdAt']];
     }
 
     /** 定型投稿の画像を下書き用にコピーする（下書きを消しても定型投稿の画像は残る）。@return array{0:?string,1:string} */
@@ -559,15 +617,18 @@ final class Sns
     public static function postRow(array $r, ?array $stat = null): array
     {
         $hits = self::complianceHits($r['postText']);
+        $gbpHits = $r['channel'] === 'gbp' ? self::gbpInfoHits($r['postText'], null, isset($r['_ss']) ? $r['_ss'] : null) : [];
         return [
             'id' => $r['id'], 'storeId' => $r['storeId'], 'storeCode' => $r['storeCode'] ?? null, 'storeName' => $r['storeName'] ?? null,
             'channel' => $r['channel'], 'scheduledAt' => substr($r['scheduledAt'], 0, 16), 'status' => $r['status'], 'topicId' => $r['topicId'],
             'title' => $r['title'], 'body' => $r['body'], 'closing' => $r['closing'], 'hashtags' => $r['hashtags'], 'fullText' => $r['postText'], 'patternIdx' => (int)$r['patternIdx'], 'standalone' => (bool)($r['standalone'] ?? 0),
             'unfilled' => self::unfilledIn($r['postText']),
             'imageUrl' => $r['imagePath'] ? self::mediaUrl($r['imagePath']) : null, 'imageKind' => $r['imageKind'], 'source' => $r['source'], 'publishMode' => $r['publishMode'],
+            'checkedAt' => $r['checkedAt'] ?? null, 'checkedBy' => $r['checkedBy'] ?? null,
             'approvedAt' => $r['approvedAt'], 'approvedBy' => $r['approvedBy'], 'postedAt' => $r['postedAt'], 'externalId' => $r['externalId'], 'permalink' => $r['permalink'], 'error' => $r['error'],
             'length' => mb_strlen($r['postText']), 'maxLength' => self::MAX_LEN[$r['channel']] ?? 2200,
             'compliance' => ['hits' => $hits, 'blocking' => $r['channel'] === 'gbp' && $hits !== []],
+            'gbpInfo' => $gbpHits,
             'stat' => $stat ? ['reach' => $stat['reach'], 'likes' => $stat['likes'], 'comments' => $stat['comments'], 'saved' => $stat['saved'], 'shares' => $stat['shares'], 'views' => $stat['views'], 'fetchedAt' => $stat['fetchedAt']] : null,
             'createdAt' => $r['createdAt'], 'updatedAt' => $r['updatedAt'],
         ];

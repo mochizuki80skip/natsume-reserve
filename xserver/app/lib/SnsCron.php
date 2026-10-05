@@ -76,6 +76,8 @@ final class SnsCron
         try {
             $hits = Sns::complianceHits($p['postText']);
             if ($p['channel'] === 'gbp' && $hits) throw new RuntimeException('広告規制の語が含まれています: ' . implode('、', $hits));
+            if ($p['channel'] === 'gbp' && ($g = Sns::gbpInfoHits($p['postText'], $store, Sns::storeSetting($store)))) throw new RuntimeException('GBP に載っている情報が投稿文に含まれています: ' . implode('、', $g));
+            if (Sns::unfilledIn($p['postText'])) throw new RuntimeException('埋まっていない差し込み語があります: ' . implode(' ', Sns::unfilledIn($p['postText'])));
             $imageUrl = $p['imagePath'] ? Sns::mediaUrl($p['imagePath']) : null;
             if ($imageUrl !== null && !str_starts_with($imageUrl, 'http')) throw new RuntimeException('config.php の APP_URL が設定されていないため、画像の公開 URL を作れません');
             if ($p['channel'] === 'ig') {
@@ -141,15 +143,15 @@ final class SnsCron
     {
         $g = Sns::setting();
         $until = date('Y-m-d H:i:s', time() + $g['remindHours'] * 3600);
-        $rows = Db::all('SELECT p.channel, p.scheduledAt, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = ? AND p.scheduledAt <= ? ORDER BY p.scheduledAt ASC', ['draft', $until]);
+        $rows = Db::all('SELECT p.channel, p.status, p.scheduledAt, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status IN (?, ?) AND p.scheduledAt <= ? ORDER BY p.scheduledAt ASC', ['draft', 'checked', $until]);
         $failed = Db::all('SELECT p.channel, p.scheduledAt, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = ? AND p.updatedAt >= ? ORDER BY p.scheduledAt ASC', ['failed', Time::addDays(Time::nowJst()['date'], -7) . ' 00:00:00']);
         if (!$rows && !$failed) return ['pending' => 0, 'failed' => 0];
         $lines = [];
         if ($rows) {
             $lines[] = "【承認待ちがあります】{$g['remindHours']} 時間以内に予定の下書き " . count($rows) . " 件が未承認です。";
-            foreach (array_slice($rows, 0, 15) as $r) $lines[] = '・' . $r['storeName'] . ' ' . Sns::CHANNEL_JA[$r['channel']] . ' ' . substr($r['scheduledAt'], 0, 16);
+            foreach (array_slice($rows, 0, 15) as $r) $lines[] = '・' . $r['storeName'] . ' ' . Sns::CHANNEL_JA[$r['channel']] . ' ' . substr($r['scheduledAt'], 0, 16) . ($r['status'] === 'checked' ? '（2 人目の承認待ち）' : '（作成者のチェック待ち）');
             if (count($rows) > 15) $lines[] = '…ほか ' . (count($rows) - 15) . ' 件';
-            $lines[] = '承認していない下書きは投稿されません。管理画面「SNS投稿」で確認してください。';
+            $lines[] = '作成者のチェックと別の人の承認がそろわない下書きは投稿されません。管理画面「SNS投稿」で確認してください。';
         }
         if ($failed) {
             $lines[] = "【失敗した投稿】" . count($failed) . " 件が「失敗」のままです。内容を直して承認し直してください。";

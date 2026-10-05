@@ -56,6 +56,24 @@ function sns_recompose(array $p, array $store, array $patch): array
     return ['title' => $title, 'body' => $body, 'patternIdx' => $idx, 'scheduledAt' => $scheduledAt, 'closing' => $c['closing'], 'hashtags' => $c['hashtags'], 'fullText' => $c['fullText'], 'standalone' => $standalone];
 }
 
+/** 内容を変えたときにチェック・承認を外す SQL 断片 */
+const SNS_RESET_CHECKS = "status = 'draft', checkedAt = NULL, checkedBy = NULL, approvedAt = NULL, approvedBy = NULL";
+
+/** チェック・承認の前に、投稿できる内容かを確かめる（問題があれば例外） */
+function sns_assert_ready(array $p, array $store): void
+{
+    if (mb_strlen(trim($p['postText'])) === 0) throw new HttpError(400, '本文が空です');
+    $hits = Sns::complianceHits($p['postText']);
+    if ($p['channel'] === 'gbp' && $hits) throw new HttpError(400, 'Google の投稿に広告規制の語が含まれています: ' . implode('、', $hits));
+    $unfilled = Sns::unfilledIn($p['postText']);
+    if ($unfilled) throw new HttpError(400, '埋まっていない差し込み語があります: ' . implode(' ', $unfilled) . '（この店舗の SNS 設定で値を入れるか、本文を直してください）');
+    if ($p['channel'] === 'gbp') {
+        $g = Sns::gbpInfoHits($p['postText'], $store, Sns::storeSetting($store));
+        if ($g) throw new HttpError(400, 'Google の投稿文には GBP に載っている情報を入れません: ' . implode('、', $g) . '。本文から外してください（予約は「予約」ボタンが自動で付きます）');
+    }
+    if ($p['channel'] === 'ig' && !$p['imagePath'] && Sns::publishModeFor($store, 'ig') === 'api') throw new HttpError(400, 'Instagram の投稿には画像が必要です。画像ライブラリから選ぶか、写真をアップロードしてください');
+}
+
 // ---------- ホーム ----------
 /** 確認待ち・手動投稿・件数のまとめ。本部は全店、店舗は自店舗 */
 function sns_home(): never
@@ -64,13 +82,13 @@ function sns_home(): never
     $s = Auth::requireSession();
     $where = $s['role'] === 'hq' ? '' : ' AND p.storeId = ' . Db::pdo()->quote($s['storeId']);
     $now = Time::nowJstDateTime();
-    $pending = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'draft' $where ORDER BY p.scheduledAt ASC LIMIT 60");
+    $pending = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status IN ('draft', 'checked') $where ORDER BY p.scheduledAt ASC LIMIT 80");
     $manual = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'approved' AND p.publishMode = 'manual' $where ORDER BY p.scheduledAt ASC LIMIT 60");
     $failed = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'failed' $where ORDER BY p.scheduledAt DESC LIMIT 30");
     $counts = Db::all("SELECT s.code, s.name, p.channel, p.status, COUNT(*) AS n FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.scheduledAt >= ? $where GROUP BY s.code, s.name, p.channel, p.status ORDER BY s.code", [Time::addDays(Time::nowJst()['date'], -30) . ' 00:00:00']);
     $byStore = [];
     foreach ($counts as $c) {
-        $byStore[$c['code']] ??= ['code' => $c['code'], 'name' => $c['name'], 'ig' => ['draft' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0], 'gbp' => ['draft' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0]];
+        $byStore[$c['code']] ??= ['code' => $c['code'], 'name' => $c['name'], 'ig' => ['draft' => 0, 'checked' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0], 'gbp' => ['draft' => 0, 'checked' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0]];
         if (isset($byStore[$c['code']][$c['channel']][$c['status']])) $byStore[$c['code']][$c['channel']][$c['status']] += (int)$c['n'];
     }
     $g = Sns::setting();
@@ -85,6 +103,7 @@ function sns_home(): never
         'lastJob' => $job ? ['k' => $job['k'], 'ranAt' => $job['ranAt']] : null,
         'baseUrlOk' => Config::str('APP_URL') !== '',
         'notify' => Notify::lineEnabled() ? 'LINE' : (Notify::mailEnabled() ? 'メール' : 'なし'),
+        'me' => $s['code'],
     ]);
 }
 
@@ -147,14 +166,16 @@ function sns_post_get(array $mm): never
     $store = Settings::findStoreById($p['storeId']);
     $ss = Sns::storeSetting($store);
     // 前後の投稿（入れ替え用）
-    $prev = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt < ? AND status IN (?, ?) ORDER BY scheduledAt DESC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'approved']);
-    $next = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt > ? AND status IN (?, ?) ORDER BY scheduledAt ASC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'approved']);
+    $prev = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt < ? AND status IN (?, ?, ?) ORDER BY scheduledAt DESC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'checked', 'approved']);
+    $next = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt > ? AND status IN (?, ?, ?) ORDER BY scheduledAt ASC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'checked', 'approved']);
     Http::json([
         'post' => sns_post_with_stat($p['id']),
         'store' => ['code' => $store['code'], 'name' => $store['name'], 'phone' => Text::formatJpPhone($store['phone']), 'area' => $ss['area'], 'bookingUrl' => Sns::bookingUrl($store), 'memo' => $ss['memo']],
         'neighbors' => ['prev' => $prev ? ['id' => $prev['id'], 'scheduledAt' => substr($prev['scheduledAt'], 0, 16)] : null, 'next' => $next ? ['id' => $next['id'], 'scheduledAt' => substr($next['scheduledAt'], 0, 16)] : null],
         'publishMode' => Sns::publishModeFor($store, $p['channel']),
         'forbiddenWords' => Sns::setting()['forbiddenWords'],
+        'me' => $s['code'],
+        'gbpInfo' => $p['channel'] === 'gbp' ? Sns::gbpInfoHits($p['postText'], $store, $ss) : [],
     ]);
 }
 
@@ -165,7 +186,7 @@ function sns_post_put(array $mm): never
     $s = Auth::requireSession();
     Http::requireJson();
     $p = sns_post_or_404($s, $mm[1]);
-    if (in_array($p['status'], ['publishing', 'posted'], true)) Http::error('投稿済みの内容は変更できません', 409);
+    if (!in_array($p['status'], Sns::EDITABLE, true)) Http::error('投稿済みの内容は変更できません', 409);
     $b = Http::body();
     $patch = [];
     if (array_key_exists('title', $b)) $patch['title'] = Http::str($b, 'title', 100, false);
@@ -180,14 +201,14 @@ function sns_post_put(array $mm): never
         // 投稿文を直接書き換える（組み立てをやめて、その文章をそのまま使う）
         $full = Http::str($b, 'fullText', 2200, false);
         if (mb_strlen($full) > Sns::MAX_LEN[$p['channel']]) Http::error(Sns::CHANNEL_JA[$p['channel']] . ' の文字数の上限（' . Sns::MAX_LEN[$p['channel']] . ' 文字）を超えています', 400);
-        Db::exec('UPDATE sns_post SET postText = ?, scheduledAt = ?, status = ?, approvedAt = NULL, approvedBy = NULL, error = NULL WHERE id = ?', [$full, $patch['scheduledAt'] ?? $p['scheduledAt'], 'draft', $p['id']]);
+        Db::exec('UPDATE sns_post SET postText = ?, scheduledAt = ?, ' . SNS_RESET_CHECKS . ', error = NULL WHERE id = ?', [$full, $patch['scheduledAt'] ?? $p['scheduledAt'], $p['id']]);
         Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
     }
     $store = Settings::findStoreById($p['storeId']);
     $n = sns_recompose($p, $store, $patch);
     if (mb_strlen($n['fullText']) > Sns::MAX_LEN[$p['channel']]) Http::error(Sns::CHANNEL_JA[$p['channel']] . ' の文字数の上限（' . Sns::MAX_LEN[$p['channel']] . ' 文字）を超えています。本文を短くしてください', 400);
-    Db::exec('UPDATE sns_post SET title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, scheduledAt = ?, status = ?, approvedAt = NULL, approvedBy = NULL, error = NULL WHERE id = ?',
-        [$n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $n['scheduledAt'], 'draft', $p['id']]);
+    Db::exec('UPDATE sns_post SET title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, scheduledAt = ?, ' . SNS_RESET_CHECKS . ', error = NULL WHERE id = ?',
+        [$n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $n['scheduledAt'], $p['id']]);
     Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
 }
 
@@ -203,19 +224,24 @@ function sns_post_action(array $mm): never
     $store = Settings::findStoreById($p['storeId']);
     $now = Time::nowJstDateTime();
     switch ($action) {
-        case 'approve':
-            if (!in_array($p['status'], ['draft', 'failed'], true)) Http::error('承認できる状態ではありません', 409);
-            $hits = Sns::complianceHits($p['postText']);
-            if ($p['channel'] === 'gbp' && $hits) Http::error('Google の投稿に広告規制の語が含まれています: ' . implode('、', $hits), 400);
-            if (mb_strlen(trim($p['postText'])) === 0) Http::error('本文が空です', 400);
-            $unfilled = Sns::unfilledIn($p['postText']);
-            if ($unfilled) Http::error('埋まっていない差し込み語があります: ' . implode(' ', $unfilled) . '（この店舗の SNS 設定で値を入れるか、本文を直してください）', 400);
-            if ($p['channel'] === 'ig' && !$p['imagePath'] && Sns::publishModeFor($store, 'ig') === 'api') Http::error('Instagram の投稿には画像が必要です。「画像を作る」か写真をアップロードしてください', 400);
+        case 'check': // 1 人目（作成者）のチェック
+            if (!in_array($p['status'], ['draft', 'failed'], true)) Http::error('チェックできる状態ではありません', 409);
+            sns_assert_ready($p, $store);
+            Db::exec('UPDATE sns_post SET status = ?, checkedAt = ?, checkedBy = ?, error = NULL WHERE id = ?', ['checked', $now, $s['code'], $p['id']]);
+            break;
+        case 'uncheck':
+            if ($p['status'] !== 'checked') Http::error('チェック済みではありません', 409);
+            Db::exec('UPDATE sns_post SET status = ?, checkedAt = NULL, checkedBy = NULL WHERE id = ?', ['draft', $p['id']]);
+            break;
+        case 'approve': // 2 人目の承認。1 人目と別のアカウントだけができる
+            if ($p['status'] !== 'checked') Http::error($p['status'] === 'approved' ? '承認済みです' : '先に作成者（1 人目）のチェックが必要です', 409);
+            if (($p['checkedBy'] ?? '') === $s['code']) Http::error('チェックした人（' . $s['code'] . '）と同じアカウントでは承認できません。別のアカウント（本部または店舗）で承認してください', 403);
+            sns_assert_ready($p, $store);
             Db::exec('UPDATE sns_post SET status = ?, approvedAt = ?, approvedBy = ?, error = NULL, manualNotifiedAt = NULL, publishMode = ? WHERE id = ?', ['approved', $now, $s['code'], Sns::publishModeFor($store, $p['channel']), $p['id']]);
             break;
         case 'unapprove':
             if ($p['status'] !== 'approved') Http::error('承認済みではありません', 409);
-            Db::exec('UPDATE sns_post SET status = ?, approvedAt = NULL, approvedBy = NULL WHERE id = ?', ['draft', $p['id']]);
+            Db::exec('UPDATE sns_post SET status = ?, approvedAt = NULL, approvedBy = NULL WHERE id = ?', ['checked', $p['id']]);
             break;
         case 'delete':
             if (in_array($p['status'], ['publishing'], true)) Http::error('投稿中のため削除できません', 409);
@@ -223,19 +249,19 @@ function sns_post_action(array $mm): never
             Db::exec('DELETE FROM sns_post WHERE id = ?', [$p['id']]);
             Http::json(['ok' => true, 'deleted' => true]);
         case 'regenerate': // 別のパターン（文章の型を次へ）
-            if (in_array($p['status'], ['publishing', 'posted'], true)) Http::error('投稿済みの内容は変更できません', 409);
+            if (!in_array($p['status'], Sns::EDITABLE, true)) Http::error('投稿済みの内容は変更できません', 409);
             $n = sns_recompose($p, $store, ['patternIdx' => (int)$p['patternIdx'] + 1]);
-            Db::exec('UPDATE sns_post SET closing = ?, hashtags = ?, postText = ?, patternIdx = ?, status = ?, approvedAt = NULL, approvedBy = NULL WHERE id = ?', [$n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], 'draft', $p['id']]);
+            Db::exec('UPDATE sns_post SET closing = ?, hashtags = ?, postText = ?, patternIdx = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $p['id']]);
             break;
-        case 'retopic': // 別のネタ
-            if (in_array($p['status'], ['publishing', 'posted'], true)) Http::error('投稿済みの内容は変更できません', 409);
+        case 'retopic': // 別の定型投稿
+            if (!in_array($p['status'], Sns::EDITABLE, true)) Http::error('投稿済みの内容は変更できません', 409);
             $topicId = isset($b['topicId']) && is_string($b['topicId']) ? $b['topicId'] : null;
             $topic = $topicId
                 ? Db::one('SELECT * FROM sns_topic WHERE id = ? AND (storeId IS NULL OR storeId = ?)', [$topicId, $p['storeId']])
                 : Sns::pickTopic($p['storeId'], $p['channel'], $p['scheduledAt'], $p['topicId'] ? [$p['topicId']] : []);
             if (!$topic) Http::error('使えるネタがありません。「ネタ」から追加してください', 404);
             $n = sns_recompose($p, $store, ['title' => $topic['title'], 'body' => $topic['body'], 'standalone' => (bool)($topic['standalone'] ?? 1)]);
-            Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, standalone = ?, status = ?, approvedAt = NULL, approvedBy = NULL WHERE id = ?', [$topic['id'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['standalone'] ? 1 : 0, 'draft', $p['id']]);
+            Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, standalone = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$topic['id'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['standalone'] ? 1 : 0, $p['id']]);
             if (!empty($topic['imagePath']) && ($p['imageKind'] === 'none' || $p['imageKind'] === 'topic')) {
                 [$img, $kind] = Sns::copyTopicImage($topic, $p['id']);
                 if ($img) { if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath'])); Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ? WHERE id = ?', [$img, $kind, $p['id']]); }
@@ -249,21 +275,21 @@ function sns_post_action(array $mm): never
             $after = sns_post_with_stat($p['id']);
             if ($r !== 'posted') Http::error($after['error'] ?? '投稿に失敗しました', 502);
             Http::json(['ok' => true, 'post' => $after]);
-        case 'mark_posted': // 手動で投稿したことを記録
-            if (!in_array($p['status'], ['approved', 'draft', 'failed'], true)) Http::error('この状態では記録できません', 409);
+        case 'mark_posted': // 手動で投稿したことを記録（2 人の承認がそろってから）
+            if ($p['status'] !== 'approved') Http::error('作成者のチェックと別の人の承認がそろってから投稿してください', 409);
             $link = isset($b['permalink']) && is_string($b['permalink']) ? mb_substr(trim($b['permalink']), 0, 300) : null;
-            Db::exec('UPDATE sns_post SET status = ?, postedAt = ?, publishMode = ?, permalink = ?, error = NULL, approvedAt = COALESCE(approvedAt, ?), approvedBy = COALESCE(approvedBy, ?) WHERE id = ?', ['posted', $now, 'manual', $link ?: null, $now, $s['code'], $p['id']]);
+            Db::exec('UPDATE sns_post SET status = ?, postedAt = ?, publishMode = ?, permalink = ?, error = NULL WHERE id = ?', ['posted', $now, 'manual', $link ?: null, $p['id']]);
             break;
         case 'swap': // 前後の投稿と中身を入れ替える（日時はそのまま）
-            if (in_array($p['status'], ['publishing', 'posted'], true)) Http::error('投稿済みの内容は入れ替えられません', 409);
+            if (!in_array($p['status'], Sns::EDITABLE, true)) Http::error('投稿済みの内容は入れ替えられません', 409);
             $otherId = (string)($b['withId'] ?? '');
-            $o = Db::one('SELECT * FROM sns_post WHERE id = ? AND storeId = ? AND channel = ? AND status IN (?, ?)', [$otherId, $p['storeId'], $p['channel'], 'draft', 'approved']);
+            $o = Db::one('SELECT * FROM sns_post WHERE id = ? AND storeId = ? AND channel = ? AND status IN (?, ?, ?)', [$otherId, $p['storeId'], $p['channel'], 'draft', 'checked', 'approved']);
             if (!$o) Http::error('入れ替え先が見つかりません', 404);
             Db::transaction(function () use ($p, $o, $store) {
                 foreach ([[$p, $o], [$o, $p]] as [$dst, $src]) {
                     $n = sns_recompose($src, $store, ['scheduledAt' => $dst['scheduledAt']]);
-                    Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, standalone = ?, imagePath = ?, imageKind = ?, status = ?, approvedAt = NULL, approvedBy = NULL WHERE id = ?',
-                        [$src['topicId'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $n['standalone'] ? 1 : 0, $src['imagePath'], $src['imageKind'], 'draft', $dst['id']]);
+                    Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, standalone = ?, imagePath = ?, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?',
+                        [$src['topicId'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $n['standalone'] ? 1 : 0, $src['imagePath'], $src['imageKind'], $dst['id']]);
                 }
             });
             break;
@@ -280,11 +306,18 @@ function sns_post_image(array $mm): never
     $s = Auth::requireSession();
     Http::requireJson();
     $p = sns_post_or_404($s, $mm[1]);
-    if (in_array($p['status'], ['publishing', 'posted'], true)) Http::error('投稿済みの画像は変更できません', 409);
+    if (!in_array($p['status'], Sns::EDITABLE, true)) Http::error('投稿済みの画像は変更できません', 409);
     $b = Http::body();
     if (($b['remove'] ?? false) === true) {
         if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath']));
-        Db::exec('UPDATE sns_post SET imagePath = NULL, imageKind = ?, status = IF(status = ?, ?, status), approvedAt = NULL, approvedBy = NULL WHERE id = ?', ['none', 'approved', 'draft', $p['id']]);
+        Db::exec('UPDATE sns_post SET imagePath = NULL, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', ['none', $p['id']]);
+        Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
+    }
+    if (isset($b['mediaId']) && is_string($b['mediaId'])) { // 画像ライブラリから選ぶ
+        [$img, $kind] = Sns::assignLibraryImage($p['storeId'], $p['channel'], $p['id'], $b['mediaId']);
+        if (!$img) Http::error('画像が見つかりません', 404);
+        if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath']));
+        Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$img, $kind, $p['id']]);
         Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
     }
     $bin = sns_decode_jpeg((string)($b['dataUrl'] ?? ''));
@@ -294,7 +327,7 @@ function sns_post_image(array $mm): never
     if (!is_dir($dir) || !is_writable($dir)) Http::error('画像の保存先（public/media/sns）に書き込めません。フォルダの権限を確認してください', 500);
     if (file_put_contents($dir . '/' . $name, $bin) === false) Http::error('画像を保存できませんでした', 500);
     if ($p['imagePath']) @unlink($dir . '/' . basename($p['imagePath']));
-    Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ? WHERE id = ?', [$name, $kind, $p['id']]);
+    Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$name, $kind, $p['id']]);
     Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
 }
 
@@ -336,11 +369,13 @@ function sns_topics_post(): never
     $b = Http::body();
     $shared = ($b['shared'] ?? false) === true;
     if ($shared && $ctx['session']['role'] !== 'hq') Http::error('全店共通のネタは本部だけが追加できます', 403);
-    $ch = in_array($b['channel'] ?? 'both', ['ig', 'gbp', 'both'], true) ? $b['channel'] : 'both';
+    $ch = $b['channel'] ?? 'both';
+    if (!in_array($ch, ['ig', 'gbp', 'both'], true)) $ch = 'both';
     $title = Http::str($b, 'title', 100, false);
     $body = Http::str($b, 'body', 1500);
     $months = sns_months($b['months'] ?? '');
     $standalone = array_key_exists('standalone', $b) ? Http::bool($b, 'standalone') : true;
+    sns_assert_topic_gbp($ch, $body);
     $id = Db::newId();
     $max = Db::one('SELECT COALESCE(MAX(sortOrder), 0) AS m FROM sns_topic WHERE ' . ($shared ? 'storeId IS NULL' : 'storeId = ?'), $shared ? [] : [$ctx['store']['id']]);
     Db::exec('INSERT INTO sns_topic (id, storeId, channel, title, body, standalone, months, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [$id, $shared ? null : $ctx['store']['id'], $ch, $title, $body, $standalone ? 1 : 0, $months, (int)$max['m'] + 1]);
@@ -379,8 +414,19 @@ function sns_topics_put(): never
     $months = array_key_exists('months', $b) ? sns_months($b['months']) : $t['months'];
     $active = array_key_exists('active', $b) ? Http::bool($b, 'active') : (bool)$t['active'];
     $standalone = array_key_exists('standalone', $b) ? Http::bool($b, 'standalone') : (bool)($t['standalone'] ?? 1);
+    sns_assert_topic_gbp($ch, $body);
     Db::exec('UPDATE sns_topic SET channel = ?, title = ?, body = ?, months = ?, active = ?, standalone = ? WHERE id = ?', [$ch, $title, $body, $months, $active ? 1 : 0, $standalone ? 1 : 0, $t['id']]);
     Http::json(['ok' => true, 'unknownPlaceholders' => Sns::unknownPlaceholders($body)]);
+}
+
+/** Google 用（または両方）の定型投稿に、GBP に載っている情報（電話・住所・営業時間・URL）が無いか */
+function sns_assert_topic_gbp(string $channel, string $body): void
+{
+    if ($channel === 'ig') return;
+    $vars = Sns::gbpForbiddenVarsIn($body);
+    if ($vars) throw new HttpError(400, 'Google 用の定型投稿に ' . implode(' ', $vars) . ' は使えません（GBP に載っている情報は投稿文に入れないルール）。Instagram 専用の定型投稿にするか、外してください');
+    $hits = Sns::gbpInfoHits($body);
+    if ($hits) throw new HttpError(400, 'Google 用の定型投稿に GBP に載っている情報が含まれています: ' . implode('、', $hits) . '。外してください');
 }
 
 /** 定型投稿 1 件（権限確認つき） */
@@ -404,6 +450,16 @@ function sns_topic_image(array $mm): never
         if ($t['imagePath']) @unlink($dir . '/' . basename($t['imagePath']));
         Db::exec('UPDATE sns_topic SET imagePath = NULL WHERE id = ?', [$t['id']]);
         Http::json(['ok' => true]);
+    }
+    if (isset($b['mediaId']) && is_string($b['mediaId'])) { // 画像ライブラリから選ぶ（コピーして持つ）
+        $m = Db::one('SELECT * FROM sns_media WHERE id = ? AND (storeId IS NULL OR storeId = ?)', [$b['mediaId'], $ctx['store']['id']]);
+        $src = $m ? $dir . '/' . basename($m['path']) : '';
+        if (!$m || !is_file($src)) Http::error('画像が見つかりません', 404);
+        $name = 'topic-' . $t['id'] . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.jpg';
+        if (!@copy($src, $dir . '/' . $name)) Http::error('画像をコピーできませんでした', 500);
+        if ($t['imagePath']) @unlink($dir . '/' . basename($t['imagePath']));
+        Db::exec('UPDATE sns_topic SET imagePath = ? WHERE id = ?', [$name, $t['id']]);
+        Http::json(['ok' => true, 'imageUrl' => Sns::mediaUrl($name)]);
     }
     $bin = sns_decode_jpeg((string)($b['dataUrl'] ?? ''));
     $name = 'topic-' . $t['id'] . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.jpg';
@@ -429,7 +485,7 @@ function sns_decode_jpeg(string $data): string
 
 /**
  * 定型投稿を複数店舗に一斉に下書き化する（本部）。各店舗の差し込み語で置き換わった下書きができ、店舗（または本部）が承認して投稿される
- * body: {channel, scheduledAt, stores: 'all' | [店舗コード...], approve?: bool}
+ * body: {channel, scheduledAt, stores: 'all' | [店舗コード...]}。作成者のチェックと別の人の承認がそろうまで投稿されない
  */
 function hq_sns_topic_broadcast(array $mm): never
 {
@@ -446,7 +502,6 @@ function hq_sns_topic_broadcast(array $mm): never
     $at = Sns::normalizeDateTime($at);
     if ($at < Time::nowJstDateTime()) Http::error('予定日時は今より後にしてください', 400);
     $codes = $b['stores'] ?? 'all';
-    $approve = ($b['approve'] ?? false) === true;
     $stores = $codes === 'all'
         ? Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC')
         : (is_array($codes) && $codes ? Db::all('SELECT * FROM store WHERE active = 1 AND code IN (' . Db::inList($codes) . ') ORDER BY code ASC', array_values(array_filter($codes, 'is_string'))) : []);
@@ -460,15 +515,74 @@ function hq_sns_topic_broadcast(array $mm): never
         $id = Sns::createPost($st, $ss, $ch, $at, $t, random_int(0, 9), 'manual');
         $row = Db::one('SELECT postText, imagePath FROM sns_post WHERE id = ?', [$id]);
         $miss = Sns::unfilledIn($row['postText']);
-        $hits = Sns::complianceHits($row['postText']);
         if ($miss) $unfilled[] = $st['name'] . '：' . implode(' ', $miss);
-        if ($approve && !$miss && !($ch === 'gbp' && $hits) && !($ch === 'ig' && !$row['imagePath'] && Sns::publishModeFor($st, 'ig') === 'api')) {
-            Db::exec('UPDATE sns_post SET status = ?, approvedAt = ?, approvedBy = ?, publishMode = ? WHERE id = ?', ['approved', Time::nowJstDateTime(), $s['code'], Sns::publishModeFor($st, $ch), $id]);
-        }
         $created[] = $st['name'];
     }
     if ($created) Db::exec('UPDATE sns_topic SET useCount = useCount + ?, lastUsedAt = ? WHERE id = ?', [count($created), Time::nowJstDateTime(), $t['id']]);
-    Http::json(['ok' => true, 'created' => count($created), 'skipped' => $skipped, 'unfilled' => $unfilled, 'approved' => $approve]);
+    Http::json(['ok' => true, 'created' => count($created), 'skipped' => $skipped, 'unfilled' => $unfilled]);
+}
+
+// ---------- 画像ライブラリ ----------
+function sns_media_get(): never
+{
+    $ctx = sns_ctx();
+    $rows = Db::all('SELECT * FROM sns_media WHERE storeId = ? OR storeId IS NULL ORDER BY (storeId IS NULL) ASC, createdAt DESC', [$ctx['store']['id']]);
+    Http::json(['store' => ['code' => $ctx['store']['code'], 'name' => $ctx['store']['name']], 'isHq' => $ctx['session']['role'] === 'hq', 'media' => array_map([Sns::class, 'mediaRow'], $rows)]);
+}
+
+/** 1 枚ずつアップロード（画面側で複数ファイルを順に送る）。{dataUrl, label?, channel?, shared?} */
+function sns_media_post(): never
+{
+    $ctx = sns_ctx();
+    Http::requireJson();
+    $b = Http::body();
+    $shared = ($b['shared'] ?? false) === true;
+    if ($shared && $ctx['session']['role'] !== 'hq') Http::error('全店共通の画像は本部だけが追加できます', 403);
+    $bin = sns_decode_jpeg((string)($b['dataUrl'] ?? ''));
+    $info = getimagesizefromstring($bin);
+    $dir = Sns::mediaDir();
+    if (!is_dir($dir) || !is_writable($dir)) Http::error('画像の保存先（public/media/sns）に書き込めません。フォルダの権限を確認してください', 500);
+    $id = Db::newId();
+    $name = 'lib-' . $id . '.jpg';
+    if (file_put_contents($dir . '/' . $name, $bin) === false) Http::error('画像を保存できませんでした', 500);
+    $ch = $b['channel'] ?? 'both';
+    if (!in_array($ch, ['ig', 'gbp', 'both'], true)) $ch = 'both';
+    Db::exec('INSERT INTO sns_media (id, storeId, path, label, channel, width, height) VALUES (?, ?, ?, ?, ?, ?, ?)', [$id, $shared ? null : $ctx['store']['id'], $name, Http::str($b, 'label', 100, false), $ch, (int)$info[0], (int)$info[1]]);
+    Http::json(['ok' => true, 'media' => Sns::mediaRow(Db::one('SELECT * FROM sns_media WHERE id = ?', [$id]))]);
+}
+
+/** メモ・媒体・使う／使わない・削除（まとめて削除は ids） */
+function sns_media_put(): never
+{
+    $ctx = sns_ctx();
+    Http::requireJson();
+    $b = Http::body();
+    $own = fn(array $m) => $m['storeId'] === null ? $ctx['session']['role'] === 'hq' : $m['storeId'] === $ctx['store']['id'];
+    $action = (string)($b['action'] ?? 'update');
+    if ($action === 'bulk_delete') {
+        $ids = array_values(array_filter($b['ids'] ?? [], 'is_string'));
+        $n = 0;
+        foreach ($ids ? Db::all('SELECT * FROM sns_media WHERE id IN (' . Db::inList($ids) . ')', $ids) : [] as $m) {
+            if (!$own($m)) continue;
+            @unlink(Sns::mediaDir() . '/' . basename($m['path']));
+            Db::exec('DELETE FROM sns_media WHERE id = ?', [$m['id']]);
+            $n++;
+        }
+        Http::json(['ok' => true, 'deleted' => $n]);
+    }
+    $m = Db::one('SELECT * FROM sns_media WHERE id = ?', [(string)($b['id'] ?? '')]);
+    if (!$m) Http::error('画像が見つかりません', 404);
+    if (!$own($m)) Http::error('forbidden', 403);
+    if ($action === 'delete') {
+        @unlink(Sns::mediaDir() . '/' . basename($m['path']));
+        Db::exec('DELETE FROM sns_media WHERE id = ?', [$m['id']]);
+        Http::json(['ok' => true]);
+    }
+    $label = array_key_exists('label', $b) ? Http::str($b, 'label', 100, false) : $m['label'];
+    $ch = in_array($b['channel'] ?? $m['channel'], ['ig', 'gbp', 'both'], true) ? ($b['channel'] ?? $m['channel']) : $m['channel'];
+    $active = array_key_exists('active', $b) ? Http::bool($b, 'active') : (bool)$m['active'];
+    Db::exec('UPDATE sns_media SET label = ?, channel = ?, active = ? WHERE id = ?', [$label, $ch, $active ? 1 : 0, $m['id']]);
+    Http::json(['ok' => true]);
 }
 
 // ---------- 店舗の設定 ----------
@@ -647,6 +761,10 @@ function hq_sns_settings_put(): never
             foreach ($groups as $g => $_) {
                 if (!isset($b['patterns'][$ch][$g]) || !is_array($b['patterns'][$ch][$g])) continue;
                 $list = array_values(array_filter(array_map(fn($s) => is_string($s) ? mb_substr(trim($s), 0, 400) : '', $b['patterns'][$ch][$g]), fn($s) => $s !== ''));
+                if ($ch === 'gbp') foreach ($list as $tpl) {
+                    $bad = array_merge(Sns::gbpForbiddenVarsIn($tpl), Sns::gbpInfoHits($tpl));
+                    if ($bad) Http::error('Google の文章の型に GBP に載っている情報（' . implode(' ', $bad) . '）は入れられません', 400);
+                }
                 if ($list) $patterns[$ch][$g] = $list;
             }
         }
