@@ -2,13 +2,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
-import { sendJson, type AccountRow, type Patterns, type Schedule } from '@/lib/sns';
+import { sendJson, type AccountRow, type Patterns, type Schedule, type VarDef } from '@/lib/sns';
 import SnsNav from '@/components/SnsNav';
 import SnsScheduleEditor from '@/components/SnsScheduleEditor';
 import { useAdmin } from '../Layout';
 
 interface StoreRow { code: string; name: string; active: boolean; igEnabled: boolean; gbpEnabled: boolean; igSchedule: string; gbpSchedule: string; area: string; ig: AccountRow | null; gbp: AccountRow | null; topics: number }
-interface Setting { forbiddenWords: string[]; patterns: Patterns; defaultIgSchedule: Schedule; defaultGbpSchedule: Schedule; daysAhead: number; remindHours: number; hashtagBase: string; lineTargets: string[] }
+interface Setting { forbiddenWords: string[]; patterns: Patterns; defaultIgSchedule: Schedule; defaultGbpSchedule: Schedule; daysAhead: number; remindHours: number; hashtagBase: string; lineTargets: string[]; customVars: VarDef[] }
 interface Resp {
   setting: Setting; stores: StoreRow[]; sharedTopics: number; google: AccountRow | null;
   configured: { ig: boolean; google: boolean; line: boolean; lineWebhook: boolean; mail: boolean; appUrl: boolean; cronSecret: boolean };
@@ -127,6 +127,23 @@ export default function SnsHqPage() {
           <label>承認待ちの通知を出す時間（予定の何時間前から） <input type="number" min={1} max={168} value={s.remindHours} onChange={(e) => setS({ ...s, remindHours: Number(e.target.value) })} className="w-20 rounded border px-2 py-1" /> 時間</label>
         </div>
         <label className="block">全店共通のハッシュタグ（店舗で指定が無いとき）<input value={s.hashtagBase} onChange={(e) => setS({ ...s, hashtagBase: e.target.value })} placeholder="#なつめ接骨院 #接骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
+        <div>
+          <div className="mb-1 font-bold">差し込み語の定義（店舗ごとに値が変わる言葉。定型投稿に {'{最寄駅}'} のように書く）</div>
+          <p className="mb-2 text-xs text-slate-500">{'{店舗名}'} {'{エリア}'} {'{電話}'} {'{予約URL}'} {'{月}'} {'{キーワード}'} {'{営業時間}'} {'{住所}'} {'{ハッシュタグ}'} は最初から使えます。ここで追加した項目は、各店舗の SNS 設定に入力欄が出ます。値が空の店舗には既定値が入ります。</p>
+          <table className="w-full text-xs"><thead><tr className="text-left text-slate-500"><th className="px-1">名前（{'{ }'} の中）</th><th className="px-1">説明（店舗の入力欄に出す）</th><th className="px-1">既定値（店舗が空のとき）</th><th></th></tr></thead>
+            <tbody>
+              {s.customVars.map((cv, i) => (
+                <tr key={i}>
+                  <td className="px-1 py-0.5"><input value={cv.key} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, key: e.target.value.replace(/[{}\s]/g, '') } : x) })} placeholder="最寄駅" className="w-full rounded border px-2 py-1" /></td>
+                  <td className="px-1 py-0.5"><input value={cv.label} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, label: e.target.value } : x) })} placeholder="最寄駅からの案内（例：沼津駅から徒歩5分）" className="w-full rounded border px-2 py-1" /></td>
+                  <td className="px-1 py-0.5"><input value={cv.default} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, default: e.target.value } : x) })} className="w-full rounded border px-2 py-1" /></td>
+                  <td className="px-1 py-0.5"><button type="button" onClick={() => setS({ ...s, customVars: s.customVars.filter((_, j) => j !== i) })} className="text-red-700 underline">削除</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button type="button" onClick={() => setS({ ...s, customVars: [...s.customVars, { key: '', label: '', default: '' }] })} className="mt-1 rounded border bg-white px-2 py-0.5 text-xs">＋ 項目を追加</button>
+        </div>
         <label className="block">広告規制で使わない語（読点・改行区切り。Google はこれが含まれると承認できない、Instagram は警告）<textarea value={s.forbiddenWords.join('、')} onChange={(e) => setS({ ...s, forbiddenWords: e.target.value.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean) })} rows={3} className="mt-1 w-full rounded border px-2 py-1" /></label>
         <details>
           <summary className="cursor-pointer font-bold">文章の型（書き出し・締め・キーワードの文）を編集</summary>

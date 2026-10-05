@@ -81,7 +81,7 @@ export default function SnsPostPage() {
           {p.imageUrl ? (
             <div>
               <img src={p.imageUrl} alt="投稿画像" className="w-full rounded border" />
-              <div className="mt-1 flex items-center gap-2 text-xs text-slate-500"><span>{p.imageKind === 'template' ? '定型画像' : '写真'}</span>{!locked && <button type="button" onClick={() => run(() => sendJson(`/api/admin/sns/posts/${id}/image`, 'POST', { remove: true }), '画像を外しました')} className="text-red-700 underline">画像を外す</button>}</div>
+              <div className="mt-1 flex items-center gap-2 text-xs text-slate-500"><span>{p.imageKind === 'template' ? '定型画像' : p.imageKind === 'topic' ? '定型投稿の画像' : '写真'}</span>{!locked && <button type="button" onClick={() => run(() => sendJson(`/api/admin/sns/posts/${id}/image`, 'POST', { remove: true }), '画像を外しました')} className="text-red-700 underline">画像を外す</button>}</div>
             </div>
           ) : <p className="text-xs text-slate-500">まだ画像がありません。下の定型画像を保存するか、写真を選んでください。</p>}
           {!locked && (
@@ -104,21 +104,29 @@ export default function SnsPostPage() {
             <span className="ml-auto text-xs text-slate-500">{(direct ?? p.fullText).length} / {p.maxLength} 文字</span>
           </div>
           {direct === null ? (
+            p.standalone ? (
+              <>
+                <p className="text-xs text-slate-500">定型投稿「{p.title || '（名前なし）'}」から作成。{'{店舗名}'} {'{エリア}'} などの差し込み語は保存時にこの店舗の値に置き換わります。</p>
+                <label className="block">投稿文（差し込み語入り）<textarea disabled={locked} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} rows={10} className="mt-1 w-full rounded border px-2 py-1" /></label>
+              </>
+            ) : (
             <>
               <label className="block">見出し<input disabled={locked} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} className="mt-1 w-full rounded border px-2 py-1" /></label>
               <label className="block">本文<textarea disabled={locked} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} rows={6} className="mt-1 w-full rounded border px-2 py-1" /></label>
               <label className="block">締めの一言<textarea disabled={locked} value={f.closing} onChange={(e) => setF({ ...f, closing: e.target.value })} rows={2} className="mt-1 w-full rounded border px-2 py-1" /></label>
               {p.channel === 'ig' && <label className="block">ハッシュタグ<input disabled={locked} value={f.hashtags} onChange={(e) => setF({ ...f, hashtags: e.target.value })} className="mt-1 w-full rounded border px-2 py-1" /></label>}
             </>
+            )
           ) : (
             <label className="block">投稿文（そのまま投稿されます）<textarea value={direct} onChange={(e) => setDirect(e.target.value)} rows={14} className="mt-1 w-full rounded border px-2 py-1 font-mono text-xs" /></label>
           )}
+          {p.unfilled.length > 0 && <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-800">埋まっていない差し込み語：{p.unfilled.join(' ')}。この店舗の <Link to={`/admin/sns/settings${me.session.role === 'hq' ? `?store=${data.store.code}` : ''}`} className="underline">SNS 設定</Link> で値を入れる（保存すると「別のネタ」や保存で組み立て直せます）か、本文から外してください。</p>}
           {liveHits.length > 0 && <p className={`rounded px-3 py-2 text-xs ${p.channel === 'gbp' ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-900'}`}>広告規制で使わない語：{liveHits.join('、')}{p.channel === 'gbp' ? '（Google はこのままでは承認できません）' : '（Instagram は注意。言い換えをおすすめします）'}</p>}
           {!locked && (
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" disabled={busy || !dirty} onClick={save} className="rounded bg-brand px-3 py-1 text-white disabled:opacity-40">保存</button>
-              <button type="button" disabled={busy} onClick={() => action('regenerate', {}, '別のパターンにしました')} className="rounded border bg-white px-3 py-1 disabled:opacity-50">別のパターン</button>
-              <button type="button" disabled={busy} onClick={() => action('retopic', {}, '別のネタにしました')} className="rounded border bg-white px-3 py-1 disabled:opacity-50">別のネタ</button>
+              {!p.standalone && <button type="button" disabled={busy} onClick={() => action('regenerate', {}, '別のパターンにしました')} className="rounded border bg-white px-3 py-1 disabled:opacity-50">別のパターン</button>}
+              <button type="button" disabled={busy} onClick={() => action('retopic', {}, '別の定型投稿にしました')} className="rounded border bg-white px-3 py-1 disabled:opacity-50">別の定型投稿</button>
               {direct === null ? <button type="button" onClick={() => setDirect(p.fullText)} className="rounded border bg-white px-3 py-1">投稿文を直接編集</button> : <button type="button" onClick={() => setDirect(null)} className="rounded border bg-white px-3 py-1">見出し・本文の編集に戻る</button>}
             </div>
           )}

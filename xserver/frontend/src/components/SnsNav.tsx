@@ -2,7 +2,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAdmin } from '@/pages/admin/Layout';
 
-const ITEMS: [string, string][] = [['/admin/sns', 'ホーム'], ['/admin/sns/posts', '投稿一覧'], ['/admin/sns/topics', 'ネタ'], ['/admin/sns/settings', '設定'], ['/admin/sns/insights', '分析']];
+const ITEMS: [string, string][] = [['/admin/sns', 'ホーム'], ['/admin/sns/posts', '投稿一覧'], ['/admin/sns/topics', '定型投稿'], ['/admin/sns/settings', '設定'], ['/admin/sns/insights', '分析']];
 
 export default function SnsNav({ title }: { title?: string }) {
   const { me } = useAdmin();

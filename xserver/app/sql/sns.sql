@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS `sns_setting` (
   `remindHours` INT NOT NULL DEFAULT 24,    -- 承認待ちの通知を何時間前から出すか
   `hashtagBase` VARCHAR(300) NOT NULL DEFAULT '',
   `lineTargets` LONGTEXT NOT NULL,          -- 通知先の LINE userId（JSON 配列）
+  `customVars` LONGTEXT NULL,               -- 店舗ごとに値を入れる差し込み語の定義（JSON：[{key, label, default}]。例 最寄駅・駐車場）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS `sns_store_setting` (
   `keywordsFixed` VARCHAR(300) NOT NULL DEFAULT '',     -- 毎回入れる検索キーワード（読点区切り）
   `keywordsRotation` VARCHAR(500) NOT NULL DEFAULT '',  -- 日替わりのキーワード
   `memo` TEXT NULL,                          -- 運用メモ（下書きを作る人・確認する人へのルール）
+  `vars` LONGTEXT NULL,                      -- 差し込み語の値（JSON：{key: value}。本部が定義した項目に店舗が値を入れる）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`storeId`),
   CONSTRAINT `fk_sss_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
@@ -55,13 +57,15 @@ CREATE TABLE IF NOT EXISTS `sns_account` (
   CONSTRAINT `fk_sa_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ネタ（見出し＋本文）。storeId が NULL なら全店共通
+-- 定型投稿（文章＋画像）。storeId が NULL なら全店共通。文章には {店舗名} {エリア} などの差し込み語を書ける
 CREATE TABLE IF NOT EXISTS `sns_topic` (
   `id` VARCHAR(32) NOT NULL,
   `storeId` VARCHAR(32) NULL,
   `channel` VARCHAR(5) NOT NULL DEFAULT 'both', -- ig / gbp / both
-  `title` VARCHAR(100) NOT NULL,
-  `body` TEXT NOT NULL,
+  `title` VARCHAR(100) NOT NULL,             -- 定型投稿の名前（一覧用。standalone のときは投稿文には入らない）
+  `body` TEXT NOT NULL,                      -- 投稿文（差し込み語入り）
+  `standalone` TINYINT(1) NOT NULL DEFAULT 1, -- 1: 本文をそのまま投稿文にする（差し込みのみ） / 0: 書き出し・締めの型で囲む
+  `imagePath` VARCHAR(200) NULL,             -- アップロードした画像（public/media/sns/）。下書きを作るときにコピーされる
   `months` VARCHAR(40) NOT NULL DEFAULT '',  -- 使う月（例 "12,1,2"）。空なら通年
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `useCount` INT NOT NULL DEFAULT 0,
@@ -88,8 +92,9 @@ CREATE TABLE IF NOT EXISTS `sns_post` (
   `hashtags` VARCHAR(500) NOT NULL DEFAULT '',
   `postText` TEXT NOT NULL,                 -- 実際に投稿する文章（本文＋締め＋タグなどを組み立てたもの）
   `patternIdx` INT NOT NULL DEFAULT 0,      -- 「別のパターン」で切り替える文章の型の番号
+  `standalone` TINYINT(1) NOT NULL DEFAULT 0, -- 1: 本文をそのまま投稿文にする（定型投稿）
   `imagePath` VARCHAR(200) NULL,            -- public/media/sns/ 以下のファイル名
-  `imageKind` VARCHAR(10) NOT NULL DEFAULT 'none', -- none / template / upload
+  `imageKind` VARCHAR(10) NOT NULL DEFAULT 'none', -- none / template / upload / topic（定型投稿の画像をコピー）
   `source` VARCHAR(10) NOT NULL DEFAULT 'auto',    -- auto（自動生成）/ manual（手で作成）
   `publishMode` VARCHAR(10) NOT NULL DEFAULT 'api', -- api / manual（Google の許可待ちなど）
   `approvedAt` DATETIME NULL,

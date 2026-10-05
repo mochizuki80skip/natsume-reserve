@@ -20,13 +20,30 @@ final class Sns
         self::$ensured = true;
         if (!$force) {
             $exists = Db::one("SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sns_job'");
-            if ($exists) return;
+            if ($exists) { self::ensureColumns(); return; }
         }
         $sql = file_get_contents(dirname(__DIR__) . '/sql/sns.sql');
         $sql = preg_replace('/^\s*--.*$/m', '', $sql);
         $pdo = Db::pdo();
         foreach (array_filter(array_map('trim', explode(';', $sql))) as $stmt) {
             if ($stmt !== '') $pdo->exec($stmt);
+        }
+        self::ensureColumns();
+    }
+
+    /** 後から追加した列が無ければ足す */
+    private static function ensureColumns(): void
+    {
+        $added = [
+            ['sns_setting', 'customVars', 'ALTER TABLE `sns_setting` ADD COLUMN `customVars` LONGTEXT NULL'],
+            ['sns_store_setting', 'vars', 'ALTER TABLE `sns_store_setting` ADD COLUMN `vars` LONGTEXT NULL'],
+            ['sns_topic', 'standalone', 'ALTER TABLE `sns_topic` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 1 AFTER `body`'],
+            ['sns_topic', 'imagePath', 'ALTER TABLE `sns_topic` ADD COLUMN `imagePath` VARCHAR(200) NULL AFTER `standalone`'],
+            ['sns_post', 'standalone', 'ALTER TABLE `sns_post` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 0 AFTER `patternIdx`'],
+        ];
+        foreach ($added as [$table, $col, $ddl]) {
+            $r = Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $col]);
+            if (!$r) Db::pdo()->exec($ddl);
         }
     }
 
@@ -99,14 +116,35 @@ final class Sns
             'remindHours' => (int)$r['remindHours'],
             'hashtagBase' => (string)$r['hashtagBase'],
             'lineTargets' => self::arr($r['lineTargets']),
+            'customVars' => self::parseCustomVars(isset($r['customVars']) && is_string($r['customVars']) ? json_decode($r['customVars'], true) : null),
         ];
     }
+
+    /** 差し込み語の定義（[{key, label, default}]）。key は {} の中に書く名前 */
+    public static function parseCustomVars(mixed $v): array
+    {
+        if (!is_array($v)) return [];
+        $out = [];
+        foreach ($v as $x) {
+            if (!is_array($x)) continue;
+            $key = trim((string)($x['key'] ?? ''));
+            if ($key === '' || mb_strlen($key) > 20 || preg_match('/[{}\s]/u', $key) || isset(self::BUILTIN_VARS[$key])) continue;
+            $out[$key] = ['key' => $key, 'label' => mb_substr(trim((string)($x['label'] ?? $key)), 0, 40) ?: $key, 'default' => mb_substr(trim((string)($x['default'] ?? '')), 0, 200)];
+        }
+        return array_values($out);
+    }
+
+    /** 最初から使える差し込み語と説明 */
+    public const BUILTIN_VARS = [
+        '店舗名' => '店舗設定の店舗名', 'エリア' => 'SNS 設定の地域（例：沼津市）', '地域' => '「エリア」と同じ', '電話' => '店舗設定の電話番号', '予約URL' => 'この店舗の WEB 予約ページ',
+        '月' => '投稿予定の月（数字）', 'キーワード' => 'SNS 設定の検索キーワード（毎回＋日替わり）', '営業時間' => 'SNS 設定の営業時間の表記', '住所' => 'SNS 設定の住所', 'ハッシュタグ' => 'SNS 設定のハッシュタグ（無ければ全店共通）',
+    ];
 
     public static function saveSetting(array $v): void
     {
         self::setting();
-        Db::exec('UPDATE sns_setting SET forbiddenWords = ?, patterns = ?, defaultIgSchedule = ?, defaultGbpSchedule = ?, daysAhead = ?, remindHours = ?, hashtagBase = ?, lineTargets = ? WHERE id = 1', [
-            self::j($v['forbiddenWords']), self::j($v['patterns']), self::j($v['defaultIgSchedule']), self::j($v['defaultGbpSchedule']), $v['daysAhead'], $v['remindHours'], $v['hashtagBase'], self::j($v['lineTargets'])]);
+        Db::exec('UPDATE sns_setting SET forbiddenWords = ?, patterns = ?, defaultIgSchedule = ?, defaultGbpSchedule = ?, daysAhead = ?, remindHours = ?, hashtagBase = ?, lineTargets = ?, customVars = ? WHERE id = 1', [
+            self::j($v['forbiddenWords']), self::j($v['patterns']), self::j($v['defaultIgSchedule']), self::j($v['defaultGbpSchedule']), $v['daysAhead'], $v['remindHours'], $v['hashtagBase'], self::j($v['lineTargets']), self::j($v['customVars'] ?? [])]);
         self::$setting = null;
     }
 
@@ -146,18 +184,32 @@ final class Sns
             'keywordsFixed' => (string)($r['keywordsFixed'] ?? ''),
             'keywordsRotation' => (string)($r['keywordsRotation'] ?? ''),
             'memo' => (string)($r['memo'] ?? ''),
+            'vars' => self::parseVars(isset($r['vars']) && is_string($r['vars']) ? json_decode($r['vars'], true) : null),
         ];
+    }
+
+    /** 店舗の差し込み語の値（{key: value}） */
+    public static function parseVars(mixed $v): array
+    {
+        if (!is_array($v)) return [];
+        $out = [];
+        foreach ($v as $k => $val) {
+            $k = trim((string)$k);
+            if ($k === '' || mb_strlen($k) > 20 || !is_scalar($val)) continue;
+            $out[$k] = mb_substr(trim((string)$val), 0, 200);
+        }
+        return $out;
     }
 
     public static function saveStoreSetting(string $storeId, array $v): void
     {
         self::ensureTables();
-        Db::exec('INSERT INTO sns_store_setting (storeId, igEnabled, igSchedule, gbpEnabled, gbpSchedule, area, address, hoursText, hashtags, keywordsFixed, keywordsRotation, memo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        Db::exec('INSERT INTO sns_store_setting (storeId, igEnabled, igSchedule, gbpEnabled, gbpSchedule, area, address, hoursText, hashtags, keywordsFixed, keywordsRotation, memo, vars)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE igEnabled = VALUES(igEnabled), igSchedule = VALUES(igSchedule), gbpEnabled = VALUES(gbpEnabled), gbpSchedule = VALUES(gbpSchedule), area = VALUES(area), address = VALUES(address),
-            hoursText = VALUES(hoursText), hashtags = VALUES(hashtags), keywordsFixed = VALUES(keywordsFixed), keywordsRotation = VALUES(keywordsRotation), memo = VALUES(memo)', [
+            hoursText = VALUES(hoursText), hashtags = VALUES(hashtags), keywordsFixed = VALUES(keywordsFixed), keywordsRotation = VALUES(keywordsRotation), memo = VALUES(memo), vars = VALUES(vars)', [
             $storeId, $v['igEnabled'] ? 1 : 0, $v['igSchedule'] === null ? null : self::j($v['igSchedule']), $v['gbpEnabled'] ? 1 : 0, $v['gbpSchedule'] === null ? null : self::j($v['gbpSchedule']),
-            $v['area'], $v['address'], $v['hoursText'], $v['hashtags'], $v['keywordsFixed'], $v['keywordsRotation'], $v['memo']]);
+            $v['area'], $v['address'], $v['hoursText'], $v['hashtags'], $v['keywordsFixed'], $v['keywordsRotation'], $v['memo'], self::j($v['vars'] ?? [])]);
     }
 
     // ---------- 頻度（スケジュール） ----------
@@ -235,21 +287,46 @@ final class Sns
     public static function placeholders(array $store, array $ss, string $scheduledAt, string $keyword = ''): array
     {
         $month = (int)substr($scheduledAt, 5, 2);
-        return [
+        $ph = [
             '{店舗名}' => $store['name'],
             '{地域}' => $ss['area'] !== '' ? $ss['area'] : '地域',
+            '{エリア}' => $ss['area'] !== '' ? $ss['area'] : '地域',
             '{電話}' => Text::formatJpPhone($store['phone']),
             '{予約URL}' => self::bookingUrl($store),
             '{月}' => (string)$month,
             '{キーワード}' => $keyword,
             '{営業時間}' => $ss['hoursText'],
             '{住所}' => $ss['address'],
+            '{ハッシュタグ}' => self::defaultHashtags($store, $ss),
         ];
+        // 本部が定義した差し込み語：店舗の値 → 無ければ既定値
+        foreach (self::setting()['customVars'] as $cv) {
+            $val = $ss['vars'][$cv['key']] ?? '';
+            $ph['{' . $cv['key'] . '}'] = $val !== '' ? $val : $cv['default'];
+        }
+        return $ph;
     }
 
+    /** 文章の中の {…} で、差し込み語として定義されていないもの */
+    public static function unknownPlaceholders(string $text, ?array $ph = null): array
+    {
+        $known = $ph !== null ? array_keys($ph) : array_merge(array_map(fn($k) => '{' . $k . '}', array_keys(self::BUILTIN_VARS)), array_map(fn($cv) => '{' . $cv['key'] . '}', self::setting()['customVars']));
+        preg_match_all('/\{[^{}\s]{1,20}\}/u', $text, $m);
+        return array_values(array_unique(array_filter($m[0], fn($x) => !in_array($x, $known, true))));
+    }
+
+    /** 店舗の値が空で既定値も無い差し込み語（投稿前の確認用） */
+    public static function emptyPlaceholders(string $text, array $ph): array
+    {
+        $out = [];
+        foreach ($ph as $k => $v) if ($v === '' && str_contains($text, $k)) $out[] = $k;
+        return $out;
+    }
+
+    /** 差し込み語を置き換える。値が空のものは置き換えずに残す（確認する人が気づけるように） */
     public static function fill(string $tpl, array $ph): string
     {
-        return strtr($tpl, $ph);
+        return strtr($tpl, array_filter($ph, fn($v) => $v !== ''));
     }
 
     public static function bookingUrl(array $store): string
@@ -286,15 +363,20 @@ final class Sns
      * 見出し・本文から投稿文を組み立てる。
      * @return array{fullText:string, closing:string, hashtags:string}
      */
-    public static function compose(string $channel, array $store, array $ss, string $scheduledAt, string $title, string $body, int $idx, ?string $closingOverride = null, ?string $hashtagsOverride = null): array
+    public static function compose(string $channel, array $store, array $ss, string $scheduledAt, string $title, string $body, int $idx, ?string $closingOverride = null, ?string $hashtagsOverride = null, bool $standalone = false): array
     {
         $p = self::setting()['patterns'][$channel];
         $idx = max(0, $idx);
-        $kw = $channel === 'gbp' ? self::keywordFor($ss, $idx) : '';
+        $kw = self::keywordFor($ss, $idx);
         $ph = self::placeholders($store, $ss, $scheduledAt, $kw);
+        if ($standalone) {
+            // 定型投稿：本文をそのまま投稿文にする（差し込み語だけ置き換える）
+            return ['fullText' => trim(self::fill(trim($body), $ph)), 'closing' => '', 'hashtags' => ''];
+        }
+        if ($channel !== 'gbp') $kw = '';
         $opening = self::fill($p['openings'][$idx % count($p['openings'])], $ph);
         $closing = $closingOverride ?? self::fill($p['closings'][$idx % count($p['closings'])], $ph);
-        $title = trim($title); $body = trim($body);
+        $title = self::fill(trim($title), $ph); $body = self::fill(trim($body), $ph);
         if ($channel === 'ig') {
             $hashtags = $hashtagsOverride ?? self::defaultHashtags($store, $ss);
             $parts = [$opening, ($title !== '' ? "■{$title}\n" : '') . $body, $closing, $hashtags];
@@ -355,7 +437,9 @@ final class Sns
     public static function topicRow(array $r): array
     {
         return ['id' => $r['id'], 'storeId' => $r['storeId'], 'shared' => $r['storeId'] === null, 'channel' => $r['channel'], 'title' => $r['title'], 'body' => $r['body'],
-            'months' => $r['months'], 'active' => (bool)$r['active'], 'useCount' => (int)$r['useCount'], 'lastUsedAt' => $r['lastUsedAt'], 'sortOrder' => (int)$r['sortOrder']];
+            'standalone' => (bool)($r['standalone'] ?? 1), 'imageUrl' => !empty($r['imagePath']) ? self::mediaUrl($r['imagePath']) : null,
+            'months' => $r['months'], 'active' => (bool)$r['active'], 'useCount' => (int)$r['useCount'], 'lastUsedAt' => $r['lastUsedAt'], 'sortOrder' => (int)$r['sortOrder'],
+            'unknownPlaceholders' => self::unknownPlaceholders($r['body'])];
     }
 
     // ---------- 下書きの自動生成 ----------
@@ -397,11 +481,23 @@ final class Sns
     {
         $title = $topic ? $topic['title'] : $title;
         $body = $topic ? $topic['body'] : $body;
-        $c = self::compose($channel, $store, $ss, $scheduledAt, $title, $body, $idx);
+        $standalone = $topic ? (bool)($topic['standalone'] ?? 1) : false;
+        $c = self::compose($channel, $store, $ss, $scheduledAt, $title, $body, $idx, null, null, $standalone);
         $id = Db::newId();
-        Db::exec('INSERT INTO sns_post (id, storeId, channel, scheduledAt, status, topicId, title, body, closing, hashtags, postText, patternIdx, source, publishMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-            $id, $store['id'], $channel, $scheduledAt, 'draft', $topic['id'] ?? null, $title, $body, $c['closing'], $c['hashtags'], $c['fullText'], $idx, $source, self::publishModeFor($store, $channel)]);
+        [$imagePath, $imageKind] = self::copyTopicImage($topic, $id);
+        Db::exec('INSERT INTO sns_post (id, storeId, channel, scheduledAt, status, topicId, title, body, closing, hashtags, postText, patternIdx, standalone, imagePath, imageKind, source, publishMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            $id, $store['id'], $channel, $scheduledAt, 'draft', $topic['id'] ?? null, $title, $body, $c['closing'], $c['hashtags'], $c['fullText'], $idx, $standalone ? 1 : 0, $imagePath, $imageKind, $source, self::publishModeFor($store, $channel)]);
         return $id;
+    }
+
+    /** 定型投稿の画像を下書き用にコピーする（下書きを消しても定型投稿の画像は残る）。@return array{0:?string,1:string} */
+    public static function copyTopicImage(?array $topic, string $postId): array
+    {
+        if (!$topic || empty($topic['imagePath'])) return [null, 'none'];
+        $src = self::mediaDir() . '/' . basename($topic['imagePath']);
+        if (!is_file($src)) return [null, 'none'];
+        $name = $postId . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.jpg';
+        return @copy($src, self::mediaDir() . '/' . $name) ? [$name, 'topic'] : [null, 'none'];
     }
 
     /** API で投稿できる状態なら api、そうでなければ manual（手動投稿の補助） */
@@ -466,7 +562,8 @@ final class Sns
         return [
             'id' => $r['id'], 'storeId' => $r['storeId'], 'storeCode' => $r['storeCode'] ?? null, 'storeName' => $r['storeName'] ?? null,
             'channel' => $r['channel'], 'scheduledAt' => substr($r['scheduledAt'], 0, 16), 'status' => $r['status'], 'topicId' => $r['topicId'],
-            'title' => $r['title'], 'body' => $r['body'], 'closing' => $r['closing'], 'hashtags' => $r['hashtags'], 'fullText' => $r['postText'], 'patternIdx' => (int)$r['patternIdx'],
+            'title' => $r['title'], 'body' => $r['body'], 'closing' => $r['closing'], 'hashtags' => $r['hashtags'], 'fullText' => $r['postText'], 'patternIdx' => (int)$r['patternIdx'], 'standalone' => (bool)($r['standalone'] ?? 0),
+            'unfilled' => self::unfilledIn($r['postText']),
             'imageUrl' => $r['imagePath'] ? self::mediaUrl($r['imagePath']) : null, 'imageKind' => $r['imageKind'], 'source' => $r['source'], 'publishMode' => $r['publishMode'],
             'approvedAt' => $r['approvedAt'], 'approvedBy' => $r['approvedBy'], 'postedAt' => $r['postedAt'], 'externalId' => $r['externalId'], 'permalink' => $r['permalink'], 'error' => $r['error'],
             'length' => mb_strlen($r['postText']), 'maxLength' => self::MAX_LEN[$r['channel']] ?? 2200,
@@ -474,6 +571,13 @@ final class Sns
             'stat' => $stat ? ['reach' => $stat['reach'], 'likes' => $stat['likes'], 'comments' => $stat['comments'], 'saved' => $stat['saved'], 'shares' => $stat['shares'], 'views' => $stat['views'], 'fetchedAt' => $stat['fetchedAt']] : null,
             'createdAt' => $r['createdAt'], 'updatedAt' => $r['updatedAt'],
         ];
+    }
+
+    /** 投稿文に残っている {…}（値が空で埋まらなかった、または未定義の差し込み語） */
+    public static function unfilledIn(string $text): array
+    {
+        preg_match_all('/\{[^{}\s]{1,20}\}/u', $text, $m);
+        return array_values(array_unique($m[0]));
     }
 
     public static function mediaUrl(string $path): string

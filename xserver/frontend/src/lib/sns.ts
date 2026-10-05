@@ -16,15 +16,17 @@ export interface PostStat { reach: number | null; likes: number | null; comments
 export interface Post {
   id: string; storeId: string; storeCode: string | null; storeName: string | null; channel: Channel; scheduledAt: string; status: PostStatus; topicId: string | null;
   title: string; body: string; closing: string; hashtags: string; fullText: string; patternIdx: number;
-  imageUrl: string | null; imageKind: 'none' | 'template' | 'upload'; source: 'auto' | 'manual'; publishMode: 'api' | 'manual';
+  imageUrl: string | null; imageKind: 'none' | 'template' | 'upload' | 'topic'; source: 'auto' | 'manual'; publishMode: 'api' | 'manual';
   approvedAt: string | null; approvedBy: string | null; postedAt: string | null; externalId: string | null; permalink: string | null; error: string | null;
   length: number; maxLength: number; compliance: { hits: string[]; blocking: boolean }; stat: PostStat | null; createdAt: string; updatedAt: string;
+  standalone: boolean; unfilled: string[];
 }
-export interface Topic { id: string; storeId: string | null; shared: boolean; channel: Channel | 'both'; title: string; body: string; months: string; active: boolean; useCount: number; lastUsedAt: string | null; sortOrder: number }
+export interface Topic { id: string; storeId: string | null; shared: boolean; channel: Channel | 'both'; title: string; body: string; standalone: boolean; imageUrl: string | null; months: string; active: boolean; useCount: number; lastUsedAt: string | null; sortOrder: number; unknownPlaceholders: string[] }
+export interface VarDef { key: string; label: string; default: string }
 export interface AccountRow { channel: Channel; externalId: string; username: string; locationName: string; connected: boolean; tokenExpiresAt: string | null; tokenRefreshedAt: string | null; lastError: string | null; updatedAt: string }
 export interface StoreSetting {
   igEnabled: boolean; igSchedule: Schedule | null; gbpEnabled: boolean; gbpSchedule: Schedule | null; effectiveIgSchedule: Schedule; effectiveGbpSchedule: Schedule;
-  area: string; address: string; hoursText: string; hashtags: string; keywordsFixed: string; keywordsRotation: string; memo: string;
+  area: string; address: string; hoursText: string; hashtags: string; keywordsFixed: string; keywordsRotation: string; memo: string; vars: Record<string, string>;
 }
 export interface Patterns { ig: { openings: string[]; closings: string[] }; gbp: { openings: string[]; keywordLines: string[]; closings: string[] } }
 

@@ -2,14 +2,14 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
-import { describeSchedule, sendJson, type AccountRow, type Channel, type Patterns, type Schedule, type StoreSetting } from '@/lib/sns';
+import { describeSchedule, sendJson, type AccountRow, type Channel, type Patterns, type Schedule, type StoreSetting, type VarDef } from '@/lib/sns';
 import SnsNav from '@/components/SnsNav';
 import SnsScheduleEditor from '@/components/SnsScheduleEditor';
 import { useAdmin } from '../Layout';
 
 interface Resp {
   store: { code: string; name: string; phone: string; bookingUrl: string }; setting: StoreSetting;
-  defaults: { igSchedule: Schedule; gbpSchedule: Schedule; hashtagBase: string; daysAhead: number }; patterns: Patterns;
+  defaults: { igSchedule: Schedule; gbpSchedule: Schedule; hashtagBase: string; daysAhead: number }; patterns: Patterns; customVars: VarDef[];
   accounts: { ig: AccountRow | null; gbp: AccountRow | null }; igConfigured: boolean; googleConnected: boolean; isHq: boolean; baseUrl: string; appUrlSet: boolean;
 }
 
@@ -74,8 +74,18 @@ export default function SnsSettingsPage() {
             <label className="block">Instagram のハッシュタグ（空なら全店共通：{data.defaults.hashtagBase || '店名・#接骨院・#地域'}）<input value={f.hashtags} onChange={str('hashtags')} placeholder="#なつめ接骨院 #沼津 #接骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">Google：毎回入れる検索キーワード（読点区切り）<input value={f.keywordsFixed} onChange={str('keywordsFixed')} placeholder="接骨院、整骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">Google：日替わりで入れるキーワード（読点区切り。1 投稿に 1 つ）<input value={f.keywordsRotation} onChange={str('keywordsRotation')} placeholder="腰痛、肩こり、交通事故、スポーツのケガ" className="mt-1 w-full rounded border px-2 py-1" /></label>
+            {data.customVars.length > 0 && (
+              <div className="rounded border p-3">
+                <div className="mb-1 font-bold">この店舗の差し込み語（定型投稿の {'{…}'} に入る言葉）</div>
+                <p className="mb-2 text-xs text-slate-500">本部が定義した項目です。空にすると既定値が入り、既定値も無ければ {'{…}'} のまま残って承認できません。</p>
+                {data.customVars.map((cv) => (
+                  <label key={cv.key} className="mb-1 flex flex-wrap items-center gap-2"><span className="w-40"><code className="rounded bg-slate-100 px-1">{`{${cv.key}}`}</code> {cv.label}</span>
+                    <input value={f.vars[cv.key] ?? ''} onChange={(e) => setF({ ...f, vars: { ...f.vars, [cv.key]: e.target.value } })} placeholder={cv.default ? `既定：${cv.default}` : '未設定'} className="min-w-64 flex-1 rounded border px-2 py-1" /></label>
+                ))}
+              </div>
+            )}
             <label className="block">運用メモ（下書きを確認する人が毎回見るルール。例：料金は書かない、絵文字なし）<textarea value={f.memo} onChange={str('memo')} rows={3} className="mt-1 w-full rounded border px-2 py-1" /></label>
-            <div className="text-xs text-slate-500">電話番号 {data.store.phone}・WEB予約 URL {data.store.bookingUrl} は店舗設定から自動で入ります。文章の型（書き出し・締め）は本部の SNS 管理で編集します。</div>
+            <div className="text-xs text-slate-500">差し込み語：{'{店舗名}'}＝{data.store.name}、{'{エリア}'}＝地域、{'{電話}'}＝{data.store.phone}、{'{予約URL}'}＝{data.store.bookingUrl}、{'{営業時間}'} {'{住所}'} {'{ハッシュタグ}'} {'{キーワード}'} はこの画面の値。文章の型（書き出し・締め）と差し込み語の項目は本部の SNS 管理で編集します。</div>
           </section>
           <div className="flex flex-wrap items-center gap-2">
             <button className="rounded bg-brand px-4 py-1.5 text-white">保存</button>

@@ -12,18 +12,20 @@ interface Resp {
   now: string; daysAhead: number; lastJob: { k: string; ranAt: string } | null; baseUrlOk: boolean; notify: string;
 }
 
-export function PostList({ posts, empty, showStore }: { posts: Post[]; empty: string; showStore: boolean }) {
+export function PostList({ posts, empty, showStore, sel, onSel }: { posts: Post[]; empty: string; showStore: boolean; sel?: Set<string>; onSel?: (id: string, on: boolean) => void }) {
   if (posts.length === 0) return <p className="px-2 py-3 text-sm text-slate-500">{empty}</p>;
   return (
     <table className="w-full text-sm">
       <tbody>
         {posts.map((p) => (
           <tr key={p.id} className="border-t">
+            {sel && onSel && <td className="w-8 px-2 py-1"><input type="checkbox" checked={sel.has(p.id)} onChange={(e) => onSel(p.id, e.target.checked)} /></td>}
             <td className="whitespace-nowrap px-2 py-1 tabular-nums">{formatScheduled(p.scheduledAt)}</td>
             {showStore && <td className="whitespace-nowrap px-2 py-1">{p.storeName}</td>}
             <td className="whitespace-nowrap px-2 py-1"><span className={`rounded px-1.5 text-xs ${p.channel === 'ig' ? 'bg-pink-100 text-pink-800' : 'bg-emerald-100 text-emerald-800'}`}>{CHANNEL_JA[p.channel]}</span></td>
             <td className="px-2 py-1"><Link to={`/admin/sns/posts/${p.id}`} className="text-brand underline">{p.title || p.body.slice(0, 24) || '（本文なし）'}</Link>
               {p.compliance.hits.length > 0 && <span className="ml-2 rounded bg-red-100 px-1.5 text-xs text-red-800" title={p.compliance.hits.join('、')}>要確認：{p.compliance.hits.join('、')}</span>}
+              {p.unfilled.length > 0 && <span className="ml-2 rounded bg-red-100 px-1.5 text-xs text-red-800">未入力：{p.unfilled.join(' ')}</span>}
               {p.channel === 'ig' && !p.imageUrl && p.status !== 'posted' && <span className="ml-2 rounded bg-amber-100 px-1.5 text-xs text-amber-800">画像なし</span>}
             </td>
             <td className="whitespace-nowrap px-2 py-1"><span className={`rounded px-1.5 text-xs ${STATUS_CLASS[p.status]}`}>{STATUS_JA[p.status]}</span>{p.publishMode === 'manual' && p.status !== 'posted' && <span className="ml-1 text-xs text-slate-500">手動</span>}</td>
@@ -39,7 +41,17 @@ export default function SnsHomePage() {
   const { data, error, reload } = useFetch<Resp>('/api/admin/sns/home');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const isHq = me.session.role === 'hq';
+  const onSel = (id: string, on: boolean) => { const n = new Set(sel); if (on) n.add(id); else n.delete(id); setSel(n); };
+  async function bulkApprove() {
+    if (sel.size === 0 || !confirm(`${sel.size} 件を承認しますか？内容は確認済みですか？`)) return;
+    setBusy(true);
+    const errs: string[] = [];
+    for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'approve' }); } catch (e) { errs.push((e as Error).message); } }
+    setMsg(errs.length ? `承認できなかったものがあります：${errs.slice(0, 3).join(' / ')}` : `${sel.size} 件を承認しました`);
+    setSel(new Set()); setBusy(false); reload();
+  }
   async function generate(all: boolean) {
     setBusy(true); setMsg('');
     try {
@@ -61,12 +73,15 @@ export default function SnsHomePage() {
         <button type="button" disabled={busy} onClick={() => generate(false)} className="rounded border bg-white px-3 py-1 disabled:opacity-50">{isHq ? 'この店舗の' : ''}下書きを今すぐ作る</button>
         {isHq && <button type="button" disabled={busy} onClick={() => generate(true)} className="rounded border bg-white px-3 py-1 disabled:opacity-50">全店舗の下書きを作る</button>}
         <Link to="/admin/sns/posts?new=1" className="rounded border bg-white px-3 py-1">手で下書きを追加</Link>
+        {isHq && <Link to="/admin/sns/topics" className="rounded border bg-white px-3 py-1">定型投稿を全店舗に一斉配信</Link>}
         <span className="ml-auto text-xs text-slate-500">通知：{data.notify}{data.lastJob && `　最終の自動処理：${data.lastJob.ranAt.slice(5, 16)}`}</span>
       </div>
       {soon.length > 0 && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">今日までに予定の未承認 {soon.length} 件があります。承認していない下書きは投稿されません。</p>}
       <section className="rounded border bg-white">
-        <h2 className="border-b px-3 py-2 font-bold">承認待ちの下書き（近い日付順）<span className="ml-2 text-sm font-normal text-slate-500">{data.pending.length} 件</span></h2>
-        <PostList posts={data.pending} empty="承認待ちはありません" showStore={isHq} />
+        <h2 className="flex items-center gap-2 border-b px-3 py-2 font-bold">承認待ちの下書き（近い日付順）<span className="text-sm font-normal text-slate-500">{data.pending.length} 件</span>
+          {data.pending.length > 0 && <span className="ml-auto flex items-center gap-2 text-xs font-normal"><label className="flex items-center gap-1"><input type="checkbox" checked={sel.size > 0 && sel.size === data.pending.length} onChange={(e) => setSel(e.target.checked ? new Set(data.pending.map((p) => p.id)) : new Set())} />すべて選択</label><button type="button" disabled={busy || sel.size === 0} onClick={bulkApprove} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択を承認</button></span>}
+        </h2>
+        <PostList posts={data.pending} empty="承認待ちはありません" showStore={isHq} sel={sel} onSel={onSel} />
       </section>
       {data.manual.length > 0 && (
         <section className="rounded border bg-white">
@@ -93,7 +108,7 @@ export default function SnsHomePage() {
                 <td className="px-2 py-1">{isHq ? <Link to={`/admin/sns/posts?store=${s.code}`} className="text-brand underline">投稿一覧</Link> : <Link to="/admin/sns/posts" className="text-brand underline">投稿一覧</Link>}</td>
               </tr>
             ))}
-            {data.byStore.length === 0 && <tr><td colSpan={4} className="px-2 py-3 text-slate-500">まだ下書きがありません。「設定」で Instagram／Google を有効にし、「ネタ」を登録すると、毎朝自動で下書きができます。</td></tr>}
+            {data.byStore.length === 0 && <tr><td colSpan={4} className="px-2 py-3 text-slate-500">まだ下書きがありません。「設定」で Instagram／Google を有効にし、「定型投稿」を登録すると、毎朝自動で下書きができます。</td></tr>}
           </tbody>
         </table>
       </section>

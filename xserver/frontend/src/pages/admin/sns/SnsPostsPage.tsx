@@ -145,7 +145,7 @@ function NewDraftForm({ storeQ, today, onDone }: { storeQ: string; today: string
         <select value={f.channel} onChange={(e) => setF({ ...f, channel: e.target.value as Channel })} className="rounded border px-2 py-1">{CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_JA[c]}</option>)}</select>
         <input type="datetime-local" value={f.scheduledAt} onChange={(e) => setF({ ...f, scheduledAt: e.target.value })} required className="rounded border px-2 py-1" />
         <select value={f.topicId} onChange={(e) => setF({ ...f, topicId: e.target.value })} className="rounded border px-2 py-1">
-          <option value="">ネタを選ばず本文を書く</option>
+          <option value="">定型投稿を使わず本文を書く</option>
           {list.map((t) => <option key={t.id} value={t.id}>{t.shared ? '［共通］' : ''}{t.title || t.body.slice(0, 20)}（使用 {t.useCount} 回）</option>)}
         </select>
       </div>
