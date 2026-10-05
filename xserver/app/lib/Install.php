@@ -15,6 +15,7 @@ final class Install
             if ($stmt !== '') $pdo->exec($stmt);
         }
         Jibai::ensureTables(true);
+        Sns::ensureTables(true);
         $log[] = 'テーブルを作成（または確認）しました';
 
         Settings::global();

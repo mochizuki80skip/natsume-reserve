@@ -7,6 +7,7 @@ require_once __DIR__ . '/handlers/admin.php';
 require_once __DIR__ . '/handlers/hq.php';
 require_once __DIR__ . '/handlers/misc.php';
 require_once __DIR__ . '/handlers/jibai.php';
+require_once __DIR__ . '/handlers/sns.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -61,6 +62,37 @@ function route_table(): array
         ['PUT', '#^/api/admin/jibai/verify$#', 'jibai_verify'],
         ['GET', '#^/api/admin/hq/jibai$#', 'hq_jibai'],
         ['PUT', '#^/api/admin/hq/jibai/settings$#', 'hq_jibai_settings_put'],
+        // SNS 投稿管理（Instagram・Google ビジネスプロフィール）
+        ['GET', '#^/api/admin/sns/home$#', 'sns_home'],
+        ['GET', '#^/api/admin/sns/posts$#', 'sns_posts_get'],
+        ['POST', '#^/api/admin/sns/posts$#', 'sns_posts_post'],
+        ['GET', '#^/api/admin/sns/posts/([0-9a-f]{24})$#', 'sns_post_get'],
+        ['PUT', '#^/api/admin/sns/posts/([0-9a-f]{24})$#', 'sns_post_put'],
+        ['POST', '#^/api/admin/sns/posts/([0-9a-f]{24})/action$#', 'sns_post_action'],
+        ['POST', '#^/api/admin/sns/posts/([0-9a-f]{24})/image$#', 'sns_post_image'],
+        ['POST', '#^/api/admin/sns/generate$#', 'sns_generate'],
+        ['GET', '#^/api/admin/sns/topics$#', 'sns_topics_get'],
+        ['POST', '#^/api/admin/sns/topics$#', 'sns_topics_post'],
+        ['PUT', '#^/api/admin/sns/topics$#', 'sns_topics_put'],
+        ['GET', '#^/api/admin/sns/settings$#', 'sns_settings_get'],
+        ['PUT', '#^/api/admin/sns/settings$#', 'sns_settings_put'],
+        ['POST', '#^/api/admin/sns/preview$#', 'sns_preview'],
+        ['GET', '#^/api/admin/sns/insights$#', 'sns_insights'],
+        ['GET', '#^/api/admin/sns/insights/export$#', 'sns_insights_export'],
+        ['POST', '#^/api/admin/sns/reviews/reply$#', 'sns_review_reply'],
+        ['GET', '#^/api/admin/sns/ig/connect$#', 'sns_ig_connect'],
+        ['POST', '#^/api/admin/sns/ig/token$#', 'sns_ig_token_post'],
+        ['GET', '#^/api/sns/ig/callback$#', 'sns_ig_callback'],
+        ['GET', '#^/api/admin/sns/google/connect$#', 'sns_google_connect'],
+        ['GET', '#^/api/sns/google/callback$#', 'sns_google_callback'],
+        ['GET', '#^/api/admin/hq/sns$#', 'hq_sns_get'],
+        ['PUT', '#^/api/admin/hq/sns/settings$#', 'hq_sns_settings_put'],
+        ['POST', '#^/api/admin/hq/sns/notify-test$#', 'hq_sns_notify_test'],
+        ['POST', '#^/api/admin/hq/sns/run-cron$#', 'hq_sns_run_cron'],
+        ['GET', '#^/api/admin/hq/sns/google/locations$#', 'hq_sns_google_locations'],
+        ['PUT', '#^/api/admin/hq/sns/google/map$#', 'hq_sns_google_map'],
+        ['POST', '#^/api/sns/line-webhook$#', 'sns_line_webhook'],
+        ['GET', '#^/api/cron/sns$#', 'cron_sns'],
         // 自動削除・初期設定
         ['GET', '#^/api/cron/cleanup$#', 'cron_cleanup'],
         ['GET', '#^/install$#', 'install_page'],

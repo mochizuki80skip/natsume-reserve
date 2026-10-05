@@ -83,7 +83,12 @@ WordPress と同じドメインの中に置いても、お互いに影響しな�
 | INSTALL_TOKEN | 初期設定ページ用の合言葉（適当な英数字） |
 | CRON_SECRET | 自動削除用の合言葉（適当な英数字） |
 | TWILIO_* | SMS を使う場合のみ。使わなければ空のまま |
-| APP_URL | 予約システムの正式な URL（例：`https://yoyaku.hachimaru-80skip.com`）。それ以外の URL で開かれたら転送する |
+| APP_URL | 予約システムの正式な URL（例：`https://yoyaku.hachimaru-80skip.com`）。それ以外の URL で開かれたら転送する。**SNS 投稿管理では必須**（画像の公開 URL・連携の戻り先） |
+| IG_APP_ID / IG_APP_SECRET | SNS 投稿管理で Instagram に自動投稿する場合（Meta for Developers のアプリ）。空なら手動投稿の補助だけ |
+| GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET | 同 Google ビジネスプロフィール（Google Cloud の OAuth クライアント）。空なら手動投稿の補助だけ |
+| LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET | SNS 投稿の通知を LINE で受ける場合（LINE 公式アカウントの Messaging API） |
+| NOTIFY_EMAIL / NOTIFY_FROM | LINE を使わないときの通知メール（カンマ区切りで複数可） |
+| SNS_SECRET | 連携トークンの暗号化の鍵（省略時は SESSION_SECRET から作る） |
 
 ## 4. 初期設定（テーブル作成）
 
@@ -110,6 +115,19 @@ https://〇〇.jp/install?token=INSTALL_TOKEN
 
 保持日数（既定 60 日）は本部画面の「個人情報の保持日数」で変えられます。
 同じ Cron で、自賠請求の明細の氏名も保持期間（既定 180 日、本部「自賠集計」で変更）を過ぎた月から自動で消えます（金額は残ります）。
+
+## 5-1. SNS 投稿の自動処理（Cron）
+
+SNS 投稿管理（Instagram・Google ビジネスプロフィールの下書き作成・予約投稿・数字の取り込み）を使う場合は、
+同じ「Cron設定」で **5〜10 分おき** に次のコマンドも登録します（分の欄に `*/10` など）。
+
+```
+/usr/bin/curl -s "https://〇〇.jp/api/cron/sns?token=CRON_SECRET" > /dev/null
+```
+
+- 承認済みの下書きを予定時刻に投稿する／毎朝 6 時以降に先の下書きを作る／9 時以降に承認待ちを通知する／5 時以降に数字を取り込む、を 1 つの処理で行います。
+- 投稿の画像は `public/media/sns/` に保存されます（自動更新で消えません）。フォルダが作れない場合は手動で作り、書き込み権限（755）を付けてください。
+- 連携の手順・画面の説明は [docs/SNS.md](../docs/SNS.md) を参照してください。
 
 ## 5-2. 自賠請求の速報集計（月末の売上をその日に把握する）
 
@@ -204,7 +222,11 @@ curl "http://127.0.0.1:3003/install?token=..."  # テーブル作成
 npm test                                        # 単体テスト
 BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... node ../e2e/smoke.mjs   # ブラウザでの一通り確認
 BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... SHOT=請求書画面.png node ../e2e/jibai.mjs   # 自賠請求：スクショ読み取り〜本部集計
+node ../e2e/sns-mock.mjs &                      # SNS：Instagram・Google・LINE の代わりをするサーバー（config.php に SNS_API_MOCK を設定）
+BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... node ../e2e/sns.mjs     # SNS 投稿管理の画面を一通り確認
 ```
+
+SNS の確認では PHP を `PHP_CLI_SERVER_WORKERS=4 php -S ...` のように複数プロセスで起動してください（模擬の Instagram が画像を取りに来るため）。
 
 `npm run build` は OCR エンジン（tesseract.js の worker と wasm）を `public/tesseract/` にコピーしてから画面をビルドします。
 

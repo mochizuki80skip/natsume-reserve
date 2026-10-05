@@ -12,13 +12,15 @@ final class Config
         $file = dirname(__DIR__) . '/config.php';
         $cfg = is_file($file) ? (require $file) : [];
         $keys = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASS', 'SESSION_SECRET', 'HQ_PASSWORD', 'INSTALL_TOKEN', 'CRON_SECRET',
-            'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'APP_ENV', 'APP_URL'];
+            'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'APP_ENV', 'APP_URL',
+            'SNS_SECRET', 'IG_APP_ID', 'IG_APP_SECRET', 'IG_API_VERSION', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'NOTIFY_EMAIL', 'NOTIFY_FROM', 'SNS_API_MOCK'];
         foreach ($keys as $k) {
             $env = getenv($k);
             if (($cfg[$k] ?? '') === '' && $env !== false) $cfg[$k] = $env;
         }
         $cfg += ['DB_HOST' => 'localhost', 'DB_PORT' => 3306, 'DB_NAME' => '', 'DB_USER' => '', 'DB_PASS' => '', 'SESSION_SECRET' => '', 'HQ_PASSWORD' => '',
-            'INSTALL_TOKEN' => '', 'CRON_SECRET' => '', 'TWILIO_ACCOUNT_SID' => '', 'TWILIO_AUTH_TOKEN' => '', 'TWILIO_FROM' => '', 'APP_ENV' => 'production', 'APP_URL' => ''];
+            'INSTALL_TOKEN' => '', 'CRON_SECRET' => '', 'TWILIO_ACCOUNT_SID' => '', 'TWILIO_AUTH_TOKEN' => '', 'TWILIO_FROM' => '', 'APP_ENV' => 'production', 'APP_URL' => '',
+            'SNS_SECRET' => '', 'IG_APP_ID' => '', 'IG_APP_SECRET' => '', 'IG_API_VERSION' => 'v23.0', 'GOOGLE_CLIENT_ID' => '', 'GOOGLE_CLIENT_SECRET' => '', 'LINE_CHANNEL_ACCESS_TOKEN' => '', 'LINE_CHANNEL_SECRET' => '', 'NOTIFY_EMAIL' => '', 'NOTIFY_FROM' => '', 'SNS_API_MOCK' => ''];
         return self::$cfg = $cfg;
     }
 

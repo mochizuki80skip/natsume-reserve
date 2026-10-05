@@ -5,3 +5,5 @@ public/index.html
 public/assets/
 e2e/out-*.png
 public/tesseract/
+public/media/*
+!public/media/.gitkeep

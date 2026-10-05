@@ -42,6 +42,7 @@ export default function AdminLayout() {
             <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
             <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
             <Link to="/admin/story" className="hover:underline">ストーリー画像</Link>
+            <Link to="/admin/sns" className="hover:underline">SNS投稿</Link>
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
             {me.session.role === 'hq' && <Link to="/admin/hq/overview" className="hover:underline">全店状況</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}

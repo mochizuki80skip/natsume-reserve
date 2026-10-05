@@ -68,5 +68,6 @@ jobs:
             mkdir -p '$DIR/app'"
           # 予約システムのフォルダの中だけを更新する（config.php はサーバー側のものを残す）
           rsync -az --delete --exclude 'config.php' -e "$SSH" xserver/app/ "$USER@$HOST:$DIR/app/"
-          rsync -az --delete --exclude '/app/' -e "$SSH" xserver/public/ "$USER@$HOST:$DIR/"
+          # /media/ は管理画面からアップロードした SNS 投稿の画像なので消さない
+          rsync -az --delete --exclude '/app/' --exclude '/media/' -e "$SSH" xserver/public/ "$USER@$HOST:$DIR/"
           echo "deployed to $HOST:$DIR"

@@ -18,6 +18,13 @@ import OverviewPage from './pages/admin/OverviewPage';
 import JibaiPage from './pages/admin/JibaiPage';
 import JibaiHqPage from './pages/admin/JibaiHqPage';
 import StoryPage from './pages/admin/StoryPage';
+import SnsHomePage from './pages/admin/sns/SnsHomePage';
+import SnsPostsPage from './pages/admin/sns/SnsPostsPage';
+import SnsPostPage from './pages/admin/sns/SnsPostPage';
+import SnsTopicsPage from './pages/admin/sns/SnsTopicsPage';
+import SnsSettingsPage from './pages/admin/sns/SnsSettingsPage';
+import SnsInsightsPage from './pages/admin/sns/SnsInsightsPage';
+import SnsHqPage from './pages/admin/sns/SnsHqPage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -37,6 +44,13 @@ createRoot(document.getElementById('root')!).render(
           <Route path="settings" element={<SettingsPage />} />
           <Route path="jibai" element={<JibaiPage />} />
           <Route path="story" element={<StoryPage />} />
+          <Route path="sns" element={<SnsHomePage />} />
+          <Route path="sns/posts" element={<SnsPostsPage />} />
+          <Route path="sns/posts/:id" element={<SnsPostPage />} />
+          <Route path="sns/topics" element={<SnsTopicsPage />} />
+          <Route path="sns/settings" element={<SnsSettingsPage />} />
+          <Route path="sns/insights" element={<SnsInsightsPage />} />
+          <Route path="hq/sns" element={<SnsHqPage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />

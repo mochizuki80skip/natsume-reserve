@@ -199,10 +199,22 @@ SMS 本文の例：
 - 予約 API は同一 IP からの連続リクエストを制限する。
 - 個人情報（予約・予約表のセル）は 2 ヶ月（設定）で自動削除する（毎日 3:00 JST のバッチ）。
 
+## 6-2. SNS 投稿管理（Instagram・Google ビジネスプロフィール）
+
+24 店舗の Instagram と Google ビジネスプロフィールの投稿（下書きの自動作成 → 人が承認 → 予定時刻に自動投稿）と数字の分析を、同じ管理画面で行う。
+詳細は [docs/SNS.md](SNS.md)。
+
+- 生成 AI は使わない。文章は「ネタ（見出し＋本文）」と「文章の型（書き出し・締め・キーワードの文）」から組み立て、画像はブラウザで描く定型画像か写真。
+- 承認していない下書きは投稿しない。Google は広告規制の禁止語が含まれると承認できない（Instagram は警告）。
+- Instagram は店舗ごとに連携（Instagram ログイン）、Google は本部の Google アカウントで連携し店舗ごとに拠点を割り当てる。API が使えない間は手動投稿の補助（本文コピー →「投稿した」）。
+- 5〜10 分おきの Cron（`/api/cron/sns`）で投稿・下書き生成・通知・トークン更新・数字の取り込み。通知は LINE（Messaging API）またはメール。
+- 画面：`/admin/sns`（ホーム）、`/admin/sns/posts`（一覧・カレンダー・詳細）、`/admin/sns/topics`（ネタ）、`/admin/sns/settings`（頻度・差し込み情報・連携）、`/admin/sns/insights`（分析）、`/admin/hq/sns`（本部：連携・共通設定・通知先）。
+
 ## 7. 今後の拡張候補
 
 - WEB キャンセル／変更（予約 ID 付き URL）
 - 前日リマインド SMS
 - LINE 公式アカウントへの通知（`line-platform` と連携）
-- Instagram ストーリーズへの自動投稿（Instagram API。Meta の審査が必要）
+- 「本日の空き状況」ストーリー画像の自動投稿（Instagram ストーリーズ API）
+- Yahoo!プレイスへの投稿（API パートナー契約が必要）
 - 予約データの Excel / CSV エクスポート

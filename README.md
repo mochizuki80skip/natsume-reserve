@@ -3,6 +3,7 @@
 > **2026-09-25 以降の本番は Xserver レンタルサーバー（PHP + MySQL）版に移行中です。**
 > 設置手順・更新方法は [xserver/README.md](xserver/README.md) を参照してください。
 > このファイルの以下の説明は Vercel + Supabase で動かしていた旧構成（Next.js）のもので、機能・画面・URL は同じです。
+> **SNS 投稿管理（Instagram・Google ビジネスプロフィールの予約投稿と分析）は Xserver 版だけにあります。** 設計と使い方は [docs/SNS.md](docs/SNS.md)。
 
 Excel の予約表（1日1シート・5ベッド×15分枠）を Web に置き換え、患者様が空き状況（〇／📞／×）を見て
 予約できるようにするシステム。店舗コードでログインする管理画面は Excel 風の表で、コピー＆ペーストで
