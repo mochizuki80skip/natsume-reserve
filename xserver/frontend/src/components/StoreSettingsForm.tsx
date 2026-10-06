@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; notifyPhone: string; hoursOverride: string }
+interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number; notifyPhone: string; hoursOverride: string }
 interface Props { store: StoreForm; globalHours: string; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void }
 
 function UrlRow({ label, path }: { label: string; path: string }) {
@@ -59,6 +59,7 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
               ['beds', 'ベッド数', '予約表の列数', 1, 20],
               ['defaultActiveBeds', '既定の施術者数', 'シフト未入力の日に顧客へ見せる枠数', 0, 20],
               ['publishDaysAhead', '公開する日数', '今日から何日先まで顧客が予約できるか', 0, 365],
+              ['maxNewConcurrent', '新規の同時対応数', '同じ時間に受けられる新規（初診・初自）の人数。WEB予約はこの人数に達した時間を×にします（0＝制限なし）', 0, 20],
               ['maxTherapists', '施術者の最大人数', 'スタッフ登録・シフト表の上限', 1, 20],
               ['maxReception', '受付の最大人数', 'スタッフ登録・シフト表の上限', 0, 20],
             ] as const).map(([k, label, help, min, max]) => (

@@ -52,18 +52,31 @@ final class PublicApi
     }
 
     /** @param array<int, array{time:int,bed:int,text:string}>|null $cells */
-    public static function buildInput(array $store, array $setting, string $date, string $kind, bool $closed = false, ?array $cells = null, ?array $capacity = null): array
+    /** @param array<int, array{startTime:int,endTime:int,count:int}>|null $blocks */
+    public static function buildInput(array $store, array $setting, string $date, string $kind, bool $closed = false, ?array $cells = null, ?array $capacity = null, ?array $blocks = null): array
     {
         $now = Time::nowJst();
         $sessions = Settings::storeSessions($store, $setting, $date, $closed);
         $cells ??= Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
         $occupied = [];
         $blocked = [];
+        $newCount = [];
         foreach ($cells as $c) {
             if ((int)$c['bed'] > 0 && Availability::isOccupiedText($c['text'])) {
                 $k = Availability::key((int)$c['time'], (int)$c['bed']);
                 $occupied[$k] = true;
                 if (Availability::isBlockMark($c['text'])) $blocked[$k] = true;
+                // 新規（初診・初・初自）の人と、その 2 枠目（上記初診対応）を時間ごとに数える
+                $t = trim((string)$c['text']);
+                if (Text::categorize($t)['isNew'] || $t === '上記初診対応') $newCount[(int)$c['time']] = ($newCount[(int)$c['time']] ?? 0) + 1;
+            }
+        }
+        $blocks ??= Db::all('SELECT startTime, endTime, count FROM slot_block WHERE storeId = ? AND date = ?', [$store['id'], $date]);
+        $blockCount = [];
+        foreach ($blocks as $bk) {
+            for ($t = (int)$bk['startTime']; $t < (int)$bk['endTime']; $t += $setting['slotMinutes']) {
+                $n = (int)$bk['count'] <= 0 ? Availability::ALL_BLOCKED : (int)$bk['count'];
+                $blockCount[$t] = min(Availability::ALL_BLOCKED, ($blockCount[$t] ?? 0) + $n);
             }
         }
         $capacity ??= Settings::capacityFor($store, $date);
@@ -80,6 +93,10 @@ final class PublicApi
             'nowMinutes' => self::nowMinutesFor($date, $now['date'], $now['minutes']),
             'webCutoffMinutes' => $setting['webCutoffMinutes'],
             'phoneCutoffMinutes' => $setting['phoneCutoffMinutes'],
+            'blockCount' => $blockCount,
+            'newLimit' => (int)($store['maxNewConcurrent'] ?? 0),
+            'newCount' => $newCount,
+            'countsAsNew' => $kind === 'NEW' || $kind === 'ACCIDENT',
         ];
     }
 
@@ -112,7 +129,9 @@ final class PublicApi
         }
         $cellsByDate = [];
         foreach (Db::all("SELECT date, time, bed, text FROM cell WHERE storeId = ? AND date IN ($in) AND bed > 0", $params) as $c) $cellsByDate[$c['date']][] = $c;
-        return ['days' => $days, 'cellsByDate' => $cellsByDate, 'caps' => Settings::capacitiesFor($store, $dates, $ov)];
+        $blocksByDate = [];
+        foreach (Db::all("SELECT date, startTime, endTime, count FROM slot_block WHERE storeId = ? AND date IN ($in)", $params) as $b) $blocksByDate[$b['date']][] = $b;
+        return ['days' => $days, 'cellsByDate' => $cellsByDate, 'blocksByDate' => $blocksByDate, 'caps' => Settings::capacitiesFor($store, $dates, $ov)];
     }
 
     /** 月ごとの日単位マーク（open / full / closed / unpublished） */
@@ -125,7 +144,7 @@ final class PublicApi
         foreach ($dates as $date) {
             $day = $r['days'][$date] ?? null;
             if (!self::isPublished($store, $date, $today, $day['published'] ?? null)) { $out[] = ['date' => $date, 'mark' => 'unpublished']; continue; }
-            $in = self::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $r['cellsByDate'][$date] ?? [], $r['caps'][$date]);
+            $in = self::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
             if (count($in['sessions']) === 0) { $out[] = ['date' => $date, 'mark' => 'closed']; continue; }
             $any = false;
             foreach (Availability::compute($in) as $s) if ($s['status'] !== 'closed') { $any = true; break; }
@@ -150,7 +169,7 @@ final class PublicApi
             elseif ($date < $today) $label = '受付終了';
             elseif (!self::isPublished($store, $date, $today, $day['published'] ?? null)) $label = '受付期間外';
             if ($label) { $out[] = ['date' => $date, 'label' => $label, 'slots' => []]; continue; }
-            $in = self::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $r['cellsByDate'][$date] ?? [], $r['caps'][$date]);
+            $in = self::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
             $slots = [];
             foreach (Availability::compute($in) as $s) $slots[] = ['time' => $s['time'], 'status' => $s['status']];
             $out[] = ['date' => $date, 'label' => null, 'slots' => $slots];

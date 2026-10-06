@@ -9,6 +9,7 @@ import { planPaste } from '@/lib/paste';
 import { categorizeCell, cellState, isContinuationText, type CellState } from '@/lib/attendance';
 import { formatJpPhone } from '@/lib/format';
 import NextDateInput from './NextDateInput';
+import BlockPanel, { blockCountText } from './BlockPanel';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
@@ -264,6 +265,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           )}
           <span className="ml-2">空欄＝シフトからの自動計算。数字を入れるとその日だけ上書きします。</span>
         </div>
+        <BlockPanel key={data.date} date={data.date} times={rows} slotMinutes={data.slotMinutes} maxCount={Math.max(cap.am, cap.pm, 1)} blocks={data.blocks ?? []} onRefresh={onRefresh} />
       </div>
 
       <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
@@ -272,6 +274,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <span><i className="mr-1 inline-block h-3 w-3 border bg-yellow-100 align-[-2px]" />予約時刻を過ぎて未チェック</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-red-100 align-[-2px]" />未来院（予約時刻＋30分）</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
+        <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
       </div>
 
       {pasteInfo && <p className="no-print mb-2 rounded bg-brand-light px-3 py-1 text-xs text-brand-dark">{pasteInfo}</p>}
@@ -303,9 +306,13 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
               {rows.map((t, r) => {
                 const isPmStart = r > 0 && am(rows[r - 1]) && !am(t);
                 const adminOnly = !customerSet.has(t);
+                const blk = (data.blocks ?? []).filter((b) => t >= b.start && t < b.end);
                 return (
                   <tr key={t} className={isPmStart ? 'border-t-4 border-t-slate-300' : ''}>
-                    <td className={`border px-1 text-center font-mono ${adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`} title={adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>{minToHm(t)}</td>
+                    <td className={`whitespace-nowrap border px-1 text-center font-mono ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
+                      title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockCountText(b.count)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
+                      {blk.length > 0 && <span className="no-print mr-0.5 text-[10px]">🔒</span>}{minToHm(t)}
+                    </td>
                     {cols.map((b, c) => {
                       const k = key(t, b);
                       const text = cells.get(k) ?? '';

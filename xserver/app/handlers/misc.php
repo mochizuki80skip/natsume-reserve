@@ -8,7 +8,7 @@ function cleanup_run(): array
     $setting = Settings::global();
     $cutoff = Time::addDays(Time::nowJst()['date'], -$setting['retentionDays']);
     $deleted = [];
-    foreach (['cell', 'reservation', 'day_status', 'shift', 'help_in', 'cancel_log'] as $t) {
+    foreach (['cell', 'reservation', 'day_status', 'shift', 'help_in', 'slot_block', 'cancel_log'] as $t) {
         $deleted[$t] = Db::exec("DELETE FROM `$t` WHERE date < ?", [$cutoff]);
     }
     $jibai = Jibai::cleanupNames(); // 自賠請求の氏名も保持期間を過ぎたら消す（金額は残す）

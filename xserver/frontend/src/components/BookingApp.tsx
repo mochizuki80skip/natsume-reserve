@@ -56,6 +56,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
     <ul className="mt-3 space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-[12.5px] leading-relaxed text-amber-900">
       <li>※ 予約時間より15分以上前後してのご来院時はお待ちいただく時がございます。</li>
       <li>※ 混雑状況によって予約時間を過ぎてのご案内になってしまう時がございます。</li>
+      <li>※ 当院は予約優先制です。急患の方がいらっしゃる場合は順番が前後し、お待ちいただくことがございます。あらかじめご了承ください。</li>
     </ul>
   );
   const phoneBanner = (

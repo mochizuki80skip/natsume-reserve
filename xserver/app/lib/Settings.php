@@ -10,6 +10,7 @@ final class Settings
     public static function storeRow(array $r): array
     {
         foreach (['beds', 'defaultActiveBeds', 'maxTherapists', 'maxReception', 'publishDaysAhead'] as $k) $r[$k] = (int)$r[$k];
+        $r['maxNewConcurrent'] = (int)($r['maxNewConcurrent'] ?? 0);
         $r['active'] = (bool)$r['active'];
         $r['hoursOverride'] = is_string($r['hoursOverride'] ?? null) ? json_decode($r['hoursOverride'], true) : null;
         return $r;

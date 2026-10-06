@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 1;
+    private const VERSION = 2;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -27,12 +27,30 @@ final class Migrate
                 if (!self::hasColumn($pdo, 'staff_member', 'joinType')) $pdo->exec('ALTER TABLE `staff_member` ADD COLUMN `joinType` VARCHAR(10) NULL');
                 $pdo->exec(self::HELP_IN_DDL);
             }
+            if ($ver < 2) {
+                // 新規の同時対応数（店舗ごと）と、予約表のブロック
+                if (!self::hasColumn($pdo, 'store', 'maxNewConcurrent')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `maxNewConcurrent` INT NOT NULL DEFAULT 0');
+                $pdo->exec(self::SLOT_BLOCK_DDL);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const SLOT_BLOCK_DDL = 'CREATE TABLE IF NOT EXISTS `slot_block` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `startTime` INT NOT NULL,
+  `endTime` INT NOT NULL,
+  `count` INT NOT NULL DEFAULT 0,
+  `label` VARCHAR(30) NOT NULL DEFAULT \'\',
+  PRIMARY KEY (`id`),
+  KEY `slot_block_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_slot_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const HELP_IN_DDL = 'CREATE TABLE IF NOT EXISTS `help_in` (
   `id` VARCHAR(32) NOT NULL,

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS `store` (
   `publishDaysAhead` INT NOT NULL DEFAULT 30,
   `hoursOverride` LONGTEXT NULL,
   `notifyPhone` VARCHAR(20) NULL,
+  `maxNewConcurrent` INT NOT NULL DEFAULT 0, -- 新規（初診・初自）を同じ時間に受ける上限。0＝制限なし
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -91,6 +92,20 @@ CREATE TABLE IF NOT EXISTS `shift` (
   KEY `shift_store_date` (`storeId`, `date`),
   CONSTRAINT `fk_shift_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_shift_staff` FOREIGN KEY (`staffId`) REFERENCES `staff_member` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 予約表のブロック（打合せ・ミーティングなど）。startTime〜endTime（終了は含まない）の間、顧客に見せる枠を count 減らす（0＝全部止める）
+CREATE TABLE IF NOT EXISTS `slot_block` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `startTime` INT NOT NULL,
+  `endTime` INT NOT NULL,
+  `count` INT NOT NULL DEFAULT 0,
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `slot_block_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_slot_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 他店からの応援（1 店舗 1 日 1 行。誰が来るか未定なら名前は空）

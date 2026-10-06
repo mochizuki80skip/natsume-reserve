@@ -378,6 +378,35 @@ function adm_shifts_get(): never
         'defaultActiveBeds' => min((int)$store['defaultActiveBeds'], (int)$store['beds']), 'beds' => (int)$store['beds']]);
 }
 
+/** 予約表のブロック（打合せ・ミーティングなど）を追加。start〜end（end は含まない）の間、顧客に見せる枠を count 減らす（0＝全部止める） */
+function adm_block_post(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    try {
+        $start = Http::int($b, 'start', 0, 24 * 60);
+        $end = Http::int($b, 'end', 0, 24 * 60);
+        $count = Http::int($b, 'count', 0, 20);
+    } catch (HttpError) {
+        Http::error('入力内容を確認してください', 400);
+    }
+    if ($end <= $start) Http::error('終了時刻は開始時刻より後にしてください', 400);
+    $label = mb_substr(trim((string)($b['label'] ?? '')), 0, 30);
+    Db::exec('INSERT INTO slot_block (id, storeId, date, startTime, endTime, count, label) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, $count, $label]);
+    Http::json(['ok' => true]);
+}
+
+function adm_block_delete(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $n = Db::exec('DELETE FROM slot_block WHERE id = ? AND storeId = ?', [(string)(Http::body()['id'] ?? ''), $ctx['store']['id']]);
+    if ($n === 0) Http::error('not found', 404);
+    Http::json(['ok' => true]);
+}
+
 /** 他店からの応援（1 日 1 行）の保存。status が空なら削除 */
 function adm_help_in_put(): never
 {
@@ -514,7 +543,7 @@ function adm_settings_get(): never
         'store' => [
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
             'maxTherapists' => $store['maxTherapists'], 'maxReception' => $store['maxReception'], 'publishDaysAhead' => $store['publishDaysAhead'],
-            'notifyPhone' => $store['notifyPhone'] ?? '', 'hoursOverride' => $store['hoursOverride'] ? json_encode($store['hoursOverride'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
+            'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => (int)($store['maxNewConcurrent'] ?? 0), 'hoursOverride' => $store['hoursOverride'] ? json_encode($store['hoursOverride'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
         ],
         'globalHours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         'canChangePassword' => $ctx['session']['role'] === 'store',
@@ -537,6 +566,7 @@ function adm_store_put(): never
         $maxR = Http::int($b, 'maxReception', 0, 20);
         $pub = Http::int($b, 'publishDaysAhead', 0, 365);
         $notify = Http::str($b, 'notifyPhone', 20, false);
+        $maxNew = array_key_exists('maxNewConcurrent', $b) ? Http::int($b, 'maxNewConcurrent', 0, 20) : (int)($ctx['store']['maxNewConcurrent'] ?? 0);
     } catch (HttpError) {
         Http::error('入力内容を確認してください', 400);
     }
@@ -546,8 +576,8 @@ function adm_store_put(): never
         if (!$cfg) Http::error('営業時間の個別設定の形式が正しくありません（docs/SPEC.md 参照）', 400);
         $hoursOverride = json_encode($cfg, JSON_UNESCAPED_UNICODE);
     }
-    Db::exec('UPDATE store SET name = ?, phone = ?, beds = ?, defaultActiveBeds = ?, maxTherapists = ?, maxReception = ?, publishDaysAhead = ?, notifyPhone = ?, hoursOverride = ? WHERE id = ?',
-        [$name, $phone, $beds, min($dab, $beds), $maxT, $maxR, $pub, $notify !== '' ? $notify : null, $hoursOverride, $ctx['store']['id']]);
+    Db::exec('UPDATE store SET name = ?, phone = ?, beds = ?, defaultActiveBeds = ?, maxTherapists = ?, maxReception = ?, publishDaysAhead = ?, notifyPhone = ?, maxNewConcurrent = ?, hoursOverride = ? WHERE id = ?',
+        [$name, $phone, $beds, min($dab, $beds), $maxT, $maxR, $pub, $notify !== '' ? $notify : null, $maxNew, $hoursOverride, $ctx['store']['id']]);
     Http::json(['ok' => true]);
 }
 

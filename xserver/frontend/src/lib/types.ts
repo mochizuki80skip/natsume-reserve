@@ -4,6 +4,7 @@ export interface ResolvedSession { start: number; lastStart: number; lastAdmin: 
 
 export interface GridCell { time: number; bed: number; text: string; visited: boolean; web?: { id: string; kind: string; phone: string; cardNo: string | null } | null }
 export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; createdAt: string }
+export interface SlotBlock { id: string; start: number; end: number; count: number; label: string }
 export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[] }
 
 export interface DayData {
@@ -20,6 +21,7 @@ export interface DayData {
   shiftLabels: { name: string; role: string; status: string }[];
   cells: GridCell[];
   cancels: CancelRow[];
+  blocks: SlotBlock[];
 }
 
 export interface DayResponse { data: DayData; storeName: string; storeCode: string; published: boolean; today: string }

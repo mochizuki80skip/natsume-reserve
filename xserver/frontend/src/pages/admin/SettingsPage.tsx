@@ -4,7 +4,7 @@ import StaffList from '@/components/StaffList';
 import { useAdmin } from './Layout';
 
 interface Resp {
-  store: { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; notifyPhone: string; hoursOverride: string };
+  store: { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number; notifyPhone: string; hoursOverride: string };
   globalHours: string; canChangePassword: boolean; smsEnabled: boolean;
   members: { id: string; name: string; role: string; active: boolean; startDate: string | null; endDate: string | null; joinType: string | null }[];
 }
