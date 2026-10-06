@@ -35,17 +35,21 @@ ok('2 人目の新規は受けない', (await req('POST', '/api/public/S001/rese
 await req('PUT', '/api/admin/store', { ...st, maxNewConcurrent: 0, hoursOverride: null });
 ok('制限なしに戻すと〇', (await slots('NEW'))[600] === 'open');
 
-// ブロック
-ok('ブロック追加（全枠）', (await req('POST', '/api/admin/blocks', { date, start: 660, end: 705, count: 0, label: '打合せ' }))[0] === 200);
+// ブロック（ベッド単位）。顧客に見せる枠は 3（ベッド1〜3）
+ok('ブロック追加（ベッド1〜3）', (await req('POST', '/api/admin/blocks', { date, start: 660, end: 705, beds: [1, 2, 3], label: '打合せ' }))[0] === 200);
 r = await slots('RETURN');
-ok('ブロック中は×・終了時刻からは〇', r[660] === 'closed' && r[690] === 'closed' && r[705] === 'open', JSON.stringify([r[660], r[690], r[705]]));
+ok('見せる枠のベッドを全部止めると×・終了時刻からは〇', r[660] === 'closed' && r[690] === 'closed' && r[705] === 'open', JSON.stringify([r[660], r[690], r[705]]));
 n = await slots('NEW');
 ok('新規はブロックにかかる直前も×', n[645] === 'closed' && n[630] === 'open', JSON.stringify([n[630], n[645]]));
-ok('枠数指定のブロック', (await req('POST', '/api/admin/blocks', { date, start: 1020, end: 1080, count: 2 }))[0] === 200);
-ok('枠数指定は残りが減る', (await slots('RETURN'))[1020] === 'phone');
-ok('開始＞終了は不可', (await req('POST', '/api/admin/blocks', { date, start: 960, end: 900, count: 0 }))[0] === 400);
+ok('ベッド1だけ止める', (await req('POST', '/api/admin/blocks', { date, start: 1020, end: 1080, beds: [1] }))[0] === 200);
+ok('1 台止めると残り 2（〇のまま）', (await slots('RETURN'))[1020] === 'open');
+ok('ベッド2も止める', (await req('POST', '/api/admin/blocks', { date, start: 1020, end: 1080, beds: [2] }))[0] === 200);
+ok('2 台止めると残り 1（電話マーク）', (await slots('RETURN'))[1020] === 'phone');
+ok('見せていないベッド6を止めても枠は減らない', (await req('POST', '/api/admin/blocks', { date, start: 1110, end: 1140, beds: [6] }))[0] === 200 && (await slots('RETURN'))[1110] === 'open');
+ok('ベッド未選択は不可', (await req('POST', '/api/admin/blocks', { date, start: 900, end: 960, beds: [] }))[0] === 400);
+ok('開始＞終了は不可', (await req('POST', '/api/admin/blocks', { date, start: 960, end: 900, beds: [1] }))[0] === 400);
 const day = (await req('GET', `/api/admin/day?date=${date}`))[1].data;
-ok('予約表にブロックが出る', day.blocks.length === 2 && day.blocks[0].label === '打合せ');
+ok('予約表にブロックが出る', day.blocks.length === 4 && day.blocks[0].label === '打合せ' && day.blocks[0].beds.join() === '1,2,3');
 for (const b of day.blocks) await req('DELETE', '/api/admin/blocks', { id: b.id });
 ok('解除すると〇', (await slots('RETURN'))[660] === 'open');
 console.log(process.exitCode ? 'RULES FAILED' : 'RULES OK', date);

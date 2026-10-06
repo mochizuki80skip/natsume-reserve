@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS `shift` (
   CONSTRAINT `fk_shift_staff` FOREIGN KEY (`staffId`) REFERENCES `staff_member` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 予約表のブロック（打合せ・ミーティングなど）。startTime〜endTime（終了は含まない）の間、顧客に見せる枠を count 減らす（0＝全部止める）
+-- 予約表のブロック（打合せ・ミーティングなど）。startTime〜endTime（終了は含まない）の間、beds（"1,2" 形式。空＝全ベッド）を使えなくする。count は旧版の名残（未使用）
 CREATE TABLE IF NOT EXISTS `slot_block` (
   `id` VARCHAR(32) NOT NULL,
   `storeId` VARCHAR(32) NOT NULL,
@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS `slot_block` (
   `startTime` INT NOT NULL,
   `endTime` INT NOT NULL,
   `count` INT NOT NULL DEFAULT 0,
+  `beds` VARCHAR(100) NOT NULL DEFAULT '',
   `label` VARCHAR(30) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   KEY `slot_block_store_date` (`storeId`, `date`),

@@ -12,7 +12,6 @@
 //   'phoneMarkRemaining' => int,
 //   'nowMinutes' => null|int|INF,       今日なら現在時刻、未来日は null、過去日は INF
 //   'webCutoffMinutes' => int, 'phoneCutoffMinutes' => int,
-//   'blockCount' => ['time' => int],    予約表のブロック（打合せなど）で減らす枠数（ALL_BLOCKED＝全部）
 //   'newLimit' => int,                  新規（初診・初自）を同じ時間に受ける上限（0＝制限なし）
 //   'newCount' => ['time' => int],      その時間に入っている新規の人数
 //   'countsAsNew' => bool,              今回の予約が新規か（新規のときだけ newLimit を見る）
@@ -21,7 +20,6 @@ declare(strict_types=1);
 
 final class Availability
 {
-    public const ALL_BLOCKED = 999;
 
     public static function key(int $time, int $bed): string
     {
@@ -75,7 +73,7 @@ final class Availability
         $byCapacity = PHP_INT_MAX;
         for ($k = 0; $k < $in['neededSlots']; $k++) {
             $t = $time + $k * $in['slotMinutes'];
-            $byCapacity = min($byCapacity, self::capacityAt($in, $time) - self::occupiedCountAt($in, $t) - (int)($in['blockCount'][$t] ?? 0));
+            $byCapacity = min($byCapacity, self::capacityAt($in, $time) - self::occupiedCountAt($in, $t));
             // 新規の同時対応数：新規の予約は、その時間にすでに入っている新規の人数が上限に達していたら受けない
             // （上限に達するまでは通常どおり。残り 1 人でも「残りわずか」の電話マークにはしない）
             if (!empty($in['countsAsNew']) && (int)($in['newLimit'] ?? 0) > 0 && (int)($in['newCount'][$t] ?? 0) >= (int)$in['newLimit']) {

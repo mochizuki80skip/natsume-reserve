@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 2;
+    private const VERSION = 3;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -32,6 +32,10 @@ final class Migrate
                 if (!self::hasColumn($pdo, 'store', 'maxNewConcurrent')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `maxNewConcurrent` INT NOT NULL DEFAULT 0');
                 $pdo->exec(self::SLOT_BLOCK_DDL);
             }
+            if ($ver < 3) {
+                // ブロックをベッド単位に
+                if (!self::hasColumn($pdo, 'slot_block', 'beds')) $pdo->exec("ALTER TABLE `slot_block` ADD COLUMN `beds` VARCHAR(100) NOT NULL DEFAULT ''");
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -46,6 +50,7 @@ final class Migrate
   `startTime` INT NOT NULL,
   `endTime` INT NOT NULL,
   `count` INT NOT NULL DEFAULT 0,
+  `beds` VARCHAR(100) NOT NULL DEFAULT \'\',
   `label` VARCHAR(30) NOT NULL DEFAULT \'\',
   PRIMARY KEY (`id`),
   KEY `slot_block_store_date` (`storeId`, `date`),

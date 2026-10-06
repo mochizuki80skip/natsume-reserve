@@ -14,7 +14,7 @@ final class DayData
         $shifts = Db::all('SELECT staffId, status FROM shift WHERE storeId = ? AND date = ?', [$sid, $date]);
         $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo
             FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date = ? AND c.bed > 0', [$sid, $date]);
-        $blocks = Db::all('SELECT id, startTime, endTime, count, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
+        $blocks = Db::all('SELECT id, startTime, endTime, beds, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? ORDER BY time ASC, createdAt ASC', [$sid, $date]);
 
         $closed = $day['closed'] ?? false;
@@ -41,7 +41,7 @@ final class DayData
                 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'visited' => (bool)$c['visited'],
                 'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo']] : null,
             ], $cells),
-            'blocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'count' => (int)$b['count'], 'label' => $b['label']], $blocks),
+            'blocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'beds' => PublicApi::blockBeds((string)$b['beds'], Settings::allBeds($store)), 'label' => $b['label']], $blocks),
             'cancels' => array_map(fn($c) => [
                 'id' => $c['id'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'name' => $c['name'], 'contText' => $c['contText'], 'kind' => $c['kind'],
                 'source' => $c['source'], 'byCode' => $c['byCode'], 'memo' => $c['memo'], 'nextDate' => $c['nextDate'], 'createdAt' => Time::formatDateTimeShort($c['createdAt']),

@@ -52,7 +52,7 @@ final class PublicApi
     }
 
     /** @param array<int, array{time:int,bed:int,text:string}>|null $cells */
-    /** @param array<int, array{startTime:int,endTime:int,count:int}>|null $blocks */
+    /** @param array<int, array{startTime:int,endTime:int,beds:string}>|null $blocks */
     public static function buildInput(array $store, array $setting, string $date, string $kind, bool $closed = false, ?array $cells = null, ?array $capacity = null, ?array $blocks = null): array
     {
         $now = Time::nowJst();
@@ -71,15 +71,23 @@ final class PublicApi
                 if (Text::categorize($t)['isNew'] || $t === '上記初診対応') $newCount[(int)$c['time']] = ($newCount[(int)$c['time']] ?? 0) + 1;
             }
         }
-        $blocks ??= Db::all('SELECT startTime, endTime, count FROM slot_block WHERE storeId = ? AND date = ?', [$store['id'], $date]);
-        $blockCount = [];
+        $capacity ??= Settings::capacityFor($store, $date);
+        // 予約表のブロック（打合せなど）：指定ベッドをその時間使えなくする。
+        // 顧客に見せる枠の中のベッドなら枠も 1 つ減らし、枠の外のベッドならベッドが埋まるだけ（✖ と同じ扱い）
+        $blocks ??= Db::all('SELECT startTime, endTime, beds FROM slot_block WHERE storeId = ? AND date = ?', [$store['id'], $date]);
+        $allBeds = Settings::allBeds($store);
         foreach ($blocks as $bk) {
+            $beds = self::blockBeds((string)($bk['beds'] ?? ''), $allBeds);
             for ($t = (int)$bk['startTime']; $t < (int)$bk['endTime']; $t += $setting['slotMinutes']) {
-                $n = (int)$bk['count'] <= 0 ? Availability::ALL_BLOCKED : (int)$bk['count'];
-                $blockCount[$t] = min(Availability::ALL_BLOCKED, ($blockCount[$t] ?? 0) + $n);
+                $cap = Hours::isAm($sessions, $t) ? $capacity['am'] : $capacity['pm'];
+                foreach ($beds as $b) {
+                    $k = Availability::key($t, $b);
+                    if (isset($occupied[$k]) && !isset($blocked[$k])) continue; // すでに患者が入っている
+                    $occupied[$k] = true;
+                    if ($b > $cap) $blocked[$k] = true; else unset($blocked[$k]);
+                }
             }
         }
-        $capacity ??= Settings::capacityFor($store, $date);
         return [
             'sessions' => $sessions,
             'slotMinutes' => $setting['slotMinutes'],
@@ -93,11 +101,17 @@ final class PublicApi
             'nowMinutes' => self::nowMinutesFor($date, $now['date'], $now['minutes']),
             'webCutoffMinutes' => $setting['webCutoffMinutes'],
             'phoneCutoffMinutes' => $setting['phoneCutoffMinutes'],
-            'blockCount' => $blockCount,
             'newLimit' => (int)($store['maxNewConcurrent'] ?? 0),
             'newCount' => $newCount,
             'countsAsNew' => $kind === 'NEW' || $kind === 'ACCIDENT',
         ];
+    }
+
+    /** ブロックのベッド指定（"1,2"。空なら全ベッド） @return int[] */
+    public static function blockBeds(string $beds, array $allBeds): array
+    {
+        if (trim($beds) === '') return $allBeds;
+        return array_values(array_intersect($allBeds, array_map('intval', explode(',', $beds))));
     }
 
     /** 1 日分の枠ごとの状態 */
@@ -130,7 +144,7 @@ final class PublicApi
         $cellsByDate = [];
         foreach (Db::all("SELECT date, time, bed, text FROM cell WHERE storeId = ? AND date IN ($in) AND bed > 0", $params) as $c) $cellsByDate[$c['date']][] = $c;
         $blocksByDate = [];
-        foreach (Db::all("SELECT date, startTime, endTime, count FROM slot_block WHERE storeId = ? AND date IN ($in)", $params) as $b) $blocksByDate[$b['date']][] = $b;
+        foreach (Db::all("SELECT date, startTime, endTime, beds FROM slot_block WHERE storeId = ? AND date IN ($in)", $params) as $b) $blocksByDate[$b['date']][] = $b;
         return ['days' => $days, 'cellsByDate' => $cellsByDate, 'blocksByDate' => $blocksByDate, 'caps' => Settings::capacitiesFor($store, $dates, $ov)];
     }
 

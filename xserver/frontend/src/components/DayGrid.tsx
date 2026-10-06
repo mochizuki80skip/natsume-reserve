@@ -9,7 +9,7 @@ import { planPaste } from '@/lib/paste';
 import { categorizeCell, cellState, isContinuationText, type CellState } from '@/lib/attendance';
 import { formatJpPhone } from '@/lib/format';
 import NextDateInput from './NextDateInput';
-import BlockPanel, { blockCountText } from './BlockPanel';
+import BlockPanel, { blockBedsText } from './BlockPanel';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
@@ -265,7 +265,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           )}
           <span className="ml-2">空欄＝シフトからの自動計算。数字を入れるとその日だけ上書きします。</span>
         </div>
-        <BlockPanel key={data.date} date={data.date} times={rows} slotMinutes={data.slotMinutes} maxCount={Math.max(cap.am, cap.pm, 1)} blocks={data.blocks ?? []} onRefresh={onRefresh} />
+        <BlockPanel key={data.date} date={data.date} times={rows} slotMinutes={data.slotMinutes} beds={cols} blocks={data.blocks ?? []} onRefresh={onRefresh} />
       </div>
 
       <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
@@ -310,7 +310,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                 return (
                   <tr key={t} className={isPmStart ? 'border-t-4 border-t-slate-300' : ''}>
                     <td className={`whitespace-nowrap border px-1 text-center font-mono ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
-                      title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockCountText(b.count)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
+                      title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockBedsText(b.beds, cols)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
                       {blk.length > 0 && <span className="no-print mr-0.5 text-[10px]">🔒</span>}{minToHm(t)}
                     </td>
                     {cols.map((b, c) => {
@@ -319,7 +319,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                       const web = webInfo.get(k);
                       const cont = isContinuationText(text);
                       const st = stateOf(t, b);
-                      const bg = STATE_BG[st] || (web ? 'bg-sky-50' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '');
+                      const bBlock = blk.find((x) => x.beds.includes(b));
+                      const bg = STATE_BG[st] || (web ? 'bg-sky-50' : bBlock && !text ? 'bg-slate-300' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '');
                       const hasName = text.trim() !== '' && !cont;
                       return (
                         <td key={b} className={`grid-cell border p-0 ${bg}`}
@@ -336,7 +337,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                               onKeyDown={(e) => onKeyDown(e, r, c)}
                               onPaste={(e) => onPaste(e, r, c)}
                               onBlur={flush}
-                              className={hasName ? (st === 'noshow' || st === 'pending' ? 'pr-16' : 'pr-4') : ''}
+                              placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
+                              className={`${hasName ? (st === 'noshow' || st === 'pending' ? 'pr-16' : 'pr-4') : ''} ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
                             {hasName && st === 'noshow' && <span className="no-print pointer-events-none absolute right-4 rounded bg-red-600 px-1 text-[10px] leading-4 text-white">未来院</span>}
                             {hasName && st === 'pending' && <span className="no-print pointer-events-none absolute right-4 rounded bg-yellow-600 px-1 text-[10px] leading-4 text-white">未チェック</span>}

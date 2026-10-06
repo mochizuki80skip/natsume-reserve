@@ -378,7 +378,7 @@ function adm_shifts_get(): never
         'defaultActiveBeds' => min((int)$store['defaultActiveBeds'], (int)$store['beds']), 'beds' => (int)$store['beds']]);
 }
 
-/** 予約表のブロック（打合せ・ミーティングなど）を追加。start〜end（end は含まない）の間、顧客に見せる枠を count 減らす（0＝全部止める） */
+/** 予約表のブロック（打合せ・ミーティングなど）を追加。start〜end（end は含まない）の間、指定したベッドを使えなくする */
 function adm_block_post(): never
 {
     $ctx = Auth::context();
@@ -388,13 +388,16 @@ function adm_block_post(): never
     try {
         $start = Http::int($b, 'start', 0, 24 * 60);
         $end = Http::int($b, 'end', 0, 24 * 60);
-        $count = Http::int($b, 'count', 0, 20);
     } catch (HttpError) {
         Http::error('入力内容を確認してください', 400);
     }
     if ($end <= $start) Http::error('終了時刻は開始時刻より後にしてください', 400);
     $label = mb_substr(trim((string)($b['label'] ?? '')), 0, 30);
-    Db::exec('INSERT INTO slot_block (id, storeId, date, startTime, endTime, count, label) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, $count, $label]);
+    $all = Settings::allBeds($ctx['store']);
+    $beds = is_array($b['beds'] ?? null) ? array_values(array_unique(array_map('intval', $b['beds']))) : [];
+    sort($beds);
+    if (!$beds || array_diff($beds, $all)) Http::error('ベッドを選んでください', 400);
+    Db::exec('INSERT INTO slot_block (id, storeId, date, startTime, endTime, count, beds, label) VALUES (?, ?, ?, ?, ?, 0, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, implode(',', $beds), $label]);
     Http::json(['ok' => true]);
 }
 
