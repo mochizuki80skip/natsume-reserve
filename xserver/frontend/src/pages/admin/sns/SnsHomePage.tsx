@@ -85,7 +85,7 @@ export default function SnsHomePage() {
       </section>
       {data.manual.length > 0 && (
         <section className="rounded border bg-white">
-          <h2 className="border-b px-3 py-2 font-bold">手動で投稿するもの<span className="ml-2 text-sm font-normal text-slate-500">API で投稿できない媒体。本文をコピーして投稿し、「投稿した」を押してください</span></h2>
+          <h2 className="flex items-center gap-2 border-b px-3 py-2 font-bold">今日までに手動で投稿するもの<span className="text-sm font-normal text-slate-500">{data.manual.length} 件</span><Link to="/admin/sns/manual" className="ml-auto rounded bg-brand px-3 py-1 text-sm font-normal text-white">手動投稿の画面へ（コピー → 投稿 → 記録）</Link></h2>
           <PostList posts={data.manual} empty="" showStore={isHq} />
         </section>
       )}

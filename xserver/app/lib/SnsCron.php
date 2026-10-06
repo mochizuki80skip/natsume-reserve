@@ -18,6 +18,7 @@ final class SnsCron
         if ($hour >= 5) $out['insights'] = self::daily("insights:$today", fn() => self::fetchInsights());
         if ($hour >= 6) $out['generate'] = self::daily("generate:$today", fn() => self::generateAll());
         if ($hour >= 6) $out['tokens'] = self::daily("tokens:$today", fn() => self::refreshTokens());
+        if ($hour >= 8) $out['manualToday'] = self::daily("manual-today:$today", fn() => self::notifyManualToday());
         if ($hour >= 9) $out['remind'] = self::daily("remind:$today", fn() => self::remind());
         if ($hour >= 9 && Time::weekdayOf($today) === 1) $out['weekly'] = self::daily("weekly:$today", fn() => self::weeklySummary());
         return $out;
@@ -103,6 +104,22 @@ final class SnsCron
         }
     }
 
+    /** 朝に「今日の手動投稿」の一覧を知らせる（店舗・媒体・時刻） */
+    public static function notifyManualToday(): int
+    {
+        $today = Time::nowJst()['date'];
+        $g = Sns::setting();
+        $rows = Db::all("SELECT p.channel, p.scheduledAt, p.title, p.body, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId
+            WHERE p.status IN ('draft', 'approved', 'failed') AND p.scheduledAt <= ? AND (p.publishMode = 'manual'" . ($g['gbpManual'] ? " OR p.channel = 'gbp'" : '') . ") ORDER BY p.scheduledAt ASC", [$today . ' 23:59:59']);
+        if (!$rows) return 0;
+        $lines = ['【今日の手動投稿】' . count($rows) . ' 件（期限切れを含む）'];
+        foreach (array_slice($rows, 0, 20) as $r) $lines[] = '・' . substr($r['scheduledAt'], 11, 5) . ' ' . $r['storeName'] . ' ' . Sns::CHANNEL_JA[$r['channel']] . ' ' . mb_substr($r['title'] !== '' ? $r['title'] : $r['body'], 0, 16);
+        if (count($rows) > 20) $lines[] = '…ほか ' . (count($rows) - 20) . ' 件';
+        $lines[] = '管理画面「SNS投稿」→「手動投稿」で、コピー → 投稿 → 「投稿した」の順に進めてください。';
+        Notify::send(implode("\n", $lines));
+        return count($rows);
+    }
+
     /** 手動投稿（Google の API 許可待ちなど）の予定時刻が来たら 1 回だけ知らせる */
     public static function notifyManualDue(): int
     {
@@ -114,7 +131,7 @@ final class SnsCron
             $lines[] = '・' . $p['storeName'] . ' ' . Sns::CHANNEL_JA[$p['channel']] . ' ' . substr($p['scheduledAt'], 0, 16) . ' ' . mb_substr($p['title'] !== '' ? $p['title'] : $p['body'], 0, 20);
             Db::exec('UPDATE sns_post SET manualNotifiedAt = ? WHERE id = ?', [$now, $p['id']]);
         }
-        $lines[] = '管理画面「SNS投稿」→「手動投稿」から本文をコピーして投稿し、「投稿した」を押してください。';
+        $lines[] = '管理画面「SNS投稿」→「手動投稿」で本文をコピーして投稿し、「投稿した」を押してください。';
         Notify::send(implode("\n", $lines));
         return count($rows);
     }

@@ -11,7 +11,7 @@ import { useAdmin } from '../Layout';
 interface Resp {
   post: Post; store: { code: string; name: string; phone: string; area: string; bookingUrl: string; memo: string };
   neighbors: { prev: { id: string; scheduledAt: string } | null; next: { id: string; scheduledAt: string } | null };
-  publishMode: 'api' | 'manual'; forbiddenWords: string[]; me: string; gbpInfo: string[];
+  publishMode: 'api' | 'manual'; forbiddenWords: string[]; me: string; gbpInfo: string[]; openUrl: string;
 }
 
 export default function SnsPostPage() {
@@ -156,7 +156,7 @@ export default function SnsPostPage() {
           {dirty && (p.status === 'draft' || p.status === 'failed') && <p className="text-xs text-amber-700">変更を保存してから承認してください。</p>}
           {isManual && p.status !== 'posted' && (
             <div className="rounded border border-slate-300 bg-white p-3 text-xs text-slate-700">
-              <p className="font-bold">手動投稿の手順（{CHANNEL_JA[p.channel]}）</p>
+              <p className="font-bold">手動投稿の手順（{CHANNEL_JA[p.channel]}）<Link to="/admin/sns/manual" className="ml-2 font-normal text-brand underline">手動投稿の画面でまとめて進める</Link>　<a href={data.openUrl} target="_blank" rel="noreferrer" className="font-normal text-brand underline">{CHANNEL_JA[p.channel]} を開く↗</a></p>
               <ol className="ml-4 list-decimal space-y-0.5">
                 <li>上の「コピー」で投稿文をコピーし、画像があれば右クリックで保存します。</li>
                 <li>{p.channel === 'gbp' ? 'Google ビジネスプロフィール（Google 検索で店名を検索 → 「最新情報を追加」）に貼り付けて投稿します。' : 'Instagram アプリで新規投稿を作り、画像を選んでキャプションに貼り付けます。'}</li>

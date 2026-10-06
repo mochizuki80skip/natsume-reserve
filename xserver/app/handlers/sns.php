@@ -83,7 +83,7 @@ function sns_home(): never
     $where = $s['role'] === 'hq' ? '' : ' AND p.storeId = ' . Db::pdo()->quote($s['storeId']);
     $now = Time::nowJstDateTime();
     $pending = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'draft' $where ORDER BY p.scheduledAt ASC LIMIT 80");
-    $manual = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'approved' AND p.publishMode = 'manual' $where ORDER BY p.scheduledAt ASC LIMIT 60");
+    $manual = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status IN ('draft', 'approved') AND p.publishMode = 'manual' AND p.scheduledAt <= ? $where ORDER BY p.scheduledAt ASC LIMIT 60", [Time::nowJst()['date'] . ' 23:59:59']);
     $failed = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'failed' $where ORDER BY p.scheduledAt DESC LIMIT 30");
     $counts = Db::all("SELECT s.code, s.name, p.channel, p.status, COUNT(*) AS n FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.scheduledAt >= ? $where GROUP BY s.code, s.name, p.channel, p.status ORDER BY s.code", [Time::addDays(Time::nowJst()['date'], -30) . ' 00:00:00']);
     $byStore = [];
@@ -176,6 +176,7 @@ function sns_post_get(array $mm): never
         'forbiddenWords' => Sns::setting()['forbiddenWords'],
         'me' => $s['code'],
         'gbpInfo' => $p['channel'] === 'gbp' ? Sns::gbpInfoHits($p['postText'], $store, $ss) : [],
+        'openUrl' => Sns::manualOpenUrl($p['channel'], $store, $ss),
     ]);
 }
 
@@ -576,6 +577,45 @@ function sns_media_put(): never
     Http::json(['ok' => true]);
 }
 
+/** https:// で始まる URL だけ受け付ける（空は可） */
+function sns_url_or_empty(string $u): string
+{
+    if ($u === '') return '';
+    if (!preg_match('#^https://[^\s]+$#u', $u)) throw new HttpError(400, 'URL は https:// から始めてください');
+    return $u;
+}
+
+// ---------- 手動投稿（API を使わずに人が投稿する分） ----------
+/** 期限が来た／今日／今後 7 日の手動投稿を店舗ごとにまとめる。本文・画像・開く URL を付けて、コピー → 投稿 → 記録 の流れを 1 画面で済ませる */
+function sns_manual_get(): never
+{
+    Sns::ensureTables();
+    $s = Auth::requireSession();
+    $where = $s['role'] === 'hq' ? '' : ' AND p.storeId = ' . Db::pdo()->quote($s['storeId']);
+    $today = Time::nowJst()['date'];
+    $until = Time::addDays($today, 7) . ' 23:59:59';
+    $g = Sns::setting();
+    // 手動扱い：publishMode = manual のもの、または Google 手動運用のときの Google 投稿すべて（未投稿）
+    $rows = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId
+        WHERE p.status IN ('draft', 'approved', 'failed') AND p.scheduledAt <= ? AND (p.publishMode = 'manual'" . ($g['gbpManual'] ? " OR p.channel = 'gbp'" : '') . ") $where ORDER BY p.scheduledAt ASC", [$until]);
+    $ssCache = []; $out = [];
+    foreach ($rows as $r) {
+        $store = $ssCache[$r['storeId']]['store'] ?? null;
+        if (!$store) { $store = Settings::findStoreById($r['storeId']); $ssCache[$r['storeId']] = ['store' => $store, 'ss' => Sns::storeSetting($store)]; }
+        $ss = $ssCache[$r['storeId']]['ss'];
+        $row = Sns::postRow($r);
+        $row['openUrl'] = Sns::manualOpenUrl($r['channel'], $store, $ss);
+        $row['openUrlIsSearch'] = $r['channel'] === 'gbp' && $ss['gbpPostUrl'] === '';
+        $row['ready'] = true; $row['issues'] = [];
+        try { sns_assert_ready($r, $store); } catch (HttpError $e) { $row['ready'] = false; $row['issues'][] = $e->getMessage(); }
+        $d = substr($r['scheduledAt'], 0, 10);
+        $row['bucket'] = $d < $today ? 'overdue' : ($d === $today ? 'today' : 'upcoming');
+        $out[] = $row;
+    }
+    Http::json(['today' => $today, 'now' => substr(Time::nowJstDateTime(), 0, 16), 'posts' => $out, 'gbpManual' => $g['gbpManual'],
+        'counts' => ['overdue' => count(array_filter($out, fn($x) => $x['bucket'] === 'overdue')), 'today' => count(array_filter($out, fn($x) => $x['bucket'] === 'today')), 'upcoming' => count(array_filter($out, fn($x) => $x['bucket'] === 'upcoming'))]]);
+}
+
 // ---------- 店舗の設定 ----------
 function sns_settings_get(): never
 {
@@ -593,6 +633,7 @@ function sns_settings_get(): never
         'accounts' => ['ig' => Sns::accountRow($ig), 'gbp' => Sns::accountRow($gbp)],
         'igConfigured' => Instagram::configured(),
         'googleConnected' => (bool)(Sns::account(null, 'gbp')['refreshToken'] ?? null),
+        'gbpManual' => $g['gbpManual'],
         'isHq' => $ctx['session']['role'] === 'hq',
         'baseUrl' => Sns::baseUrl(),
         'appUrlSet' => Config::str('APP_URL') !== '',
@@ -625,6 +666,8 @@ function sns_settings_put(): never
         'keywordsRotation' => array_key_exists('keywordsRotation', $b) ? Http::str($b, 'keywordsRotation', 500, false) : $cur['keywordsRotation'],
         'memo' => array_key_exists('memo', $b) ? Http::str($b, 'memo', 2000, false) : $cur['memo'],
         'vars' => array_key_exists('vars', $b) ? Sns::parseVars($b['vars']) : $cur['vars'],
+        'gbpPostUrl' => array_key_exists('gbpPostUrl', $b) ? sns_url_or_empty(Http::str($b, 'gbpPostUrl', 300, false)) : $cur['gbpPostUrl'],
+        'igProfileUrl' => array_key_exists('igProfileUrl', $b) ? sns_url_or_empty(Http::str($b, 'igProfileUrl', 300, false)) : $cur['igProfileUrl'],
     ];
     Sns::saveStoreSetting($ctx['store']['id'], $v);
     Http::json(['ok' => true]);
@@ -775,7 +818,10 @@ function hq_sns_settings_put(): never
         'hashtagBase' => array_key_exists('hashtagBase', $b) ? Http::str($b, 'hashtagBase', 300, false) : $cur['hashtagBase'],
         'lineTargets' => $targets,
         'customVars' => array_key_exists('customVars', $b) ? Sns::parseCustomVars($b['customVars']) : $cur['customVars'],
+        'gbpManual' => array_key_exists('gbpManual', $b) ? Http::bool($b, 'gbpManual') : $cur['gbpManual'],
     ]);
+    // Google を手動運用にしたら、承認済みの Google 投稿も手動扱いにそろえる（自動処理が送らないように）
+    if (Sns::setting()['gbpManual']) Db::exec("UPDATE sns_post SET publishMode = 'manual' WHERE channel = 'gbp' AND status IN ('draft', 'approved', 'failed')");
     Http::json(['ok' => true]);
 }
 

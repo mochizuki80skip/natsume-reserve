@@ -26,6 +26,7 @@ import SnsSettingsPage from './pages/admin/sns/SnsSettingsPage';
 import SnsInsightsPage from './pages/admin/sns/SnsInsightsPage';
 import SnsHqPage from './pages/admin/sns/SnsHqPage';
 import SnsMediaPage from './pages/admin/sns/SnsMediaPage';
+import SnsManualPage from './pages/admin/sns/SnsManualPage';
 import { SNS_ONLY } from './lib/mode';
 
 createRoot(document.getElementById('root')!).render(
@@ -47,6 +48,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="jibai" element={<JibaiPage />} />
           <Route path="story" element={<StoryPage />} />
           <Route path="sns" element={<SnsHomePage />} />
+          <Route path="sns/manual" element={<SnsManualPage />} />
           <Route path="sns/posts" element={<SnsPostsPage />} />
           <Route path="sns/posts/:id" element={<SnsPostPage />} />
           <Route path="sns/topics" element={<SnsTopicsPage />} />

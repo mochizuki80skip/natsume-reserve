@@ -8,7 +8,7 @@ import SnsScheduleEditor from '@/components/SnsScheduleEditor';
 import { useAdmin } from '../Layout';
 
 interface StoreRow { code: string; name: string; active: boolean; igEnabled: boolean; gbpEnabled: boolean; igSchedule: string; gbpSchedule: string; area: string; ig: AccountRow | null; gbp: AccountRow | null; topics: number }
-interface Setting { forbiddenWords: string[]; patterns: Patterns; defaultIgSchedule: Schedule; defaultGbpSchedule: Schedule; daysAhead: number; remindHours: number; hashtagBase: string; lineTargets: string[]; customVars: VarDef[] }
+interface Setting { forbiddenWords: string[]; patterns: Patterns; defaultIgSchedule: Schedule; defaultGbpSchedule: Schedule; daysAhead: number; remindHours: number; hashtagBase: string; lineTargets: string[]; customVars: VarDef[]; gbpManual: boolean }
 interface Resp {
   setting: Setting; stores: StoreRow[]; sharedTopics: number; google: AccountRow | null;
   configured: { ig: boolean; google: boolean; line: boolean; lineWebhook: boolean; mail: boolean; appUrl: boolean; cronSecret: boolean };
@@ -59,7 +59,7 @@ export default function SnsHqPage() {
           <div>{check(data.configured.appUrl)}APP_URL（画像の公開 URL・連携の戻り先）：{data.baseUrl || '未設定'}</div>
           <div>{check(data.configured.cronSecret)}CRON_SECRET（自動処理）</div>
           <div>{check(data.configured.ig)}Instagram アプリ（IG_APP_ID / IG_APP_SECRET）</div>
-          <div>{check(data.configured.google)}Google OAuth（GOOGLE_CLIENT_ID / SECRET）</div>
+          {!s.gbpManual && <div>{check(data.configured.google)}Google OAuth（GOOGLE_CLIENT_ID / SECRET）</div>}
           <div>{check(data.configured.line)}LINE 通知（LINE_CHANNEL_ACCESS_TOKEN）　{check(data.configured.lineWebhook)}LINE Webhook（LINE_CHANNEL_SECRET）</div>
           <div>{check(data.configured.mail)}メール通知（NOTIFY_EMAIL。LINE が無いときの代わり）</div>
           <div>{check(data.mediaWritable)}画像の保存先（public/media/sns）に書き込める</div>
@@ -81,6 +81,10 @@ export default function SnsHqPage() {
       </section>
 
       <section className="rounded border bg-white p-4 text-sm">
+        <h2 className="mb-2 font-bold">Google ビジネスプロフィールの投稿方法</h2>
+        <label className="flex items-start gap-2"><input type="checkbox" checked={s.gbpManual} onChange={(e) => { const v = e.target.checked; setS({ ...s, gbpManual: v }); run(() => sendJson('/api/admin/hq/sns/settings', 'PUT', { gbpManual: v }), v ? 'Google は手動投稿の運用にしました' : 'Google は API 連携の運用にしました'); }} className="mt-1" /><span><span className="font-bold">Google は手動で投稿する（API 申請なし）</span><br /><span className="text-xs text-slate-500">オンにすると Google の投稿はすべて「手動投稿」になり、予定時刻の通知 → 手動投稿の画面でコピー → Google に貼り付け → 「投稿した」で記録します。API 連携の設定は表示しません。</span></span></label>
+      </section>
+      {!s.gbpManual && <section className="rounded border bg-white p-4 text-sm">
         <h2 className="mb-2 font-bold">Google ビジネスプロフィール（本部の Google アカウントで 24 店舗分をまとめて連携）</h2>
         {data.google?.connected ? <p>連携中{data.google.tokenRefreshedAt && <span className="text-xs text-slate-500">（最終更新 {data.google.tokenRefreshedAt.slice(0, 16)}）</span>}{data.google.lastError && <span className="ml-2 text-xs text-red-700">エラー：{data.google.lastError}</span>}</p> : <p className="text-slate-600">未連携。全店舗の拠点を管理している Google アカウントで連携してください。API の利用許可（申請）が下りる前でも連携はできますが、投稿・数字の取得は許可後に動きます。</p>}
         <div className="mt-2 flex flex-wrap gap-2">
@@ -89,7 +93,7 @@ export default function SnsHqPage() {
           {data.google?.connected && <button type="button" disabled={busy} onClick={() => confirm('Google の連携を解除しますか？') && run(() => sendJson('/api/admin/hq/sns/google/map', 'PUT', { disconnect: true }), '解除しました')} className="rounded border bg-white px-3 py-1 text-red-700">連携解除</button>}
         </div>
         {locs && <p className="mt-2 text-xs text-slate-500">{locs.length} 拠点を読み込みました。下の表で店舗ごとに拠点を選んでください。</p>}
-      </section>
+      </section>}
 
       <section className="overflow-x-auto rounded border bg-white">
         <h2 className="border-b px-3 py-2 font-bold">店舗ごとの状態</h2>
@@ -106,7 +110,7 @@ export default function SnsHqPage() {
                       <option value="">（割り当てなし）</option>
                       {locs.map((l) => <option key={l.location} value={`${l.account}|${l.location}`}>{l.title}　{l.address}</option>)}
                     </select>
-                  ) : st.gbpEnabled ? (st.gbp?.locationName ? <span className="text-green-700">{st.gbp.username}{st.gbp.lastError && <span className="ml-1 text-red-700" title={st.gbp.lastError}>!</span>}</span> : <span className="text-amber-700">拠点未割当（手動投稿）</span>) : <span className="text-slate-400">使わない</span>}
+                  ) : !st.gbpEnabled ? <span className="text-slate-400">使わない</span> : s.gbpManual ? <span className="text-slate-600">手動投稿</span> : (st.gbp?.locationName ? <span className="text-green-700">{st.gbp.username}{st.gbp.lastError && <span className="ml-1 text-red-700" title={st.gbp.lastError}>!</span>}</span> : <span className="text-amber-700">拠点未割当（手動投稿）</span>)}
                 </td>
                 <td className="whitespace-nowrap px-2 py-1 text-xs">{st.igEnabled ? st.igSchedule : '-'} / {st.gbpEnabled ? st.gbpSchedule : '-'}</td>
                 <td className="px-2 py-1 text-xs">{st.area || <span className="text-amber-700">未設定</span>}</td>

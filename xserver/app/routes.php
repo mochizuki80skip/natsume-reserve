@@ -65,6 +65,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/hq/jibai/settings$#', 'hq_jibai_settings_put'],
         // SNS 投稿管理（Instagram・Google ビジネスプロフィール）
         ['GET', '#^/api/admin/sns/home$#', 'sns_home'],
+        ['GET', '#^/api/admin/sns/manual$#', 'sns_manual_get'],
         ['GET', '#^/api/admin/sns/posts$#', 'sns_posts_get'],
         ['POST', '#^/api/admin/sns/posts$#', 'sns_posts_post'],
         ['GET', '#^/api/admin/sns/posts/([0-9a-f]{24})$#', 'sns_post_get'],

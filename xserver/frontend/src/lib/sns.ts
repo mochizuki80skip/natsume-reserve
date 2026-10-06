@@ -29,6 +29,19 @@ export interface AccountRow { channel: Channel; externalId: string; username: st
 export interface StoreSetting {
   igEnabled: boolean; igSchedule: Schedule | null; gbpEnabled: boolean; gbpSchedule: Schedule | null; effectiveIgSchedule: Schedule; effectiveGbpSchedule: Schedule;
   area: string; address: string; hoursText: string; hashtags: string; keywordsFixed: string; keywordsRotation: string; memo: string; vars: Record<string, string>;
+  gbpPostUrl: string; igProfileUrl: string;
+}
+export interface ManualPost extends Post { openUrl: string; openUrlIsSearch: boolean; ready: boolean; issues: string[]; bucket: 'overdue' | 'today' | 'upcoming' }
+
+/** 画像を保存（同じサイトの画像なので download 属性が効く） */
+export function downloadImage(url: string, name: string): void {
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+export async function copyText(text: string): Promise<boolean> {
+  try { await navigator.clipboard.writeText(text); return true; } catch { window.prompt('コピーしてください', text); return false; }
 }
 export interface Patterns { ig: { openings: string[]; closings: string[] }; gbp: { openings: string[]; keywordLines: string[]; closings: string[] } }
 

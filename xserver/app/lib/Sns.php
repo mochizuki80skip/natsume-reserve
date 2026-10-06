@@ -43,6 +43,9 @@ final class Sns
             ['sns_post', 'standalone', 'ALTER TABLE `sns_post` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 0 AFTER `patternIdx`'],
             ['sns_post', 'checkedAt', 'ALTER TABLE `sns_post` ADD COLUMN `checkedAt` DATETIME NULL AFTER `publishMode`'],
             ['sns_post', 'checkedBy', 'ALTER TABLE `sns_post` ADD COLUMN `checkedBy` VARCHAR(20) NULL AFTER `checkedAt`'],
+            ['sns_setting', 'gbpManual', 'ALTER TABLE `sns_setting` ADD COLUMN `gbpManual` TINYINT(1) NOT NULL DEFAULT 0'],
+            ['sns_store_setting', 'gbpPostUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `gbpPostUrl` VARCHAR(300) NOT NULL DEFAULT \'\''],
+            ['sns_store_setting', 'igProfileUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `igProfileUrl` VARCHAR(300) NOT NULL DEFAULT \'\''],
         ];
         if (!Db::one("SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sns_media'")) {
             Db::pdo()->exec("CREATE TABLE IF NOT EXISTS `sns_media` (`id` VARCHAR(32) NOT NULL, `storeId` VARCHAR(32) NULL, `path` VARCHAR(200) NOT NULL, `label` VARCHAR(100) NOT NULL DEFAULT '', `channel` VARCHAR(5) NOT NULL DEFAULT 'both', `width` INT NOT NULL DEFAULT 0, `height` INT NOT NULL DEFAULT 0, `active` TINYINT(1) NOT NULL DEFAULT 1, `useCount` INT NOT NULL DEFAULT 0, `lastUsedAt` DATETIME NULL, `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), KEY `sm_store` (`storeId`), CONSTRAINT `fk_sm_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
@@ -125,6 +128,7 @@ final class Sns
             'hashtagBase' => (string)$r['hashtagBase'],
             'lineTargets' => self::arr($r['lineTargets']),
             'customVars' => self::parseCustomVars(isset($r['customVars']) && is_string($r['customVars']) ? json_decode($r['customVars'], true) : null),
+            'gbpManual' => (bool)($r['gbpManual'] ?? 0), // Google は API を使わず手動で投稿する運用
         ];
     }
 
@@ -151,8 +155,8 @@ final class Sns
     public static function saveSetting(array $v): void
     {
         self::setting();
-        Db::exec('UPDATE sns_setting SET forbiddenWords = ?, patterns = ?, defaultIgSchedule = ?, defaultGbpSchedule = ?, daysAhead = ?, remindHours = ?, hashtagBase = ?, lineTargets = ?, customVars = ? WHERE id = 1', [
-            self::j($v['forbiddenWords']), self::j($v['patterns']), self::j($v['defaultIgSchedule']), self::j($v['defaultGbpSchedule']), $v['daysAhead'], $v['remindHours'], $v['hashtagBase'], self::j($v['lineTargets']), self::j($v['customVars'] ?? [])]);
+        Db::exec('UPDATE sns_setting SET forbiddenWords = ?, patterns = ?, defaultIgSchedule = ?, defaultGbpSchedule = ?, daysAhead = ?, remindHours = ?, hashtagBase = ?, lineTargets = ?, customVars = ?, gbpManual = ? WHERE id = 1', [
+            self::j($v['forbiddenWords']), self::j($v['patterns']), self::j($v['defaultIgSchedule']), self::j($v['defaultGbpSchedule']), $v['daysAhead'], $v['remindHours'], $v['hashtagBase'], self::j($v['lineTargets']), self::j($v['customVars'] ?? []), !empty($v['gbpManual']) ? 1 : 0]);
         self::$setting = null;
     }
 
@@ -195,7 +199,19 @@ final class Sns
             'keywordsRotation' => (string)($r['keywordsRotation'] ?? ''),
             'memo' => (string)($r['memo'] ?? ''),
             'vars' => self::parseVars(isset($r['vars']) && is_string($r['vars']) ? json_decode($r['vars'], true) : null),
+            'gbpPostUrl' => (string)($r['gbpPostUrl'] ?? ''),   // Google の投稿作成ページ（手動投稿で開く。空なら店名検索）
+            'igProfileUrl' => (string)($r['igProfileUrl'] ?? ''), // Instagram のプロフィール URL（手動投稿で開く）
         ];
+    }
+
+    /** 手動投稿で開く URL。Google は登録 URL → 無ければ店名＋地域の検索（オーナーでログインしていれば管理パネルが出る） */
+    public static function manualOpenUrl(string $channel, array $store, array $ss): string
+    {
+        if ($channel === 'gbp') {
+            if ($ss['gbpPostUrl'] !== '') return $ss['gbpPostUrl'];
+            return 'https://www.google.com/search?q=' . rawurlencode(trim($store['name'] . ' ' . $ss['area']));
+        }
+        return $ss['igProfileUrl'] !== '' ? $ss['igProfileUrl'] : 'https://www.instagram.com/';
     }
 
     /** 店舗の差し込み語の値（{key: value}） */
@@ -214,12 +230,12 @@ final class Sns
     public static function saveStoreSetting(string $storeId, array $v): void
     {
         self::ensureTables();
-        Db::exec('INSERT INTO sns_store_setting (storeId, igEnabled, igSchedule, gbpEnabled, gbpSchedule, area, address, hoursText, hashtags, keywordsFixed, keywordsRotation, memo, vars)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        Db::exec('INSERT INTO sns_store_setting (storeId, igEnabled, igSchedule, gbpEnabled, gbpSchedule, area, address, hoursText, hashtags, keywordsFixed, keywordsRotation, memo, vars, gbpPostUrl, igProfileUrl)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE igEnabled = VALUES(igEnabled), igSchedule = VALUES(igSchedule), gbpEnabled = VALUES(gbpEnabled), gbpSchedule = VALUES(gbpSchedule), area = VALUES(area), address = VALUES(address),
-            hoursText = VALUES(hoursText), hashtags = VALUES(hashtags), keywordsFixed = VALUES(keywordsFixed), keywordsRotation = VALUES(keywordsRotation), memo = VALUES(memo), vars = VALUES(vars)', [
+            hoursText = VALUES(hoursText), hashtags = VALUES(hashtags), keywordsFixed = VALUES(keywordsFixed), keywordsRotation = VALUES(keywordsRotation), memo = VALUES(memo), vars = VALUES(vars), gbpPostUrl = VALUES(gbpPostUrl), igProfileUrl = VALUES(igProfileUrl)', [
             $storeId, $v['igEnabled'] ? 1 : 0, $v['igSchedule'] === null ? null : self::j($v['igSchedule']), $v['gbpEnabled'] ? 1 : 0, $v['gbpSchedule'] === null ? null : self::j($v['gbpSchedule']),
-            $v['area'], $v['address'], $v['hoursText'], $v['hashtags'], $v['keywordsFixed'], $v['keywordsRotation'], $v['memo'], self::j($v['vars'] ?? [])]);
+            $v['area'], $v['address'], $v['hoursText'], $v['hashtags'], $v['keywordsFixed'], $v['keywordsRotation'], $v['memo'], self::j($v['vars'] ?? []), $v['gbpPostUrl'] ?? '', $v['igProfileUrl'] ?? '']);
     }
 
     // ---------- 頻度（スケジュール） ----------
@@ -568,6 +584,7 @@ final class Sns
     {
         $acc = self::account($store['id'], $channel);
         if ($channel === 'ig') return $acc && $acc['accessToken'] ? 'api' : 'manual';
+        if (self::setting()['gbpManual']) return 'manual'; // Google は手動投稿の運用
         $hq = self::account(null, 'gbp');
         return $acc && $acc['locationName'] !== '' && $hq && $hq['refreshToken'] ? 'api' : 'manual';
     }

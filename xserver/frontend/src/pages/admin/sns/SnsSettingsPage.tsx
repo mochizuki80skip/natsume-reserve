@@ -11,7 +11,7 @@ import { useAdmin } from '../Layout';
 interface Resp {
   store: { code: string; name: string; phone: string; bookingUrl: string }; setting: StoreSetting;
   defaults: { igSchedule: Schedule; gbpSchedule: Schedule; hashtagBase: string; daysAhead: number }; patterns: Patterns; customVars: VarDef[];
-  accounts: { ig: AccountRow | null; gbp: AccountRow | null }; igConfigured: boolean; googleConnected: boolean; isHq: boolean; baseUrl: string; appUrlSet: boolean;
+  accounts: { ig: AccountRow | null; gbp: AccountRow | null }; igConfigured: boolean; googleConnected: boolean; gbpManual: boolean; isHq: boolean; baseUrl: string; appUrlSet: boolean;
 }
 
 export default function SnsSettingsPage() {
@@ -85,6 +85,9 @@ export default function SnsSettingsPage() {
                 ))}
               </div>
             )}
+            <label className="block">Google の投稿作成ページの URL（手動投稿で直接開く。空なら店名を検索して管理パネルを開く）<input value={f.gbpPostUrl} onChange={str('gbpPostUrl')} placeholder="https://business.google.com/..." className="mt-1 w-full rounded border px-2 py-1" /></label>
+            <p className="-mt-1 text-xs text-slate-500">取り方：オーナーの Google アカウントでログインして Google 検索で店名を検索 → 管理パネルの「最新情報を追加」を押す → 開いたページの URL をコピーして貼る。</p>
+            <label className="block">Instagram のプロフィール URL（手動投稿で開く）<input value={f.igProfileUrl} onChange={str('igProfileUrl')} placeholder="https://www.instagram.com/アカウント名/" className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">運用メモ（下書きを確認する人が毎回見るルール。例：料金は書かない、絵文字なし）<textarea value={f.memo} onChange={str('memo')} rows={3} className="mt-1 w-full rounded border px-2 py-1" /></label>
             {SNS_ONLY && !data.store.bookingUrl.includes('/s/') && null}
             <div className="text-xs text-slate-500">差し込み語：{'{店舗名}'}＝{data.store.name}、{'{エリア}'}＝地域、{'{電話}'}＝{data.store.phone}、{'{予約URL}'}＝{data.store.bookingUrl}、{'{営業時間}'} {'{住所}'} {'{ハッシュタグ}'} {'{キーワード}'} はこの画面の値。文章の型（書き出し・締め）と差し込み語の項目は本部の SNS 管理で編集します。</div>
@@ -124,12 +127,19 @@ export default function SnsSettingsPage() {
               </details>
             )}
           </section>
+          {data.gbpManual ? (
+            <section className="rounded border bg-white p-4 text-sm">
+              <h2 className="mb-2 font-bold">Google ビジネスプロフィール</h2>
+              <p className="text-slate-600">手動投稿の運用です（API 申請なし）。予定時刻になると通知が届き、<a href="/admin/sns/manual" className="text-brand underline">手動投稿の画面</a>でコピー → Google に貼り付け → 「投稿した」で記録します。左の「投稿作成ページの URL」を登録しておくと 1 クリックで開けます。</p>
+            </section>
+          ) : (
           <section className="rounded border bg-white p-4 text-sm">
             <h2 className="mb-2 font-bold">Google ビジネスプロフィールの連携</h2>
             {gbp?.locationName ? <p>拠点：<span className="font-bold">{gbp.username}</span> <span className="text-xs text-slate-500">{gbp.locationName}</span>{!data.googleConnected && <span className="ml-2 text-xs text-red-700">（本部の Google 連携が切れています）</span>}</p> : <p className="text-slate-600">拠点が割り当てられていません。{data.isHq ? '「SNS管理（本部）」で Google アカウントを連携し、この店舗に拠点を割り当ててください。' : '本部が Google アカウントを連携し拠点を割り当てるまでは「手動投稿」になります。'}</p>}
             {gbp?.lastError && <p className="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-800">直近のエラー：{gbp.lastError}</p>}
             <p className="mt-2 text-xs text-slate-500">Google の API は利用許可（申請）が出るまで使えません。許可前は予定時刻に通知が届くので、本文をコピーして Google の画面から投稿し、「投稿した」を押してください。</p>
           </section>
+          )}
         </div>
       </div>
     </div>

@@ -44,6 +44,10 @@ await page.waitForSelector('h1:has-text("SNS 管理（本部）")');
 const hqText = await page.textContent('body');
 ok('接続状況が表示される', hqText.includes('APP_URL') && hqText.includes('CRON_SECRET'));
 ok('店舗ごとの状態の表がある', hqText.includes('店舗ごとの状態'));
+// Google の API 連携の流れを確かめるため、手動運用になっていたら一度オフにする
+const manualBox0 = page.locator('label:has-text("Google は手動で投稿する") input[type="checkbox"]');
+if (await manualBox0.isChecked()) { await manualBox0.uncheck(); await page.waitForSelector('text=API 連携の運用にしました'); }
+await page.waitForSelector('button:has-text("拠点を読み込む")');
 await page.click('button:has-text("拠点を読み込む")');
 await page.waitForSelector('text=拠点を読み込みました', { timeout: 15000 });
 ok('Google の拠点を読み込める（モック）', true);
@@ -149,6 +153,27 @@ await page.click('button:has-text("投稿した（手動）")');
 await page.waitForSelector('text=投稿済みにしました');
 await page.waitForSelector('text=投稿日時', { timeout: 15000 });
 ok('手動で投稿した記録', true);
+
+// Google を手動投稿の運用にして、手動投稿の画面で 1 件を片づける
+await page.goto(`${BASE}/admin/hq/sns`);
+await page.waitForSelector('h1:has-text("SNS 管理（本部）")');
+const gbpManualBox = page.locator('label:has-text("Google は手動で投稿する") input[type="checkbox"]');
+if (!(await gbpManualBox.isChecked())) { await gbpManualBox.check(); await page.waitForSelector('text=手動投稿の運用にしました'); }
+ok('Google を手動投稿の運用にできる', (await page.locator('text=Google と連携する').count()) === 0);
+await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+await page.goto(`${BASE}/admin/sns/manual`);
+await page.waitForSelector('h1:has-text("手動投稿")');
+await page.click('text=先に進めるなら表示');
+const card = page.locator('div.rounded.border.bg-white:has(button:has-text("③ 投稿した"))').filter({ hasNot: page.locator('text=このままでは投稿できません') }).first();
+await card.waitFor({ timeout: 15000 });
+const cardText = await card.textContent();
+ok('手動投稿の画面に投稿の内容と開くリンクが出る', cardText.includes('本文をコピーして') && (cardText.includes('Google') || cardText.includes('Instagram')));
+await card.locator('button:has-text("本文だけコピー")').click();
+await card.locator('button:has-text("本文だけコピー ✓")').waitFor({ timeout: 10000 });
+ok('本文をコピーできる', true);
+await card.locator('button:has-text("③ 投稿した")').click();
+await page.waitForSelector('text=を投稿済みにしました');
+ok('手動投稿を「投稿した」で記録できる', true);
 
 // 分析
 await page.goto(`${BASE}/admin/sns/insights?detail=S001`);
