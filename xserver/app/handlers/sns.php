@@ -56,10 +56,10 @@ function sns_recompose(array $p, array $store, array $patch): array
     return ['title' => $title, 'body' => $body, 'patternIdx' => $idx, 'scheduledAt' => $scheduledAt, 'closing' => $c['closing'], 'hashtags' => $c['hashtags'], 'fullText' => $c['fullText'], 'standalone' => $standalone];
 }
 
-/** 内容を変えたときにチェック・承認を外す SQL 断片 */
+/** 内容を変えたときに承認を外す SQL 断片 */
 const SNS_RESET_CHECKS = "status = 'draft', checkedAt = NULL, checkedBy = NULL, approvedAt = NULL, approvedBy = NULL";
 
-/** チェック・承認の前に、投稿できる内容かを確かめる（問題があれば例外） */
+/** 承認の前に、投稿できる内容かを確かめる（問題があれば例外） */
 function sns_assert_ready(array $p, array $store): void
 {
     if (mb_strlen(trim($p['postText'])) === 0) throw new HttpError(400, '本文が空です');
@@ -82,13 +82,13 @@ function sns_home(): never
     $s = Auth::requireSession();
     $where = $s['role'] === 'hq' ? '' : ' AND p.storeId = ' . Db::pdo()->quote($s['storeId']);
     $now = Time::nowJstDateTime();
-    $pending = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status IN ('draft', 'checked') $where ORDER BY p.scheduledAt ASC LIMIT 80");
+    $pending = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'draft' $where ORDER BY p.scheduledAt ASC LIMIT 80");
     $manual = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'approved' AND p.publishMode = 'manual' $where ORDER BY p.scheduledAt ASC LIMIT 60");
     $failed = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'failed' $where ORDER BY p.scheduledAt DESC LIMIT 30");
     $counts = Db::all("SELECT s.code, s.name, p.channel, p.status, COUNT(*) AS n FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.scheduledAt >= ? $where GROUP BY s.code, s.name, p.channel, p.status ORDER BY s.code", [Time::addDays(Time::nowJst()['date'], -30) . ' 00:00:00']);
     $byStore = [];
     foreach ($counts as $c) {
-        $byStore[$c['code']] ??= ['code' => $c['code'], 'name' => $c['name'], 'ig' => ['draft' => 0, 'checked' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0], 'gbp' => ['draft' => 0, 'checked' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0]];
+        $byStore[$c['code']] ??= ['code' => $c['code'], 'name' => $c['name'], 'ig' => ['draft' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0], 'gbp' => ['draft' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0]];
         if (isset($byStore[$c['code']][$c['channel']][$c['status']])) $byStore[$c['code']][$c['channel']][$c['status']] += (int)$c['n'];
     }
     $g = Sns::setting();
@@ -166,8 +166,8 @@ function sns_post_get(array $mm): never
     $store = Settings::findStoreById($p['storeId']);
     $ss = Sns::storeSetting($store);
     // 前後の投稿（入れ替え用）
-    $prev = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt < ? AND status IN (?, ?, ?) ORDER BY scheduledAt DESC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'checked', 'approved']);
-    $next = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt > ? AND status IN (?, ?, ?) ORDER BY scheduledAt ASC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'checked', 'approved']);
+    $prev = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt < ? AND status IN (?, ?) ORDER BY scheduledAt DESC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'approved']);
+    $next = Db::one('SELECT id, scheduledAt FROM sns_post WHERE storeId = ? AND channel = ? AND scheduledAt > ? AND status IN (?, ?) ORDER BY scheduledAt ASC LIMIT 1', [$p['storeId'], $p['channel'], $p['scheduledAt'], 'draft', 'approved']);
     Http::json([
         'post' => sns_post_with_stat($p['id']),
         'store' => ['code' => $store['code'], 'name' => $store['name'], 'phone' => Text::formatJpPhone($store['phone']), 'area' => $ss['area'], 'bookingUrl' => Sns::bookingUrl($store), 'memo' => $ss['memo']],
@@ -224,24 +224,14 @@ function sns_post_action(array $mm): never
     $store = Settings::findStoreById($p['storeId']);
     $now = Time::nowJstDateTime();
     switch ($action) {
-        case 'check': // 1 人目（作成者）のチェック
-            if (!in_array($p['status'], ['draft', 'failed'], true)) Http::error('チェックできる状態ではありません', 409);
-            sns_assert_ready($p, $store);
-            Db::exec('UPDATE sns_post SET status = ?, checkedAt = ?, checkedBy = ?, error = NULL WHERE id = ?', ['checked', $now, $s['code'], $p['id']]);
-            break;
-        case 'uncheck':
-            if ($p['status'] !== 'checked') Http::error('チェック済みではありません', 409);
-            Db::exec('UPDATE sns_post SET status = ?, checkedAt = NULL, checkedBy = NULL WHERE id = ?', ['draft', $p['id']]);
-            break;
-        case 'approve': // 2 人目の承認。1 人目と別のアカウントだけができる
-            if ($p['status'] !== 'checked') Http::error($p['status'] === 'approved' ? '承認済みです' : '先に作成者（1 人目）のチェックが必要です', 409);
-            if (($p['checkedBy'] ?? '') === $s['code']) Http::error('チェックした人（' . $s['code'] . '）と同じアカウントでは承認できません。別のアカウント（本部または店舗）で承認してください', 403);
+        case 'approve':
+            if (!in_array($p['status'], ['draft', 'failed'], true)) Http::error($p['status'] === 'approved' ? '承認済みです' : '承認できる状態ではありません', 409);
             sns_assert_ready($p, $store);
             Db::exec('UPDATE sns_post SET status = ?, approvedAt = ?, approvedBy = ?, error = NULL, manualNotifiedAt = NULL, publishMode = ? WHERE id = ?', ['approved', $now, $s['code'], Sns::publishModeFor($store, $p['channel']), $p['id']]);
             break;
         case 'unapprove':
             if ($p['status'] !== 'approved') Http::error('承認済みではありません', 409);
-            Db::exec('UPDATE sns_post SET status = ?, approvedAt = NULL, approvedBy = NULL WHERE id = ?', ['checked', $p['id']]);
+            Db::exec('UPDATE sns_post SET status = ?, approvedAt = NULL, approvedBy = NULL WHERE id = ?', ['draft', $p['id']]);
             break;
         case 'delete':
             if (in_array($p['status'], ['publishing'], true)) Http::error('投稿中のため削除できません', 409);
@@ -275,15 +265,16 @@ function sns_post_action(array $mm): never
             $after = sns_post_with_stat($p['id']);
             if ($r !== 'posted') Http::error($after['error'] ?? '投稿に失敗しました', 502);
             Http::json(['ok' => true, 'post' => $after]);
-        case 'mark_posted': // 手動で投稿したことを記録（2 人の承認がそろってから）
-            if ($p['status'] !== 'approved') Http::error('作成者のチェックと別の人の承認がそろってから投稿してください', 409);
+        case 'mark_posted': // 手動で投稿したことを記録（承認済みのもの。未承認なら内容の確認を通してから記録する）
+            if (!in_array($p['status'], ['approved', 'draft', 'failed'], true)) Http::error('この状態では記録できません', 409);
+            if ($p['status'] !== 'approved') sns_assert_ready($p, $store);
             $link = isset($b['permalink']) && is_string($b['permalink']) ? mb_substr(trim($b['permalink']), 0, 300) : null;
-            Db::exec('UPDATE sns_post SET status = ?, postedAt = ?, publishMode = ?, permalink = ?, error = NULL WHERE id = ?', ['posted', $now, 'manual', $link ?: null, $p['id']]);
+            Db::exec('UPDATE sns_post SET status = ?, postedAt = ?, publishMode = ?, permalink = ?, error = NULL, approvedAt = COALESCE(approvedAt, ?), approvedBy = COALESCE(approvedBy, ?) WHERE id = ?', ['posted', $now, 'manual', $link ?: null, $now, $s['code'], $p['id']]);
             break;
         case 'swap': // 前後の投稿と中身を入れ替える（日時はそのまま）
             if (!in_array($p['status'], Sns::EDITABLE, true)) Http::error('投稿済みの内容は入れ替えられません', 409);
             $otherId = (string)($b['withId'] ?? '');
-            $o = Db::one('SELECT * FROM sns_post WHERE id = ? AND storeId = ? AND channel = ? AND status IN (?, ?, ?)', [$otherId, $p['storeId'], $p['channel'], 'draft', 'checked', 'approved']);
+            $o = Db::one('SELECT * FROM sns_post WHERE id = ? AND storeId = ? AND channel = ? AND status IN (?, ?)', [$otherId, $p['storeId'], $p['channel'], 'draft', 'approved']);
             if (!$o) Http::error('入れ替え先が見つかりません', 404);
             Db::transaction(function () use ($p, $o, $store) {
                 foreach ([[$p, $o], [$o, $p]] as [$dst, $src]) {
@@ -485,7 +476,7 @@ function sns_decode_jpeg(string $data): string
 
 /**
  * 定型投稿を複数店舗に一斉に下書き化する（本部）。各店舗の差し込み語で置き換わった下書きができ、店舗（または本部）が承認して投稿される
- * body: {channel, scheduledAt, stores: 'all' | [店舗コード...]}。作成者のチェックと別の人の承認がそろうまで投稿されない
+ * body: {channel, scheduledAt, stores: 'all' | [店舗コード...]}。各店舗（または本部）が承認すると投稿される
  */
 function hq_sns_topic_broadcast(array $mm): never
 {

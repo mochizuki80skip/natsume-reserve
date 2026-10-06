@@ -44,13 +44,12 @@ export default function SnsHomePage() {
   const [sel, setSel] = useState<Set<string>>(new Set());
   const isHq = me.session.role === 'hq';
   const onSel = (id: string, on: boolean) => { const n = new Set(sel); if (on) n.add(id); else n.delete(id); setSel(n); };
-  async function bulk(action: 'check' | 'approve') {
-    const label = action === 'check' ? '作成者チェック（1 人目）' : '承認（2 人目）';
-    if (sel.size === 0 || !confirm(`${sel.size} 件を${label}しますか？内容は確認済みですか？`)) return;
+  async function bulkApprove() {
+    if (sel.size === 0 || !confirm(`${sel.size} 件を承認しますか？内容は確認済みですか？`)) return;
     setBusy(true);
     const errs: string[] = []; let n = 0;
-    for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action }); n++; } catch (e) { errs.push((e as Error).message); } }
-    setMsg(`${n} 件を${label}しました${errs.length ? `。できなかったもの：${errs.slice(0, 3).join(' / ')}` : ''}`);
+    for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'approve' }); n++; } catch (e) { errs.push((e as Error).message); } }
+    setMsg(`${n} 件を承認しました${errs.length ? `。承認できなかったもの：${errs.slice(0, 3).join(' / ')}` : ''}`);
     setSel(new Set()); setBusy(false); reload();
   }
   async function generate(all: boolean) {
@@ -77,11 +76,10 @@ export default function SnsHomePage() {
         {isHq && <Link to="/admin/sns/topics" className="rounded border bg-white px-3 py-1">定型投稿を全店舗に一斉配信</Link>}
         <span className="ml-auto text-xs text-slate-500">通知：{data.notify}{data.lastJob && `　最終の自動処理：${data.lastJob.ranAt.slice(5, 16)}`}</span>
       </div>
-      {soon.length > 0 && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">今日までに予定の未承認 {soon.length} 件があります。作成者のチェックと別のアカウントの承認がそろわない下書きは投稿されません。</p>}
-      <p className="text-xs text-slate-500">投稿までの流れ：作成者がチェック（1 人目）→ 別のアカウント（本部または店舗）が承認（2 人目）→ 予定時刻に投稿。同じアカウントで両方はできません。</p>
+      {soon.length > 0 && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">今日までに予定の未承認 {soon.length} 件があります。承認していない下書きは投稿されません。</p>}
       <section className="rounded border bg-white">
-        <h2 className="flex items-center gap-2 border-b px-3 py-2 font-bold">確認待ちの下書き（近い日付順）<span className="text-sm font-normal text-slate-500">{data.pending.length} 件</span>
-          {data.pending.length > 0 && <span className="ml-auto flex items-center gap-2 text-xs font-normal"><label className="flex items-center gap-1"><input type="checkbox" checked={sel.size > 0 && sel.size === data.pending.length} onChange={(e) => setSel(e.target.checked ? new Set(data.pending.map((p) => p.id)) : new Set())} />すべて選択</label><button type="button" disabled={busy || sel.size === 0} onClick={() => bulk('check')} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択をチェック（1 人目）</button><button type="button" disabled={busy || sel.size === 0} onClick={() => bulk('approve')} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択を承認（2 人目）</button></span>}
+        <h2 className="flex items-center gap-2 border-b px-3 py-2 font-bold">承認待ちの下書き（近い日付順）<span className="text-sm font-normal text-slate-500">{data.pending.length} 件</span>
+          {data.pending.length > 0 && <span className="ml-auto flex items-center gap-2 text-xs font-normal"><label className="flex items-center gap-1"><input type="checkbox" checked={sel.size > 0 && sel.size === data.pending.length} onChange={(e) => setSel(e.target.checked ? new Set(data.pending.map((p) => p.id)) : new Set())} />すべて選択</label><button type="button" disabled={busy || sel.size === 0} onClick={bulkApprove} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択を承認</button></span>}
         </h2>
         <PostList posts={data.pending} empty="承認待ちはありません" showStore={isHq} sel={sel} onSel={onSel} />
       </section>
@@ -105,8 +103,8 @@ export default function SnsHomePage() {
             {data.byStore.map((s) => (
               <tr key={s.code} className="border-t">
                 <td className="px-2 py-1">{s.name}</td>
-                <td className="px-2 py-1 tabular-nums">{s.ig.draft} / {s.ig.checked} / {s.ig.approved} / {s.ig.posted} / <span className={s.ig.failed ? 'text-red-700' : ''}>{s.ig.failed}</span></td>
-                <td className="px-2 py-1 tabular-nums">{s.gbp.draft} / {s.gbp.checked} / {s.gbp.approved} / {s.gbp.posted} / <span className={s.gbp.failed ? 'text-red-700' : ''}>{s.gbp.failed}</span></td>
+                <td className="px-2 py-1 tabular-nums">{s.ig.draft} / {s.ig.approved} / {s.ig.posted} / <span className={s.ig.failed ? 'text-red-700' : ''}>{s.ig.failed}</span></td>
+                <td className="px-2 py-1 tabular-nums">{s.gbp.draft} / {s.gbp.approved} / {s.gbp.posted} / <span className={s.gbp.failed ? 'text-red-700' : ''}>{s.gbp.failed}</span></td>
                 <td className="px-2 py-1">{isHq ? <Link to={`/admin/sns/posts?store=${s.code}`} className="text-brand underline">投稿一覧</Link> : <Link to="/admin/sns/posts" className="text-brand underline">投稿一覧</Link>}</td>
               </tr>
             ))}

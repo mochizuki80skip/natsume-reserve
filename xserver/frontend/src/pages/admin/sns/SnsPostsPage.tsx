@@ -32,12 +32,11 @@ export default function SnsPostsPage() {
     for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'delete' }); n++; } catch { /* 投稿済みなどは飛ばす */ } }
     setMsg(`${n} 件を削除しました`); reload();
   }
-  async function bulk(action: 'check' | 'approve') {
-    const label = action === 'check' ? '作成者チェック（1 人目）' : '承認（2 人目）';
-    if (sel.size === 0 || !confirm(`${sel.size} 件を${label}しますか？内容は確認済みですか？`)) return;
+  async function bulkApprove() {
+    if (sel.size === 0 || !confirm(`${sel.size} 件を承認しますか？内容は確認済みですか？`)) return;
     const errs: string[] = []; let n = 0;
-    for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action }); n++; } catch (e) { errs.push((e as Error).message); } }
-    setMsg(`${n} 件を${label}しました${errs.length ? `。できなかったもの：${errs.slice(0, 3).join(' / ')}` : ''}`); reload();
+    for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'approve' }); n++; } catch (e) { errs.push((e as Error).message); } }
+    setMsg(`${n} 件を承認しました${errs.length ? `。承認できなかったもの：${errs.slice(0, 3).join(' / ')}` : ''}`); reload();
   }
 
   if (error) return <div><SnsNav /><p className="text-sm text-red-700">{error.message}</p></div>;
@@ -45,7 +44,7 @@ export default function SnsPostsPage() {
   const posts = data.posts;
   const byDate = new Map<string, Post[]>();
   for (const p of posts) { const d = p.scheduledAt.slice(0, 10); byDate.set(d, [...(byDate.get(d) ?? []), p]); }
-  const selectable = posts.filter((p) => p.status === 'draft' || p.status === 'checked' || p.status === 'approved' || p.status === 'failed');
+  const selectable = posts.filter((p) => p.status === 'draft' || p.status === 'approved' || p.status === 'failed');
 
   return (
     <div className="space-y-4">
@@ -92,14 +91,13 @@ export default function SnsPostsPage() {
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-xs text-slate-500">色：灰＝下書き、紫＝1 人目チェック済み、青＝承認済み、緑＝投稿済み、赤＝失敗。</p>
+          <p className="mt-2 text-xs text-slate-500">色：灰＝下書き、青＝承認済み、緑＝投稿済み、赤＝失敗。</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded border bg-white">
           <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-sm">
             <label className="flex items-center gap-1"><input type="checkbox" checked={sel.size > 0 && sel.size === selectable.length} onChange={(e) => setSel(e.target.checked ? new Set(selectable.map((p) => p.id)) : new Set())} />すべて選択</label>
-            <button type="button" disabled={sel.size === 0} onClick={() => bulk('check')} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択をチェック（1 人目）</button>
-            <button type="button" disabled={sel.size === 0} onClick={() => bulk('approve')} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択を承認（2 人目）</button>
+            <button type="button" disabled={sel.size === 0} onClick={bulkApprove} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択を承認</button>
             <button type="button" disabled={sel.size === 0} onClick={bulkDelete} className="rounded border bg-white px-2 py-0.5 text-red-700 disabled:opacity-40">選択を削除</button>
             <span className="ml-auto text-xs text-slate-500">{from} 〜 {to}　{posts.length} 件</span>
           </div>
@@ -108,7 +106,7 @@ export default function SnsPostsPage() {
             <tbody>
               {posts.map((p) => (
                 <tr key={p.id} className={`border-t ${p.scheduledAt.slice(0, 10) < me.today && p.status === 'draft' ? 'bg-red-50' : ''}`}>
-                  <td className="px-2 py-1">{(p.status === 'draft' || p.status === 'checked' || p.status === 'approved' || p.status === 'failed') && <input type="checkbox" checked={sel.has(p.id)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(p.id); else n.delete(p.id); setSel(n); }} />}</td>
+                  <td className="px-2 py-1">{(p.status === 'draft' || p.status === 'approved' || p.status === 'failed') && <input type="checkbox" checked={sel.has(p.id)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(p.id); else n.delete(p.id); setSel(n); }} />}</td>
                   <td className="whitespace-nowrap px-2 py-1 tabular-nums">{formatScheduled(p.scheduledAt)}</td>
                   <td className="whitespace-nowrap px-2 py-1"><span className={`rounded px-1.5 text-xs ${p.channel === 'ig' ? 'bg-pink-100 text-pink-800' : 'bg-emerald-100 text-emerald-800'}`}>{CHANNEL_JA[p.channel]}</span></td>
                   <td className="px-2 py-1"><Link to={`/admin/sns/posts/${p.id}`} className="text-brand underline">{p.title || p.body.slice(0, 30) || '（本文なし）'}</Link>

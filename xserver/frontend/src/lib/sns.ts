@@ -2,12 +2,12 @@
 import { WEEKDAY_JA, addDays, weekdayOf } from './time';
 
 export type Channel = 'ig' | 'gbp';
-export type PostStatus = 'draft' | 'checked' | 'approved' | 'publishing' | 'posted' | 'failed';
+export type PostStatus = 'draft' | 'approved' | 'publishing' | 'posted' | 'failed';
 export const CHANNELS: Channel[] = ['ig', 'gbp'];
 export const CHANNEL_JA: Record<Channel, string> = { ig: 'Instagram', gbp: 'Google' };
-export const STATUS_JA: Record<PostStatus, string> = { draft: '下書き', checked: '1人目チェック済み', approved: '承認済み', publishing: '投稿中', posted: '投稿済み', failed: '失敗' };
+export const STATUS_JA: Record<PostStatus, string> = { draft: '下書き', approved: '承認済み', publishing: '投稿中', posted: '投稿済み', failed: '失敗' };
 export const STATUS_CLASS: Record<PostStatus, string> = {
-  draft: 'bg-slate-200 text-slate-700', checked: 'bg-violet-100 text-violet-800', approved: 'bg-blue-100 text-blue-800', publishing: 'bg-amber-100 text-amber-800', posted: 'bg-green-100 text-green-800', failed: 'bg-red-100 text-red-800',
+  draft: 'bg-slate-200 text-slate-700', approved: 'bg-blue-100 text-blue-800', publishing: 'bg-amber-100 text-amber-800', posted: 'bg-green-100 text-green-800', failed: 'bg-red-100 text-red-800',
 };
 
 export type Schedule = { type: 'weekly'; weekdays: number[]; hour: number; minute: number } | { type: 'monthly'; nth: number; weekday: number; hour: number; minute: number };
@@ -17,7 +17,6 @@ export interface Post {
   id: string; storeId: string; storeCode: string | null; storeName: string | null; channel: Channel; scheduledAt: string; status: PostStatus; topicId: string | null;
   title: string; body: string; closing: string; hashtags: string; fullText: string; patternIdx: number;
   imageUrl: string | null; imageKind: 'none' | 'template' | 'upload' | 'topic' | 'library'; source: 'auto' | 'manual'; publishMode: 'api' | 'manual';
-  checkedAt: string | null; checkedBy: string | null;
   approvedAt: string | null; approvedBy: string | null; postedAt: string | null; externalId: string | null; permalink: string | null; error: string | null;
   length: number; maxLength: number; compliance: { hits: string[]; blocking: boolean }; stat: PostStat | null; createdAt: string; updatedAt: string;
   standalone: boolean; unfilled: string[]; gbpInfo: string[];

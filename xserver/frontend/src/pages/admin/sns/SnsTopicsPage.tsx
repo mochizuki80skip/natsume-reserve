@@ -43,7 +43,7 @@ export default function SnsTopicsPage() {
   }
   async function broadcast() {
     if (!bc || !data) return;
-    if (!confirm(`この定型投稿を全店舗（${data.storeCount} 店舗）の ${bc.scheduledAt.replace('T', ' ')} の下書きにします。作成者のチェックと別のアカウントの承認がそろった店舗から投稿されます。よろしいですか？`)) return;
+    if (!confirm(`この定型投稿を全店舗（${data.storeCount} 店舗）の ${bc.scheduledAt.replace('T', ' ')} の下書きにします。各店舗（または本部）が承認すると投稿されます。よろしいですか？`)) return;
     await run(async () => {
       const r = await sendJson<{ created: number; skipped: string[]; unfilled: string[] }>(`/api/admin/hq/sns/topics/${bc.id}/broadcast`, 'POST', { channel: bc.channel, scheduledAt: bc.scheduledAt, stores: 'all' });
       setBc(null);
@@ -176,7 +176,7 @@ function BroadcastDialog({ bc, setBc, topic, storeCount, onRun }: { bc: { id: st
           </select>
           <input type="datetime-local" value={bc.scheduledAt} onChange={(e) => setBc({ ...bc, scheduledAt: e.target.value })} className="rounded border px-2 py-1" />
         </div>
-        <p className="text-xs text-slate-600">作った下書きは、作成者のチェック（1 人目）と別のアカウントの承認（2 人目）がそろった店舗から予定時刻に投稿されます。ホームの「選択をチェック」「選択を承認」でまとめて進められます。</p>
+        <p className="text-xs text-slate-600">作った下書きは、各店舗（または本部）が承認すると予定時刻に投稿されます。ホームの「選択を承認」でまとめて承認できます。</p>
         {bc.channel === 'ig' && !topic.imageUrl && <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900">この定型投稿には画像がありません。各店舗の下書きには画像ライブラリから自動で 1 枚付きます（ライブラリが空なら画像なし）。</p>}
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setBc(null)} className="rounded border px-3 py-1">やめる</button><button type="button" onClick={onRun} className="rounded bg-brand px-3 py-1 text-white">下書きを作る</button></div>
       </div>

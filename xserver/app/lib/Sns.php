@@ -6,8 +6,8 @@ final class Sns
 {
     public const CHANNELS = ['ig', 'gbp'];
     public const CHANNEL_JA = ['ig' => 'Instagram', 'gbp' => 'Google'];
-    public const STATUSES = ['draft', 'checked', 'approved', 'publishing', 'posted', 'failed'];
-    public const EDITABLE = ['draft', 'checked', 'approved', 'failed']; // 内容を変えられる状態（変えるとチェック・承認は外れる）
+    public const STATUSES = ['draft', 'approved', 'publishing', 'posted', 'failed'];
+    public const EDITABLE = ['draft', 'approved', 'failed']; // 内容を変えられる状態（変えると承認は外れる）
     public const MAX_LEN = ['ig' => 2200, 'gbp' => 1500]; // Instagram のキャプション / Google の投稿本文の上限
     public const MEDIA_DIR = 'media/sns'; // public/ からの相対パス
 
@@ -51,6 +51,8 @@ final class Sns
             $r = Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $col]);
             if (!$r) Db::pdo()->exec($ddl);
         }
+        // 以前の「2 人チェック」の途中状態（checked）は下書きに戻す
+        Db::exec("UPDATE sns_post SET status = 'draft' WHERE status = 'checked'");
     }
 
     // ---------- 既定値 ----------
@@ -624,7 +626,6 @@ final class Sns
             'title' => $r['title'], 'body' => $r['body'], 'closing' => $r['closing'], 'hashtags' => $r['hashtags'], 'fullText' => $r['postText'], 'patternIdx' => (int)$r['patternIdx'], 'standalone' => (bool)($r['standalone'] ?? 0),
             'unfilled' => self::unfilledIn($r['postText']),
             'imageUrl' => $r['imagePath'] ? self::mediaUrl($r['imagePath']) : null, 'imageKind' => $r['imageKind'], 'source' => $r['source'], 'publishMode' => $r['publishMode'],
-            'checkedAt' => $r['checkedAt'] ?? null, 'checkedBy' => $r['checkedBy'] ?? null,
             'approvedAt' => $r['approvedAt'], 'approvedBy' => $r['approvedBy'], 'postedAt' => $r['postedAt'], 'externalId' => $r['externalId'], 'permalink' => $r['permalink'], 'error' => $r['error'],
             'length' => mb_strlen($r['postText']), 'maxLength' => self::MAX_LEN[$r['channel']] ?? 2200,
             'compliance' => ['hits' => $hits, 'blocking' => $r['channel'] === 'gbp' && $hits !== []],

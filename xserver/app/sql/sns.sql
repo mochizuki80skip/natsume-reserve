@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS `sns_media` (
   CONSTRAINT `fk_sm_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 投稿（下書き）。status: draft → checked（作成者のチェック）→ approved（別の人の承認）→ publishing → posted／failed
+-- 投稿（下書き）。status: draft → approved（承認）→ publishing → posted／failed
 CREATE TABLE IF NOT EXISTS `sns_post` (
   `id` VARCHAR(32) NOT NULL,
   `storeId` VARCHAR(32) NOT NULL,
@@ -115,9 +115,9 @@ CREATE TABLE IF NOT EXISTS `sns_post` (
   `imageKind` VARCHAR(10) NOT NULL DEFAULT 'none', -- none / template / upload / topic（定型投稿の画像をコピー）
   `source` VARCHAR(10) NOT NULL DEFAULT 'auto',    -- auto（自動生成）/ manual（手で作成）
   `publishMode` VARCHAR(10) NOT NULL DEFAULT 'api', -- api / manual（Google の許可待ちなど）
-  `checkedAt` DATETIME NULL,                -- 1 人目（作成者）のチェック
+  `checkedAt` DATETIME NULL,                -- （未使用。以前の 2 人チェックの名残）
   `checkedBy` VARCHAR(20) NULL,
-  `approvedAt` DATETIME NULL,               -- 2 人目の承認（checkedBy と別のアカウントだけができる）
+  `approvedAt` DATETIME NULL,
   `approvedBy` VARCHAR(20) NULL,
   `postedAt` DATETIME NULL,
   `externalId` VARCHAR(200) NULL,

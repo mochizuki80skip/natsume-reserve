@@ -55,7 +55,6 @@ export default function SnsPostPage() {
   if (!data || !p || !f) return <div><SnsNav /><p className="text-sm text-slate-500">読み込み中…</p></div>;
   const locked = p.status === 'posted' || p.status === 'publishing';
   const storeQ = me.session.role === 'hq' ? `store=${encodeURIComponent(data.store.code)}` : '';
-  const canApprove = p.status === 'checked' && p.checkedBy !== data.me;
   const liveHits = complianceHits(direct ?? `${f.title}\n${f.body}\n${f.closing}`, data.forbiddenWords);
   const dirty = direct !== null || f.title !== p.title || f.body !== p.body || f.closing !== p.closing || f.hashtags !== p.hashtags || f.scheduledAt !== toInputDateTime(p.scheduledAt);
   const isManual = data.publishMode === 'manual';
@@ -94,7 +93,7 @@ export default function SnsPostPage() {
                 <button type="button" disabled={busy} onClick={() => setPicker(true)} className="rounded bg-brand px-3 py-1 text-white disabled:opacity-50">画像ライブラリから選ぶ</button>
                 <label className="cursor-pointer rounded border bg-white px-3 py-1">写真をアップロード<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} /></label>
               </div>
-              <p className="text-xs text-slate-500">写真は 1080px に縮小して JPEG で保存します。人物が写る写真は本人の同意を確認してください。画像を変えるとチェック・承認は外れます。</p>
+              <p className="text-xs text-slate-500">写真は 1080px に縮小して JPEG で保存します。人物が写る写真は本人の同意を確認してください。画像を変えると承認は外れます。</p>
               <details className="text-xs">
                 <summary className="cursor-pointer text-slate-600">文字だけの簡易画像を作る（ライブラリに画像が無いとき）</summary>
                 <div className="mt-2 flex items-center gap-2"><select value={variant} onChange={(e) => setVariant(Number(e.target.value))} className="rounded border px-1 text-xs"><option value={0}>白</option><option value={1}>紺</option><option value={2}>ブランド色</option></select><button type="button" disabled={busy} onClick={saveCanvas} className="rounded border bg-white px-2 py-0.5 disabled:opacity-50">この簡易画像を使う</button></div>
@@ -145,31 +144,23 @@ export default function SnsPostPage() {
             <pre className="whitespace-pre-wrap font-sans text-sm">{p.fullText}</pre>
           </div>
 
-          <div className="rounded border bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            <span className="font-bold">投稿までの流れ：</span>作成者のチェック（1 人目）→ 別のアカウントの承認（2 人目）→ 予定時刻に投稿。内容や画像を変えると両方とも外れます。
-            <div className="mt-1">1 人目：{p.checkedBy ? <span className="text-violet-800">{p.checkedBy}（{p.checkedAt?.slice(5, 16)}）</span> : '未'}　2 人目：{p.approvedBy ? <span className="text-blue-800">{p.approvedBy}（{p.approvedAt?.slice(5, 16)}）</span> : '未'}　あなた：{data.me}</div>
-          </div>
           <div className="flex flex-wrap items-center gap-2 border-t pt-3">
-            {(p.status === 'draft' || p.status === 'failed') && <button type="button" disabled={busy || dirty} onClick={() => action('check', {}, 'チェックしました。別のアカウントの承認を待ちます')} className="rounded bg-violet-700 px-4 py-1.5 font-bold text-white disabled:opacity-40">作成者チェック（1 人目）</button>}
-            {p.status === 'checked' && <button type="button" disabled={busy} onClick={() => action('uncheck', {}, 'チェックを取り消しました')} className="rounded border bg-white px-3 py-1">チェックを取り消す</button>}
-            {p.status === 'checked' && (canApprove
-              ? <button type="button" disabled={busy || dirty} onClick={() => action('approve', {}, '承認しました。予定時刻に投稿されます')} className="rounded bg-green-700 px-4 py-1.5 font-bold text-white disabled:opacity-40">承認する（2 人目）</button>
-              : <span className="rounded bg-amber-50 px-3 py-1.5 text-xs text-amber-900">チェックした {p.checkedBy} と別のアカウント（本部または店舗）の承認が必要です</span>)}
+            {(p.status === 'draft' || p.status === 'failed') && <button type="button" disabled={busy || dirty} onClick={() => action('approve', {}, '承認しました。予定時刻に投稿されます')} className="rounded bg-green-700 px-4 py-1.5 font-bold text-white disabled:opacity-40">承認する</button>}
             {p.status === 'approved' && <button type="button" disabled={busy} onClick={() => action('unapprove', {}, '承認を取り消しました')} className="rounded border bg-white px-3 py-1">承認を取り消す</button>}
             {p.status === 'approved' && !isManual && <button type="button" disabled={busy} onClick={() => confirm('今すぐ投稿します。よろしいですか？') && action('publish_now', {}, '投稿しました')} className="rounded border border-green-700 bg-white px-3 py-1 text-green-800">今すぐ投稿</button>}
-            {isManual && p.status === 'approved' && <button type="button" disabled={busy} onClick={() => { const link = window.prompt('投稿した URL があれば入力（なければそのまま OK）', '') ; if (link !== null) action('mark_posted', { permalink: link }, '投稿済みにしました'); }} className="rounded border bg-white px-3 py-1">投稿した（手動）</button>}
+            {isManual && p.status !== 'posted' && p.status !== 'publishing' && <button type="button" disabled={busy || dirty} onClick={() => { const link = window.prompt('投稿した URL があれば入力（なければそのまま OK）', '') ; if (link !== null) action('mark_posted', { permalink: link }, '投稿済みにしました'); }} className="rounded border bg-white px-3 py-1">投稿した（手動）</button>}
             {!locked && data.neighbors.prev && <button type="button" disabled={busy} onClick={() => action('swap', { withId: data.neighbors.prev!.id }, '前の投稿と中身を入れ替えました')} className="rounded border bg-white px-3 py-1 text-xs">前の投稿と入れ替え</button>}
             {!locked && data.neighbors.next && <button type="button" disabled={busy} onClick={() => action('swap', { withId: data.neighbors.next!.id }, '次の投稿と中身を入れ替えました')} className="rounded border bg-white px-3 py-1 text-xs">次の投稿と入れ替え</button>}
             {p.status !== 'publishing' && <button type="button" disabled={busy} onClick={() => confirm('この投稿を削除しますか？') && run(async () => { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'delete' }); navigate('/admin/sns/posts'); })} className="ml-auto rounded border bg-white px-3 py-1 text-red-700">削除</button>}
           </div>
-          {dirty && (p.status === 'draft' || p.status === 'failed' || p.status === 'checked') && <p className="text-xs text-amber-700">変更を保存してからチェック・承認してください。</p>}
+          {dirty && (p.status === 'draft' || p.status === 'failed') && <p className="text-xs text-amber-700">変更を保存してから承認してください。</p>}
           {isManual && p.status !== 'posted' && (
             <div className="rounded border border-slate-300 bg-white p-3 text-xs text-slate-700">
               <p className="font-bold">手動投稿の手順（{CHANNEL_JA[p.channel]}）</p>
               <ol className="ml-4 list-decimal space-y-0.5">
                 <li>上の「コピー」で投稿文をコピーし、画像があれば右クリックで保存します。</li>
                 <li>{p.channel === 'gbp' ? 'Google ビジネスプロフィール（Google 検索で店名を検索 → 「最新情報を追加」）に貼り付けて投稿します。' : 'Instagram アプリで新規投稿を作り、画像を選んでキャプションに貼り付けます。'}</li>
-                <li>2 人の確認がそろったら「投稿した（手動）」を押して記録します。{p.channel === 'gbp' ? ' API の利用許可が出ると自動投稿に切り替わります。' : ''}</li>
+                <li>「投稿した（手動）」を押して記録します。{p.channel === 'gbp' ? ' API の利用許可が出ると自動投稿に切り替わります。' : ''}</li>
               </ol>
             </div>
           )}
