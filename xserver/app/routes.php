@@ -71,7 +71,9 @@ function route_table(): array
         ['DELETE', '#^/api/admin/jibai/claims$#', 'jibai_claims_delete'],
         ['POST', '#^/api/admin/jibai/submit$#', 'jibai_submit'],
         ['PUT', '#^/api/admin/jibai/verify$#', 'jibai_verify'],
+        ['GET', '#^/api/admin/jibai/stats$#', 'jibai_stats'],
         ['GET', '#^/api/admin/hq/jibai$#', 'hq_jibai'],
+        ['GET', '#^/api/admin/hq/jibai/stats$#', 'hq_jibai_stats'],
         ['PUT', '#^/api/admin/hq/jibai/settings$#', 'hq_jibai_settings_put'],
         // 自動削除・初期設定
         ['GET', '#^/api/cron/cleanup$#', 'cron_cleanup'],

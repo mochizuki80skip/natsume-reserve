@@ -54,6 +54,43 @@ final class Jibai
         return Time::isValidMonth($ym) && $ym >= '2020-01' && $ym <= '2099-12';
     }
 
+    /** "2026-09" に n か月を足す */
+    public static function addMonths(string $ym, int $n): string
+    {
+        [$y, $m] = array_map('intval', explode('-', $ym));
+        $t = $y * 12 + ($m - 1) + $n;
+        return sprintf('%04d-%02d', intdiv($t, 12), $t % 12 + 1);
+    }
+
+    /** 1 枚あたりの平均（円、四捨五入）。0 枚なら null */
+    public static function avg(int $total, int $count): ?int
+    {
+        return $count > 0 ? (int)round($total / $count) : null;
+    }
+
+    /**
+     * from から 12 か月の月別の枚数・合計・1 枚あたり平均（請求月で集計）。storeId が null なら全店
+     * @return array{from:string,to:string,months:array,year:array}
+     */
+    public static function yearStats(?string $storeId, string $from): array
+    {
+        $to = self::addMonths($from, 11);
+        $sql = 'SELECT COALESCE(invoiceYm, ym) AS m, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS t FROM jibai_claim WHERE COALESCE(invoiceYm, ym) BETWEEN ? AND ?';
+        $params = [$from, $to];
+        if ($storeId !== null) { $sql .= ' AND storeId = ?'; $params[] = $storeId; }
+        $by = [];
+        foreach (Db::all($sql . ' GROUP BY COALESCE(invoiceYm, ym)', $params) as $r) $by[$r['m']] = ['n' => (int)$r['n'], 't' => (int)$r['t']];
+        $months = [];
+        $yn = 0; $yt = 0;
+        for ($i = 0; $i < 12; $i++) {
+            $m = self::addMonths($from, $i);
+            $n = $by[$m]['n'] ?? 0; $t = $by[$m]['t'] ?? 0;
+            $months[] = ['ym' => $m, 'count' => $n, 'total' => $t, 'avg' => self::avg($t, $n)];
+            $yn += $n; $yt += $t;
+        }
+        return ['from' => $from, 'to' => $to, 'months' => $months, 'year' => ['count' => $yn, 'total' => $yt, 'avg' => self::avg($yt, $yn)]];
+    }
+
     /** 今月の "YYYY-MM" */
     public static function currentYm(): string
     {

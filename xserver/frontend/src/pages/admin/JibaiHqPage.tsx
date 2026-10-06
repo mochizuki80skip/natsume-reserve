@@ -1,8 +1,9 @@
-// 本部：自賠請求の店舗別・全社の速報合計（提出状況・経理確認の進み具合・過去 12 か月の推移・氏名の保持期間）
-import { useState } from 'react';
+// 本部：自賠請求の店舗別・全社の速報合計（提出状況・経理確認の進み具合・1 枚あたり平均・年間の月別推移・氏名の保持期間）
+import { useEffect, useState } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, yen } from '@/lib/jibai';
+import JibaiYearStats from '@/components/JibaiYearStats';
 import { useAdmin } from './Layout';
 
 interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; lateCount: number; lateTotal: number; movedOut: number; verifiedCount: number; verifiedTotal: number }
@@ -17,6 +18,9 @@ export default function JibaiHqPage() {
   const navigate = useNavigate();
   const ymParam = sp.get('ym') ?? '';
   const { data, error, reload } = useFetch<Resp>(me.session.role === 'hq' ? `/api/admin/hq/jibai?ym=${encodeURIComponent(ymParam)}` : null);
+  // 画面のデータが読み直されたら年間の表も読み直す
+  const [statsTick, setStatsTick] = useState(0);
+  useEffect(() => { if (data) setStatsTick((t) => t + 1); }, [data]);
   const [days, setDays] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   if (me.session.role !== 'hq') return <Navigate to="/admin" replace />;
@@ -53,6 +57,7 @@ export default function JibaiHqPage() {
       <div className="flex flex-wrap items-center gap-6 rounded border bg-white px-4 py-3">
         <div><span className="text-xs text-slate-500">{formatYm(ym)}分 全社速報合計（請求月で集計）</span><div className="text-2xl font-bold tabular-nums text-brand-dark">{yen(sum.total)}</div></div>
         <div><span className="text-xs text-slate-500">件数</span><div className="text-xl font-bold tabular-nums">{sum.count} 件</div></div>
+        <div><span className="text-xs text-slate-500">1 枚あたり平均</span><div className="text-xl font-bold tabular-nums">{sum.count > 0 ? yen(Math.round(sum.total / sum.count)) : '—'}</div></div>
         <div><span className="text-xs text-slate-500">提出済み店舗</span><div className="text-xl font-bold tabular-nums">{sum.submitted} / {data.storeCount}</div></div>
         <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-xl font-bold tabular-nums">{sum.verifiedCount} 件 / {yen(sum.verifiedTotal)}</div></div>
       </div>
@@ -65,6 +70,7 @@ export default function JibaiHqPage() {
               <th className="px-2 py-1">状態</th>
               <th className={num}>件数</th>
               <th className={num}>速報合計</th>
+              <th className={num}>1枚平均</th>
               <th className={num}>経理確認</th>
               <th className={num}>確定合計</th>
               <th className={num}>差額</th>
@@ -78,6 +84,7 @@ export default function JibaiHqPage() {
                 <td className="whitespace-nowrap px-2 py-1">{statusBadge(r)}{r.submittedAt && <span className="ml-1 text-xs text-slate-500">{formatDateTime(r.submittedAt)}</span>}{r.lateCount > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 text-xs text-amber-800" title="他の月の画面で登録された、この月分の明細（この月の合計に含む）">他の月の画面で登録 {r.lateCount}件 {yen(r.lateTotal)}</span>}{r.movedOut > 0 && <span className="ml-1 rounded bg-slate-100 px-1.5 text-xs text-slate-600" title="この月の画面で登録したが、請求月が別の月の明細（その月の合計に含む）">別の月分 {r.movedOut}件</span>}</td>
                 <td className={num}>{r.count}</td>
                 <td className={`${num} font-bold`}>{r.count > 0 ? r.total.toLocaleString('ja-JP') : ''}</td>
+                <td className={num}>{r.count > 0 ? Math.round(r.total / r.count).toLocaleString('ja-JP') : ''}</td>
                 <td className={num}>{r.count > 0 ? `${r.verifiedCount} / ${r.count}` : ''}</td>
                 <td className={num}>{r.verifiedCount > 0 ? r.verifiedTotal.toLocaleString('ja-JP') : ''}</td>
                 <td className={`${num} ${r.verifiedCount > 0 && r.verifiedCount === r.count && r.verifiedTotal !== r.total ? 'text-amber-700' : 'text-slate-500'}`}>{r.verifiedCount > 0 && r.verifiedCount === r.count ? (r.verifiedTotal - r.total).toLocaleString('ja-JP') : ''}</td>
@@ -89,7 +96,7 @@ export default function JibaiHqPage() {
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={8} className="px-2 py-4 text-center text-slate-500">稼働中の店舗がありません</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={9} className="px-2 py-4 text-center text-slate-500">稼働中の店舗がありません</td></tr>}
           </tbody>
           {rows.length > 0 && (
             <tfoot>
@@ -97,6 +104,7 @@ export default function JibaiHqPage() {
                 <td className="px-2 py-1" colSpan={2}>合計（{rows.length} 店舗）</td>
                 <td className={num}>{sum.count}</td>
                 <td className={num}>{sum.total.toLocaleString('ja-JP')}</td>
+                <td className={num}>{sum.count > 0 ? Math.round(sum.total / sum.count).toLocaleString('ja-JP') : ''}</td>
                 <td className={num}>{sum.verifiedCount} / {sum.count}</td>
                 <td className={num}>{sum.verifiedCount > 0 ? sum.verifiedTotal.toLocaleString('ja-JP') : ''}</td>
                 <td className={num}></td>
@@ -108,24 +116,9 @@ export default function JibaiHqPage() {
       </div>
       <p className="text-xs text-slate-500">件数・速報合計は請求月（請求書に印字された「令和 ○年 ○月」）で集計しています。別の月の画面で登録・提出された明細も、請求月がこの月ならここに入ります（「他の月の画面で登録」の表示）。速報合計は店舗がスクショから登録した金額の合計（提出前の入力中の分も含む）。確定合計は経理が請求書コピーと照合して登録した金額。差額は全件の経理確認が終わった店舗だけ表示します。「明細・経理確認」を押すとその店舗に切り替えて明細を開きます。</p>
 
+      <JibaiYearStats endpoint="/api/admin/hq/jibai/stats" currentYm={data.currentYm} hqStores={rows.map((r) => ({ code: r.code, name: r.name }))} refreshKey={statsTick} />
+
       <div className="grid gap-4 md:grid-cols-2">
-        <section className="rounded border bg-white p-4">
-          <h2 className="mb-2 font-bold">過去 12 か月の全社合計</h2>
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-xs text-slate-500"><th className="px-2 py-1">月</th><th className={num}>件数</th><th className={num}>速報合計</th><th className={num}>確定合計</th></tr></thead>
-            <tbody>
-              {data.trend.map((t) => (
-                <tr key={t.ym} className="border-t">
-                  <td className="px-2 py-1"><button type="button" onClick={() => go(t.ym)} className="text-brand underline">{formatYm(t.ym)}</button></td>
-                  <td className={num}>{t.count}</td>
-                  <td className={`${num} font-bold`}>{t.total.toLocaleString('ja-JP')}</td>
-                  <td className={num}>{t.verifiedTotal > 0 ? t.verifiedTotal.toLocaleString('ja-JP') : ''}</td>
-                </tr>
-              ))}
-              {data.trend.length === 0 && <tr><td colSpan={4} className="px-2 py-3 text-center text-slate-500">まだデータがありません</td></tr>}
-            </tbody>
-          </table>
-        </section>
         <section className="rounded border bg-white p-4">
           <h2 className="mb-2 font-bold">氏名の保持期間</h2>
           <form onSubmit={saveDays} className="flex flex-wrap items-center gap-2 text-sm">

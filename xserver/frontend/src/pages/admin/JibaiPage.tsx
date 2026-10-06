@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, formatYmWithEra, LOG_ACTION_JA, ymOptions, yen, type JibaiClaim, type JibaiLog, type JibaiMonth } from '@/lib/jibai';
+import JibaiYearStats from '@/components/JibaiYearStats';
 import { readInvoiceImage, warmUpOcr, type InvoiceReadResult, type OcrProgress } from '@/lib/jibaiOcr';
 import JibaiSizeGuide from '@/components/JibaiSizeGuide';
 import { useAdmin } from './Layout';
@@ -40,6 +41,9 @@ export default function JibaiPage() {
   const navigate = useNavigate();
   const ymParam = sp.get('ym') ?? '';
   const { data, error, reload } = useFetch<Resp>(`/api/admin/jibai?ym=${encodeURIComponent(ymParam)}`);
+  // 画面のデータが読み直されたら年間の表も読み直す
+  const [statsTick, setStatsTick] = useState(0);
+  useEffect(() => { if (data) setStatsTick((t) => t + 1); }, [data]);
   const [rows, setRows] = useState<Row[]>([]);
   const [msg, setMsg] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
@@ -226,6 +230,7 @@ export default function JibaiPage() {
       <div className="flex flex-wrap items-center gap-3 rounded border bg-white px-4 py-3">
         <div><span className="text-xs text-slate-500">対象月</span><div className="text-lg font-bold">{formatYm(ym)}</div></div>
         <div><span className="text-xs text-slate-500">{formatYm(ym)}分の合計（請求月で集計）</span><div className="text-lg font-bold tabular-nums text-brand-dark">{monthCount} 件　{yen(monthTotal)}</div></div>
+        <div><span className="text-xs text-slate-500">1 枚あたり平均</span><div className="text-lg font-bold tabular-nums">{monthCount > 0 ? yen(Math.round(monthTotal / monthCount)) : '—'}</div></div>
         {(hasOtherMonths || otherScreens.length > 0 || ymMissing > 0) && <div><span className="text-xs text-slate-500">この画面の明細（提出する分）</span><div className="text-lg font-bold tabular-nums">{rows.length} 件　{yen(total)}</div></div>}
         {(data.isHq || verifiedCount > 0) && <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-lg font-bold tabular-nums">{verifiedCount} 件 / {yen(verifiedTotal)}</div></div>}
         <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -379,6 +384,8 @@ export default function JibaiPage() {
           <span className="text-xs text-slate-500">保存してから「この月を提出する」を押すと本部の集計に反映されます。氏名は対象月の翌月から約 {data.nameRetentionDays} 日後に自動で消え、患者番号・実日数・金額は残ります。</span>
         </div>
       )}
+
+      <JibaiYearStats endpoint="/api/admin/jibai/stats" currentYm={data.currentYm} refreshKey={statsTick} />
 
       <div>
         <button type="button" onClick={() => setShowLogs((v) => !v)} className="text-xs text-slate-500 hover:underline">{showLogs ? '▼' : '▶'} 操作記録（{data.logs.length} 件）</button>

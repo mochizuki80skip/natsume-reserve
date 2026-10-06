@@ -243,3 +243,39 @@ function hq_jibai_settings_put(): never
     Db::exec('UPDATE jibai_setting SET nameRetentionDays = ? WHERE id = 1', [$days]);
     Http::json(['ok' => true, 'setting' => Jibai::setting()]);
 }
+
+/** 年間（12 か月）の月別の枚数・合計・1 枚あたり平均の from（既定は今年の 1 月） */
+function jibai_stats_from(): string
+{
+    $from = Http::query('from', '');
+    return Jibai::isValidYm($from) ? $from : substr(Jibai::currentYm(), 0, 4) . '-01';
+}
+
+/** 店舗（本部が店舗切替中も含む）：12 か月の月別の 1 枚あたり平均 */
+function jibai_stats(): never
+{
+    $ctx = Auth::context();
+    Jibai::ensureTables();
+    Http::json(Jibai::yearStats($ctx['store']['id'], jibai_stats_from()) + ['currentYm' => Jibai::currentYm()]);
+}
+
+/** 本部：全店（または 1 店舗）の 12 か月の月別の 1 枚あたり平均と、店舗ごとの年間の比較 */
+function hq_jibai_stats(): never
+{
+    Auth::requireHq();
+    Jibai::ensureTables();
+    $from = jibai_stats_from();
+    $code = Http::query('store', '');
+    $store = $code !== '' ? Settings::findStoreByCode($code) : null;
+    if ($code !== '' && !$store) Http::error('店舗が見つかりません', 404);
+    $data = Jibai::yearStats($store ? $store['id'] : null, $from);
+    $agg = [];
+    foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS t FROM jibai_claim WHERE COALESCE(invoiceYm, ym) BETWEEN ? AND ? GROUP BY storeId', [$data['from'], $data['to']]) as $r) $agg[$r['storeId']] = $r;
+    $stores = [];
+    foreach (Db::all('SELECT id, code, name FROM store WHERE active = 1 ORDER BY code ASC') as $s) {
+        $n = isset($agg[$s['id']]) ? (int)$agg[$s['id']]['n'] : 0;
+        $t = isset($agg[$s['id']]) ? (int)$agg[$s['id']]['t'] : 0;
+        $stores[] = ['code' => $s['code'], 'name' => $s['name'], 'count' => $n, 'total' => $t, 'avg' => Jibai::avg($t, $n)];
+    }
+    Http::json($data + ['currentYm' => Jibai::currentYm(), 'store' => $store ? ['code' => $store['code'], 'name' => $store['name']] : null, 'stores' => $stores]);
+}

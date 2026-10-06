@@ -6,7 +6,7 @@ const { chromium } = createRequire(new URL('../frontend/package.json', import.me
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3003';
 const HQ_PASSWORD = process.env.HQ_PASSWORD ?? 'hqpassword';
 const SHOT = process.env.SHOT; // レセコン画面のスクショ（PNG）。無ければ読み取りの確認は飛ばす
-const EXPECT = { patientNo: process.env.EXPECT_NO ?? '003862a', amount: process.env.EXPECT_AMOUNT ?? '73420', days: process.env.EXPECT_DAYS ?? '13' };
+const EXPECT = { patientNo: process.env.EXPECT_NO ?? '003862a', amount: process.env.EXPECT_AMOUNT ?? '73420', days: process.env.EXPECT_DAYS ?? '13', ym: process.env.EXPECT_YM ?? '2026-09' };
 const ok = (name, cond, extra = '') => { console.log(cond ? 'PASS' : 'FAIL', name, extra); if (!cond) process.exitCode = 1; };
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -25,7 +25,8 @@ async function login(code, password) {
 
 // --- 店舗：読み取り → 保存 → 提出
 await login('S001', 'password');
-await page.goto(`${BASE}/admin/jibai`);
+// スクショの請求月の画面で作業する（今日の日付に左右されないように）
+await page.goto(`${BASE}/admin/jibai?ym=${EXPECT.ym}`);
 await page.waitForSelector('text=自賠請求（速報）');
 ok('店舗の自賠請求ページが開く', true);
 const ym = await page.locator('select').first().inputValue();
@@ -72,7 +73,21 @@ await page.waitForSelector('text=保存しました', { timeout: 15000 });
 ok('保存できた', true, await page.locator('text=保存しました').textContent());
 await page.waitForFunction(() => !document.body.textContent.includes('未保存'));
 const total = Number(EXPECT.amount) + 12000;
-ok('合計が表示される', (await page.locator('tfoot').textContent()).includes(total.toLocaleString('ja-JP')), await page.locator('tfoot').textContent());
+ok('合計が表示される', (await page.locator('tfoot').first().textContent()).includes(total.toLocaleString('ja-JP')), await page.locator('tfoot').first().textContent());
+
+// 1 枚あたり平均（当月）と年間の月別の表
+const avg2 = Math.round(total / 2).toLocaleString('ja-JP');
+ok('当月の 1 枚あたり平均が出る', (await page.locator('text=1 枚あたり平均').first().locator('..').textContent()).includes(`${avg2}円`), avg2);
+await page.waitForSelector('text=年間の 1 枚あたり平均請求額（月別）');
+await page.locator('select[aria-label="年"]').selectOption(String(Number(ym.slice(0, 4))));
+const ymLabel = `${Number(ym.slice(0, 4))}年${Number(ym.slice(5, 7))}月`;
+await page.waitForFunction((l) => [...document.querySelectorAll('tbody tr')].some((tr) => tr.textContent.includes(l) && /\d/.test(tr.lastElementChild?.textContent ?? '')), ymLabel, { timeout: 15000 });
+const yrow = await page.locator('tbody tr', { hasText: ymLabel }).last().textContent();
+ok('年間の表の当月の行に 1 枚あたり平均が出る', yrow.includes(`${avg2}円`) && yrow.includes(total.toLocaleString('ja-JP')), yrow);
+await page.getByRole('button', { name: '年度（4月〜）' }).click();
+await page.waitForFunction(() => document.body.textContent.includes('年度（'));
+ok('年度（4月〜）に切り替えられる', (await page.locator('select[aria-label="年"]').locator('option:checked').textContent()).includes('年度'));
+await page.screenshot({ path: 'e2e/out-jibai-average.png', fullPage: true });
 
 page.once('dialog', (d) => d.accept());
 await page.getByRole('button', { name: 'この月を提出する' }).click();
@@ -96,7 +111,18 @@ await page.waitForSelector('text=全店集計');
 const s001 = page.locator('tbody tr', { hasText: 'S001' }).first();
 const s001Text = await s001.textContent();
 ok('本部集計に S001 の合計が出る', s001Text.includes(total.toLocaleString('ja-JP')) && s001Text.includes('提出済み'), s001Text);
-ok('全社合計が出る', (await page.locator('tfoot').textContent()).includes(total.toLocaleString('ja-JP')));
+ok('全社合計が出る', (await page.locator('tfoot').first().textContent()).includes(total.toLocaleString('ja-JP')));
+ok('本部の店舗別に 1 枚平均が出る', s001Text.includes(Math.round(total / 2).toLocaleString('ja-JP')), s001Text);
+ok('本部の 1 枚あたり平均（全社）が出る', (await page.locator('text=1 枚あたり平均').first().locator('..').textContent()).includes(`${Math.round(total / 2).toLocaleString('ja-JP')}円`));
+await page.waitForSelector('text=店舗（年間）');
+await page.locator('select[aria-label="年"]').selectOption(String(Number(ym.slice(0, 4))));
+await page.waitForFunction((y) => [...document.querySelectorAll('select[aria-label="年"] option:checked')].some((o) => o.textContent.startsWith(y)), String(Number(ym.slice(0, 4))));
+const yS001 = await page.locator('tbody tr', { hasText: 'S001' }).last().textContent();
+ok('本部の年間の店舗別比較に 1 枚あたり平均が出る', yS001.includes(`${Math.round(total / 2).toLocaleString('ja-JP')}円`), yS001);
+await page.locator('select[aria-label="店舗"]').selectOption('S002');
+await page.waitForFunction(() => document.body.textContent.includes('年間（サンプル駅前院）'), null, { timeout: 15000 });
+ok('本部の年間の表を店舗ごとに切り替えられる', true);
+await page.screenshot({ path: 'e2e/out-jibai-hq-average.png', fullPage: true });
 await page.screenshot({ path: 'e2e/out-jibai-hq.png', fullPage: true });
 
 await s001.getByRole('button', { name: '明細・経理確認' }).click();

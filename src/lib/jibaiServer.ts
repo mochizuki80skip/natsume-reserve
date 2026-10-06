@@ -74,3 +74,57 @@ export async function cleanupJibaiNames(): Promise<{ beforeMonth: string; namesC
 }
 
 export const yenFmt = (n: number) => n.toLocaleString('ja-JP');
+
+/** "2026-09" に n か月を足す */
+export function addMonthsYm(ym: string, n: number): string {
+  const [y, m] = ym.split('-').map(Number);
+  const t = y * 12 + (m - 1) + n;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+}
+
+/** 1 枚あたりの平均（円、四捨五入）。0 枚なら null */
+export function avgYen(total: number, count: number): number | null {
+  return count > 0 ? Math.round(total / count) : null;
+}
+
+/** 年間（12 か月）の from。既定は今年の 1 月 */
+export function statsFrom(q: string | null): string {
+  return isValidYm(q) ? q : `${currentYm().slice(0, 4)}-01`;
+}
+
+/** from から 12 か月の明細（請求月で集計するため、請求月 or 登録月が範囲に入るものを取り、請求月で振り分ける） */
+async function claimsInRange(from: string, to: string, storeId: string | null) {
+  const rows = await prisma.jibaiClaim.findMany({
+    where: { ...(storeId ? { storeId } : {}), OR: [{ invoiceYm: { gte: from, lte: to } }, { invoiceYm: null, ym: { gte: from, lte: to } }] },
+    select: { storeId: true, ym: true, invoiceYm: true, amount: true },
+  });
+  return rows.map((r) => ({ storeId: r.storeId, m: r.invoiceYm ?? r.ym, amount: r.amount }));
+}
+
+/** from から 12 か月の月別の枚数・合計・1 枚あたり平均（請求月で集計）。storeId が null なら全店 */
+export async function yearStats(storeId: string | null, from: string) {
+  const to = addMonthsYm(from, 11);
+  const rows = await claimsInRange(from, to, storeId);
+  const by = new Map<string, { n: number; t: number }>();
+  for (const r of rows) { const c = by.get(r.m) ?? { n: 0, t: 0 }; c.n++; c.t += r.amount; by.set(r.m, c); }
+  let yn = 0, yt = 0;
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const m = addMonthsYm(from, i);
+    const c = by.get(m) ?? { n: 0, t: 0 };
+    yn += c.n; yt += c.t;
+    return { ym: m, count: c.n, total: c.t, avg: avgYen(c.t, c.n) };
+  });
+  return { from, to, months, year: { count: yn, total: yt, avg: avgYen(yt, yn) } };
+}
+
+/** 店舗ごとの年間（from から 12 か月）の枚数・合計・1 枚あたり平均 */
+export async function storesYearSummary(from: string) {
+  const to = addMonthsYm(from, 11);
+  const [rows, stores] = await Promise.all([
+    claimsInRange(from, to, null),
+    prisma.store.findMany({ where: { active: true }, orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
+  ]);
+  const by = new Map<string, { n: number; t: number }>();
+  for (const r of rows) { const c = by.get(r.storeId) ?? { n: 0, t: 0 }; c.n++; c.t += r.amount; by.set(r.storeId, c); }
+  return stores.map((s) => { const c = by.get(s.id) ?? { n: 0, t: 0 }; return { code: s.code, name: s.name, count: c.n, total: c.t, avg: avgYen(c.t, c.n) }; });
+}
