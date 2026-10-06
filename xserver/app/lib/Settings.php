@@ -116,7 +116,7 @@ final class Settings
             $autoPm = min(count($namesPm), $beds);
         }
         if ($helpIn) {
-            $label = '応援' . ($helpIn['name'] !== '' ? '（' . $helpIn['name'] . '）' : '');
+            $label = 'ヘルプ' . ($helpIn['name'] !== '' ? '（' . $helpIn['name'] . '）' : '（他店から）');
             if ($helpIn['status'] !== 'PM_HELP_IN') { $namesAm[] = $label; $autoAm = min($autoAm + 1, $beds); }
             if ($helpIn['status'] !== 'AM_HELP_IN') { $namesPm[] = $label; $autoPm = min($autoPm + 1, $beds); }
         }

@@ -7,6 +7,7 @@ require_once __DIR__ . '/handlers/admin.php';
 require_once __DIR__ . '/handlers/hq.php';
 require_once __DIR__ . '/handlers/misc.php';
 require_once __DIR__ . '/handlers/jibai.php';
+require_once __DIR__ . '/handlers/karte.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -41,6 +42,15 @@ function route_table(): array
         ['PUT', '#^/api/admin/shifts$#', 'adm_shifts_put'],
         ['PUT', '#^/api/admin/help-in$#', 'adm_help_in_put'],
         ['POST', '#^/api/admin/blocks$#', 'adm_block_post'],
+        ['GET', '#^/api/admin/karte$#', 'karte_get'],
+        ['GET', '#^/api/admin/karte/export$#', 'karte_export'],
+        ['POST', '#^/api/admin/karte$#', 'karte_post'],
+        ['PATCH', '#^/api/admin/karte$#', 'karte_patch'],
+        ['DELETE', '#^/api/admin/karte$#', 'karte_delete'],
+        ['GET', '#^/api/admin/hq/karte$#', 'hq_karte_get'],
+        ['GET', '#^/api/admin/hq/karte/options$#', 'hq_karte_options_get'],
+        ['PUT', '#^/api/admin/hq/karte/options$#', 'hq_karte_options_put'],
+        ['PUT', '#^/api/admin/hq/areas$#', 'hq_areas_put'],
         ['DELETE', '#^/api/admin/blocks$#', 'adm_block_delete'],
         ['POST', '#^/api/admin/staff-members$#', 'adm_staff_post'],
         ['PUT', '#^/api/admin/staff-members$#', 'adm_staff_put'],

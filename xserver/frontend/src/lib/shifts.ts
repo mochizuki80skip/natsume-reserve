@@ -14,7 +14,7 @@ export function worksPm(status: string | undefined): boolean {
 
 // 他店からの応援（シフト表の「応援」行。枠を 1 増やす）
 export const HELP_IN_STATUSES = ['HELP_IN', 'AM_HELP_IN', 'PM_HELP_IN'] as const;
-export const HELP_IN_LABEL: Record<string, string> = { HELP_IN: '応援', AM_HELP_IN: '前応援', PM_HELP_IN: '後応援' };
+export const HELP_IN_LABEL: Record<string, string> = { HELP_IN: 'ヘルプ', AM_HELP_IN: '前ヘルプ', PM_HELP_IN: '後ヘルプ' };
 
 /** その日に所属しているか（所属開始日・終了日。空なら制限なし） */
 export function inPeriod(m: { startDate?: string | null; endDate?: string | null }, date: string): boolean {

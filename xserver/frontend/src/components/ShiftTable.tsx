@@ -99,8 +99,8 @@ export default function ShiftTable({ month, dates, closedDates, members, shifts,
         <span className="ml-auto text-xs text-slate-500">{state === 'saving' ? '保存中…' : state === 'saved' ? '保存しました' : state === 'error' ? '保存に失敗しました' : '選ぶと自動保存されます'}</span>
       </div>
       <p className="mb-2 text-xs text-slate-600">
-        未入力＝〇（終日勤務）。前休・前有＝午前の枠を1つ減らす／後休・後有＝午後の枠を1つ減らす／休・有給＝終日減らす。ヘルプ（他店へ出張）も同じで、前ヘルプ＝午前／後ヘルプ＝午後／ヘルプ＝終日減らす。
-        「応援」の行（他店から来る人）は、前応援＝午前／後応援＝午後／応援＝終日、枠を1つ増やします。灰色の「－」は所属期間外（入社前・異動後）です。
+        未入力＝〇（終日勤務）。前休・前有＝午前の枠を1つ減らす／後休・後有＝午後の枠を1つ減らす／休・有給＝終日減らす。スタッフの行のヘルプ（他店へ出張）も同じで、前ヘルプ＝午前／後ヘルプ＝午後／ヘルプ＝終日減らす。
+        下の「ヘルプ（他店から）」の行は、他店から来る人の分で、前ヘルプ＝午前／後ヘルプ＝午後／ヘルプ＝終日、枠を1つ増やします。灰色の「－」は所属期間外（入社前・異動後）です。
         一番下の行が、顧客に見える枠数（午前／午後）です。
       </p>
       <div className="overflow-x-auto rounded border bg-white">
@@ -120,9 +120,9 @@ export default function ShiftTable({ month, dates, closedDates, members, shifts,
           </thead>
           <tbody>
             <Rows list={therapists} label="施術者" />
-            <tr className="bg-slate-100"><td colSpan={dates.length + 1} className="px-2 py-0.5 text-xs font-bold text-slate-600">応援（他店から来る人。誰が来るか未定なら名前は空欄でOK）</td></tr>
+            <tr className="bg-slate-100"><td colSpan={dates.length + 1} className="px-2 py-0.5 text-xs font-bold text-slate-600">ヘルプ（他店から来る人。誰が来るか未定なら名前は空欄でOK）</td></tr>
             <tr>
-              <td className="sticky left-0 z-10 whitespace-nowrap border bg-white px-2 py-0.5 font-medium">応援</td>
+              <td className="sticky left-0 z-10 whitespace-nowrap border bg-white px-2 py-0.5 font-medium">ヘルプ（他店から）</td>
               {dates.map((d) => {
                 const h = help.get(d);
                 const isClosed = closed.has(d);
@@ -130,13 +130,13 @@ export default function ShiftTable({ month, dates, closedDates, members, shifts,
                   <td key={d} className={`border p-0 align-top ${isClosed ? 'bg-slate-200' : h ? 'bg-emerald-50' : ''}`}>
                     {isClosed ? <span className="block whitespace-nowrap text-center text-[10px] text-slate-400">休診</span> : (
                       <>
-                        <select value={h?.status ?? ''} onChange={(e) => saveHelp(d, e.target.value, h?.name ?? '')} aria-label={`応援 ${d}`}
+                        <select value={h?.status ?? ''} onChange={(e) => saveHelp(d, e.target.value, h?.name ?? '')} aria-label={`他店からのヘルプ ${d}`}
                           className="h-7 w-full appearance-none bg-transparent text-center text-xs outline-none focus:bg-yellow-50">
                           <option value="">－</option>
                           {HELP_IN_STATUSES.map((st) => <option key={st} value={st}>{HELP_IN_LABEL[st]}</option>)}
                         </select>
                         {h && (
-                          <input key={`${d}:${h.status}`} defaultValue={h.name} placeholder="名前" maxLength={30} aria-label={`応援の名前 ${d}`}
+                          <input key={`${d}:${h.status}`} defaultValue={h.name} placeholder="名前" maxLength={30} aria-label={`他店からのヘルプの名前 ${d}`}
                             onBlur={(e) => e.target.value.trim() !== h.name && saveHelp(d, h.status, e.target.value.trim())}
                             className="block w-full min-w-[3.5rem] border-t bg-transparent px-0.5 text-center text-[10px] outline-none focus:bg-yellow-50" />
                         )}

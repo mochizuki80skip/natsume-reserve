@@ -184,3 +184,51 @@ CREATE TABLE IF NOT EXISTS `rate_limit` (
   `resetAt` INT NOT NULL,
   PRIMARY KEY (`k`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 初回カルテ集計（予約の自動削除の対象外。消さずに残す）
+CREATE TABLE IF NOT EXISTS `karte` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `srcTime` INT NULL,
+  `srcBed` INT NULL,
+  `auto` TINYINT(1) NOT NULL DEFAULT 0,
+  `edited` TINYINT(1) NOT NULL DEFAULT 0,
+  `karteNo` VARCHAR(20) NOT NULL DEFAULT '',
+  `kind` VARCHAR(10) NOT NULL DEFAULT 'NEW',
+  `trig` VARCHAR(30) NOT NULL DEFAULT '',
+  `trigDetail` VARCHAR(60) NOT NULL DEFAULT '',
+  `name` VARCHAR(40) NOT NULL DEFAULT '',
+  `age` INT NULL,
+  `sex` VARCHAR(2) NOT NULL DEFAULT '',
+  `symptomCat` VARCHAR(20) NOT NULL DEFAULT '',
+  `symptom` VARCHAR(100) NOT NULL DEFAULT '',
+  `staff` VARCHAR(30) NOT NULL DEFAULT '',
+  `treatment` VARCHAR(10) NOT NULL DEFAULT '',
+  `visits` TEXT NOT NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `karte_src` (`storeId`, `date`, `srcTime`, `srcBed`),
+  KEY `karte_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_karte_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- カルテ集計の選択肢（きっかけ・他事業紹介・キャンペーン・症状カテゴリー・再来アクション）
+CREATE TABLE IF NOT EXISTS `karte_option` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `category` VARCHAR(20) NOT NULL,
+  `label` VARCHAR(60) NOT NULL,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `karte_option_cat` (`category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 本部の集計のエリア（storeCodes は店舗コードをカンマ区切り）
+CREATE TABLE IF NOT EXISTS `area` (
+  `id` VARCHAR(32) NOT NULL,
+  `name` VARCHAR(30) NOT NULL,
+  `storeCodes` TEXT NOT NULL,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

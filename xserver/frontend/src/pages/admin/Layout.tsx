@@ -13,6 +13,8 @@ export function useAdmin(): AdminContext {
 export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  // 表の幅が広い画面（初回カルテ集計・本部の集計）は横幅いっぱいに使う
+  const wide = location.pathname.startsWith('/admin/karte') || location.pathname.startsWith('/admin/hq/karte');
   const { data: me, error, loading, reload } = useFetch<Me>('/api/admin/me');
   useEffect(() => {
     if (error && error.status === 401) navigate('/admin/login', { replace: true });
@@ -24,7 +26,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen">
       <header className="no-print border-b bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
+        <div className={`mx-auto flex ${wide ? 'max-w-none' : 'max-w-6xl'} flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2`}>
           <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {me.session.role === 'hq' && (
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
@@ -40,10 +42,12 @@ export default function AdminLayout() {
             <Link to="/admin/calendar" className="hover:underline">カレンダー</Link>
             <Link to="/admin/shifts" className="hover:underline">シフト</Link>
             <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
+            <Link to="/admin/karte" className="hover:underline">初回カルテ集計</Link>
             <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
             <Link to="/admin/story" className="hover:underline">ストーリー画像</Link>
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
             {me.session.role === 'hq' && <Link to="/admin/hq/overview" className="hover:underline">全店状況</Link>}
+            {me.session.role === 'hq' && <Link to="/admin/hq/karte" className="hover:underline">新患・再来集計</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq" className="hover:underline">本部</Link>}
             {store && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer" className="text-slate-500 hover:underline">顧客ページ↗</a>}
@@ -51,7 +55,7 @@ export default function AdminLayout() {
           </nav>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-4 py-4">
+      <div className={`mx-auto ${wide ? 'max-w-none px-4 py-3' : 'max-w-6xl px-4 py-4'}`}>
         <Outlet context={{ me, refreshMe: reload } satisfies AdminContext} />
       </div>
     </div>
