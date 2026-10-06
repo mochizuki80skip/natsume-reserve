@@ -6,3 +6,4 @@ node_modules
 next-env.d.ts
 e2e/out-*.png
 public/tesseract
+release/
