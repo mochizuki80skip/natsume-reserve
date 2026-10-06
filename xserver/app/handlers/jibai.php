@@ -269,13 +269,23 @@ function hq_jibai_stats(): never
     $store = $code !== '' ? Settings::findStoreByCode($code) : null;
     if ($code !== '' && !$store) Http::error('店舗が見つかりません', 404);
     $data = Jibai::yearStats($store ? $store['id'] : null, $from);
-    $agg = [];
-    foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS t FROM jibai_claim WHERE COALESCE(invoiceYm, ym) BETWEEN ? AND ? GROUP BY storeId', [$data['from'], $data['to']]) as $r) $agg[$r['storeId']] = $r;
+    // 店舗 × 月（12 か月）の枚数・合計・1 枚あたり平均と、店舗ごとの年間
+    $cell = [];
+    foreach (Db::all('SELECT storeId, COALESCE(invoiceYm, ym) AS m, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS t FROM jibai_claim WHERE COALESCE(invoiceYm, ym) BETWEEN ? AND ? GROUP BY storeId, COALESCE(invoiceYm, ym)', [$data['from'], $data['to']]) as $r) {
+        $cell[$r['storeId']][$r['m']] = ['n' => (int)$r['n'], 't' => (int)$r['t']];
+    }
     $stores = [];
     foreach (Db::all('SELECT id, code, name FROM store WHERE active = 1 ORDER BY code ASC') as $s) {
-        $n = isset($agg[$s['id']]) ? (int)$agg[$s['id']]['n'] : 0;
-        $t = isset($agg[$s['id']]) ? (int)$agg[$s['id']]['t'] : 0;
-        $stores[] = ['code' => $s['code'], 'name' => $s['name'], 'count' => $n, 'total' => $t, 'avg' => Jibai::avg($t, $n)];
+        $months = [];
+        $yn = 0; $yt = 0;
+        foreach ($data['months'] as $mm) {
+            $c = $cell[$s['id']][$mm['ym']] ?? ['n' => 0, 't' => 0];
+            $months[] = ['ym' => $mm['ym'], 'count' => $c['n'], 'total' => $c['t'], 'avg' => Jibai::avg($c['t'], $c['n'])];
+            $yn += $c['n']; $yt += $c['t'];
+        }
+        $stores[] = ['code' => $s['code'], 'name' => $s['name'], 'count' => $yn, 'total' => $yt, 'avg' => Jibai::avg($yt, $yn), 'months' => $months];
     }
-    Http::json($data + ['currentYm' => Jibai::currentYm(), 'store' => $store ? ['code' => $store['code'], 'name' => $store['name']] : null, 'stores' => $stores]);
+    // 全店の月別（店舗を絞り込んでいても、一覧表の合計行には全店を出す）
+    $all = $store ? Jibai::yearStats(null, $from) : $data;
+    Http::json($data + ['currentYm' => Jibai::currentYm(), 'store' => $store ? ['code' => $store['code'], 'name' => $store['name']] : null, 'stores' => $stores, 'allMonths' => $all['months'], 'allYear' => $all['year']]);
 }

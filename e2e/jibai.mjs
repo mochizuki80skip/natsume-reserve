@@ -117,8 +117,22 @@ ok('本部の 1 枚あたり平均（全社）が出る', (await page.locator('t
 await page.waitForSelector('text=店舗（年間）');
 await page.locator('select[aria-label="年"]').selectOption(String(Number(ym.slice(0, 4))));
 await page.waitForFunction((y) => [...document.querySelectorAll('select[aria-label="年"] option:checked')].some((o) => o.textContent.startsWith(y)), String(Number(ym.slice(0, 4))));
-const yS001 = await page.locator('tbody tr', { hasText: 'S001' }).last().textContent();
+const yS001 = await page.locator('table', { hasText: '店舗（年間）' }).locator('tbody tr', { hasText: 'S001' }).first().textContent();
 ok('本部の年間の店舗別比較に 1 枚あたり平均が出る', yS001.includes(`${Math.round(total / 2).toLocaleString('ja-JP')}円`), yS001);
+// 店舗別・月別の一覧（縦に店舗、横に 12 か月、右端に年間、最下段に全店）
+const mtx = page.locator('table[aria-label="店舗別・月別の一覧"]');
+await mtx.waitFor();
+const mS001 = await mtx.locator('tbody tr', { hasText: 'S001' }).first().textContent();
+const tot = total.toLocaleString('ja-JP'), av = Math.round(total / 2).toLocaleString('ja-JP');
+ok('一覧表：店舗の月別の合計と 1 枚平均・枚数が出る', mS001.includes(tot) && mS001.includes(`@${av}・2枚`), mS001);
+ok('一覧表：全店の行が出る', (await mtx.locator('tfoot').textContent()).includes(tot));
+await page.getByRole('button', { name: '1枚平均', exact: true }).click();
+ok('一覧表：「1枚平均」だけの表示に切り替えられる', !(await mtx.locator('tbody tr', { hasText: 'S001' }).first().textContent()).includes('@'));
+await page.getByRole('button', { name: '合計＋平均' }).click();
+const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /CSV ダウンロード/ }).click()]);
+const csv = (await (await import('node:fs')).promises.readFile(await dl.path(), 'utf8'));
+ok('一覧表：CSV に店舗別・月別の枚数・合計・1 枚平均が入る', csv.includes('"S001"') && csv.includes(`"${total}"`) && csv.includes(`"${Math.round(total / 2)}"`) && csv.includes('全店') && /^jibai_store_month_\d{4}-\d{2}_\d{4}-\d{2}\.csv$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+await page.screenshot({ path: 'e2e/out-vercel-jibai-hq-matrix.png', fullPage: true });
 await page.locator('select[aria-label="店舗"]').selectOption('S002');
 await page.waitForFunction(() => document.body.textContent.includes('年間（サンプル駅前院）'), null, { timeout: 15000 });
 ok('本部の年間の表を店舗ごとに切り替えられる', true);

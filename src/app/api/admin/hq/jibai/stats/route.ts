@@ -14,6 +14,8 @@ export async function GET(req: Request) {
   const code = sp.get('store') ?? '';
   const store = code ? await prisma.store.findUnique({ where: { code }, select: { id: true, code: true, name: true } }) : null;
   if (code && !store) return NextResponse.json({ error: '店舗が見つかりません' }, { status: 404 });
-  const [data, stores] = await Promise.all([yearStats(store?.id ?? null, from), storesYearSummary(from)]);
-  return NextResponse.json({ ...data, currentYm: currentYm(), store: store ? { code: store.code, name: store.name } : null, stores });
+  const [data, stores, all] = await Promise.all([yearStats(store?.id ?? null, from), storesYearSummary(from), store ? yearStats(null, from) : null]);
+  // 全店の月別（店舗を絞り込んでいても、一覧表の合計行には全店を出す）
+  const allStats = all ?? data;
+  return NextResponse.json({ ...data, currentYm: currentYm(), store: store ? { code: store.code, name: store.name } : null, stores, allMonths: allStats.months, allYear: allStats.year });
 }

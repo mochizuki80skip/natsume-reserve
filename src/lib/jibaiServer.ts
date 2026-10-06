@@ -117,14 +117,23 @@ export async function yearStats(storeId: string | null, from: string) {
   return { from, to, months, year: { count: yn, total: yt, avg: avgYen(yt, yn) } };
 }
 
-/** 店舗ごとの年間（from から 12 か月）の枚数・合計・1 枚あたり平均 */
+/** 店舗ごとの年間（from から 12 か月）の枚数・合計・1 枚あたり平均と、店舗 × 月の内訳 */
 export async function storesYearSummary(from: string) {
   const to = addMonthsYm(from, 11);
   const [rows, stores] = await Promise.all([
     claimsInRange(from, to, null),
     prisma.store.findMany({ where: { active: true }, orderBy: { code: 'asc' }, select: { id: true, code: true, name: true } }),
   ]);
-  const by = new Map<string, { n: number; t: number }>();
-  for (const r of rows) { const c = by.get(r.storeId) ?? { n: 0, t: 0 }; c.n++; c.t += r.amount; by.set(r.storeId, c); }
-  return stores.map((s) => { const c = by.get(s.id) ?? { n: 0, t: 0 }; return { code: s.code, name: s.name, count: c.n, total: c.t, avg: avgYen(c.t, c.n) }; });
+  const cell = new Map<string, { n: number; t: number }>();
+  for (const r of rows) { const k = `${r.storeId}|${r.m}`; const c = cell.get(k) ?? { n: 0, t: 0 }; c.n++; c.t += r.amount; cell.set(k, c); }
+  const yms = Array.from({ length: 12 }, (_, i) => addMonthsYm(from, i));
+  return stores.map((s) => {
+    let yn = 0, yt = 0;
+    const months = yms.map((m) => {
+      const c = cell.get(`${s.id}|${m}`) ?? { n: 0, t: 0 };
+      yn += c.n; yt += c.t;
+      return { ym: m, count: c.n, total: c.t, avg: avgYen(c.t, c.n) };
+    });
+    return { code: s.code, name: s.name, count: yn, total: yt, avg: avgYen(yt, yn), months };
+  });
 }
