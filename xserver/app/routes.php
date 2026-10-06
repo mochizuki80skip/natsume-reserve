@@ -53,6 +53,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/hq/settings$#', 'hq_settings_put'],
         ['POST', '#^/api/admin/hq/stores$#', 'hq_stores_post'],
         ['PUT', '#^/api/admin/hq/stores$#', 'hq_stores_put'],
+        ['POST', '#^/api/admin/hq/stores/bulk$#', 'hq_stores_bulk'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
         // 自賠責請求の速報集計
         ['GET', '#^/api/admin/jibai$#', 'jibai_get'],
@@ -109,6 +110,8 @@ function dispatch(string $method, string $path): bool
 {
     foreach (route_table() as [$m, $re, $fn]) {
         if ($m !== $method || !preg_match($re, $path, $mm)) continue;
+        // SNS 投稿管理だけの設置では、予約関連の API を出さない（店舗名の取得＝店舗別ログイン画面用だけ残す）
+        if (Config::isSnsOnly() && str_starts_with($path, '/api/public/') && $fn !== 'pub_store') { Http::error('not found', 404); }
         try {
             $fn($mm);
         } catch (HttpError $e) {

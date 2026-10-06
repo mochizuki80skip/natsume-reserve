@@ -368,9 +368,12 @@ final class Sns
         return strtr($tpl, array_filter($ph, fn($v) => $v !== ''));
     }
 
+    /** この店舗の WEB 予約ページ。SNS だけの設置では config.php の BOOKING_URL（予約システムの URL）を使う */
     public static function bookingUrl(array $store): string
     {
-        return rtrim(self::baseUrl(), '/') . '/s/' . rawurlencode($store['code']);
+        $base = rtrim(Config::str('BOOKING_URL'), '/');
+        if ($base === '') $base = rtrim(self::baseUrl(), '/');
+        return $base . '/s/' . rawurlencode($store['code']);
     }
 
     /** 公開 URL のもと（config.php の APP_URL。無ければ今のリクエストのホスト） */

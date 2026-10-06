@@ -89,6 +89,8 @@ WordPress と同じドメインの中に置いても、お互いに影響しな�
 | LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET | SNS 投稿の通知を LINE で受ける場合（LINE 公式アカウントの Messaging API） |
 | NOTIFY_EMAIL / NOTIFY_FROM | LINE を使わないときの通知メール（カンマ区切りで複数可） |
 | SNS_SECRET | 連携トークンの暗号化の鍵（省略時は SESSION_SECRET から作る） |
+| APP_MODE | `full`（予約＋SNS、既定）／`sns`（SNS 投稿管理だけの独立したシステム。別サブドメイン・別 DB に置く） |
+| BOOKING_URL | `sns` のとき、予約システムの URL（投稿文の {予約URL} に使う） |
 
 ## 4. 初期設定（テーブル作成）
 
@@ -115,6 +117,14 @@ https://〇〇.jp/install?token=INSTALL_TOKEN
 
 保持日数（既定 60 日）は本部画面の「個人情報の保持日数」で変えられます。
 同じ Cron で、自賠請求の明細の氏名も保持期間（既定 180 日、本部「自賠集計」で変更）を過ぎた月から自動で消えます（金額は残ります）。
+
+## 5-0. SNS 投稿管理を別のシステムとして設置する（APP_MODE = 'sns'）
+
+予約システムとは別のサブドメイン（例 `sns.〇〇.jp`）と別の MySQL データベースに、同じ一式をもう 1 つ置き、
+`config.php` に `'APP_MODE' => 'sns'` と `'BOOKING_URL' => 'https://yoyaku.〇〇.jp'`（予約システムの URL）を入れます。
+予約の画面・API は出ず、SNS 投稿・定型投稿・画像・分析・店舗管理だけのシステムになります。
+`/install` で初期設定したあと、「店舗管理」→「店舗をまとめて登録」に予約システムと同じ店舗コードで店舗を登録してください。
+Cron は 5〜10 分おきの `/api/cron/sns` だけで構いません。詳しくは [docs/SNS.md](../docs/SNS.md) の 0 章。
 
 ## 5-1. SNS 投稿の自動処理（Cron）
 
@@ -224,6 +234,7 @@ BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... node ../e2e/smoke.mjs   # ブラ�
 BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... SHOT=請求書画面.png node ../e2e/jibai.mjs   # 自賠請求：スクショ読み取り〜本部集計
 node ../e2e/sns-mock.mjs &                      # SNS：Instagram・Google・LINE の代わりをするサーバー（config.php に SNS_API_MOCK を設定）
 BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... node ../e2e/sns.mjs     # SNS 投稿管理の画面を一通り確認
+BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... node ../e2e/sns-only.mjs  # APP_MODE = 'sns' の設置で予約の画面・API が出ないことの確認
 ```
 
 SNS の確認では PHP を `PHP_CLI_SERVER_WORKERS=4 php -S ...` のように複数プロセスで起動してください（模擬の Instagram が画像を取りに来るため）。

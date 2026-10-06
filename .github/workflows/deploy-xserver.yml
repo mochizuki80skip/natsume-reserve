@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAS_SSH: ${{ secrets.XSERVER_HOST != '' && secrets.XSERVER_SSH_KEY != '' }}
+      SNS_DIR: ${{ secrets.XSERVER_SNS_DIR }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -71,3 +72,20 @@ jobs:
           # /media/ は管理画面からアップロードした SNS 投稿の画像なので消さない
           rsync -az --delete --exclude '/app/' --exclude '/media/' -e "$SSH" xserver/public/ "$USER@$HOST:$DIR/"
           echo "deployed to $HOST:$DIR"
+      - name: Deploy SNS-only install over SSH (only when XSERVER_SNS_DIR is set)
+        # SNS 投稿管理を別のサブドメインに分けて設置している場合：同じ一式をそのフォルダにも反映する（config.php と media/ は残す）
+        if: env.HAS_SSH == 'true' && env.SNS_DIR != ''
+        env:
+          HOST: ${{ secrets.XSERVER_HOST }}
+          USER: ${{ secrets.XSERVER_USER }}
+          SNS_DIR: ${{ secrets.XSERVER_SNS_DIR }}   # 例：/home/main80skip/hachimaru-80skip.com/public_html/sns.hachimaru-80skip.com
+        run: |
+          case "$SNS_DIR" in
+            /home/*/public_html/?*) ;;
+            *) echo "XSERVER_SNS_DIR が正しくありません" >&2; exit 1;;
+          esac
+          SSH="ssh -p 10022 -i ~/.ssh/id_xserver -o StrictHostKeyChecking=yes"
+          $SSH "$USER@$HOST" "set -e; for f in wp-config.php wp-login.php wp-settings.php; do if [ -e '$SNS_DIR'/\$f ]; then echo \"WordPress のファイル（\$f）があるため中止しました\" >&2; exit 1; fi; done; mkdir -p '$SNS_DIR/app'"
+          rsync -az --delete --exclude 'config.php' -e "$SSH" xserver/app/ "$USER@$HOST:$SNS_DIR/app/"
+          rsync -az --delete --exclude '/app/' --exclude '/media/' -e "$SSH" xserver/public/ "$USER@$HOST:$SNS_DIR/"
+          echo "deployed to $HOST:$SNS_DIR"

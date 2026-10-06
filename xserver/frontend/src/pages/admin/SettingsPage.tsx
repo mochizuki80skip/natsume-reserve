@@ -1,6 +1,7 @@
 import { useFetch } from '@/lib/api';
 import StoreSettingsForm from '@/components/StoreSettingsForm';
 import StaffList from '@/components/StaffList';
+import { SNS_ONLY } from '@/lib/mode';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -20,9 +21,9 @@ export default function SettingsPage() {
     <div className="max-w-6xl">
       <h1 className="mb-4 text-xl font-bold">店舗設定：{data.store.name}（{data.store.code}）</h1>
       {/* 画面が広いときは 2 列（左：店舗設定、右：スタッフ・シフト）、半面では 1 列 */}
-      <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
+      <div className={SNS_ONLY ? 'max-w-2xl' : 'grid gap-6 xl:grid-cols-2 xl:items-start'}>
         <StoreSettingsForm store={data.store} globalHours={data.globalHours} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
-        <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
+        {!SNS_ONLY && <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />}
       </div>
     </div>
   );

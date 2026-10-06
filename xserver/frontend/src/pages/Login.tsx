@@ -2,6 +2,7 @@
 import { useParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import LoginForm from '@/components/LoginForm';
+import { APP_TITLE, SNS_ONLY } from '@/lib/mode';
 
 interface StoreInfo { code: string; name: string }
 
@@ -21,14 +22,16 @@ export default function Login() {
     return (
       <main className="mx-auto max-w-sm px-4 pt-16">
         <h1 className="mb-1 text-center text-xl font-bold">{data.name}</h1>
-        <p className="mb-6 text-center text-sm text-slate-500">管理画面ログイン</p>
+        <p className="mb-6 text-center text-sm text-slate-500">{SNS_ONLY ? 'SNS投稿管理 ログイン' : '管理画面ログイン'}</p>
         <LoginForm fixedCode={data.code} />
       </main>
     );
   }
   return (
     <main className="mx-auto max-w-sm px-4 pt-16">
-      <h1 className="mb-6 text-center text-xl font-bold">管理画面ログイン</h1>
+      <h1 className="mb-1 text-center text-xl font-bold">{SNS_ONLY ? APP_TITLE : '管理画面ログイン'}</h1>
+      {SNS_ONLY && <p className="mb-6 text-center text-sm text-slate-500">店舗コード（本部は HQ）とパスワードでログイン</p>}
+      {!SNS_ONLY && <div className="mb-5" />}
       <LoginForm />
     </main>
   );

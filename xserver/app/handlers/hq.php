@@ -69,6 +69,43 @@ function hq_stores_post(): never
     Http::json(['ok' => true]);
 }
 
+/**
+ * 店舗の一括登録（SNS 投稿管理だけの設置で、予約システムの店舗一覧を写すため）。
+ * body: {rows: [{code, name, phone, password?}]}。既にある店舗コードは名前・電話だけ更新
+ */
+function hq_stores_bulk(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $rows = Http::body()['rows'] ?? null;
+    if (!is_array($rows) || !$rows || count($rows) > 200) Http::error('店舗の一覧を 1〜200 行で送ってください', 400);
+    $added = 0; $updated = 0; $errors = [];
+    foreach ($rows as $i => $r) {
+        $code = trim((string)($r['code'] ?? ''));
+        $name = trim((string)($r['name'] ?? ''));
+        $phone = trim((string)($r['phone'] ?? ''));
+        $password = (string)($r['password'] ?? '');
+        if (!preg_match('/^[A-Za-z0-9_-]{2,20}$/', $code) || strtoupper($code) === 'HQ') { $errors[] = ($i + 1) . ' 行目：店舗コードは英数字 2〜20 文字'; continue; }
+        if ($name === '' || mb_strlen($name) > 50 || mb_strlen($phone) > 20) { $errors[] = ($i + 1) . ' 行目：店舗名（50 文字まで）・電話（20 文字まで）を確認'; continue; }
+        $cur = Settings::findStoreByCode($code);
+        if ($cur) {
+            Db::exec('UPDATE store SET name = ?, phone = ? WHERE id = ?', [$name, $phone !== '' ? $phone : $cur['phone'], $cur['id']]);
+            if (strlen($password) >= 8) Db::exec('UPDATE admin_account SET passwordHash = ? WHERE storeId = ? AND role = ?', [password_hash($password, PASSWORD_BCRYPT), $cur['id'], 'store']);
+            $updated++;
+            continue;
+        }
+        if (strlen($password) < 8) { $errors[] = ($i + 1) . ' 行目（' . $code . '）：新しい店舗はパスワード 8 文字以上が必要'; continue; }
+        if (Db::one('SELECT id FROM admin_account WHERE code = ?', [$code])) { $errors[] = ($i + 1) . ' 行目（' . $code . '）：このコードは使われています'; continue; }
+        Db::transaction(function () use ($code, $name, $phone, $password) {
+            $id = Db::newId();
+            Db::exec('INSERT INTO store (id, code, name, phone) VALUES (?, ?, ?, ?)', [$id, $code, $name, $phone !== '' ? $phone : '-']);
+            Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId) VALUES (?, ?, ?, ?, ?)', [Db::newId(), $code, password_hash($password, PASSWORD_BCRYPT), 'store', $id]);
+        });
+        $added++;
+    }
+    Http::json(['ok' => true, 'added' => $added, 'updated' => $updated, 'errors' => $errors]);
+}
+
 function hq_stores_put(): never
 {
     Auth::requireHq();

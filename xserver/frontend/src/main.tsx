@@ -26,13 +26,14 @@ import SnsSettingsPage from './pages/admin/sns/SnsSettingsPage';
 import SnsInsightsPage from './pages/admin/sns/SnsInsightsPage';
 import SnsHqPage from './pages/admin/sns/SnsHqPage';
 import SnsMediaPage from './pages/admin/sns/SnsMediaPage';
+import { SNS_ONLY } from './lib/mode';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/s/:code" element={<Booking />} />
+        <Route path="/" element={SNS_ONLY ? <Navigate to="/admin" replace /> : <Home />} />
+        <Route path="/s/:code" element={SNS_ONLY ? <Navigate to="/admin/login" replace /> : <Booking />} />
         <Route path="/admin/login" element={<Login />} />
         <Route path="/admin/login/:code" element={<Login />} />
         <Route path="/admin/print/:date" element={<PrintPage />} />

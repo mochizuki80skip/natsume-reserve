@@ -23,6 +23,13 @@ return [
     'TWILIO_AUTH_TOKEN' => '',
     'TWILIO_FROM' => '',
 
+    // ---- 設置の種類 ----
+    // 'full'：予約システム＋SNS 投稿管理を 1 つで動かす（既定）
+    // 'sns' ：SNS 投稿管理だけの独立したシステムとして動かす（予約の画面・API は出さない。別のサブドメイン・別の DB に置く）
+    'APP_MODE' => 'full',
+    // 'sns' のとき：予約システムの URL（投稿文の {予約URL} と Google の「予約」ボタンに使う。例：https://yoyaku.〇〇.jp）
+    'BOOKING_URL' => '',
+
     // ---- SNS 投稿管理（Instagram・Google ビジネスプロフィール）。使わない項目は空のままで可 ----
     // Instagram：Meta for Developers のアプリ（「Instagram API with Instagram Login」）の ID とシークレット
     'IG_APP_ID' => '',

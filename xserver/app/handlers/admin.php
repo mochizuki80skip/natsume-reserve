@@ -49,6 +49,7 @@ function adm_me(): never
         'stores' => $stores,
         'today' => Time::nowJst()['date'],
         'smsEnabled' => Sms::enabled(),
+        'mode' => Config::mode(),
     ]);
 }
 

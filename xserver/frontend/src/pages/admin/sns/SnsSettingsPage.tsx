@@ -5,6 +5,7 @@ import { useFetch } from '@/lib/api';
 import { describeSchedule, sendJson, type AccountRow, type Channel, type Patterns, type Schedule, type StoreSetting, type VarDef } from '@/lib/sns';
 import SnsNav from '@/components/SnsNav';
 import SnsScheduleEditor from '@/components/SnsScheduleEditor';
+import { SNS_ONLY } from '@/lib/mode';
 import { useAdmin } from '../Layout';
 
 interface Resp {
@@ -85,6 +86,7 @@ export default function SnsSettingsPage() {
               </div>
             )}
             <label className="block">運用メモ（下書きを確認する人が毎回見るルール。例：料金は書かない、絵文字なし）<textarea value={f.memo} onChange={str('memo')} rows={3} className="mt-1 w-full rounded border px-2 py-1" /></label>
+            {SNS_ONLY && !data.store.bookingUrl.includes('/s/') && null}
             <div className="text-xs text-slate-500">差し込み語：{'{店舗名}'}＝{data.store.name}、{'{エリア}'}＝地域、{'{電話}'}＝{data.store.phone}、{'{予約URL}'}＝{data.store.bookingUrl}、{'{営業時間}'} {'{住所}'} {'{ハッシュタグ}'} {'{キーワード}'} はこの画面の値。文章の型（書き出し・締め）と差し込み語の項目は本部の SNS 管理で編集します。</div>
           </section>
           <div className="flex flex-wrap items-center gap-2">

@@ -13,19 +13,30 @@ final class Config
         $cfg = is_file($file) ? (require $file) : [];
         $keys = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASS', 'SESSION_SECRET', 'HQ_PASSWORD', 'INSTALL_TOKEN', 'CRON_SECRET',
             'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM', 'APP_ENV', 'APP_URL',
-            'SNS_SECRET', 'IG_APP_ID', 'IG_APP_SECRET', 'IG_API_VERSION', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'NOTIFY_EMAIL', 'NOTIFY_FROM', 'SNS_API_MOCK'];
+            'SNS_SECRET', 'IG_APP_ID', 'IG_APP_SECRET', 'IG_API_VERSION', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'NOTIFY_EMAIL', 'NOTIFY_FROM', 'SNS_API_MOCK', 'APP_MODE', 'BOOKING_URL'];
         foreach ($keys as $k) {
             $env = getenv($k);
             if (($cfg[$k] ?? '') === '' && $env !== false) $cfg[$k] = $env;
         }
         $cfg += ['DB_HOST' => 'localhost', 'DB_PORT' => 3306, 'DB_NAME' => '', 'DB_USER' => '', 'DB_PASS' => '', 'SESSION_SECRET' => '', 'HQ_PASSWORD' => '',
             'INSTALL_TOKEN' => '', 'CRON_SECRET' => '', 'TWILIO_ACCOUNT_SID' => '', 'TWILIO_AUTH_TOKEN' => '', 'TWILIO_FROM' => '', 'APP_ENV' => 'production', 'APP_URL' => '',
-            'SNS_SECRET' => '', 'IG_APP_ID' => '', 'IG_APP_SECRET' => '', 'IG_API_VERSION' => 'v23.0', 'GOOGLE_CLIENT_ID' => '', 'GOOGLE_CLIENT_SECRET' => '', 'LINE_CHANNEL_ACCESS_TOKEN' => '', 'LINE_CHANNEL_SECRET' => '', 'NOTIFY_EMAIL' => '', 'NOTIFY_FROM' => '', 'SNS_API_MOCK' => ''];
+            'SNS_SECRET' => '', 'IG_APP_ID' => '', 'IG_APP_SECRET' => '', 'IG_API_VERSION' => 'v23.0', 'GOOGLE_CLIENT_ID' => '', 'GOOGLE_CLIENT_SECRET' => '', 'LINE_CHANNEL_ACCESS_TOKEN' => '', 'LINE_CHANNEL_SECRET' => '', 'NOTIFY_EMAIL' => '', 'NOTIFY_FROM' => '', 'SNS_API_MOCK' => '', 'APP_MODE' => 'full', 'BOOKING_URL' => ''];
         return self::$cfg = $cfg;
     }
 
     public static function str(string $k): string
     {
         return (string)(self::get()[$k] ?? '');
+    }
+
+    /** 'full'（予約システム＋SNS 投稿管理）か 'sns'（SNS 投稿管理だけの独立したシステム） */
+    public static function mode(): string
+    {
+        return self::str('APP_MODE') === 'sns' ? 'sns' : 'full';
+    }
+
+    public static function isSnsOnly(): bool
+    {
+        return self::mode() === 'sns';
     }
 }

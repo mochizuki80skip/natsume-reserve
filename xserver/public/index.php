@@ -55,4 +55,7 @@ if (!is_file($html)) {
 }
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-cache');
-readfile($html);
+// 設置の種類（full＝予約＋SNS、sns＝SNS 投稿管理だけ）を画面に渡す
+$page = file_get_contents($html);
+$inject = '<script>window.APP_MODE=' . json_encode(Config::mode()) . ';</script>';
+echo str_contains($page, '</head>') ? str_replace('</head>', $inject . '</head>', $page) : $inject . $page;

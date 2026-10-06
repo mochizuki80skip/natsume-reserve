@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SNS_ONLY } from '@/lib/mode';
 
 interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; notifyPhone: string; hoursOverride: string }
 interface Props { store: StoreForm; globalHours: string; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void }
@@ -47,13 +48,13 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       <div className="rounded border bg-white p-4 text-sm">
         <h2 className="mb-2 font-bold">この店舗のURL</h2>
-        <UrlRow label="管理画面（スタッフ用）" path={`/admin/login/${store.code}`} />
-        <UrlRow label="患者様用（WEB予約）" path={`/s/${store.code}`} />
+        <UrlRow label={SNS_ONLY ? 'ログイン（スタッフ用）' : '管理画面（スタッフ用）'} path={`/admin/login/${store.code}`} />
+        {!SNS_ONLY && <UrlRow label="患者様用（WEB予約）" path={`/s/${store.code}`} />}
       </div>
       <form onSubmit={save} className="space-y-3 rounded border bg-white p-4">
         <label className="block text-sm">店舗名<input value={f.name} onChange={str('name')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
-        <label className="block text-sm">電話番号（顧客サイトの電話マークに表示）<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
-        <table className="w-full text-sm">
+        <label className="block text-sm">{SNS_ONLY ? '電話番号（投稿文の {電話} に入ります）' : '電話番号（顧客サイトの電話マークに表示）'}<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
+        {!SNS_ONLY && <table className="w-full text-sm">
           <tbody>
             {([
               ['beds', 'ベッド数', '予約表の列数', 1, 20],
@@ -69,13 +70,13 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
               </tr>
             ))}
           </tbody>
-        </table>
-        <p className="text-xs text-slate-500">顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
-        {smsEnabled && <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>}
-        <label className="block text-sm">営業時間の個別設定（空欄＝全店共通設定を使う）
+        </table>}
+        {!SNS_ONLY && <p className="text-xs text-slate-500">顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>}
+        {smsEnabled && !SNS_ONLY && <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>}
+        {!SNS_ONLY && <label className="block text-sm">営業時間の個別設定（空欄＝全店共通設定を使う）
           <textarea value={f.hoursOverride} onChange={str('hoursOverride')} rows={8} className="mt-1 w-full rounded border px-2 py-1 font-mono text-xs" placeholder={globalHours} />
-        </label>
-        <details className="text-xs text-slate-500"><summary>全店共通の営業時間（参考）</summary><pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2">{globalHours}</pre></details>
+        </label>}
+        {!SNS_ONLY && <details className="text-xs text-slate-500"><summary>全店共通の営業時間（参考）</summary><pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2">{globalHours}</pre></details>}
         <button type="submit" className="rounded bg-brand px-4 py-2 font-bold text-white">保存</button>
       </form>
       {canChangePassword && (

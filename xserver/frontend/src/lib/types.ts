@@ -30,4 +30,5 @@ export interface Me {
   stores: { code: string; name: string; active: boolean }[];
   today: string;
   smsEnabled: boolean;
+  mode?: 'full' | 'sns';
 }
