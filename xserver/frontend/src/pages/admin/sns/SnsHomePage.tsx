@@ -43,7 +43,7 @@ export function PostTable({ posts, empty, showStore, sel, onSel, onDelete }: { p
             <td className="whitespace-nowrap px-2 py-2 tabular-nums">{formatScheduled(p.scheduledAt)}</td>
             {showStore && <td className="whitespace-nowrap px-2 py-2"><StoreDot code={p.storeCode} className="mr-1.5" />{p.storeName}</td>}
             <td className="whitespace-nowrap px-2 py-2">{CHANNEL_JA[p.channel]}</td>
-            <td className="px-2 py-2"><Link to={`/admin/sns/posts/${p.id}`} className="font-bold text-slate-800 hover:underline">{p.title || p.body.slice(0, 24) || '（本文なし）'}</Link><div className="text-xs text-slate-500">{p.body.replace(/\s+/g, ' ').slice(0, 40)}</div></td>
+            <td className="px-2 py-2"><Link to={`/admin/sns/posts/${p.id}`} className="font-bold text-slate-800 hover:underline">{p.title || p.body.slice(0, 24) || '（本文なし）'}</Link><div className="text-xs text-slate-500">{p.fullText.replace(/\s+/g, ' ').slice(0, 40)}</div></td>
             <td className="whitespace-nowrap px-2 py-2"><span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_CLASS[p.status]}`}>{STATUS_JA[p.status]}</span>{p.publishMode === 'manual' && p.status !== 'posted' && <span className="ml-1 text-xs text-slate-400">手動</span>}</td>
             <td className="whitespace-nowrap px-2 py-2"><CheckBadge p={p} /></td>
             {onDelete && <td className="px-2 py-2 text-right"><button type="button" onClick={() => onDelete(p)} title="削除" className="text-slate-400 hover:text-red-700">🗑</button></td>}
