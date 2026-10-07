@@ -81,7 +81,7 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
       </form>
       {canChangePassword && (
         <form onSubmit={changePw} className="space-y-3 rounded border bg-white p-4">
-          <h2 className="font-bold">パスワード変更</h2>
+          <h2 className="font-bold">パスワード変更（ログイン中のアカウント）</h2>
           <label className="block text-sm">現在のパスワード<input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label className="block text-sm">新しいパスワード（8文字以上）<input type="password" minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required className="mt-1 w-full rounded border px-2 py-1" /></label>
           <button type="submit" className="rounded border px-4 py-2">変更</button>

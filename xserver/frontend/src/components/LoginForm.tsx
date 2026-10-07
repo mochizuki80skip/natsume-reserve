@@ -21,7 +21,7 @@ export default function LoginForm({ fixedCode }: { fixedCode?: string } = {}) {
       {fixedCode ? (
         <p className="mb-3 text-sm text-slate-600">店舗コード：<span className="font-mono font-bold">{fixedCode}</span></p>
       ) : (
-        <label className="mb-3 block text-sm">店舗コード
+        <label className="mb-3 block text-sm">店舗コード（本部は ID）
           <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="username" required className="mt-1 w-full rounded border px-3 py-2" />
         </label>
       )}

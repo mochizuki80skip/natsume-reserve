@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 4;
+    private const VERSION = 5;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -42,12 +42,34 @@ final class Migrate
                 $pdo->exec(self::KARTE_OPTION_DDL);
                 $pdo->exec(self::AREA_DDL);
             }
+            if ($ver < 5) {
+                // 本部アカウントを一人ずつ（使用者名・停止・発行権限・最終ログイン）と操作の記録
+                if (!self::hasColumn($pdo, 'admin_account', 'name')) $pdo->exec("ALTER TABLE `admin_account` ADD COLUMN `name` VARCHAR(30) NOT NULL DEFAULT ''");
+                if (!self::hasColumn($pdo, 'admin_account', 'active')) $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `active` TINYINT(1) NOT NULL DEFAULT 1');
+                if (!self::hasColumn($pdo, 'admin_account', 'canManage')) $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `canManage` TINYINT(1) NOT NULL DEFAULT 0');
+                if (!self::hasColumn($pdo, 'admin_account', 'lastLoginAt')) $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `lastLoginAt` DATETIME NULL');
+                $pdo->exec("UPDATE `admin_account` SET `canManage` = 1, `active` = 1, `name` = IF(`name` = '', '管理者', `name`) WHERE `code` = 'HQ'");
+                $pdo->exec(self::AUDIT_DDL);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const AUDIT_DDL = 'CREATE TABLE IF NOT EXISTS `audit_log` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `accountId` VARCHAR(32) NOT NULL DEFAULT \'\',
+  `actor` VARCHAR(60) NOT NULL DEFAULT \'\',
+  `storeCode` VARCHAR(20) NOT NULL DEFAULT \'\',
+  `action` VARCHAR(60) NOT NULL DEFAULT \'\',
+  `detail` VARCHAR(120) NOT NULL DEFAULT \'\',
+  `status` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `audit_at` (`at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const KARTE_DDL = 'CREATE TABLE IF NOT EXISTS `karte` (
   `id` VARCHAR(32) NOT NULL,

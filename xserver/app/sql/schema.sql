@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS `admin_account` (
   `passwordHash` VARCHAR(255) NOT NULL,
   `role` VARCHAR(10) NOT NULL DEFAULT 'store',
   `storeId` VARCHAR(32) NULL,
+  `name` VARCHAR(30) NOT NULL DEFAULT '',      -- 本部アカウントの使用者名
+  `active` TINYINT(1) NOT NULL DEFAULT 1,      -- 0＝停止（ログインできない）
+  `canManage` TINYINT(1) NOT NULL DEFAULT 0,   -- 1＝本部アカウントの発行・停止ができる
+  `lastLoginAt` DATETIME NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -231,4 +235,18 @@ CREATE TABLE IF NOT EXISTS `area` (
   `storeCodes` TEXT NOT NULL,
   `sortOrder` INT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 操作の記録（誰が・いつ・何をしたか。患者の氏名などは残さない）
+CREATE TABLE IF NOT EXISTS `audit_log` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `accountId` VARCHAR(32) NOT NULL DEFAULT '',
+  `actor` VARCHAR(60) NOT NULL DEFAULT '',
+  `storeCode` VARCHAR(20) NOT NULL DEFAULT '',
+  `action` VARCHAR(60) NOT NULL DEFAULT '',
+  `detail` VARCHAR(120) NOT NULL DEFAULT '',
+  `status` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `audit_at` (`at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

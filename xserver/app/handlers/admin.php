@@ -12,7 +12,8 @@ function adm_login(): never
     $password = (string)($b['password'] ?? '');
     $acc = Db::one('SELECT a.*, s.active AS storeActive FROM admin_account a LEFT JOIN store s ON s.id = a.storeId WHERE a.code = ?', [$code]);
     $ok = $acc && password_verify($password, $acc['passwordHash']);
-    if (!$ok || ($acc['role'] === 'store' && !(int)$acc['storeActive'])) Http::error('店舗コードまたはパスワードが違います', 401);
+    if (!$ok || ($acc['role'] === 'store' && !(int)$acc['storeActive']) || !(int)($acc['active'] ?? 1)) Http::error('店舗コード（ID）またはパスワードが違います', 401);
+    Db::exec('UPDATE admin_account SET lastLoginAt = ? WHERE id = ?', [Time::nowJstDateTime(), $acc['id']]);
     Auth::setSessionCookie(['accountId' => $acc['id'], 'role' => $acc['role'] === 'hq' ? 'hq' : 'store', 'storeId' => $acc['storeId'], 'code' => $acc['code']]);
     Http::json(['ok' => true]);
 }
@@ -44,7 +45,7 @@ function adm_me(): never
     $store = Auth::resolveStore($s);
     $stores = $s['role'] === 'hq' ? array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active']], Db::all('SELECT code, name, active FROM store ORDER BY code ASC')) : [];
     Http::json([
-        'session' => ['code' => $s['code'], 'role' => $s['role']],
+        'session' => ['code' => $s['code'], 'role' => $s['role'], 'name' => $s['role'] === 'hq' ? (Auth::account()['name'] ?? '') : '', 'canManage' => $s['role'] === 'hq' && (int)(Auth::account()['canManage'] ?? 0) === 1],
         'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active']] : null,
         'stores' => $stores,
         'today' => Time::nowJst()['date'],
@@ -549,7 +550,7 @@ function adm_settings_get(): never
             'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => (int)($store['maxNewConcurrent'] ?? 0), 'hoursOverride' => $store['hoursOverride'] ? json_encode($store['hoursOverride'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
         ],
         'globalHours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        'canChangePassword' => $ctx['session']['role'] === 'store',
+        'canChangePassword' => true,
         'smsEnabled' => Sms::enabled(),
         'members' => array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'role' => $m['role'], 'active' => (bool)$m['active'], 'startDate' => $m['startDate'], 'endDate' => $m['endDate'], 'joinType' => $m['joinType']], $members),
     ]);

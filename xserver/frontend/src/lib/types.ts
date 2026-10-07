@@ -27,7 +27,7 @@ export interface DayData {
 export interface DayResponse { data: DayData; storeName: string; storeCode: string; published: boolean; today: string }
 
 export interface Me {
-  session: { code: string; role: 'store' | 'hq' };
+  session: { code: string; role: 'store' | 'hq'; name?: string; canManage?: boolean };
   store: { id: string; code: string; name: string; active: boolean } | null;
   stores: { code: string; name: string; active: boolean }[];
   today: string;

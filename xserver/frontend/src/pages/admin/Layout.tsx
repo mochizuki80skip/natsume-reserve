@@ -50,8 +50,9 @@ export default function AdminLayout() {
             {me.session.role === 'hq' && <Link to="/admin/hq/karte" className="hover:underline">新患・再来集計</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq" className="hover:underline">本部</Link>}
+            {me.session.role === 'hq' && <Link to="/admin/hq/accounts" className="hover:underline">アカウント</Link>}
             {store && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer" className="text-slate-500 hover:underline">顧客ページ↗</a>}
-            <form action="/api/admin/logout" method="post"><button className="text-slate-500 hover:underline">ログアウト（{me.session.code}）</button></form>
+            <form action="/api/admin/logout" method="post"><button className="text-slate-500 hover:underline">ログアウト（{me.session.name || me.session.code}）</button></form>
           </nav>
         </div>
       </header>

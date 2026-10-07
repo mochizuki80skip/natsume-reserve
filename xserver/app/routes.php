@@ -8,6 +8,7 @@ require_once __DIR__ . '/handlers/hq.php';
 require_once __DIR__ . '/handlers/misc.php';
 require_once __DIR__ . '/handlers/jibai.php';
 require_once __DIR__ . '/handlers/karte.php';
+require_once __DIR__ . '/handlers/accounts.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -51,6 +52,10 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/karte/options$#', 'hq_karte_options_get'],
         ['PUT', '#^/api/admin/hq/karte/options$#', 'hq_karte_options_put'],
         ['PUT', '#^/api/admin/hq/areas$#', 'hq_areas_put'],
+        ['GET', '#^/api/admin/hq/accounts$#', 'hq_accounts_get'],
+        ['POST', '#^/api/admin/hq/accounts$#', 'hq_accounts_post'],
+        ['PUT', '#^/api/admin/hq/accounts$#', 'hq_accounts_put'],
+        ['GET', '#^/api/admin/hq/audit$#', 'hq_audit_get'],
         ['DELETE', '#^/api/admin/blocks$#', 'adm_block_delete'],
         ['POST', '#^/api/admin/staff-members$#', 'adm_staff_post'],
         ['PUT', '#^/api/admin/staff-members$#', 'adm_staff_put'],
@@ -85,6 +90,7 @@ function dispatch(string $method, string $path): bool
     foreach (route_table() as [$m, $re, $fn]) {
         if ($m !== $method || !preg_match($re, $path, $mm)) continue;
         try {
+            audit_register($fn, $method);
             $fn($mm);
         } catch (HttpError $e) {
             Http::error($e->getMessage(), $e->status);

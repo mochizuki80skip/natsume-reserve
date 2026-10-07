@@ -23,7 +23,7 @@ final class Install
         $hq = Db::one('SELECT id FROM admin_account WHERE code = ?', ['HQ']);
         if (!$hq) {
             $pw = Config::str('HQ_PASSWORD') !== '' ? Config::str('HQ_PASSWORD') : 'hq-pass';
-            Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId) VALUES (?, ?, ?, ?, NULL)', [Db::newId(), 'HQ', password_hash($pw, PASSWORD_BCRYPT), 'hq']);
+            Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId, name, canManage) VALUES (?, ?, ?, ?, NULL, ?, 1)', [Db::newId(), 'HQ', password_hash($pw, PASSWORD_BCRYPT), 'hq', '管理者']);
             $log[] = '本部アカウント HQ を作成しました（パスワードは config.php の HQ_PASSWORD）';
         } else {
             $log[] = '本部アカウント HQ は作成済みです';

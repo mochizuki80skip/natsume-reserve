@@ -20,6 +20,7 @@ import JibaiHqPage from './pages/admin/JibaiHqPage';
 import StoryPage from './pages/admin/StoryPage';
 import KartePage from './pages/admin/KartePage';
 import KarteHqPage from './pages/admin/KarteHqPage';
+import AccountsPage from './pages/admin/AccountsPage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -41,6 +42,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="story" element={<StoryPage />} />
           <Route path="karte" element={<KartePage />} />
           <Route path="hq/karte" element={<KarteHqPage />} />
+          <Route path="hq/accounts" element={<AccountsPage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />

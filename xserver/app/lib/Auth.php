@@ -10,6 +10,7 @@ final class Auth
 
     private static ?array $session = null;
     private static bool $sessionLoaded = false;
+    private static ?array $account = null;
     private static ?array $store = null;
     private static bool $storeLoaded = false;
 
@@ -72,6 +73,27 @@ final class Auth
     {
         $s = self::session();
         if (!$s) throw new HttpError(401, 'unauthorized');
+        // 本部アカウントは毎回、停止されていないか確かめる（停止したら次の操作から使えなくする）
+        if ($s['role'] === 'hq' && !self::account()) throw new HttpError(401, 'unauthorized');
+        return $s;
+    }
+
+    /** ログイン中の本部アカウント（停止中・存在しないときは null） */
+    public static function account(): ?array
+    {
+        if (self::$account !== null) return self::$account ?: null;
+        $s = self::session();
+        $a = $s ? Db::one('SELECT id, code, name, role, active, canManage FROM admin_account WHERE id = ?', [$s['accountId']]) : null;
+        $ok = $a && (int)$a['active'] === 1 && $a['role'] === 'hq';
+        self::$account = $ok ? $a : [];
+        return $ok ? $a : null;
+    }
+
+    /** 本部アカウントの発行・停止ができる人だけ */
+    public static function requireManager(): array
+    {
+        $s = self::requireHq();
+        if (!(int)(self::account()['canManage'] ?? 0)) throw new HttpError(403, 'この操作はアカウント管理の権限がある人だけができます');
         return $s;
     }
 
