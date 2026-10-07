@@ -99,11 +99,22 @@ export default function AccountsPage() {
 }
 
 function Audit() {
-  const { data } = useFetch<{ rows: AuditRow[] }>('/api/admin/hq/audit');
+  const [account, setAccount] = useState('');
+  const { data } = useFetch<{ rows: AuditRow[]; actors: { id: string; label: string; hq: boolean; count: number }[] }>(`/api/admin/hq/audit?account=${encodeURIComponent(account)}`);
+  const actors = data?.actors ?? [];
   return (
     <div className="rounded-lg border bg-white p-3 text-sm">
-      <h2 className="mb-1 font-bold">操作の記録（新しい順・300件まで）</h2>
-      <p className="mb-2 text-xs text-slate-500">誰が・いつ・どの店舗で・何をしたかを記録しています。患者様の氏名などは記録しません。</p>
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h2 className="font-bold">操作の記録（新しい順・300件まで）</h2>
+        <label className="ml-auto flex items-center gap-1 text-xs">操作した人
+          <select value={account} onChange={(e) => setAccount(e.target.value)} className="rounded border px-2 py-1 text-sm">
+            <option value="">全員</option>
+            {actors.some((a) => a.hq) && <optgroup label="本部">{actors.filter((a) => a.hq).map((a) => <option key={a.id} value={a.id}>{a.label}（{a.count}件）</option>)}</optgroup>}
+            {actors.some((a) => !a.hq) && <optgroup label="店舗">{actors.filter((a) => !a.hq).map((a) => <option key={a.id} value={a.id}>{a.label}（{a.count}件）</option>)}</optgroup>}
+          </select>
+        </label>
+      </div>
+      <p className="mb-2 text-xs text-slate-500">誰が・いつ・どの店舗で・何をしたかを記録しています。患者様の氏名などは記録しません。{account && ' 「全員」に戻すと全部の記録を表示します。'}</p>
       <div className="max-h-96 overflow-auto">
         <table className="w-full text-xs">
           <thead className="sticky top-0 bg-slate-50 text-slate-500"><tr><th className="px-2 py-1 text-left">日時</th><th className="px-2 py-1 text-left">操作した人</th><th className="px-2 py-1 text-left">店舗</th><th className="px-2 py-1 text-left">操作</th><th className="px-2 py-1 text-left">内容</th></tr></thead>

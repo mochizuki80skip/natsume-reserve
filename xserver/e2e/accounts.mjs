@@ -45,6 +45,10 @@ ok('部長の権限を外す', (await hq('PUT', '/api/admin/hq/accounts', { id: 
 
 const audit = (await hq('GET', '/api/admin/hq/audit'))[1].rows;
 ok('操作の記録に、誰が何をしたかが残る', audit.some((r) => r.actor.includes('佐藤 部長') && r.action === '本部アカウントの変更') && audit.some((r) => r.actor.includes('山田 MG') && r.action === '自分のパスワード変更'), audit.slice(0, 3).map((r) => `${r.actor}:${r.action}`).join(' / '));
+const f = (await hq('GET', `/api/admin/hq/audit?account=${mg.id}`))[1];
+ok('操作した人で絞り込める', f.rows.length > 0 && f.rows.every((r) => r.actor.includes('山田 MG')), `${f.rows.length}件`);
+const all = (await hq('GET', '/api/admin/hq/audit'))[1];
+ok('絞り込みの選択肢に本部の人と店舗が出る', all.actors.some((x) => x.id === mg.id && x.hq && x.count >= 1) && all.actors.some((x) => x.id === bu.id));
 ok('記録にパスワードは残らない', !JSON.stringify(audit).includes('mgnew1234'));
 // 後片付け（停止）
 for (const a of [mg, bu]) await hq('PUT', '/api/admin/hq/accounts', { id: a.id, active: false });

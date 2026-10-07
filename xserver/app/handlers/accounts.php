@@ -70,8 +70,17 @@ function hq_accounts_put(): never
 function hq_audit_get(): never
 {
     Auth::requireManager();
-    $rows = Db::all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 300');
-    Http::json(['rows' => array_map(fn($r) => ['at' => Time::formatDateTimeShort($r['at']), 'actor' => $r['actor'], 'store' => $r['storeCode'], 'action' => $r['action'], 'detail' => $r['detail'], 'ok' => (int)$r['status'] < 400], $rows)]);
+    // 操作した人で絞り込み（?account=アカウントの id。空なら全員）
+    $acc = (string)(Http::query('account') ?? '');
+    $rows = $acc !== ''
+        ? Db::all('SELECT * FROM audit_log WHERE accountId = ? ORDER BY id DESC LIMIT 300', [$acc])
+        : Db::all('SELECT * FROM audit_log ORDER BY id DESC LIMIT 300');
+    // 選択肢：記録に出てくる人（本部の人を先、次に店舗。表示名は最新の記録のもの）
+    $actors = Db::all('SELECT l.accountId, l.actor, a.role, s.name AS storeName, (SELECT COUNT(*) FROM audit_log c WHERE c.accountId = l.accountId) AS n
+        FROM audit_log l JOIN (SELECT accountId, MAX(id) AS mid FROM audit_log GROUP BY accountId) m ON m.mid = l.id
+        LEFT JOIN admin_account a ON a.id = l.accountId LEFT JOIN store s ON s.id = a.storeId ORDER BY (a.role = \'hq\') DESC, l.actor ASC');
+    $label = fn($x) => $x['role'] === 'store' && $x['storeName'] ? "{$x['storeName']}（{$x['actor']}）" : $x['actor'];
+    Http::json(['actors' => array_map(fn($x) => ['id' => $x['accountId'], 'label' => $label($x), 'hq' => $x['role'] === 'hq', 'count' => (int)$x['n']], $actors), 'rows' => array_map(fn($r) => ['at' => Time::formatDateTimeShort($r['at']), 'actor' => $r['actor'], 'store' => $r['storeCode'], 'action' => $r['action'], 'detail' => $r['detail'], 'ok' => (int)$r['status'] < 400], $rows)]);
 }
 
 // ---------- 操作の記録 ----------
