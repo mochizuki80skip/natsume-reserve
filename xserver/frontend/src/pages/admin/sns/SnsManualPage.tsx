@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { CHANNEL_JA, STATUS_CLASS, STATUS_JA, copyText, downloadImage, formatScheduled, sendJson, type ManualPost } from '@/lib/sns';
 import SnsNav from '@/components/SnsNav';
+import { StoreDot } from '@/lib/storeColor';
 import { useAdmin } from '../Layout';
 
 interface Resp { today: string; now: string; posts: ManualPost[]; gbpManual: boolean; counts: { overdue: number; today: number; upcoming: number } }
@@ -42,7 +43,7 @@ export default function SnsManualPage() {
       <div className={`rounded border bg-white p-3 ${p.ready ? '' : 'border-red-300'}`}>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-bold tabular-nums">{formatScheduled(p.scheduledAt)}</span>
-          {me.session.role === 'hq' && <span className="font-bold">{p.storeName}</span>}
+          {me.session.role === 'hq' && <span className="font-bold"><StoreDot code={p.storeCode} className="mr-1" />{p.storeName}</span>}
           <span className={`rounded px-1.5 text-xs ${p.channel === 'ig' ? 'bg-pink-100 text-pink-800' : 'bg-emerald-100 text-emerald-800'}`}>{CHANNEL_JA[p.channel]}</span>
           <span className={`rounded px-1.5 text-xs ${STATUS_CLASS[p.status]}`}>{STATUS_JA[p.status]}</span>
           <Link to={`/admin/sns/posts/${p.id}`} className="ml-auto text-xs text-brand underline">内容を直す</Link>

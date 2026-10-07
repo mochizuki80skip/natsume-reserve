@@ -34,13 +34,14 @@ ok('本部ログイン', true);
 // ナビから SNS 投稿へ
 await page.click('text=SNS投稿');
 await page.waitForURL(/\/admin\/sns$/);
-await page.waitForSelector('h1:has-text("確認待ち")');
-ok('SNS ホームが開く', (await page.textContent('body')).includes('承認待ちの下書き'));
-ok('本部メニューに SNS管理がある', (await page.locator('a:has-text("SNS管理（本部）")').count()) === 1);
+await page.waitForSelector('h1:has-text("ホーム")');
+await page.waitForSelector('h2:has-text("承認待ち")', { timeout: 15000 });
+ok('SNS ホームが開く', true);
+ok('本部メニューに接続状況がある', (await page.locator('a:has-text("接続状況")').count()) === 1);
 
 // 本部の SNS 管理
-await page.click('a:has-text("SNS管理（本部）")');
-await page.waitForSelector('h1:has-text("SNS 管理（本部）")');
+await page.click('a:has-text("接続状況")');
+await page.waitForSelector('h1:has-text("接続状況")');
 const hqText = await page.textContent('body');
 ok('接続状況が表示される', hqText.includes('APP_URL') && hqText.includes('CRON_SECRET'));
 ok('店舗ごとの状態の表がある', hqText.includes('店舗ごとの状態'));
@@ -94,7 +95,8 @@ ok('定型投稿を追加', true);
 const row = page.locator('tr', { hasText: TITLE }).first();
 await row.locator('input[type="file"]').setInputFiles({ name: 'x.jpg', mimeType: 'image/jpeg', buffer: await makeJpeg() });
 await page.waitForSelector('text=画像を保存しました', { timeout: 20000 });
-ok('定型投稿に画像を登録', (await page.locator('tr', { hasText: TITLE }).first().locator('img').count()) === 1);
+await page.locator('tr', { hasText: TITLE }).first().locator('img').waitFor({ timeout: 15000 });
+ok('定型投稿に画像を登録', true);
 // 全店舗に一斉配信（本部）
 await page.locator('tr', { hasText: TITLE }).first().locator('button:has-text("全店舗に一斉配信")').click();
 await page.waitForSelector('h3:has-text("全店舗に一斉配信")');
@@ -106,7 +108,7 @@ ok('一斉配信で下書きができる', (await page.textContent('body')).incl
 
 // 下書きを作って一覧へ
 await page.goto(`${BASE}/admin/sns?`);
-await page.waitForSelector('h1:has-text("確認待ち")');
+await page.waitForSelector('h1:has-text("ホーム")');
 await page.goto(`${BASE}/admin/sns/posts?store=S002&new=1`);
 await page.waitForSelector('text=手で下書きを追加');
 const nf = page.locator('form:has(button:has-text("下書きを作る"))');
@@ -121,7 +123,7 @@ await page.click('button:has-text("下書きを作る")');
 await page.waitForSelector(`a:has-text("${TITLE}")`);
 ok('一覧に下書きが出る', (await page.textContent('table')).includes(TITLE));
 await page.click('button:has-text("カレンダー")');
-await page.waitForSelector('text=色：灰＝下書き');
+await page.waitForSelector('text=左の線：桃＝Instagram');
 ok('カレンダー表示', true);
 await page.click('button:has-text("一覧")');
 await page.click(`a:has-text("${TITLE}")`);
@@ -156,7 +158,7 @@ ok('手動で投稿した記録', true);
 
 // Google を手動投稿の運用にして、手動投稿の画面で 1 件を片づける
 await page.goto(`${BASE}/admin/hq/sns`);
-await page.waitForSelector('h1:has-text("SNS 管理（本部）")');
+await page.waitForSelector('h1:has-text("接続状況")');
 const gbpManualBox = page.locator('label:has-text("Google は手動で投稿する") input[type="checkbox"]');
 if (!(await gbpManualBox.isChecked())) { await gbpManualBox.check(); await page.waitForSelector('text=手動投稿の運用にしました'); }
 ok('Google を手動投稿の運用にできる', (await page.locator('text=Google と連携する').count()) === 0);
@@ -189,8 +191,8 @@ await page.fill('input[type="password"]', 'password');
 await page.getByRole('button', { name: 'ログイン' }).click();
 await page.waitForURL(/\/admin\/day\//, { timeout: 15000 });
 await page.goto(`${BASE}/admin/sns`);
-await page.waitForSelector('h1:has-text("確認待ち")');
-ok('店舗には SNS管理（本部）が出ない', (await page.locator('a:has-text("SNS管理（本部）")').count()) === 0);
+await page.waitForSelector('h1:has-text("ホーム")');
+ok('店舗には接続状況（本部）が出ない', (await page.locator('a:has-text("接続状況")').count()) === 0);
 await page.goto(`${BASE}/admin/sns/insights`);
 await page.waitForSelector('h1:has-text("分析")');
 const own = await page.textContent('body');

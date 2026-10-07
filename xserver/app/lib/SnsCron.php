@@ -137,14 +137,14 @@ final class SnsCron
     }
 
     // ---------- 下書きの生成 ----------
-    public static function generateAll(): array
+    public static function generateAll(?int $daysAhead = null): array
     {
         $res = ['created' => 0, 'missingTopics' => 0];
         $missingStores = [];
         foreach (Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC') as $store) {
             $store = Settings::storeRow($store);
             foreach (Sns::CHANNELS as $ch) {
-                $r = Sns::generateDrafts($store, $ch);
+                $r = Sns::generateDrafts($store, $ch, $daysAhead, $daysAhead ? 60 : 10);
                 $res['created'] += $r['created'];
                 $res['missingTopics'] += $r['missingTopics'];
                 if ($r['missingTopics'] > 0) $missingStores[] = $store['name'] . '（' . Sns::CHANNEL_JA[$ch] . '）';

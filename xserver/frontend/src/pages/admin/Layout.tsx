@@ -25,7 +25,7 @@ export default function AdminLayout() {
   return (
     <div className="min-h-screen">
       <header className="no-print border-b bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2">
+        <div className={`mx-auto flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 ${SNS_ONLY ? 'max-w-7xl' : 'max-w-6xl'}`}>
           <Link to={SNS_ONLY ? '/admin/sns' : `/admin/day/${today}`} className="font-bold text-brand-dark">{SNS_ONLY && <span className="mr-2 rounded bg-brand px-1.5 py-0.5 text-xs text-white">SNS投稿管理</span>}{me.session.role === 'hq' ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {me.session.role === 'hq' && (
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
@@ -43,7 +43,7 @@ export default function AdminLayout() {
             {!SNS_ONLY && <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>}
             {!SNS_ONLY && <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>}
             {!SNS_ONLY && <Link to="/admin/story" className="hover:underline">ストーリー画像</Link>}
-            <Link to="/admin/sns" className="hover:underline">SNS投稿</Link>
+            {!SNS_ONLY && <Link to="/admin/sns" className="hover:underline">SNS投稿</Link>}
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
             {!SNS_ONLY && me.session.role === 'hq' && <Link to="/admin/hq/overview" className="hover:underline">全店状況</Link>}
             {!SNS_ONLY && me.session.role === 'hq' && <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}
@@ -53,7 +53,7 @@ export default function AdminLayout() {
           </nav>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-4 py-4">
+      <div className={`mx-auto px-4 py-4 ${SNS_ONLY ? 'max-w-7xl' : 'max-w-6xl'}`}>
         <Outlet context={{ me, refreshMe: reload } satisfies AdminContext} />
       </div>
     </div>

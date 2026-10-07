@@ -21,8 +21,10 @@ await page.fill('input[autocomplete="username"]', 'HQ'); await page.fill('input[
 await page.waitForURL(/\/admin\/sns$/);
 ok('ログイン後は SNS ホーム', true);
 const nav = (await page.locator('header nav').textContent()).replace(/\s+/g, '');
+const side = (await page.locator('aside').textContent()).replace(/\s+/g, '');
 ok('メニューに予約表・シフト・自賠請求が無い', !nav.includes('予約表') && !nav.includes('シフト') && !nav.includes('自賠'));
-ok('メニューに SNS投稿・店舗設定・店舗管理がある', nav.includes('SNS投稿') && nav.includes('店舗設定') && nav.includes('店舗管理'));
+ok('左メニューにホーム・手動投稿・カレンダー・店舗の下書き・接続状況がある', side.includes('ホーム') && side.includes('手動投稿') && side.includes('カレンダー') && side.includes('店舗の下書き') && side.includes('接続状況'));
+ok('ヘッダーに店舗設定・店舗管理がある', nav.includes('店舗設定') && nav.includes('店舗管理'));
 await page.goto(`${BASE}/admin/hq`); await page.waitForSelector('h1:has-text("店舗管理")');
 ok('店舗管理に共通設定（営業時間）が無い', (await page.locator('text=全店共通設定').count()) === 0);
 ok('店舗をまとめて登録がある', (await page.locator('text=店舗をまとめて登録').count()) === 1);

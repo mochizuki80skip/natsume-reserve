@@ -5,6 +5,7 @@ import { useFetch } from '@/lib/api';
 import { CHANNEL_JA, formatScheduled, num, pct, sendJson, type Post } from '@/lib/sns';
 import { addDays, formatDateShort } from '@/lib/time';
 import SnsNav from '@/components/SnsNav';
+import { StoreDot } from '@/lib/storeColor';
 import { useAdmin } from '../Layout';
 
 type Pair = { now: number; prev: number } | { now: number | null; prev: number | null };
@@ -65,7 +66,7 @@ export default function SnsInsightsPage() {
           <tbody>
             {data.rows.map((r) => (
               <tr key={r.code} className={`border-t ${d?.store.code === r.code ? 'bg-yellow-50' : ''}`}>
-                <td className="whitespace-nowrap px-2 py-1">{r.name}</td>
+                <td className="whitespace-nowrap px-2 py-1"><StoreDot code={r.code} className="mr-1" />{r.name}</td>
                 <td className="px-2 py-1 tabular-nums">{r.posts.ig} / {r.posts.gbp}</td>
                 <td className="px-2 py-1"><Delta p={r.ig.followers} /></td>
                 <td className="px-2 py-1"><Delta p={r.ig.reach} /></td>

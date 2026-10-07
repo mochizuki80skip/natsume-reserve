@@ -3,18 +3,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { CHANNELS, CHANNEL_JA, STATUS_CLASS, STATUS_JA, addMonthsYm, formatScheduled, monthGrid, sendJson, type Channel, type Post, type Topic } from '@/lib/sns';
-import { WEEKDAY_JA, addDays } from '@/lib/time';
+import { WEEKDAY_JA, addDays, weekdayOf } from '@/lib/time';
 import SnsNav from '@/components/SnsNav';
+import { StoreDot } from '@/lib/storeColor';
 import { useAdmin } from '../Layout';
 
 interface Resp { store: { code: string; name: string }; from: string; to: string; today: string; posts: Post[]; setting: { igEnabled: boolean; gbpEnabled: boolean; igSchedule: string; gbpSchedule: string; memo: string }; publishMode: Record<Channel, 'api' | 'manual'> }
 
-export default function SnsPostsPage() {
+export default function SnsPostsPage({ defaultView = 'list' }: { defaultView?: 'list' | 'calendar' } = {}) {
   const { me } = useAdmin();
   const [sp, setSp] = useSearchParams();
   const storeQ = me.session.role === 'hq' && sp.get('store') ? `&store=${encodeURIComponent(sp.get('store')!)}` : '';
   const channel = (sp.get('channel') ?? 'all') as Channel | 'all';
-  const view = sp.get('view') ?? 'list';
+  const view = sp.get('view') ?? defaultView;
   const ym = sp.get('ym') ?? me.today.slice(0, 7);
   const from = view === 'calendar' ? `${ym}-01` : addDays(me.today, -14);
   const to = view === 'calendar' ? addDays(addMonthsYm(ym, 1) + '-01', -1) : addDays(me.today, 70);
@@ -48,13 +49,14 @@ export default function SnsPostsPage() {
 
   return (
     <div className="space-y-4">
-      <SnsNav title={`投稿一覧：${data.store.name}`} />
+      <SnsNav title={view === 'calendar' ? 'カレンダー' : '投稿一覧'} />
+      <p className="-mt-2 text-sm text-slate-600"><StoreDot code={data.store.code} className="mr-1" />{data.store.name}</p>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {(['all', ...CHANNELS] as const).map((c) => <button key={c} type="button" onClick={() => set('channel', c === 'all' ? null : c)} className={`rounded border px-3 py-1 ${channel === c ? 'bg-brand text-white' : 'bg-white'}`}>{c === 'all' ? 'すべて' : CHANNEL_JA[c]}</button>)}
         <span className="mx-2 text-slate-300">|</span>
-        <button type="button" onClick={() => set('view', null)} className={`rounded border px-3 py-1 ${view === 'list' ? 'bg-slate-700 text-white' : 'bg-white'}`}>一覧</button>
-        <button type="button" onClick={() => set('view', 'calendar')} className={`rounded border px-3 py-1 ${view === 'calendar' ? 'bg-slate-700 text-white' : 'bg-white'}`}>カレンダー</button>
+        <button type="button" onClick={() => set('view', defaultView === 'list' ? null : 'list')} className={`rounded border px-3 py-1 ${view === 'list' ? 'bg-slate-700 text-white' : 'bg-white'}`}>一覧</button>
+        <button type="button" onClick={() => set('view', defaultView === 'calendar' ? null : 'calendar')} className={`rounded border px-3 py-1 ${view === 'calendar' ? 'bg-slate-700 text-white' : 'bg-white'}`}>カレンダー</button>
         <button type="button" onClick={() => setShowNew((v) => !v)} className="rounded border bg-white px-3 py-1">＋ 手で下書きを追加</button>
         <span className="ml-auto text-xs text-slate-500">
           Instagram：{data.setting.igEnabled ? `${data.setting.igSchedule}（${data.publishMode.ig === 'api' ? '自動投稿' : '手動投稿'}）` : '使わない'}　
@@ -72,26 +74,23 @@ export default function SnsPostsPage() {
             <button type="button" onClick={() => set('ym', addMonthsYm(ym, 1))} className="rounded border px-2 py-1">翌月 ›</button>
             <button type="button" onClick={() => set('ym', null)} className="rounded border px-2 py-1">今月</button>
           </div>
-          <table className="w-full table-fixed border-collapse text-xs">
-            <thead><tr>{[1, 2, 3, 4, 5, 6, 0].map((w) => <th key={w} className={`border px-1 py-1 ${w === 0 ? 'text-red-700' : w === 6 ? 'text-blue-700' : ''}`}>{WEEKDAY_JA[w]}</th>)}</tr></thead>
-            <tbody>
-              {monthGrid(ym).map((week, i) => (
-                <tr key={i}>
-                  {week.map((d, j) => (
-                    <td key={j} className={`h-24 border p-1 align-top ${d === me.today ? 'bg-yellow-50' : d === null ? 'bg-slate-50' : ''}`}>
-                      {d && <div className="text-slate-500">{Number(d.slice(8))}</div>}
-                      {d && (byDate.get(d) ?? []).map((p) => (
-                        <Link key={p.id} to={`/admin/sns/posts/${p.id}`} className={`mt-0.5 block truncate rounded px-1 ${STATUS_CLASS[p.status]}`} title={`${CHANNEL_JA[p.channel]} ${p.scheduledAt.slice(11)} ${p.title || p.body}`}>
-                          {p.channel === 'ig' ? 'IG' : 'G'} {p.scheduledAt.slice(11, 16)} {p.title || p.body.slice(0, 10)}
-                        </Link>
-                      ))}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="mt-2 text-xs text-slate-500">色：灰＝下書き、青＝承認済み、緑＝投稿済み、赤＝失敗。</p>
+          <div className="grid grid-cols-7 gap-1 text-xs">
+            {[1, 2, 3, 4, 5, 6, 0].map((w) => <div key={w} className={`px-1 py-1 text-center font-bold ${w === 0 ? 'text-red-700' : w === 6 ? 'text-blue-700' : 'text-slate-600'}`}>{WEEKDAY_JA[w]}</div>)}
+            {monthGrid(ym).flat().map((d, i) => (
+              <div key={i} className={`min-h-28 rounded-md border p-1 ${d === null ? 'bg-slate-50' : d === me.today ? 'border-2 border-blue-500 bg-white' : 'bg-white'}`}>
+                {d && <div className={`mb-1 text-xs ${weekdayOf(d) === 0 ? 'text-red-700' : weekdayOf(d) === 6 ? 'text-blue-700' : 'text-slate-500'}`}>{Number(d.slice(8))}</div>}
+                {d && (byDate.get(d) ?? []).map((p) => (
+                  <Link key={p.id} to={`/admin/sns/posts/${p.id}`} title={`${CHANNEL_JA[p.channel]} ${p.scheduledAt.slice(11)} ${p.title || p.body}`}
+                    className={`mb-1 block rounded-md border-l-4 px-1.5 py-1 ${p.channel === 'ig' ? 'border-pink-500' : 'border-blue-500'} ${p.status === 'posted' ? 'bg-slate-100 text-slate-500' : p.status === 'approved' ? 'bg-green-50' : p.status === 'failed' ? 'bg-red-50' : 'bg-amber-50'}`}>
+                    <div className="text-[10px] text-slate-500">{p.channel === 'ig' ? 'IG' : 'G'} {p.scheduledAt.slice(11, 16)}</div>
+                    <div className="truncate font-bold">{p.title || p.body.slice(0, 14)}</div>
+                    <div className="truncate text-[10px] text-slate-500">{STATUS_JA[p.status]}</div>
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">左の線：桃＝Instagram、青＝Google。背景：黄＝確認待ち、緑＝承認済み、灰＝投稿済み、赤＝失敗。</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded border bg-white">

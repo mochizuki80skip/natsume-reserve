@@ -27,6 +27,8 @@ import SnsInsightsPage from './pages/admin/sns/SnsInsightsPage';
 import SnsHqPage from './pages/admin/sns/SnsHqPage';
 import SnsMediaPage from './pages/admin/sns/SnsMediaPage';
 import SnsManualPage from './pages/admin/sns/SnsManualPage';
+import SnsShell from './components/SnsShell';
+import SnsSchedulePage from './pages/admin/sns/SnsSchedulePage';
 import { SNS_ONLY } from './lib/mode';
 
 createRoot(document.getElementById('root')!).render(
@@ -47,15 +49,19 @@ createRoot(document.getElementById('root')!).render(
           <Route path="settings" element={<SettingsPage />} />
           <Route path="jibai" element={<JibaiPage />} />
           <Route path="story" element={<StoryPage />} />
-          <Route path="sns" element={<SnsHomePage />} />
-          <Route path="sns/manual" element={<SnsManualPage />} />
-          <Route path="sns/posts" element={<SnsPostsPage />} />
-          <Route path="sns/posts/:id" element={<SnsPostPage />} />
-          <Route path="sns/topics" element={<SnsTopicsPage />} />
-          <Route path="sns/media" element={<SnsMediaPage />} />
-          <Route path="sns/settings" element={<SnsSettingsPage />} />
-          <Route path="sns/insights" element={<SnsInsightsPage />} />
-          <Route path="hq/sns" element={<SnsHqPage />} />
+          <Route element={<SnsShell />}>
+            <Route path="sns" element={<SnsHomePage />} />
+            <Route path="sns/manual" element={<SnsManualPage />} />
+            <Route path="sns/calendar" element={<SnsPostsPage defaultView="calendar" />} />
+            <Route path="sns/posts" element={<SnsPostsPage />} />
+            <Route path="sns/posts/:id" element={<SnsPostPage />} />
+            <Route path="sns/topics" element={<SnsTopicsPage />} />
+            <Route path="sns/media" element={<SnsMediaPage />} />
+            <Route path="sns/settings" element={<SnsSettingsPage />} />
+            <Route path="sns/schedule" element={<SnsSchedulePage />} />
+            <Route path="sns/insights" element={<SnsInsightsPage />} />
+            <Route path="hq/sns" element={<SnsHqPage />} />
+          </Route>
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />

@@ -93,6 +93,7 @@ function route_table(): array
         ['GET', '#^/api/admin/sns/google/connect$#', 'sns_google_connect'],
         ['GET', '#^/api/sns/google/callback$#', 'sns_google_callback'],
         ['GET', '#^/api/admin/hq/sns$#', 'hq_sns_get'],
+        ['GET', '#^/api/admin/hq/sns/stores$#', 'hq_sns_stores_get'],
         ['PUT', '#^/api/admin/hq/sns/settings$#', 'hq_sns_settings_put'],
         ['POST', '#^/api/admin/hq/sns/notify-test$#', 'hq_sns_notify_test'],
         ['POST', '#^/api/admin/hq/sns/run-cron$#', 'hq_sns_run_cron'],

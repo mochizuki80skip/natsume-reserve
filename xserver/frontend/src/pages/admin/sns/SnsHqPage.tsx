@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { sendJson, type AccountRow, type Patterns, type Schedule, type VarDef } from '@/lib/sns';
 import SnsNav from '@/components/SnsNav';
+import { StoreDot } from '@/lib/storeColor';
 import SnsScheduleEditor from '@/components/SnsScheduleEditor';
 import { useAdmin } from '../Layout';
 
@@ -50,7 +51,7 @@ export default function SnsHqPage() {
 
   return (
     <div className="space-y-4">
-      <SnsNav title="SNS 管理（本部）" />
+      <SnsNav title="接続状況・本部設定" />
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
 
       <section className="rounded border bg-white p-4 text-sm">
@@ -102,7 +103,7 @@ export default function SnsHqPage() {
           <tbody>
             {data.stores.map((st) => (
               <tr key={st.code} className={`border-t ${st.active ? '' : 'text-slate-400'}`}>
-                <td className="whitespace-nowrap px-2 py-1">{st.name}{!st.active && '（停止）'}</td>
+                <td className="whitespace-nowrap px-2 py-1"><StoreDot code={st.code} className="mr-1" />{st.name}{!st.active && '（停止）'}</td>
                 <td className="px-2 py-1 text-xs">{st.igEnabled ? (st.ig?.connected ? <span className="text-green-700">連携 @{st.ig.username}{st.ig.lastError && <span className="ml-1 text-red-700" title={st.ig.lastError}>!</span>}</span> : <span className="text-amber-700">未連携（手動投稿）</span>) : <span className="text-slate-400">使わない</span>}</td>
                 <td className="px-2 py-1 text-xs">
                   {locs ? (

@@ -5,9 +5,9 @@ export type Channel = 'ig' | 'gbp';
 export type PostStatus = 'draft' | 'approved' | 'publishing' | 'posted' | 'failed';
 export const CHANNELS: Channel[] = ['ig', 'gbp'];
 export const CHANNEL_JA: Record<Channel, string> = { ig: 'Instagram', gbp: 'Google' };
-export const STATUS_JA: Record<PostStatus, string> = { draft: '下書き', approved: '承認済み', publishing: '投稿中', posted: '投稿済み', failed: '失敗' };
+export const STATUS_JA: Record<PostStatus, string> = { draft: '確認待ち', approved: '承認済み', publishing: '投稿中', posted: '投稿済み', failed: '失敗' };
 export const STATUS_CLASS: Record<PostStatus, string> = {
-  draft: 'bg-slate-200 text-slate-700', approved: 'bg-blue-100 text-blue-800', publishing: 'bg-amber-100 text-amber-800', posted: 'bg-green-100 text-green-800', failed: 'bg-red-100 text-red-800',
+  draft: 'bg-amber-100 text-amber-800', approved: 'bg-blue-100 text-blue-800', publishing: 'bg-amber-100 text-amber-800', posted: 'bg-green-100 text-green-800', failed: 'bg-red-100 text-red-800',
 };
 
 export type Schedule = { type: 'weekly'; weekdays: number[]; hour: number; minute: number } | { type: 'monthly'; nth: number; weekday: number; hour: number; minute: number };
@@ -32,6 +32,17 @@ export interface StoreSetting {
   gbpPostUrl: string; igProfileUrl: string;
 }
 export interface ManualPost extends Post { openUrl: string; openUrlIsSearch: boolean; ready: boolean; issues: string[]; bucket: 'overdue' | 'today' | 'upcoming' }
+
+/** 投稿前の確認（禁止語・差し込み語の未入力・Google の掲載情報・画像）。問題が無ければ空 */
+export function checkIssues(p: Post, igNeedsImage = false): string[] {
+  const out: string[] = [];
+  if (p.compliance.blocking) out.push(`禁止語：${p.compliance.hits.join('、')}`);
+  else if (p.compliance.hits.length) out.push(`要確認：${p.compliance.hits.join('、')}`);
+  if (p.unfilled.length) out.push(`未入力：${p.unfilled.join(' ')}`);
+  if (p.channel === 'gbp' && p.gbpInfo.length) out.push(`GBP掲載情報：${p.gbpInfo.join('、')}`);
+  if (p.channel === 'ig' && !p.imageUrl && igNeedsImage) out.push('画像なし');
+  return out;
+}
 
 /** 画像を保存（同じサイトの画像なので download 属性が効く） */
 export function downloadImage(url: string, name: string): void {

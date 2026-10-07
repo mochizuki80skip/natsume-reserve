@@ -85,7 +85,7 @@ function sns_home(): never
     $pending = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'draft' $where ORDER BY p.scheduledAt ASC LIMIT 80");
     $manual = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status IN ('draft', 'approved') AND p.publishMode = 'manual' AND p.scheduledAt <= ? $where ORDER BY p.scheduledAt ASC LIMIT 60", [Time::nowJst()['date'] . ' 23:59:59']);
     $failed = Db::all("SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.status = 'failed' $where ORDER BY p.scheduledAt DESC LIMIT 30");
-    $counts = Db::all("SELECT s.code, s.name, p.channel, p.status, COUNT(*) AS n FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.scheduledAt >= ? $where GROUP BY s.code, s.name, p.channel, p.status ORDER BY s.code", [Time::addDays(Time::nowJst()['date'], -30) . ' 00:00:00']);
+    $counts = Db::all("SELECT s.code, s.name, p.channel, p.status, COUNT(*) AS n FROM sns_post p JOIN store s ON s.id = p.storeId WHERE s.active = 1 AND (p.status IN ('draft', 'approved', 'failed') OR p.scheduledAt >= ?) $where GROUP BY s.code, s.name, p.channel, p.status ORDER BY s.code", [Time::addDays(Time::nowJst()['date'], -30) . ' 00:00:00']);
     $byStore = [];
     foreach ($counts as $c) {
         $byStore[$c['code']] ??= ['code' => $c['code'], 'name' => $c['name'], 'ig' => ['draft' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0], 'gbp' => ['draft' => 0, 'approved' => 0, 'posted' => 0, 'failed' => 0]];
@@ -93,7 +93,22 @@ function sns_home(): never
     }
     $g = Sns::setting();
     $job = Db::one('SELECT k, ranAt FROM sns_job ORDER BY ranAt DESC LIMIT 1');
+    // 接続状況のまとめ（左メニュー下とホームのカード用）
+    $igEnabledStores = (int)Db::one("SELECT COUNT(*) AS n FROM sns_store_setting ss JOIN store s ON s.id = ss.storeId WHERE ss.igEnabled = 1 AND s.active = 1")['n'];
+    $igConnected = (int)Db::one("SELECT COUNT(*) AS n FROM sns_account a JOIN store s ON s.id = a.storeId WHERE a.channel = 'ig' AND a.accessToken IS NOT NULL AND s.active = 1")['n'];
+    $gbpMapped = (int)Db::one("SELECT COUNT(*) AS n FROM sns_account a JOIN store s ON s.id = a.storeId WHERE a.channel = 'gbp' AND a.locationName <> '' AND s.active = 1")['n'];
+    $googleHq = Sns::account(null, 'gbp');
+    $approvedCount = (int)Db::one("SELECT COUNT(*) AS n FROM sns_post p WHERE p.status = 'approved' $where")['n'];
+    $failedCount = (int)Db::one("SELECT COUNT(*) AS n FROM sns_post p WHERE p.status = 'failed' $where")['n'];
+    $pendingCount = (int)Db::one("SELECT COUNT(*) AS n FROM sns_post p WHERE p.status = 'draft' $where")['n'];
     Http::json([
+        'status' => [
+            'pending' => $pendingCount, 'approved' => $approvedCount, 'failed' => $failedCount,
+            'ig' => ['enabled' => $igEnabledStores, 'connected' => $igConnected],
+            'google' => $g['gbpManual'] ? 'manual' : (($googleHq && $googleHq['refreshToken']) ? ($gbpMapped > 0 ? 'ok' : 'nolocation') : 'none'),
+            'googleMapped' => $gbpMapped,
+            'line' => Notify::lineEnabled() ? 'ok' : (Notify::mailEnabled() ? 'mail' : 'none'),
+        ],
         'pending' => array_map([Sns::class, 'postRow'], $pending),
         'manual' => array_map([Sns::class, 'postRow'], $manual),
         'failed' => array_map([Sns::class, 'postRow'], $failed),
@@ -329,13 +344,15 @@ function sns_generate(): never
     Sns::ensureTables();
     $s = Auth::requireSession();
     Http::requireJson();
+    $days = Http::query('days');
+    $days = $days !== null && is_numeric($days) ? max(1, min(120, (int)$days)) : null;
     if ($s['role'] === 'hq' && Http::query('store') === 'all') {
-        Http::json(['ok' => true] + SnsCron::generateAll());
+        Http::json(['ok' => true] + SnsCron::generateAll($days));
     }
     $ctx = sns_ctx();
     $res = ['created' => 0, 'missingTopics' => 0];
     foreach (Sns::CHANNELS as $ch) {
-        $r = Sns::generateDrafts($ctx['store'], $ch, null, 30);
+        $r = Sns::generateDrafts($ctx['store'], $ch, $days, 30);
         $res['created'] += $r['created']; $res['missingTopics'] += $r['missingTopics'];
     }
     Http::json(['ok' => true] + $res);
@@ -778,6 +795,21 @@ function hq_sns_get(): never
         'jobs' => Db::all('SELECT k, ranAt, note FROM sns_job ORDER BY ranAt DESC LIMIT 12'),
         'mediaWritable' => is_writable(Sns::mediaDir()),
     ]);
+}
+
+/** 全店舗の SNS 設定をまとめて返す（設定画面で店舗ごとのカードを並べる） */
+function hq_sns_stores_get(): never
+{
+    Sns::ensureTables();
+    Auth::requireHq();
+    $g = Sns::setting();
+    $out = [];
+    foreach (Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC') as $st) {
+        $st = Settings::storeRow($st);
+        $ss = Sns::storeSetting($st);
+        $out[] = ['code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'setting' => $ss, 'draftCount' => (int)Db::one("SELECT COUNT(*) AS n FROM sns_post WHERE storeId = ? AND status = 'draft'", [$st['id']])['n']];
+    }
+    Http::json(['stores' => $out, 'defaults' => ['igSchedule' => $g['defaultIgSchedule'], 'gbpSchedule' => $g['defaultGbpSchedule']], 'customVars' => $g['customVars'], 'gbpManual' => $g['gbpManual']]);
 }
 
 function hq_sns_settings_put(): never
