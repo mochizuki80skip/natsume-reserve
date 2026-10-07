@@ -84,7 +84,9 @@ export default function SnsHomePage() {
   }
   if (error) return <div><SnsNav title="ホーム" /><p className="text-sm text-red-700">{error.message}</p></div>;
   if (!data) return <div><SnsNav title="ホーム" /><p className="text-sm text-slate-500">読み込み中…</p></div>;
-  const st = data.status;
+  // サーバー側（app/）が古くて status が無い場合でも画面を出す
+  const serverOld = !data.status;
+  const st: HomeStatus = data.status ?? { pending: data.pending.length, approved: 0, failed: data.failed.length, ig: { enabled: 0, connected: 0 }, google: 'none', googleMapped: 0, line: 'none' };
   const soon = data.pending.filter((p) => p.scheduledAt <= data.now.slice(0, 10) + ' 23:59');
   const card = (n: number, label: string, cls = '') => <div className="rounded-lg border bg-white px-5 py-4"><div className={`text-3xl font-bold tabular-nums ${cls}`}>{n}</div><div className="text-sm text-slate-500">{label}</div></div>;
   return (
@@ -96,6 +98,7 @@ export default function SnsHomePage() {
           {!isHq && <button type="button" disabled={busy} onClick={() => generate(false)} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">この店舗の下書きを作る</button>}
         </div>
       </div>
+      {serverOld && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-800">サーバー側のプログラム（app フォルダ）が画面より古いようです。zip の app フォルダの中身を上書きアップロードしてください（config.php は残す）。</p>}
       {!data.baseUrlOk && <p className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">config.php の APP_URL が未設定です。画像の公開 URL と連携の戻り先に必要なため、自動投稿は動きません（本部に連絡してください）。</p>}
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

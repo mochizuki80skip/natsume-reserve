@@ -16,7 +16,7 @@ export default function SnsShell() {
   const isHq = me.session.role === 'hq';
   const { data } = useFetch<HomeResp>('/api/admin/sns/home');
   const storeParam = sp.get('store');
-  const st = data?.status;
+  const st = data?.status ?? (data ? { pending: 0, approved: 0, failed: 0, ig: { enabled: 0, connected: 0 }, google: 'none' as const, googleMapped: 0, line: 'none' as const } : undefined);
   const item = (to: string, label: string, badge?: number, exact = false) => {
     const active = exact ? pathname === to : pathname.startsWith(to) && !(to === '/admin/sns/posts' && storeParam);
     return (
@@ -27,7 +27,7 @@ export default function SnsShell() {
     );
   };
   const stores = isHq ? me.stores.filter((s) => s.active) : me.store ? [{ code: me.store.code, name: me.store.name, active: true }] : [];
-  const draftCount = (code: string) => { const r = data?.byStore.find((b) => b.code === code); return r ? (r.ig.draft ?? 0) + (r.gbp.draft ?? 0) : 0; };
+  const draftCount = (code: string) => { const r = data?.byStore?.find((b) => b.code === code); return r ? (r.ig.draft ?? 0) + (r.gbp.draft ?? 0) : 0; };
   const dot = (ok: boolean | null, label: string, text?: string) => (
     <div className="flex items-center gap-2 text-xs"><span className={`inline-block h-2.5 w-2.5 rounded-full ${ok === true ? 'bg-green-600' : ok === false ? 'bg-red-600' : 'bg-amber-500'}`} /><span className={ok === true ? 'text-green-800' : ok === false ? 'text-red-800' : 'text-amber-800'}>{label}{text ? ` ${text}` : ''}</span></div>
   );
@@ -52,7 +52,7 @@ export default function SnsShell() {
           </nav>
           <div className="mt-3 px-3 text-xs text-slate-500">全体</div>
           <nav className="mt-1 space-y-0.5">
-            {item('/admin/sns/manual', '手動投稿', data?.manual.length)}
+            {item('/admin/sns/manual', '手動投稿', data?.manual?.length)}
             {item('/admin/sns/calendar', 'カレンダー')}
             {item('/admin/sns/posts', '投稿一覧')}
             {item('/admin/sns/topics', '定型投稿・ネタ')}
