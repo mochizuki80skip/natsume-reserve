@@ -28,6 +28,7 @@ function route_table(): array
         // 予約表
         ['GET', '#^/api/admin/day$#', 'adm_day'],
         ['PUT', '#^/api/admin/cells$#', 'adm_cells_put'],
+        ['GET', '#^/api/admin/web-new$#', 'adm_web_new_get'],
         ['PUT', '#^/api/admin/days$#', 'adm_days_put'],
         ['PUT', '#^/api/admin/visit$#', 'adm_visit_put'],
         ['POST', '#^/api/admin/cancel$#', 'adm_cancel_post'],

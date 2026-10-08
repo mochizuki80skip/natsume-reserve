@@ -28,6 +28,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const [menu, setMenu] = useState<string | null>(null);
   const [pasteInfo, setPasteInfo] = useState('');
   const dirty = useRef(new Map<string, string>());
+  // サーバーが最後に知らせてきたセルの内容（保存時に送り、WEB予約の上書きを防ぐ）と、この画面で最後に触った時刻
+  const serverText = useRef(new Map<string, string>(data.cells.map((c) => [key(c.time, c.bed), c.text])));
+  const touchedAt = useRef(new Map<string, number>());
+  const [conflictMsg, setConflictMsg] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef(new Map<string, HTMLInputElement>());
 
@@ -50,14 +54,26 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const flush = useCallback(async () => {
     if (dirty.current.size === 0) return;
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    const batch = Array.from(dirty.current.entries()).map(([k, text]) => { const [time, bed] = k.split(':').map(Number); return { time, bed, text }; });
+    const batch = Array.from(dirty.current.entries()).map(([k, text]) => { const [time, bed] = k.split(':').map(Number); return { time, bed, text, prev: serverText.current.get(k) ?? '' }; });
     dirty.current.clear();
     setSaveState('saving');
     try {
       const r = await fetch('/api/admin/cells', { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: batch }) });
       setSaveState(r.ok ? 'saved' : 'error');
+      if (!r.ok) return;
+      const j = await r.json().catch(() => ({})) as { conflicts?: { time: number; bed: number; text: string }[] };
+      const conflicts = j.conflicts ?? [];
+      const lost = new Set(conflicts.map((c) => key(c.time, c.bed)));
+      for (const c of batch) if (!lost.has(key(c.time, c.bed))) serverText.current.set(key(c.time, c.bed), c.text);
+      if (conflicts.length) {
+        // 先に WEB予約が入っていたセル：入力は保存せず、WEB予約を表示し直す
+        setCells((m) => { const n = new Map(m); for (const c of conflicts) n.set(key(c.time, c.bed), c.text); return n; });
+        for (const c of conflicts) { serverText.current.set(key(c.time, c.bed), c.text); touchedAt.current.delete(key(c.time, c.bed)); }
+        setConflictMsg(`先に WEB予約が入っていたため、次のセルの入力は保存されませんでした：${conflicts.map((c) => `${minToHm(c.time)} ベッド${c.bed}（${c.text}）`).join('、')}。空いている別のセルに入れ直してください。`);
+        onRefresh();
+      }
     } catch { setSaveState('error'); }
-  }, [data.date]);
+  }, [data.date, onRefresh]);
   const schedule = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(flush, 200); }, [flush]);
   useEffect(() => {
     const onLeave = () => { void flush(); };
@@ -71,8 +87,41 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   function setCell(time: number, bed: number, text: string) {
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), text); return n; });
     dirty.current.set(key(time, bed), text);
+    touchedAt.current.set(key(time, bed), Date.now());
     schedule();
   }
+
+  // ---------- 自動更新（30 秒ごと・画面に戻ったとき） ----------
+  // 新しく読み込んだ内容を画面に反映する。入力中・直前（15 秒以内）に触ったセルはそのまま（保存時にサーバーが確認する）
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; return; }
+    const fresh = new Map(data.cells.map((c) => [key(c.time, c.bed), c.text]));
+    const recent = (k: string) => dirty.current.has(k) || Date.now() - (touchedAt.current.get(k) ?? 0) < 15000;
+    setCells((m) => {
+      const n = new Map(m);
+      for (const k of new Set([...m.keys(), ...fresh.keys()])) {
+        if (recent(k)) continue;
+        const v = fresh.get(k) ?? '';
+        n.set(k, v);
+        serverText.current.set(k, v);
+      }
+      return n;
+    });
+    const freshVisited = new Set(data.cells.filter((c) => c.visited).map((c) => key(c.time, c.bed)));
+    setVisited((v) => {
+      const n = new Set(freshVisited);
+      for (const k of v) if (recent(k) && !freshVisited.has(k)) n.add(k);
+      for (const k of freshVisited) if (recent(k) && !v.has(k)) n.delete(k);
+      return n;
+    });
+  }, [data.cells]);
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === 'visible') onRefresh(); };
+    const id = setInterval(tick, 30 * 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
+  }, [onRefresh]);
 
   // ---------- キー操作・貼り付け ----------
   function focusCell(r: number, c: number) {
@@ -109,6 +158,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     const k = key(time, bed);
     const next = !visited.has(k);
     setVisited((s) => { const n = new Set(s); if (next) n.add(k); else n.delete(k); return n; });
+    touchedAt.current.set(k, Date.now());
     const r = await fetch('/api/admin/visit', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, visited: next }) });
     if (!r.ok) { setVisited((s) => { const n = new Set(s); if (next) n.delete(k); else n.add(k); return n; }); alert('来院チェックの保存に失敗しました'); }
   }
@@ -125,6 +175,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     const r = await fetch('/api/admin/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, kind, memo, nextDate }) });
     if (!r.ok) { alert((await r.json()).error ?? 'キャンセルに失敗しました'); return; }
     setCancelDlg(null);
+    touchedAt.current.set(key(time, bed), Date.now()); touchedAt.current.set(key(time + data.slotMinutes, bed), Date.now());
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); return n; });
     onRefresh();
   }
@@ -140,6 +191,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   function moved(to: { date: string; time: number; bed: number; slots: number }) {
     if (!moveDlg) return;
     const { time, bed, twoSlots } = moveDlg;
+    for (const k of [key(time, bed), key(time + data.slotMinutes, bed), key(to.time, to.bed), key(to.time + data.slotMinutes, to.bed)]) touchedAt.current.set(k, Date.now());
     setCells((m) => {
       const n = new Map(m);
       const name = n.get(key(time, bed)) ?? '';
@@ -178,6 +230,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     onRefresh();
     // 画面のセルにも即反映
     const c = data.cancels.find((x) => x.id === id);
+    if (c) { touchedAt.current.set(key(c.time, c.bed), Date.now()); touchedAt.current.set(key(c.time + data.slotMinutes, c.bed), Date.now()); }
     if (c) setCells((m) => { const n = new Map(m); n.set(key(c.time, c.bed), c.name); if (c.contText) n.set(key(c.time + data.slotMinutes, c.bed), c.contText); return n; });
   }
   async function saveMemo(id: string, memo: string) {
@@ -243,6 +296,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${today}`)}>今日</button>
         <span className="ml-auto text-xs text-slate-500">
           {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '保存しました' : saveState === 'error' ? '保存に失敗しました' : '入力すると自動保存されます'}
+          <span className="ml-2 text-slate-400">（30秒ごとに最新の内容に自動更新）</span>
         </span>
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white">印刷／PDF</a>
         <button type="button" onClick={copyAll} className="rounded border bg-white px-3 py-1">表をコピー</button>
@@ -315,6 +369,12 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
       </div>
 
+      {conflictMsg && (
+        <p role="alert" className="no-print mb-2 flex items-start gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <span className="flex-1">{conflictMsg}</span>
+          <button type="button" onClick={() => setConflictMsg('')} aria-label="閉じる" className="text-red-500">✕</button>
+        </p>
+      )}
       {pasteInfo && <p className="no-print mb-2 rounded bg-brand-light px-3 py-1 text-xs text-brand-dark">{pasteInfo}</p>}
       {rows.length === 0 ? (
         <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日・臨時休診）のため予約表はありません。営業する場合は「臨時休診」を外すか、店舗設定の営業時間を確認してください。</p>

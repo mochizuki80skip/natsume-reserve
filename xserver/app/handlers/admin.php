@@ -76,7 +76,8 @@ function adm_cells_put(): never
     if (!is_array($cells) || count($cells) > 500) Http::error('bad request', 400);
     $sid = $ctx['store']['id'];
     $beds = (int)$ctx['store']['beds'];
-    Db::transaction(function () use ($cells, $sid, $beds, $date) {
+    $conflicts = [];
+    Db::transaction(function () use ($cells, $sid, $beds, $date, &$conflicts) {
         $touched = [];
         foreach ($cells as $c) {
             if (!is_array($c)) throw new HttpError(400, 'bad request');
@@ -84,6 +85,14 @@ function adm_cells_put(): never
             $bed = Http::int($c, 'bed', 0, 20);
             $text = mb_substr(trim((string)($c['text'] ?? '')), 0, 100);
             if ($bed > $beds) continue;
+            // 画面が古いまま WEB予約のセルを上書きしないようにする（prev＝画面が最後に知っていた内容）
+            if (array_key_exists('prev', $c)) {
+                $cur = Db::one('SELECT text, reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
+                if ($cur && $cur['reservationId'] && trim((string)$cur['text']) !== trim((string)$c['prev']) && trim((string)$cur['text']) !== $text) {
+                    $conflicts[] = ['time' => $time, 'bed' => $bed, 'text' => (string)$cur['text']];
+                    continue;
+                }
+            }
             if ($text === '') {
                 $old = Db::one('SELECT reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
                 if ($old && $old['reservationId']) $touched[$old['reservationId']] = true;
@@ -98,7 +107,20 @@ function adm_cells_put(): never
             if ($n === 0) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $rid]);
         }
     });
-    Http::json(['ok' => true]);
+    Http::json(['ok' => true, 'conflicts' => $conflicts]);
+}
+
+/** 新しく入った WEB予約（管理画面のお知らせ用）。since より後に受け付けた分を返す。since が無ければ今の時刻だけ返す */
+function adm_web_new_get(): never
+{
+    $ctx = Auth::context();
+    $sid = $ctx['store']['id'];
+    $now = Time::nowJstDateTime();
+    $since = (string)($_GET['since'] ?? '');
+    if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $since)) Http::json(['now' => $now, 'items' => []]);
+    $rows = Db::all('SELECT id, date, time, bed, kind, name FROM reservation WHERE storeId = ? AND status = ? AND createdAt >= ? ORDER BY createdAt ASC LIMIT 20', [$sid, 'BOOKED', $since]);
+    $items = array_map(fn($r) => ['id' => $r['id'], 'date' => $r['date'], 'time' => (int)$r['time'], 'bed' => (int)$r['bed'], 'kind' => $r['kind'], 'name' => $r['name']], $rows);
+    Http::json(['now' => $now, 'items' => $items]);
 }
 
 /** 日付の公開/非公開・臨時休診・メモ・枠数の上書き */

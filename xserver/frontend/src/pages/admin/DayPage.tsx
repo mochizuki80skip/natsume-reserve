@@ -13,9 +13,12 @@ export default function DayPage() {
   const { data, error, loading, reload } = useFetch<DayResponse>(valid ? `/api/admin/day?date=${date}` : null);
   if (!valid) return <p className="text-sm text-red-700">日付が正しくありません。</p>;
   if (!me.store) return <p>店舗が登録されていません。本部画面から店舗を追加してください。</p>;
-  if (error) return <p className="text-sm text-red-700">{error.message}</p>;
+  if (error && !data) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">{loading ? '読み込み中…' : ''}</p>;
   return (
+    <>
+    {/* 自動更新で読み込めなかったときは表をそのまま残して知らせる */}
+    {error && <p role="alert" className="no-print mb-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">最新の内容を読み込めませんでした（{error.message}）。インターネットの接続を確認して、F5 を押してください。</p>}
     <DayGrid
       // 読み込み済みデータの日付で作り直す（URL の日付だと、前の日のデータのまま表が作られて氏名が出なくなる）
       key={`${me.store.id}:${data.data.date}`}
@@ -25,5 +28,6 @@ export default function DayPage() {
       today={data.today}
       onRefresh={reload}
     />
+    </>
   );
 }
