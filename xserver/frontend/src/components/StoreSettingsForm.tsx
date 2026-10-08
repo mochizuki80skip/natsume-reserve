@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import HoursEditor from './HoursEditor';
 
 interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number; notifyPhone: string; hoursOverride: string }
-interface Props { store: StoreForm; globalHours: string; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void }
+interface Props { store: StoreForm; globalHours: string; slotMinutes: number; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void }
 
 function UrlRow({ label, path }: { label: string; path: string }) {
   const url = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
@@ -14,14 +15,17 @@ function UrlRow({ label, path }: { label: string; path: string }) {
   );
 }
 
-export default function StoreSettingsForm({ store, globalHours, canChangePassword, smsEnabled, onRefresh }: Props) {
+export default function StoreSettingsForm({ store, globalHours, slotMinutes, canChangePassword, smsEnabled, onRefresh }: Props) {
   const [f, setF] = useState(store);
+  const [hoursErr, setHoursErr] = useState('');
+  const [hoursKey, setHoursKey] = useState(0);
   const [pw, setPw] = useState({ current: '', next: '' });
   const [msg, setMsg] = useState('');
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setMsg('');
+    if (hoursErr) { setMsg(`営業時間：${hoursErr}`); return; }
     let hoursOverride: unknown = null;
     if (f.hoursOverride.trim()) {
       try { hoursOverride = JSON.parse(f.hoursOverride); } catch { setMsg('営業時間の個別設定が JSON として正しくありません'); return; }
@@ -73,10 +77,16 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
         </table>
         <p className="text-xs text-slate-500">顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
         {smsEnabled && <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>}
-        <label className="block text-sm">営業時間の個別設定（空欄＝全店共通設定を使う）
-          <textarea value={f.hoursOverride} onChange={str('hoursOverride')} rows={8} className="mt-1 w-full rounded border px-2 py-1 font-mono text-xs" placeholder={globalHours} />
-        </label>
-        <details className="text-xs text-slate-500"><summary>全店共通の営業時間（参考）</summary><pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2">{globalHours}</pre></details>
+        <div className="rounded border p-3">
+          <h3 className="mb-2 font-bold">この店舗の営業時間</h3>
+          <HoursEditor key={hoursKey} value={f.hoursOverride} globalHours={globalHours} slotMinutes={slotMinutes} onChange={(json, error) => { setF((x) => ({ ...x, hoursOverride: json })); setHoursErr(error ?? ''); }} />
+          <details className="mt-3 text-xs text-slate-500">
+            <summary>詳しい設定（JSON・上級者向け）</summary>
+            <textarea value={f.hoursOverride} onChange={(e) => { setF({ ...f, hoursOverride: e.target.value }); setHoursErr(''); }} onBlur={() => setHoursKey((k) => k + 1)} rows={8} className="mt-1 w-full rounded border px-2 py-1 font-mono text-xs" placeholder={globalHours} />
+            <div className="mt-1">全店共通の営業時間（参考）</div>
+            <pre className="mt-1 whitespace-pre-wrap rounded bg-slate-50 p-2">{globalHours}</pre>
+          </details>
+        </div>
         <button type="submit" className="rounded bg-brand px-4 py-2 font-bold text-white">保存</button>
       </form>
       {canChangePassword && (

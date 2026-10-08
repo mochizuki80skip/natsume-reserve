@@ -49,16 +49,22 @@ final class Settings
     }
 
     /** 店舗に適用する営業時間設定（個別設定があればそちら） */
-    public static function hoursForStore(array $store, array $setting): array
+    /**
+     * その日に使う営業時間の設定。店舗の個別設定に、その日を含む期間があればそれを使い、
+     * 無ければ全店共通の営業時間を使う（例：個別設定は「〜10/20」だけ → 10/21 からは全店共通）
+     */
+    public static function hoursForStore(array $store, array $setting, ?string $date = null): array
     {
-        return Hours::parseHoursConfig($store['hoursOverride'] ?? null)
-            ?? Hours::parseHoursConfig($setting['hours'] ?? null)
-            ?? Hours::defaultHours();
+        $global = Hours::parseHoursConfig($setting['hours'] ?? null) ?? Hours::defaultHours();
+        $own = Hours::parseHoursConfig($store['hoursOverride'] ?? null);
+        if (!$own) return $global;
+        if ($date === null) return $own;
+        return Hours::periodForDate($own, $date) ? $own : $global;
     }
 
     public static function storeSessions(array $store, array $setting, string $date, bool $closed = false): array
     {
-        return Hours::sessionsForDate(self::hoursForStore($store, $setting), $date, $setting['closeOnHolidays'], $closed, $setting['adminExtraSlots'], $setting['slotMinutes']);
+        return Hours::sessionsForDate(self::hoursForStore($store, $setting, $date), $date, $setting['closeOnHolidays'], $closed, $setting['adminExtraSlots'], $setting['slotMinutes']);
     }
 
     public static function allBeds(array $store): array

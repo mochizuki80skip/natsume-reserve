@@ -547,9 +547,10 @@ function adm_settings_get(): never
         'store' => [
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
             'maxTherapists' => $store['maxTherapists'], 'maxReception' => $store['maxReception'], 'publishDaysAhead' => $store['publishDaysAhead'],
-            'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => (int)($store['maxNewConcurrent'] ?? 0), 'hoursOverride' => $store['hoursOverride'] ? json_encode($store['hoursOverride'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
+            'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => (int)($store['maxNewConcurrent'] ?? 0), 'hoursOverride' => ($ho = is_string($store['hoursOverride'] ?? null) ? json_decode($store['hoursOverride'], true) : ($store['hoursOverride'] ?? null)) ? json_encode($ho, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
         ],
         'globalHours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        'slotMinutes' => $setting['slotMinutes'],
         'canChangePassword' => true,
         'smsEnabled' => Sms::enabled(),
         'members' => array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'role' => $m['role'], 'active' => (bool)$m['active'], 'startDate' => $m['startDate'], 'endDate' => $m['endDate'], 'joinType' => $m['joinType']], $members),

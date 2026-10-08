@@ -11,12 +11,13 @@ const ok = (name, cond, extra = '') => { results.push([cond ? 'PASS' : 'FAIL', n
 async function pickBusinessDays(n) {
   const out = [];
   let start = new Date(); start.setDate(start.getDate() + 3);
+  const first = start.toISOString().slice(0, 10); // 週間 API は月曜始まりに丸めるので、比べるのは最初の日付
   for (let w = 0; w < 6 && out.length < n; w++) {
     const s = start.toISOString().slice(0, 10);
     const j = await (await fetch(`${BASE}/api/public/S001/week?start=${s}&kind=NEW`)).json();
     for (const d of j.days) {
       if (out.length >= n) break;
-      if (d.label === null && d.date >= s && d.slots.some((x) => x.time === 600 && x.status === 'open') && d.slots.some((x) => x.time === 900 && x.status === 'open')) out.push(d.date);
+      if (d.label === null && d.date >= first && !out.includes(d.date) && d.slots.some((x) => x.time === 600 && x.status === 'open') && d.slots.some((x) => x.time === 900 && x.status === 'open')) out.push(d.date);
     }
     start.setDate(start.getDate() + 7);
   }
@@ -100,7 +101,7 @@ ok('2枠目に「上記初診対応」が入る', values.includes('上記初診�
 await ap.goto(`${BASE}/admin/settings`);
 for (const n of ['山本', '佐々木', '田村']) {
   await ap.fill('input[placeholder="氏名"]', n);
-  await ap.getByRole('button', { name: '追加' }).click();
+  await ap.getByRole('button', { name: '追加', exact: true }).click();
   await ap.waitForTimeout(500);
 }
 await ap.goto(`${BASE}/admin/shifts?month=${date.slice(0, 7)}`);
