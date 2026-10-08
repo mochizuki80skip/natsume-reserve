@@ -42,6 +42,7 @@ function route_table(): array
         ['GET', '#^/api/admin/shifts$#', 'adm_shifts_get'],
         ['PUT', '#^/api/admin/shifts$#', 'adm_shifts_put'],
         ['PUT', '#^/api/admin/help-in$#', 'adm_help_in_put'],
+        ['POST', '#^/api/admin/move$#', 'adm_move_post'],
         ['POST', '#^/api/admin/blocks$#', 'adm_block_post'],
         ['GET', '#^/api/admin/karte$#', 'karte_get'],
         ['GET', '#^/api/admin/karte/export$#', 'karte_export'],

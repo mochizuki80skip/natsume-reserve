@@ -10,6 +10,7 @@ import { categorizeCell, cellState, isContinuationText, type CellState } from '@
 import { formatJpPhone } from '@/lib/format';
 import NextDateInput from './NextDateInput';
 import BlockPanel, { blockBedsText } from './BlockPanel';
+import MoveDialog from './MoveDialog';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
@@ -127,6 +128,43 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); return n; });
     onRefresh();
   }
+  // 予約の移動（別の日・時間。ベッドは自動）
+  const [moveDlg, setMoveDlg] = useState<{ date: string; time: number; bed: number; name: string; twoSlots: boolean } | null>(null);
+  const [moveMsg, setMoveMsg] = useState<{ text: string; date: string } | null>(null);
+  async function openMove(time: number, bed: number) {
+    setMenu(null);
+    await flush();
+    const name = cells.get(key(time, bed)) ?? '';
+    setMoveDlg({ date: data.date, time, bed, name, twoSlots: isContinuationText(cells.get(key(time + data.slotMinutes, bed))) });
+  }
+  function moved(to: { date: string; time: number; bed: number; slots: number }) {
+    if (!moveDlg) return;
+    const { time, bed, twoSlots } = moveDlg;
+    setCells((m) => {
+      const n = new Map(m);
+      const name = n.get(key(time, bed)) ?? '';
+      const cont = n.get(key(time + data.slotMinutes, bed)) ?? '';
+      n.set(key(time, bed), '');
+      if (twoSlots) n.set(key(time + data.slotMinutes, bed), '');
+      // 同じ日の中で動かしたときは、移動先にも表示する
+      if (to.date === data.date) { n.set(key(to.time, to.bed), name); if (twoSlots) n.set(key(to.time + data.slotMinutes, to.bed), cont); }
+      return n;
+    });
+    setVisited((v) => { const n = new Set(v); n.delete(key(time, bed)); return n; });
+    setMoveMsg({ text: `${moveDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に移動しました`, date: to.date });
+    setMoveDlg(null);
+    onRefresh();
+  }
+  // 下のセルに「上記初診対応」「上記再来対応」を入れる（手入力の初診・再来用。打ち込まなくてよい）
+  function fillBelow(time: number, bed: number, text: string) {
+    setMenu(null);
+    const t2 = time + data.slotMinutes;
+    if (!rows.includes(t2)) { alert('下の時間が予約表にないため入れられません'); return; }
+    if ((cells.get(key(t2, bed)) ?? '').trim()) { alert('下のセルにすでに入力があります'); return; }
+    setCell(t2, bed, text);
+  }
+  // セルをクリックしたら文字を全部選ぶ（そのまま Ctrl+C でコピー、入力すると置き換え）
+  const justFocused = useRef(false);
   function deleteCell(time: number, bed: number) {
     setMenu(null);
     if (!confirm('この入力を削除します（名簿には残しません）。よろしいですか？')) return;
@@ -337,6 +375,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                               onKeyDown={(e) => onKeyDown(e, r, c)}
                               onPaste={(e) => onPaste(e, r, c)}
                               onBlur={flush}
+                              onFocus={(e) => { e.currentTarget.select(); justFocused.current = true; }}
+                              onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}
                               placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
                               className={`${hasName ? (st === 'noshow' || st === 'pending' ? 'pr-16' : 'pr-4') : ''} ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
@@ -349,6 +389,13 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                             {menu === k && (
                               <div data-menu className="absolute right-0 top-full z-20 min-w-[200px] rounded border bg-white py-1 text-left text-sm shadow-lg">
                                 <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => { setMenu(null); toggleVisit(t, b); }}>{visited.has(k) ? '来院チェックを外す' : '✓ 来院'}</button>
+                                {!(cells.get(key(t + data.slotMinutes, b)) ?? '').trim() && rows.includes(t + data.slotMinutes) && (
+                                  <>
+                                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => fillBelow(t, b, '上記初診対応')}>下のセルに「上記初診対応」</button>
+                                    <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => fillBelow(t, b, '上記再来対応')}>下のセルに「上記再来対応」</button>
+                                  </>
+                                )}
+                                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => openMove(t, b)}>別の日・時間に移動…</button>
                                 <div className="my-1 border-t" />
                                 <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => cancelCell(t, b, 'ADVANCE')}>キャンセル（連絡あり）→ 名簿へ</button>
                                 <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => cancelCell(t, b, 'NOSHOW')}>無断キャンセル → 名簿へ</button>
@@ -394,6 +441,14 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         </table>
       </div>
 
+      {moveDlg && <MoveDialog from={moveDlg} onClose={() => setMoveDlg(null)} onMoved={moved} />}
+      {moveMsg && (
+        <div className="no-print fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+          {moveMsg.text}
+          {moveMsg.date !== data.date && <button type="button" onClick={() => { setMoveMsg(null); navigate(`/admin/day/${moveMsg.date}`); }} className="rounded bg-white/20 px-2 py-0.5 underline">移動先の日を開く</button>}
+          <button type="button" onClick={() => setMoveMsg(null)} aria-label="閉じる" className="text-white/70">✕</button>
+        </div>
+      )}
       {cancelDlg && (
         <div className="no-print fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setCancelDlg(null)}>
           <div className="w-full max-w-md rounded-lg border bg-white p-4 text-sm shadow-xl" onClick={(e) => e.stopPropagation()}>

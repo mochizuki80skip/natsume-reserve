@@ -87,7 +87,7 @@ function hq_audit_get(): never
 const AUDIT_LABEL = [
     'adm_cells_put' => '予約表の入力', 'adm_visit_put' => '来院チェック', 'adm_cancel_post' => 'キャンセル名簿へ移動', 'adm_cancel_delete' => 'キャンセルを戻す',
     'adm_days_put' => '日の設定（公開・休診・枠数）', 'adm_shifts_put' => 'シフト', 'adm_help_in_put' => 'ヘルプ（他店から）',
-    'adm_block_post' => 'ブロックの追加', 'adm_block_delete' => 'ブロックの解除', 'adm_staff_post' => 'スタッフ追加', 'adm_staff_put' => 'スタッフ変更', 'adm_staff_delete' => 'スタッフ削除',
+    'adm_block_post' => 'ブロックの追加', 'adm_move_post' => '予約の移動', 'adm_block_delete' => 'ブロックの解除', 'adm_staff_post' => 'スタッフ追加', 'adm_staff_put' => 'スタッフ変更', 'adm_staff_delete' => 'スタッフ削除',
     'adm_store_put' => '店舗設定', 'adm_store_patch' => '自分のパスワード変更',
     'karte_post' => 'カルテ集計 行の追加', 'karte_patch' => 'カルテ集計 入力', 'karte_delete' => 'カルテ集計 行の削除',
     'hq_settings_put' => '全店共通設定', 'hq_stores_post' => '店舗の追加', 'hq_karte_options_put' => 'カルテ集計の選択肢', 'hq_areas_put' => 'エリア',
