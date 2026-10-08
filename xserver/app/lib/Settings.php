@@ -56,7 +56,9 @@ final class Settings
     public static function hoursForStore(array $store, array $setting, ?string $date = null): array
     {
         $global = Hours::parseHoursConfig($setting['hours'] ?? null) ?? Hours::defaultHours();
-        $own = Hours::parseHoursConfig($store['hoursOverride'] ?? null);
+        $ov = $store['hoursOverride'] ?? null;
+        if (is_string($ov)) $ov = json_decode($ov, true); // 管理画面ではデータベースの文字列のまま渡ってくる
+        $own = Hours::parseHoursConfig($ov);
         if (!$own) return $global;
         if ($date === null) return $own;
         return Hours::periodForDate($own, $date) ? $own : $global;
