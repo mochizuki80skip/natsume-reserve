@@ -14,17 +14,23 @@ final class Text
     /** 1枠目の文字が初診・再来（2枠使う予約）か */
     public static function isTwoSlotName(?string $text): bool
     {
-        return (bool)preg_match('/[（(](初|初診|初自|再)[）)]/u', trim($text ?? ''));
+        $c = self::categorize($text);
+        return $c['isNew'] || $c['isRevisit'];
     }
 
-    /** 内訳判定：初診「（初診）（初自）（初）」・再来「（再）」・自賠「（初自）」「自賠」「事故」 */
+    /**
+     * 内訳判定。初診＝「（初診）（初自）（初）」または括弧なしの「初診」「初自」、
+     * 再来＝「（再）」または括弧なしの「再来」「再診」、自賠＝「初自」「自賠」「事故」。
+     * 括弧なしの「初」「再」1文字はお名前（初美など）と区別できないので数えない。2枠目の「上記初診対応」「上記再来対応」は対象外
+     */
     public static function categorize(?string $text): array
     {
         $t = trim($text ?? '');
+        if (self::isContinuationText($t)) return ['isNew' => false, 'isRevisit' => false, 'isJibai' => false];
         return [
-            'isNew' => (bool)preg_match('/[（(]初(診|自)?[）)]/u', $t),
-            'isRevisit' => (bool)preg_match('/[（(]再[）)]/u', $t),
-            'isJibai' => (bool)preg_match('/自賠|事故|[（(]初自[）)]/u', $t),
+            'isNew' => (bool)preg_match('/[（(]初(診|自)?[）)]|初診|初自/u', $t),
+            'isRevisit' => (bool)preg_match('/[（(]再[）)]|再来|再診/u', $t),
+            'isJibai' => (bool)preg_match('/自賠|事故|初自/u', $t),
         ];
     }
 

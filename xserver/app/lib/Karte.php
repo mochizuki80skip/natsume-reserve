@@ -54,10 +54,12 @@ final class Karte
         return null;
     }
 
-    /** 「山田 太郎（初診）」→「山田 太郎」 */
+    /** 「山田 太郎（初診）」「山田 太郎 初診」→「山田 太郎」 */
     public static function nameOfText(string $text): string
     {
-        return trim(preg_replace('/\s*[（(](初診|初自|初|再)[）)]\s*/u', ' ', $text) ?? $text);
+        $t = preg_replace('/\s*[（(](初診|初自|初|再)[）)]\s*/u', ' ', $text) ?? $text;
+        $t = preg_replace('/\s*(初診|初自|再来|再診)\s*/u', ' ', $t) ?? $t;
+        return trim(preg_replace('/\s+/u', ' ', $t) ?? $t);
     }
 
     /**

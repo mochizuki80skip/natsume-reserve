@@ -311,7 +311,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             <tr><td className="pr-2 text-slate-500">来院</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vPm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm + counts.vPm}</td></tr>
           </tbody>
         </table>
-        <table className="text-sm" title="内訳。初診＝「（初診）」「（初自）」「（初）」、再来＝「（再）」、自賠＝「（初自）」または「自賠」「事故」を含むセル（手入力可）">
+        <table className="text-sm" title="内訳。初診＝「（初診）」「（初自）」「（初）」または括弧なしの「初診」「初自」、再来＝「（再）」または括弧なしの「再来」「再診」、自賠＝「初自」「自賠」「事故」を含むセル（手入力可）">
           <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
           <tbody>
             <tr><td className="pr-2 text-slate-500">初診</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nPm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm + counts.nPm}</td></tr>
@@ -536,7 +536,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       <p className="no-print mt-2 text-xs text-slate-500">
         セルに氏名を入力すると自動保存されます。Excel／スプレッドシートからの貼り付けは、<b>時間の列を含めて</b>（例：B7:L36）コピーし、9:00 のベッド1 のセルで Ctrl+V。
         時刻で行を合わせ、結合セル（2列で1ベッド）は自動で1列にまとめます。矢印キー／Enter／Tab で移動。
-        氏名の左の □ で来院チェック、右の「⋯」でキャンセル（名簿へ）や削除。初診の 2 枠目「上記初診対応」、再来の「上記再来対応」は 1 枠目と同じ色になり、人数には数えません。内訳の「自賠」は、セルに「自賠」または「事故」と入力すると数えます（例：山田 自賠）。
+        氏名の左の □ で来院チェック、右の「⋯」でキャンセル（名簿へ）や削除。初診の 2 枠目「上記初診対応」、再来の「上記再来対応」は 1 枠目と同じ色になり、人数には数えません。初診・再来は「山田 初診」「山田 再来」のように括弧なしでも数えます（「初」「再」1文字のときは「（初）」「（再）」と括弧が必要）。内訳の「自賠」は、セルに「自賠」または「事故」と入力すると数えます（例：山田 自賠）。
         黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません。
       </p>
     </div>

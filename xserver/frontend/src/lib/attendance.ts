@@ -9,28 +9,30 @@ export function isContinuationText(text: string | null | undefined): boolean {
   return t === '上記初診対応' || t === '上記再来対応' || t === '〃';
 }
 
-/** 1枠目の文字が初診・再来（2枠使う予約）か */
-export function isTwoSlotName(text: string | null | undefined): boolean {
-  return /[（(](初|初診|初自|再)[）)]/.test((text ?? '').trim());
-}
-
 /** 予約表の内訳集計に使う区分。1 つのセルが複数に該当することがある（例：初診かつ自賠） */
 export interface CellCategories { isNew: boolean; isRevisit: boolean; isJibai: boolean }
 
 /**
- * セルの文字から内訳を判定する。
- * - 初診：「（初診）」「（初自）」「（初）」を含む（WEB予約の初めての方、または手入力）。半角括弧も可
- * - 再来：「（再）」を含む
- * - 自賠：「（初自）」（WEB予約の交通事故）、または「自賠」「事故」を含む
- * - 自賠：「自賠」または「事故」を含む（手入力。例：山田 自賠、鈴木（事故））
+ * セルの文字から内訳を判定する（サーバー側 Text::categorize と同じ決まり）。
+ * - 初診：「（初診）」「（初自）」「（初）」（半角括弧も可）、または括弧なしの「初診」「初自」を含む
+ * - 再来：「（再）」、または括弧なしの「再来」「再診」を含む
+ * - 自賠：「初自」「自賠」「事故」を含む（例：山田 自賠、鈴木（事故））
+ * 括弧なしの「初」「再」1文字はお名前（初美など）と区別できないので数えない。2枠目の「上記初診対応」「上記再来対応」は対象外
  */
 export function categorizeCell(text: string | null | undefined): CellCategories {
   const t = (text ?? '').trim();
+  if (isContinuationText(t)) return { isNew: false, isRevisit: false, isJibai: false };
   return {
-    isNew: /[（(]初(診|自)?[）)]/.test(t),
-    isRevisit: /[（(]再[）)]/.test(t),
-    isJibai: /自賠|事故|[（(]初自[）)]/.test(t),
+    isNew: /[（(]初(診|自)?[）)]|初診|初自/.test(t),
+    isRevisit: /[（(]再[）)]|再来|再診/.test(t),
+    isJibai: /自賠|事故|初自/.test(t),
   };
+}
+
+/** 1枠目の文字が初診・再来（2枠使う予約）か */
+export function isTwoSlotName(text: string | null | undefined): boolean {
+  const c = categorizeCell(text);
+  return c.isNew || c.isRevisit;
 }
 
 /**

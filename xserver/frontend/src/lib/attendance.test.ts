@@ -35,4 +35,21 @@ describe('attendance', () => {
     expect(categorizeCell('田中')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
     expect(categorizeCell('')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
   });
+  it('括弧なしの「初診」「初自」「再来」「再診」も数える。1文字の「初」「再」とお名前は数えない', () => {
+    expect(categorizeCell('山田 初診')).toEqual({ isNew: true, isRevisit: false, isJibai: false });
+    expect(categorizeCell('山田初診')).toEqual({ isNew: true, isRevisit: false, isJibai: false });
+    expect(categorizeCell('初診 山田')).toEqual({ isNew: true, isRevisit: false, isJibai: false });
+    expect(categorizeCell('山田 初自')).toEqual({ isNew: true, isRevisit: false, isJibai: true });
+    expect(categorizeCell('佐藤 再来')).toEqual({ isNew: false, isRevisit: true, isJibai: false });
+    expect(categorizeCell('佐藤 再診')).toEqual({ isNew: false, isRevisit: true, isJibai: false });
+    expect(categorizeCell('山田 初')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
+    expect(categorizeCell('佐藤 再')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
+    expect(categorizeCell('初美')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
+    expect(categorizeCell('上記初診対応')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
+    expect(categorizeCell('上記再来対応')).toEqual({ isNew: false, isRevisit: false, isJibai: false });
+    expect(isTwoSlotName('山田 初診')).toBe(true);
+    expect(isTwoSlotName('佐藤 再来')).toBe(true);
+    expect(isTwoSlotName('上記初診対応')).toBe(false);
+    expect(isTwoSlotName('初美')).toBe(false);
+  });
 });
