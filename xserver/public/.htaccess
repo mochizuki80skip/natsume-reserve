@@ -9,6 +9,10 @@ RewriteBase /
 # app フォルダを public_html の中に置いた場合でも外から読めないようにする
 RewriteRule ^app/ - [F,L]
 
+# トップ（/）は必ず index.php に渡す。フォルダ扱いで index.html が直接返されると、
+# 設置の種類（APP_MODE）が画面に渡らず、SNS 投稿管理でも予約システムのトップが出てしまうため
+RewriteRule ^$ index.php [L]
+
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
