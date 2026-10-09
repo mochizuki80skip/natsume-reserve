@@ -804,10 +804,20 @@ function hq_sns_stores_get(): never
     Auth::requireHq();
     $g = Sns::setting();
     $out = [];
-    foreach (Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC') as $st) {
+    // ?all=1 なら停止中の店舗も含める（店舗管理の画面用）
+    $all = Http::query('all', '') === '1';
+    foreach (Db::all('SELECT * FROM store' . ($all ? '' : ' WHERE active = 1') . ' ORDER BY code ASC') as $st) {
         $st = Settings::storeRow($st);
         $ss = Sns::storeSetting($st);
-        $out[] = ['code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'setting' => $ss, 'draftCount' => (int)Db::one("SELECT COUNT(*) AS n FROM sns_post WHERE storeId = ? AND status = 'draft'", [$st['id']])['n']];
+        $ig = Db::one("SELECT username, externalId, accessToken, lastError FROM sns_account WHERE storeId = ? AND channel = 'ig'", [$st['id']]);
+        $varsMissing = [];
+        foreach ($g['customVars'] as $cv) {
+            if (trim((string)($ss['vars'][$cv['key']] ?? '')) === '' && trim((string)$cv['default']) === '') $varsMissing[] = $cv['label'] !== '' ? $cv['label'] : $cv['key'];
+        }
+        $out[] = ['code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'active' => (bool)$st['active'], 'setting' => $ss,
+            'draftCount' => (int)Db::one("SELECT COUNT(*) AS n FROM sns_post WHERE storeId = ? AND status = 'draft'", [$st['id']])['n'],
+            'ig' => $ig && !empty($ig['accessToken']) ? ['connected' => true, 'username' => (string)($ig['username'] ?: $ig['externalId']), 'error' => $ig['lastError']] : ['connected' => false, 'username' => '', 'error' => null],
+            'varsMissing' => $varsMissing];
     }
     Http::json(['stores' => $out, 'defaults' => ['igSchedule' => $g['defaultIgSchedule'], 'gbpSchedule' => $g['defaultGbpSchedule']], 'customVars' => $g['customVars'], 'gbpManual' => $g['gbpManual']]);
 }

@@ -118,7 +118,7 @@ export default function HqClient({ stores, setting, onRefresh }: { stores: Store
 
 
 /** 店舗の一括登録：1 行に「店舗コード,店舗名,電話,初期パスワード」を貼り付ける（既にある店舗は名前・電話だけ更新） */
-function BulkStoreImport({ onDone }: { onDone: () => void }) {
+export function BulkStoreImport({ onDone }: { onDone: () => void }) {
   const [text, setText] = useState('');
   const [msg, setMsg] = useState('');
   const [open, setOpen] = useState(false);

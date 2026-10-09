@@ -1,6 +1,6 @@
 // 店舗の SNS 設定：投稿の有無・頻度、差し込みに使う情報（地域・住所・営業時間・タグ・キーワード）、運用メモ、Instagram の連携
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { describeSchedule, sendJson, type AccountRow, type Channel, type Patterns, type Schedule, type StoreSetting, type VarDef } from '@/lib/sns';
 import SnsNav from '@/components/SnsNav';
@@ -47,6 +47,7 @@ export default function SnsSettingsPage() {
   return (
     <div className="space-y-4">
       <SnsNav title={`SNS 設定：${data.store.name}`} />
+      {data.isHq && <Link to="/admin/sns/stores" className="-mt-2 inline-block text-sm text-brand underline">← 店舗管理に戻る</Link>}
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
         <form onSubmit={save} className="space-y-4 rounded border bg-white p-4 text-sm">

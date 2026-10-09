@@ -47,7 +47,7 @@ export default function AdminLayout() {
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
             {!SNS_ONLY && me.session.role === 'hq' && <Link to="/admin/hq/overview" className="hover:underline">全店状況</Link>}
             {!SNS_ONLY && me.session.role === 'hq' && <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}
-            {me.session.role === 'hq' && <Link to="/admin/hq" className="hover:underline">{SNS_ONLY ? '店舗管理' : '本部'}</Link>}
+            {me.session.role === 'hq' && <Link to={SNS_ONLY ? '/admin/sns/stores' : '/admin/hq'} className="hover:underline">{SNS_ONLY ? '店舗管理' : '本部'}</Link>}
             {!SNS_ONLY && store && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer" className="text-slate-500 hover:underline">顧客ページ↗</a>}
             <form action="/api/admin/logout" method="post"><button className="text-slate-500 hover:underline">ログアウト（{me.session.code}）</button></form>
           </nav>

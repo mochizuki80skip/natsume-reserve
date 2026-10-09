@@ -28,6 +28,13 @@ ok('ヘッダーに店舗設定・店舗管理がある', nav.includes('店舗�
 await page.goto(`${BASE}/admin/hq`); await page.waitForSelector('h1:has-text("店舗管理")');
 ok('店舗管理に共通設定（営業時間）が無い', (await page.locator('text=全店共通設定').count()) === 0);
 ok('店舗をまとめて登録がある', (await page.locator('text=店舗をまとめて登録').count()) === 1);
+ok('店舗管理は SNS 用の画面（左メニュー付き）', page.url().endsWith('/admin/sns/stores') && (await page.locator('aside').count()) === 1);
+ok('店舗管理にベッド・顧客URLが無い', (await page.locator('th:has-text("ベッド")').count()) === 0 && (await page.locator('text=顧客URL').count()) === 0);
+ok('店舗管理に地域・Instagram・Google の列がある', (await page.locator('th:has-text("地域")').count()) === 1 && (await page.locator('th:has-text("Instagram")').count()) === 1 && (await page.locator('th:has-text("Google")').count()) === 1);
+await page.getByRole('link', { name: 'SNS設定' }).first().click();
+await page.waitForURL(/\/admin\/sns\/settings\?store=/); await page.waitForSelector('h1:has-text("SNS 設定")');
+ok('SNS設定ボタンで店舗の SNS 設定が開く', (await page.locator('text=文章に差し込む情報').count()) === 1);
+ok('店舗管理に戻るリンクがある', (await page.locator('text=店舗管理に戻る').count()) === 1);
 await page.goto(`${BASE}/admin/settings`); await page.waitForSelector('h1');
 ok('店舗設定にベッド数などが無い', (await page.locator('text=ベッド数').count()) === 0);
 await page.goto(`${BASE}/s/S001`); await page.waitForURL(/\/admin\/login/);
