@@ -105,6 +105,7 @@ function sns_home(): never
         'status' => [
             'pending' => $pendingCount, 'approved' => $approvedCount, 'failed' => $failedCount,
             'ig' => ['enabled' => $igEnabledStores, 'connected' => $igConnected],
+            'manualOnly' => Config::isSnsOnly(),
             'google' => $g['gbpManual'] ? 'manual' : (($googleHq && $googleHq['refreshToken']) ? ($gbpMapped > 0 ? 'ok' : 'nolocation') : 'none'),
             'googleMapped' => $gbpMapped,
             'line' => Notify::lineEnabled() ? 'ok' : (Notify::mailEnabled() ? 'mail' : 'none'),
@@ -810,6 +811,8 @@ function hq_sns_stores_get(): never
         $st = Settings::storeRow($st);
         $ss = Sns::storeSetting($st);
         $ig = Db::one("SELECT username, externalId, accessToken, lastError FROM sns_account WHERE storeId = ? AND channel = 'ig'", [$st['id']]);
+        $cred = [];
+        foreach (Db::all('SELECT channel, loginId, passwordEnc FROM sns_credential WHERE storeId = ?', [$st['id']]) as $c) $cred[$c['channel']] = ['loginId' => $c['loginId'], 'hasPassword' => !empty($c['passwordEnc'])];
         $varsMissing = [];
         foreach ($g['customVars'] as $cv) {
             if (trim((string)($ss['vars'][$cv['key']] ?? '')) === '' && trim((string)$cv['default']) === '') $varsMissing[] = $cv['label'] !== '' ? $cv['label'] : $cv['key'];
@@ -817,7 +820,8 @@ function hq_sns_stores_get(): never
         $out[] = ['code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'active' => (bool)$st['active'], 'setting' => $ss,
             'draftCount' => (int)Db::one("SELECT COUNT(*) AS n FROM sns_post WHERE storeId = ? AND status = 'draft'", [$st['id']])['n'],
             'ig' => $ig && !empty($ig['accessToken']) ? ['connected' => true, 'username' => (string)($ig['username'] ?: $ig['externalId']), 'error' => $ig['lastError']] : ['connected' => false, 'username' => '', 'error' => null],
-            'varsMissing' => $varsMissing];
+            'varsMissing' => $varsMissing, 'cred' => ['ig' => $cred['ig'] ?? null, 'gbp' => $cred['gbp'] ?? null],
+            'gbpOpenUrl' => Sns::manualOpenUrl('gbp', $st, $ss), 'igOpenUrl' => Sns::manualOpenUrl('ig', $st, $ss)];
     }
     Http::json(['stores' => $out, 'defaults' => ['igSchedule' => $g['defaultIgSchedule'], 'gbpSchedule' => $g['defaultGbpSchedule']], 'customVars' => $g['customVars'], 'gbpManual' => $g['gbpManual']]);
 }
@@ -1033,4 +1037,79 @@ function cron_sns(): never
     $token = Http::query('token', '');
     if ($secret === '' || !(hash_equals("Bearer $secret", $auth) || hash_equals($secret, $token))) Http::error('unauthorized', 401);
     Http::json(['ok' => true] + SnsCron::run());
+}
+
+// ---------- ログイン情報（本部だけ）：Instagram・Google のログイン ID・パスワードなどを店舗ごとに保管 ----------
+function sns_cred_ctx(): array
+{
+    $ctx = sns_ctx();
+    if ($ctx['session']['role'] !== 'hq') throw new HttpError(403, 'ログイン情報は本部だけが見られます');
+    return $ctx;
+}
+
+function sns_cred_row(?array $r, string $channel): array
+{
+    return [
+        'channel' => $channel,
+        'loginId' => (string)($r['loginId'] ?? ''),
+        'hasPassword' => !empty($r['passwordEnc']),
+        'email' => (string)($r['email'] ?? ''),
+        'phone' => (string)($r['phone'] ?? ''),
+        'note' => (string)($r['note'] ?? ''),
+        'updatedAt' => $r['updatedAt'] ?? null,
+        'updatedBy' => $r['updatedBy'] ?? null,
+        'revealedAt' => $r['revealedAt'] ?? null,
+        'revealedBy' => $r['revealedBy'] ?? null,
+    ];
+}
+
+/** GET /api/admin/sns/credentials?store=：パスワードそのものは返さない（「表示」で別に取る） */
+function sns_credentials_get(): never
+{
+    $ctx = sns_cred_ctx();
+    $out = [];
+    foreach (Sns::CHANNELS as $ch) {
+        $out[$ch] = sns_cred_row(Db::one('SELECT * FROM sns_credential WHERE storeId = ? AND channel = ?', [$ctx['store']['id'], $ch]), $ch);
+    }
+    Http::json(['store' => ['code' => $ctx['store']['code'], 'name' => $ctx['store']['name']], 'credentials' => $out]);
+}
+
+/** PUT /api/admin/sns/credentials?store=  {channel, loginId, email, phone, note, password?（空なら変えない）, clearPassword?} */
+function sns_credentials_put(): never
+{
+    $ctx = sns_cred_ctx();
+    Http::requireJson();
+    $b = Http::body();
+    $ch = sns_channel($b['channel'] ?? null);
+    $cur = Db::one('SELECT * FROM sns_credential WHERE storeId = ? AND channel = ?', [$ctx['store']['id'], $ch]);
+    $loginId = Http::str($b, 'loginId', 200, false);
+    $email = Http::str($b, 'email', 200, false);
+    $phone = Http::str($b, 'phone', 50, false);
+    $note = Http::str($b, 'note', 2000, false);
+    $pw = isset($b['password']) && is_string($b['password']) ? $b['password'] : '';
+    if (mb_strlen($pw) > 200) throw new HttpError(400, 'パスワードが長すぎます');
+    $enc = $cur['passwordEnc'] ?? null;
+    if (!empty($b['clearPassword'])) $enc = null;
+    elseif ($pw !== '') $enc = SnsCrypto::encrypt($pw);
+    Db::exec('INSERT INTO sns_credential (storeId, channel, loginId, passwordEnc, email, phone, note, updatedBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE loginId = VALUES(loginId), passwordEnc = VALUES(passwordEnc), email = VALUES(email), phone = VALUES(phone), note = VALUES(note), updatedBy = VALUES(updatedBy), updatedAt = CURRENT_TIMESTAMP',
+        [$ctx['store']['id'], $ch, $loginId, $enc, $email, $phone, $note, $ctx['session']['code']]);
+    Http::json(['ok' => true, 'credential' => sns_cred_row(Db::one('SELECT * FROM sns_credential WHERE storeId = ? AND channel = ?', [$ctx['store']['id'], $ch]), $ch)]);
+}
+
+/** POST /api/admin/sns/credentials/reveal?store=  {channel}：パスワードを表示する（誰がいつ見たかを残す） */
+function sns_credentials_reveal(): never
+{
+    $ctx = sns_cred_ctx();
+    if (!RateLimit::allow('cred-reveal:' . $ctx['session']['code'], 60, 10 * 60)) Http::error('しばらくしてからお試しください', 429);
+    Http::requireJson();
+    $b = Http::body();
+    $ch = sns_channel($b['channel'] ?? null);
+    $r = Db::one('SELECT passwordEnc FROM sns_credential WHERE storeId = ? AND channel = ?', [$ctx['store']['id'], $ch]);
+    if (!$r || empty($r['passwordEnc'])) Http::error('パスワードは登録されていません', 404);
+    $plain = SnsCrypto::decrypt($r['passwordEnc']);
+    if ($plain === null) Http::error('パスワードを読み出せません。config.php の SNS_SECRET が登録したときと変わっている可能性があります。もう一度登録してください', 409);
+    Db::exec('UPDATE sns_credential SET revealedBy = ?, revealedAt = NOW(), updatedAt = updatedAt WHERE storeId = ? AND channel = ?', [$ctx['session']['code'], $ctx['store']['id'], $ch]);
+    header('Cache-Control: no-store');
+    Http::json(['password' => $plain]);
 }

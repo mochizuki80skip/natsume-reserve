@@ -5,6 +5,7 @@ import { useFetch } from '@/lib/api';
 import { describeSchedule, sendJson, type AccountRow, type Channel, type Patterns, type Schedule, type StoreSetting, type VarDef } from '@/lib/sns';
 import SnsNav from '@/components/SnsNav';
 import SnsScheduleEditor from '@/components/SnsScheduleEditor';
+import SnsCredentials from '@/components/SnsCredentials';
 import { SNS_ONLY } from '@/lib/mode';
 import { useAdmin } from '../Layout';
 
@@ -66,7 +67,7 @@ export default function SnsSettingsPage() {
                 </div>
               );
             })}
-            <p className="text-xs text-slate-500">下書きは毎朝 {data.defaults.daysAhead} 日先まで自動で作られます（本部の SNS 管理で変更）。投稿は予定時刻以降、5〜10 分おきの自動処理で送られます。</p>
+            <p className="text-xs text-slate-500">下書きは毎朝 {data.defaults.daysAhead} 日先まで自動で作られます（本部の SNS 管理で変更）。{SNS_ONLY ? '予定時刻になると通知が届き、「手動投稿」の画面からコピーして各サービスに投稿します。' : '投稿は予定時刻以降、5〜10 分おきの自動処理で送られます。'}</p>
           </section>
           <section className="space-y-2">
             <h2 className="font-bold">文章に差し込む情報</h2>
@@ -101,6 +102,20 @@ export default function SnsSettingsPage() {
           {preview && <div className="rounded border bg-slate-50 p-3"><div className="mb-1 text-xs text-slate-600">{preview.channel === 'ig' ? 'Instagram' : 'Google'} の見本（{preview.length} 文字）{preview.compliance.length > 0 && <span className="ml-2 text-red-700">禁止語：{preview.compliance.join('、')}</span>}</div><pre className="whitespace-pre-wrap font-sans text-sm">{preview.fullText}</pre></div>}
         </form>
 
+        {SNS_ONLY ? (
+        <div className="space-y-4">
+          <section className="rounded border bg-white p-4 text-sm">
+            <h2 className="mb-2 font-bold">投稿ページを開く</h2>
+            <p className="mb-2 text-xs text-slate-500">API は使わず、ここ（または「手動投稿」の画面）から各サービスを開いて投稿します。URL は左の欄で登録します（保存後に反映）。</p>
+            <div className="flex flex-wrap gap-2">
+              <a href={data.setting.gbpPostUrl || `https://www.google.com/search?q=${encodeURIComponent(`${data.store.name} ${data.setting.area}`.trim())}`} target="_blank" rel="noreferrer" className="rounded bg-emerald-700 px-3 py-1.5 text-white">{data.setting.gbpPostUrl ? 'Google の投稿ページを開く↗' : 'Google で店名を検索（管理パネル）↗'}</a>
+              <a href={data.setting.igProfileUrl || 'https://www.instagram.com/'} target="_blank" rel="noreferrer" className="rounded bg-pink-600 px-3 py-1.5 text-white">{data.setting.igProfileUrl ? 'Instagram のプロフィールを開く↗' : 'Instagram を開く↗'}</a>
+            </div>
+            {!data.setting.gbpPostUrl && <p className="mt-2 text-xs text-amber-800">Google の投稿ページの URL が未登録です。登録すると、そのページが 1 クリックで開きます。</p>}
+          </section>
+          {data.isHq && <SnsCredentials storeQ={storeQ} />}
+        </div>
+        ) : (
         <div className="space-y-4">
           <section className="rounded border bg-white p-4 text-sm">
             <h2 className="mb-2 font-bold">Instagram の連携</h2>
@@ -142,6 +157,7 @@ export default function SnsSettingsPage() {
           </section>
           )}
         </div>
+        )}
       </div>
     </div>
   );

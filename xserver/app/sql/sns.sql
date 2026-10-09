@@ -189,3 +189,20 @@ CREATE TABLE IF NOT EXISTS `sns_job` (
   `note` VARCHAR(300) NULL,
   PRIMARY KEY (`k`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 店舗ごとの SNS のログイン情報（本部だけが見られる）。パスワードは暗号化して保存（鍵は config.php の SNS_SECRET）
+CREATE TABLE IF NOT EXISTS `sns_credential` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `channel` VARCHAR(5) NOT NULL,            -- ig / gbp
+  `loginId` VARCHAR(200) NOT NULL DEFAULT '',
+  `passwordEnc` TEXT NULL,
+  `email` VARCHAR(200) NOT NULL DEFAULT '',
+  `phone` VARCHAR(50) NOT NULL DEFAULT '',
+  `note` TEXT NULL,
+  `updatedBy` VARCHAR(20) NULL,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `revealedBy` VARCHAR(20) NULL,
+  `revealedAt` DATETIME NULL,
+  PRIMARY KEY (`storeId`, `channel`),
+  CONSTRAINT `fk_scr_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

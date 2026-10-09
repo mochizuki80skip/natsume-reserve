@@ -50,12 +50,17 @@ final class Sns
         if (!Db::one("SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sns_media'")) {
             Db::pdo()->exec("CREATE TABLE IF NOT EXISTS `sns_media` (`id` VARCHAR(32) NOT NULL, `storeId` VARCHAR(32) NULL, `path` VARCHAR(200) NOT NULL, `label` VARCHAR(100) NOT NULL DEFAULT '', `channel` VARCHAR(5) NOT NULL DEFAULT 'both', `width` INT NOT NULL DEFAULT 0, `height` INT NOT NULL DEFAULT 0, `active` TINYINT(1) NOT NULL DEFAULT 1, `useCount` INT NOT NULL DEFAULT 0, `lastUsedAt` DATETIME NULL, `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), KEY `sm_store` (`storeId`), CONSTRAINT `fk_sm_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         }
+        if (!Db::one("SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sns_credential'")) {
+            Db::pdo()->exec("CREATE TABLE IF NOT EXISTS `sns_credential` (`storeId` VARCHAR(32) NOT NULL, `channel` VARCHAR(5) NOT NULL, `loginId` VARCHAR(200) NOT NULL DEFAULT '', `passwordEnc` TEXT NULL, `email` VARCHAR(200) NOT NULL DEFAULT '', `phone` VARCHAR(50) NOT NULL DEFAULT '', `note` TEXT NULL, `updatedBy` VARCHAR(20) NULL, `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, `revealedBy` VARCHAR(20) NULL, `revealedAt` DATETIME NULL, PRIMARY KEY (`storeId`, `channel`), CONSTRAINT `fk_scr_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        }
         foreach ($added as [$table, $col, $ddl]) {
             $r = Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $col]);
             if (!$r) Db::pdo()->exec($ddl);
         }
         // 以前の「2 人チェック」の途中状態（checked）は下書きに戻す
         Db::exec("UPDATE sns_post SET status = 'draft' WHERE status = 'checked'");
+        // SNS 投稿管理だけの設置ではすべて手動投稿。以前 API の予定で作った下書きも手動に切り替える
+        if (Config::isSnsOnly()) Db::exec("UPDATE sns_post SET publishMode = 'manual' WHERE publishMode = 'api' AND status IN ('draft', 'approved', 'failed')");
     }
 
     // ---------- 既定値 ----------
@@ -128,7 +133,8 @@ final class Sns
             'hashtagBase' => (string)$r['hashtagBase'],
             'lineTargets' => self::arr($r['lineTargets']),
             'customVars' => self::parseCustomVars(isset($r['customVars']) && is_string($r['customVars']) ? json_decode($r['customVars'], true) : null),
-            'gbpManual' => (bool)($r['gbpManual'] ?? 0), // Google は API を使わず手動で投稿する運用
+            // Google は API を使わず手動で投稿する運用。SNS 投稿管理だけの設置（APP_MODE=sns）では常に手動
+            'gbpManual' => Config::isSnsOnly() || (bool)($r['gbpManual'] ?? 0),
         ];
     }
 
@@ -582,6 +588,7 @@ final class Sns
     /** API で投稿できる状態なら api、そうでなければ manual（手動投稿の補助） */
     public static function publishModeFor(array $store, string $channel): string
     {
+        if (Config::isSnsOnly()) return 'manual'; // SNS 投稿管理だけの設置では API を使わず、すべて手動投稿
         $acc = self::account($store['id'], $channel);
         if ($channel === 'ig') return $acc && $acc['accessToken'] ? 'api' : 'manual';
         if (self::setting()['gbpManual']) return 'manual'; // Google は手動投稿の運用

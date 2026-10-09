@@ -7,11 +7,14 @@ import { describeSchedule, type Schedule, type StoreSetting } from '@/lib/sns';
 import { StoreDot } from '@/lib/storeColor';
 import SnsNav from '@/components/SnsNav';
 import { BulkStoreImport } from '@/components/HqClient';
+import { SNS_ONLY } from '@/lib/mode';
 import { useAdmin } from '../Layout';
 
 interface Row {
   code: string; name: string; phone: string; active: boolean; setting: StoreSetting; draftCount: number;
   ig: { connected: boolean; username: string; error: string | null }; varsMissing: string[];
+  cred?: { ig: { loginId: string; hasPassword: boolean } | null; gbp: { loginId: string; hasPassword: boolean } | null };
+  gbpOpenUrl?: string; igOpenUrl?: string;
 }
 interface Resp { stores: Row[]; defaults: { igSchedule: Schedule; gbpSchedule: Schedule }; gbpManual: boolean }
 
@@ -63,7 +66,7 @@ export default function SnsStoresPage() {
   return (
     <div className="space-y-4">
       <SnsNav title="店舗管理" />
-      <p className="-mt-2 text-sm text-slate-600">店舗ごとの SNS の設定状況です。「SNS設定」を押すと、その店舗の地域・差し込み語・投稿の有無と頻度・Google の投稿ページ・Instagram の連携を設定できます。</p>
+      <p className="-mt-2 text-sm text-slate-600">店舗ごとの SNS の設定状況です。「SNS設定」を押すと、その店舗の地域・差し込み語・投稿の有無と頻度・Google の投稿ページ・{SNS_ONLY ? 'Instagram と Google のログイン情報' : 'Instagram の連携'}を設定できます。</p>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       {todo.length > 0 && <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">設定が終わっていない店舗が {todo.length} 店舗あります（黄色の項目）。</p>}
 
@@ -99,12 +102,16 @@ export default function SnsStoresPage() {
                   <td className="px-2 py-2">
                     {s.igEnabled ? <span className={ok}>投稿する</span> : <span className={off}>投稿しない</span>}
                     {s.igEnabled && <div className="mt-1 text-xs text-slate-500">{describeSchedule(s.effectiveIgSchedule)}</div>}
-                    {s.igEnabled && <div className="mt-1">{st.ig.connected ? <span className={st.ig.error ? warn : ok}>{st.ig.error ? '要再連携' : `連携中 @${st.ig.username}`}</span> : <span className={off}>未連携（手動投稿）</span>}</div>}
+                    {!SNS_ONLY && s.igEnabled && <div className="mt-1">{st.ig.connected ? <span className={st.ig.error ? warn : ok}>{st.ig.error ? '要再連携' : `連携中 @${st.ig.username}`}</span> : <span className={off}>未連携（手動投稿）</span>}</div>}
+                    {SNS_ONLY && <CredLine c={st.cred?.ig ?? null} prefix="@" />}
+                    {SNS_ONLY && st.igOpenUrl && <a href={st.igOpenUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block whitespace-nowrap text-xs text-pink-700 underline">Instagram を開く↗</a>}
                   </td>
                   <td className="px-2 py-2">
                     {s.gbpEnabled ? <span className={ok}>投稿する</span> : <span className={off}>投稿しない</span>}
                     {s.gbpEnabled && <div className="mt-1 text-xs text-slate-500">{describeSchedule(s.effectiveGbpSchedule)}</div>}
-                    {s.gbpEnabled && data.gbpManual && <div className="mt-1">{s.gbpPostUrl ? <span className={ok}>投稿ページ登録済み</span> : <span className={warn}>投稿ページ未登録</span>}</div>}
+                    {s.gbpEnabled && data.gbpManual && !s.gbpPostUrl && <div className="mt-1"><span className={warn}>投稿ページ未登録</span></div>}
+                    {SNS_ONLY && <CredLine c={st.cred?.gbp ?? null} prefix="" />}
+                    {st.gbpOpenUrl && <a href={st.gbpOpenUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block whitespace-nowrap text-xs text-emerald-700 underline">{s.gbpPostUrl ? 'Google の投稿ページを開く↗' : 'Google で店名を検索↗'}</a>}
                   </td>
                   <td className="px-2 py-2">{st.varsMissing.length === 0 ? <span className={ok}>OK</span> : <span className={warn} title={st.varsMissing.join('、')}>未入力 {st.varsMissing.length}</span>}</td>
                   <td className="px-2 py-2">{st.draftCount > 0 ? <Link to={`/admin/sns/posts?store=${encodeURIComponent(st.code)}`} className="text-brand underline">{st.draftCount} 件</Link> : <span className="text-slate-400">0</span>}</td>
@@ -138,6 +145,17 @@ export default function SnsStoresPage() {
         </form>
         <BulkStoreImport onDone={refresh} />
       </section>
+    </div>
+  );
+}
+
+/** 保管しているログイン情報の有無（ID と、パスワードが登録済みか） */
+function CredLine({ c, prefix }: { c: { loginId: string; hasPassword: boolean } | null; prefix: string }) {
+  if (!c || (!c.loginId && !c.hasPassword)) return <div className="mt-1"><span className={warn}>ログイン情報 未登録</span></div>;
+  return (
+    <div className="mt-1 space-x-1">
+      {c.loginId && <span className="text-xs text-slate-600">{prefix}{c.loginId}</span>}
+      <span className={c.hasPassword ? ok : warn}>{c.hasPassword ? 'PW 保管済み' : 'PW 未登録'}</span>
     </div>
   );
 }

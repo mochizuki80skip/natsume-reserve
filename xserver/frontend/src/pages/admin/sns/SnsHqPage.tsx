@@ -6,6 +6,7 @@ import { sendJson, type AccountRow, type Patterns, type Schedule, type VarDef } 
 import SnsNav from '@/components/SnsNav';
 import { StoreDot } from '@/lib/storeColor';
 import SnsScheduleEditor from '@/components/SnsScheduleEditor';
+import { SNS_ONLY } from '@/lib/mode';
 import { useAdmin } from '../Layout';
 
 interface StoreRow { code: string; name: string; active: boolean; igEnabled: boolean; gbpEnabled: boolean; igSchedule: string; gbpSchedule: string; area: string; ig: AccountRow | null; gbp: AccountRow | null; topics: number }
@@ -59,8 +60,8 @@ export default function SnsHqPage() {
         <div className="grid gap-1 md:grid-cols-2">
           <div>{check(data.configured.appUrl)}APP_URL（画像の公開 URL・連携の戻り先）：{data.baseUrl || '未設定'}</div>
           <div>{check(data.configured.cronSecret)}CRON_SECRET（自動処理）</div>
-          <div>{check(data.configured.ig)}Instagram アプリ（IG_APP_ID / IG_APP_SECRET）</div>
-          {!s.gbpManual && <div>{check(data.configured.google)}Google OAuth（GOOGLE_CLIENT_ID / SECRET）</div>}
+          {!SNS_ONLY && <div>{check(data.configured.ig)}Instagram アプリ（IG_APP_ID / IG_APP_SECRET）</div>}
+          {!SNS_ONLY && !s.gbpManual && <div>{check(data.configured.google)}Google OAuth（GOOGLE_CLIENT_ID / SECRET）</div>}
           <div>{check(data.configured.line)}LINE 通知（LINE_CHANNEL_ACCESS_TOKEN）　{check(data.configured.lineWebhook)}LINE Webhook（LINE_CHANNEL_SECRET）</div>
           <div>{check(data.configured.mail)}メール通知（NOTIFY_EMAIL。LINE が無いときの代わり）</div>
           <div>{check(data.mediaWritable)}画像の保存先（public/media/sns）に書き込める</div>
@@ -68,8 +69,8 @@ export default function SnsHqPage() {
         <details className="mt-2 text-xs text-slate-600">
           <summary className="cursor-pointer">各サービスに登録する URL</summary>
           <ul className="ml-4 mt-1 list-disc space-y-0.5">
-            <li>Instagram アプリの「OAuth リダイレクト URI」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.ig}</code></li>
-            <li>Google OAuth クライアントの「承認済みのリダイレクト URI」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.google}</code></li>
+            {!SNS_ONLY && <li>Instagram アプリの「OAuth リダイレクト URI」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.ig}</code></li>}
+            {!SNS_ONLY && <li>Google OAuth クライアントの「承認済みのリダイレクト URI」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.google}</code></li>}
             <li>LINE Messaging API の「Webhook URL」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.lineWebhook}</code></li>
             <li>Xserver の Cron（5〜10 分おき）：<code className="rounded bg-slate-100 px-1">/usr/bin/curl -s "{data.redirectUris.cron}" &gt; /dev/null</code></li>
           </ul>
@@ -81,11 +82,14 @@ export default function SnsHqPage() {
         {data.jobs.length > 0 && <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">自動処理の記録（1 日 1 回の処理）</summary><ul className="ml-4 mt-1 list-disc">{data.jobs.map((j) => <li key={j.k}>{j.ranAt.slice(5, 16)} {j.k} <span className="text-slate-400">{j.note}</span></li>)}</ul></details>}
       </section>
 
-      <section className="rounded border bg-white p-4 text-sm">
+      {SNS_ONLY ? <section className="rounded border bg-white p-4 text-sm">
+        <h2 className="mb-1 font-bold">投稿の方法</h2>
+        <p className="text-slate-600">Instagram・Google とも API は使わず、手動で投稿します。予定時刻になると通知が届き、「手動投稿」の画面で本文をコピー → 各店舗の投稿ページを開いて貼り付け → 「投稿した」で記録します。ログイン情報と投稿ページの URL は「店舗管理」→ 各店舗の「SNS設定」で登録します。</p>
+      </section> : <section className="rounded border bg-white p-4 text-sm">
         <h2 className="mb-2 font-bold">Google ビジネスプロフィールの投稿方法</h2>
         <label className="flex items-start gap-2"><input type="checkbox" checked={s.gbpManual} onChange={(e) => { const v = e.target.checked; setS({ ...s, gbpManual: v }); run(() => sendJson('/api/admin/hq/sns/settings', 'PUT', { gbpManual: v }), v ? 'Google は手動投稿の運用にしました' : 'Google は API 連携の運用にしました'); }} className="mt-1" /><span><span className="font-bold">Google は手動で投稿する（API 申請なし）</span><br /><span className="text-xs text-slate-500">オンにすると Google の投稿はすべて「手動投稿」になり、予定時刻の通知 → 手動投稿の画面でコピー → Google に貼り付け → 「投稿した」で記録します。API 連携の設定は表示しません。</span></span></label>
-      </section>
-      {!s.gbpManual && <section className="rounded border bg-white p-4 text-sm">
+      </section>}
+      {!SNS_ONLY && !s.gbpManual && <section className="rounded border bg-white p-4 text-sm">
         <h2 className="mb-2 font-bold">Google ビジネスプロフィール（本部の Google アカウントで 24 店舗分をまとめて連携）</h2>
         {data.google?.connected ? <p>連携中{data.google.tokenRefreshedAt && <span className="text-xs text-slate-500">（最終更新 {data.google.tokenRefreshedAt.slice(0, 16)}）</span>}{data.google.lastError && <span className="ml-2 text-xs text-red-700">エラー：{data.google.lastError}</span>}</p> : <p className="text-slate-600">未連携。全店舗の拠点を管理している Google アカウントで連携してください。API の利用許可（申請）が下りる前でも連携はできますが、投稿・数字の取得は許可後に動きます。</p>}
         <div className="mt-2 flex flex-wrap gap-2">
@@ -104,7 +108,7 @@ export default function SnsHqPage() {
             {data.stores.map((st) => (
               <tr key={st.code} className={`border-t ${st.active ? '' : 'text-slate-400'}`}>
                 <td className="whitespace-nowrap px-2 py-1"><StoreDot code={st.code} className="mr-1" />{st.name}{!st.active && '（停止）'}</td>
-                <td className="px-2 py-1 text-xs">{st.igEnabled ? (st.ig?.connected ? <span className="text-green-700">連携 @{st.ig.username}{st.ig.lastError && <span className="ml-1 text-red-700" title={st.ig.lastError}>!</span>}</span> : <span className="text-amber-700">未連携（手動投稿）</span>) : <span className="text-slate-400">使わない</span>}</td>
+                <td className="px-2 py-1 text-xs">{st.igEnabled && SNS_ONLY ? <span className="text-slate-600">手動投稿</span> : st.igEnabled ? (st.ig?.connected ? <span className="text-green-700">連携 @{st.ig.username}{st.ig.lastError && <span className="ml-1 text-red-700" title={st.ig.lastError}>!</span>}</span> : <span className="text-amber-700">未連携（手動投稿）</span>) : <span className="text-slate-400">使わない</span>}</td>
                 <td className="px-2 py-1 text-xs">
                   {locs ? (
                     <select value={st.gbp?.locationName ? `${st.gbp.externalId}|${st.gbp.locationName}` : ''} onChange={(e) => mapLoc(st.code, e.target.value)} className="max-w-xs rounded border px-1 py-0.5">
