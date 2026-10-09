@@ -352,8 +352,9 @@ final class Sns
         $month = (int)substr($scheduledAt, 5, 2);
         $ph = [
             '{店舗名}' => $store['name'],
-            '{地域}' => $ss['area'] !== '' ? $ss['area'] : '地域',
-            '{エリア}' => $ss['area'] !== '' ? $ss['area'] : '地域',
+            // 地域が未入力なら置き換えずに {エリア} のまま残す（MEO の語が抜けたまま投稿されないように）
+            '{地域}' => $ss['area'],
+            '{エリア}' => $ss['area'],
             '{電話}' => Text::formatJpPhone($store['phone']),
             '{予約URL}' => self::bookingUrl($store),
             '{月}' => (string)$month,
@@ -384,6 +385,25 @@ final class Sns
         $out = [];
         foreach ($ph as $k => $v) if ($v === '' && str_contains($text, $k)) $out[] = $k;
         return $out;
+    }
+
+    /**
+     * 店舗の下書き（確認待ち・失敗）に残っている {…} を、今の店舗の設定で埋め直す。
+     * 差し込み語を後から入力したときに、作成済みの下書きもそのまま完成させるため。@return 埋め直した件数
+     */
+    public static function refillDrafts(string $storeId): int
+    {
+        $store = Settings::findStoreById($storeId);
+        if (!$store) return 0;
+        $ss = self::storeSetting($store);
+        $n = 0;
+        foreach (Db::all("SELECT id, channel, postText, scheduledAt, patternIdx FROM sns_post WHERE storeId = ? AND status IN ('draft', 'failed') AND postText LIKE ?", [$storeId, '%{%']) as $r) {
+            $ph = self::placeholders($store, $ss, $r['scheduledAt'], self::keywordFor($ss, (int)$r['patternIdx']));
+            if ($r['channel'] === 'gbp') foreach (self::GBP_FORBIDDEN_VARS as $k) unset($ph['{' . $k . '}']);
+            $t = self::fill($r['postText'], $ph);
+            if ($t !== $r['postText']) { Db::exec('UPDATE sns_post SET postText = ? WHERE id = ?', [$t, $r['id']]); $n++; }
+        }
+        return $n;
     }
 
     /** 差し込み語を置き換える。値が空のものは置き換えずに残す（確認する人が気づけるように） */

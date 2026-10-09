@@ -687,7 +687,7 @@ function sns_settings_put(): never
         'igProfileUrl' => array_key_exists('igProfileUrl', $b) ? sns_url_or_empty(Http::str($b, 'igProfileUrl', 300, false)) : $cur['igProfileUrl'],
     ];
     Sns::saveStoreSetting($ctx['store']['id'], $v);
-    Http::json(['ok' => true]);
+    Http::json(['ok' => true, 'refilled' => Sns::refillDrafts($ctx['store']['id'])]);
 }
 
 /** 投稿文の見本（設定画面でパターンを確かめる） */
@@ -867,6 +867,8 @@ function hq_sns_settings_put(): never
     ]);
     // Google を手動運用にしたら、承認済みの Google 投稿も手動扱いにそろえる（自動処理が送らないように）
     if (Sns::setting()['gbpManual']) Db::exec("UPDATE sns_post SET publishMode = 'manual' WHERE channel = 'gbp' AND status IN ('draft', 'approved', 'failed')");
+    // 差し込み語の既定値を変えたときに、作成済みの下書きにも反映する
+    foreach (Db::all('SELECT id FROM store WHERE active = 1') as $st) Sns::refillDrafts($st['id']);
     Http::json(['ok' => true]);
 }
 
@@ -1111,4 +1113,97 @@ function sns_credentials_reveal(): never
     Db::exec('UPDATE sns_credential SET revealedBy = ?, revealedAt = NOW(), updatedAt = updatedAt WHERE storeId = ? AND channel = ?', [$ctx['session']['code'], $ctx['store']['id'], $ch]);
     header('Cache-Control: no-store');
     Http::json(['password' => $plain]);
+}
+
+// ---------- 下書き（全店を 1 ページで）と差し込み語の一括入力 ----------
+/** 見られる店舗（本部は稼働中の全店、店舗アカウントは自店舗） */
+function sns_visible_stores(array $s): array
+{
+    if ($s['role'] === 'hq') return array_map([Settings::class, 'storeRow'], Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC'));
+    $st = Auth::resolveStore($s);
+    if (!$st) throw new HttpError(404, '店舗が登録されていません');
+    return [Settings::storeRow($st)];
+}
+
+/** 差し込み語の入力欄に出す店舗の値 */
+function sns_store_vars_row(array $st, array $ss): array
+{
+    return ['code' => $st['code'], 'name' => $st['name'], 'area' => $ss['area'], 'keywordsFixed' => $ss['keywordsFixed'], 'keywordsRotation' => $ss['keywordsRotation'], 'vars' => (object)$ss['vars'],
+        'igEnabled' => $ss['igEnabled'], 'gbpEnabled' => $ss['gbpEnabled']];
+}
+
+/** GET /api/admin/sns/drafts?channel=&store=：確認待ち・失敗の下書きを全店まとめて */
+function sns_drafts_get(): never
+{
+    Sns::ensureTables();
+    $s = Auth::requireSession();
+    $stores = sns_visible_stores($s);
+    $code = Http::query('store');
+    if ($code) $stores = array_values(array_filter($stores, fn($st) => $st['code'] === $code));
+    $ch = sns_channel(Http::query('channel'), true);
+    $from = Time::addDays(Time::nowJst()['date'], -30) . ' 00:00:00';
+    $ssBy = []; $storeRows = [];
+    foreach ($stores as $st) { $ssBy[$st['id']] = Sns::storeSetting($st); $storeRows[] = sns_store_vars_row($st, $ssBy[$st['id']]); }
+    $posts = [];
+    if ($stores) {
+        $in = implode(',', array_fill(0, count($stores), '?'));
+        $params = array_merge(array_column($stores, 'id'), [$from]);
+        $sql = "SELECT p.*, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.storeId IN ($in) AND p.status IN ('draft', 'failed') AND p.scheduledAt >= ?";
+        if ($ch) { $sql .= ' AND p.channel = ?'; $params[] = $ch; }
+        foreach (Db::all($sql . ' ORDER BY s.code ASC, p.scheduledAt ASC LIMIT 2000', $params) as $r) {
+            $r['_ss'] = $ssBy[$r['storeId']] ?? null;
+            $posts[] = Sns::postRow($r);
+        }
+    }
+    Http::json(['today' => Time::nowJst()['date'], 'isHq' => $s['role'] === 'hq', 'stores' => $storeRows, 'customVars' => Sns::setting()['customVars'], 'posts' => $posts]);
+}
+
+/** GET /api/admin/sns/vars：差し込み語の一括入力用（店舗ごとの値） */
+function sns_vars_get(): never
+{
+    Sns::ensureTables();
+    $s = Auth::requireSession();
+    $rows = [];
+    foreach (sns_visible_stores($s) as $st) {
+        $row = sns_store_vars_row($st, Sns::storeSetting($st));
+        $row['unfilled'] = (int)Db::one("SELECT COUNT(*) AS n FROM sns_post WHERE storeId = ? AND status IN ('draft', 'failed') AND postText LIKE ?", [$st['id'], '%{%'])['n'];
+        $rows[] = $row;
+    }
+    Http::json(['stores' => $rows, 'customVars' => Sns::setting()['customVars'], 'isHq' => $s['role'] === 'hq']);
+}
+
+/** PUT /api/admin/sns/vars {rows:[{code, name?, area?, keywordsFixed?, keywordsRotation?, vars?}]}：保存して、作成済みの下書きも埋め直す */
+function sns_vars_put(): never
+{
+    Sns::ensureTables();
+    $s = Auth::requireSession();
+    Http::requireJson();
+    $b = Http::body();
+    $rows = $b['rows'] ?? null;
+    if (!is_array($rows) || count($rows) > 200) Http::error('bad request', 400);
+    $allowed = [];
+    foreach (sns_visible_stores($s) as $st) $allowed[$st['code']] = $st;
+    $saved = 0; $refilled = 0;
+    Db::transaction(function () use ($rows, $allowed, &$saved, &$refilled) {
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            $st = $allowed[(string)($row['code'] ?? '')] ?? null;
+            if (!$st) throw new HttpError(403, '店舗 ' . (string)($row['code'] ?? '') . ' は変更できません');
+            if (array_key_exists('name', $row)) {
+                $name = Http::str($row, 'name', 50, false);
+                if ($name === '') throw new HttpError(400, $st['code'] . ' の店舗名が空です');
+                if ($name !== $st['name']) Db::exec('UPDATE store SET name = ? WHERE id = ?', [$name, $st['id']]);
+            }
+            $cur = Sns::storeSetting($st);
+            $v = $cur;
+            if (array_key_exists('area', $row)) $v['area'] = Http::str($row, 'area', 50, false);
+            if (array_key_exists('keywordsFixed', $row)) $v['keywordsFixed'] = Http::str($row, 'keywordsFixed', 300, false);
+            if (array_key_exists('keywordsRotation', $row)) $v['keywordsRotation'] = Http::str($row, 'keywordsRotation', 500, false);
+            if (array_key_exists('vars', $row)) $v['vars'] = array_merge($cur['vars'], Sns::parseVars($row['vars']));
+            Sns::saveStoreSetting($st['id'], $v);
+            $saved++;
+            $refilled += Sns::refillDrafts($st['id']);
+        }
+    });
+    Http::json(['ok' => true, 'saved' => $saved, 'refilled' => $refilled]);
 }

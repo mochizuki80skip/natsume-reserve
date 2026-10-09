@@ -23,7 +23,7 @@ ok('ログイン後は SNS ホーム', true);
 const nav = (await page.locator('header nav').textContent()).replace(/\s+/g, '');
 const side = (await page.locator('aside').textContent()).replace(/\s+/g, '');
 ok('メニューに予約表・シフト・自賠請求が無い', !nav.includes('予約表') && !nav.includes('シフト') && !nav.includes('自賠'));
-ok('左メニューにホーム・手動投稿・カレンダー・店舗の下書き・接続状況がある', side.includes('ホーム') && side.includes('手動投稿') && side.includes('カレンダー') && side.includes('店舗の下書き') && side.includes('接続状況'));
+ok('左メニューにホーム・下書き（全店）・手動投稿・カレンダー・差し込み語・接続状況がある', side.includes('ホーム') && side.includes('下書き（全店）') && side.includes('手動投稿') && side.includes('カレンダー') && side.includes('差し込み語（MEO）') && side.includes('接続状況'));
 ok('ヘッダーに店舗設定・店舗管理がある', nav.includes('店舗設定') && nav.includes('店舗管理'));
 await page.goto(`${BASE}/admin/hq`); await page.waitForSelector('h1:has-text("店舗管理")');
 ok('店舗管理に共通設定（営業時間）が無い', (await page.locator('text=全店共通設定').count()) === 0);
@@ -55,6 +55,27 @@ await page.goto(`${BASE}/s/S001`); await page.waitForURL(/\/admin\/login/);
 ok('顧客の予約ページはログインへ転送', true);
 const r = await (await fetch(`${BASE}/api/admin/sns/settings?store=S001`, { headers: { cookie: (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ') } })).json();
 ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'string' && !r.store.bookingUrl.startsWith(BASE), r.store?.bookingUrl ?? '');
+// 差し込み語：S002 のエリアを空にして下書きを作ると {エリア} が残り、差し込み語のページで入れると埋まる
+{
+  const cookie = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
+  const put = (rows) => fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) }).then((r) => r.json());
+  await put([{ code: 'S002', area: '' }]);
+  const mk = await fetch(`${BASE}/api/admin/sns/posts?store=S002`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-01-05 10:00', title: 'テスト', body: '{エリア}で腰痛にお困りの方へ。{店舗名}です。' }) });
+  ok('エリア未入力の下書きを作成', mk.ok);
+  await page.goto(`${BASE}/admin/sns/drafts?store=S002&unfilled=1`); await page.waitForSelector('h1:has-text("下書き")');
+  ok('下書きページに {エリア} が赤く出る', await page.waitForSelector('section mark:has-text("{エリア}")', { timeout: 10000 }).then(() => true, () => false));
+  await page.locator('label:has-text("エリア {エリア}") input').first().fill('三島市');
+  await page.getByRole('button', { name: '保存して下書きを完成' }).first().click();
+  await page.waitForSelector('text=件の下書きを埋めました');
+  const gone = await page.waitForFunction(() => ![...document.querySelectorAll('section mark')].some((m) => m.textContent === '{エリア}'), null, { timeout: 10000 }).then(() => true, () => false);
+  ok('保存すると下書きが埋まる（画面から {エリア} が消える）', gone);
+  const d = await (await fetch(`${BASE}/api/admin/sns/drafts?store=S002`, { headers: { cookie } })).json();
+  ok('API でも {エリア} が残っていない', d.posts.every((p) => !p.fullText.includes('{エリア}')));
+  await page.goto(`${BASE}/admin/sns/vars`); await page.waitForSelector('th:has-text("エリア")');
+  ok('差し込み語ページに全店舗の行がある', (await page.locator('tbody tr').count()) >= 2);
+  const r = await put([{ code: 'S002', area: '沼津市' }]);
+  ok('一括保存の応答', r.ok === true && r.saved === 1);
+}
 const ck = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
 ok('Instagram の API 連携は使える', (await fetch(`${BASE}/api/admin/sns/ig/connect?store=S001`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);
 ok('Google の API 連携は止まっている', (await fetch(`${BASE}/api/admin/sns/google/connect`, { headers: { cookie: ck }, redirect: 'manual' })).status === 404);

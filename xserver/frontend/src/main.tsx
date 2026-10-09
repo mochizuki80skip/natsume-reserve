@@ -30,6 +30,8 @@ import SnsManualPage from './pages/admin/sns/SnsManualPage';
 import SnsShell from './components/SnsShell';
 import SnsSchedulePage from './pages/admin/sns/SnsSchedulePage';
 import SnsStoresPage from './pages/admin/sns/SnsStoresPage';
+import SnsDraftsPage from './pages/admin/sns/SnsDraftsPage';
+import SnsVarsPage from './pages/admin/sns/SnsVarsPage';
 import { SNS_ONLY } from './lib/mode';
 
 createRoot(document.getElementById('root')!).render(
@@ -61,6 +63,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="sns/settings" element={<SnsSettingsPage />} />
             <Route path="sns/schedule" element={<SnsSchedulePage />} />
             <Route path="sns/stores" element={<SnsStoresPage />} />
+            <Route path="sns/drafts" element={<SnsDraftsPage />} />
+            <Route path="sns/vars" element={<SnsVarsPage />} />
             <Route path="sns/insights" element={<SnsInsightsPage />} />
             <Route path="hq/sns" element={<SnsHqPage />} />
           </Route>
