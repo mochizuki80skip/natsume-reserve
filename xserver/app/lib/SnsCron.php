@@ -229,7 +229,8 @@ final class SnsCron
             }
         }
         $hq = Sns::account(null, 'gbp');
-        if ($hq && $hq['refreshToken']) {
+        // SNS 投稿管理だけの設置では Google の API は使わない（数字の取り込みもしない）
+        if ($hq && $hq['refreshToken'] && !Config::isSnsOnly()) {
             foreach (Db::all('SELECT a.*, s.name AS storeName FROM sns_account a JOIN store s ON s.id = a.storeId WHERE a.channel = ? AND a.locationName <> ? AND s.active = 1', ['gbp', '']) as $a) {
                 try {
                     // パフォーマンスの数字は数日遅れて確定するため、直近 10 日分を毎日取り直す

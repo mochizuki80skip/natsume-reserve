@@ -117,8 +117,8 @@ function dispatch(string $method, string $path): bool
         if ($m !== $method || !preg_match($re, $path, $mm)) continue;
         // SNS 投稿管理だけの設置では、予約関連の API を出さない（店舗名の取得＝店舗別ログイン画面用だけ残す）
         if (Config::isSnsOnly() && str_starts_with($path, '/api/public/') && $fn !== 'pub_store') { Http::error('not found', 404); }
-        // SNS 投稿管理だけの設置では Instagram・Google の API 連携は使わない（手動投稿＋ログイン情報の保管）
-        if (Config::isSnsOnly() && in_array($fn, ['sns_ig_connect', 'sns_ig_token_post', 'sns_ig_callback', 'sns_google_connect', 'sns_google_callback', 'hq_sns_google_locations', 'hq_sns_google_map'], true)) { Http::error('この設置では API 連携は使いません', 404); }
+        // SNS 投稿管理だけの設置では Google の API 連携は使わない（手動投稿）。Instagram は API で自動投稿できる
+        if (Config::isSnsOnly() && in_array($fn, ['sns_google_connect', 'sns_google_callback', 'hq_sns_google_locations', 'hq_sns_google_map', 'sns_review_reply'], true)) { Http::error('この設置では Google の API 連携は使いません', 404); }
         try {
             $fn($mm);
         } catch (HttpError $e) {

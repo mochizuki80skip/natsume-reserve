@@ -59,8 +59,10 @@ final class Sns
         }
         // 以前の「2 人チェック」の途中状態（checked）は下書きに戻す
         Db::exec("UPDATE sns_post SET status = 'draft' WHERE status = 'checked'");
-        // SNS 投稿管理だけの設置ではすべて手動投稿。以前 API の予定で作った下書きも手動に切り替える
-        if (Config::isSnsOnly()) Db::exec("UPDATE sns_post SET publishMode = 'manual' WHERE publishMode = 'api' AND status IN ('draft', 'approved', 'failed')");
+        // Instagram を連携済みの店舗で、手動のまま残っているまだ投稿していない分は自動投稿に戻す
+        Db::exec("UPDATE sns_post p JOIN sns_account a ON a.storeId = p.storeId AND a.channel = 'ig' AND a.accessToken IS NOT NULL SET p.publishMode = 'api' WHERE p.channel = 'ig' AND p.publishMode = 'manual' AND p.status IN ('draft', 'approved', 'failed')");
+        // SNS 投稿管理だけの設置では Google は手動投稿。以前 API の予定で作った Google の下書きも手動に切り替える
+        if (Config::isSnsOnly()) Db::exec("UPDATE sns_post SET publishMode = 'manual' WHERE channel = 'gbp' AND publishMode = 'api' AND status IN ('draft', 'approved', 'failed')");
     }
 
     // ---------- 既定値 ----------
@@ -588,7 +590,6 @@ final class Sns
     /** API で投稿できる状態なら api、そうでなければ manual（手動投稿の補助） */
     public static function publishModeFor(array $store, string $channel): string
     {
-        if (Config::isSnsOnly()) return 'manual'; // SNS 投稿管理だけの設置では API を使わず、すべて手動投稿
         $acc = self::account($store['id'], $channel);
         if ($channel === 'ig') return $acc && $acc['accessToken'] ? 'api' : 'manual';
         if (self::setting()['gbpManual']) return 'manual'; // Google は手動投稿の運用
@@ -626,12 +627,21 @@ final class Sns
             Db::exec('INSERT INTO sns_account (id, storeId, channel, externalId, username, locationName, accessToken, refreshToken, tokenExpiresAt, tokenRefreshedAt, lastError) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [Db::newId(), $storeId, $channel, $row['externalId'], $row['username'], $row['locationName'], $row['accessToken'], $row['refreshToken'], $row['tokenExpiresAt'], $row['tokenRefreshedAt'], $row['lastError']]);
         }
+        if ($storeId !== null && $channel === 'ig') self::syncPublishMode($storeId, 'ig');
     }
 
     public static function deleteAccount(?string $storeId, string $channel): void
     {
         $cur = self::account($storeId, $channel);
         if ($cur) Db::exec('DELETE FROM sns_account WHERE id = ?', [$cur['id']]);
+        if ($storeId !== null && $channel === 'ig') self::syncPublishMode($storeId, 'ig');
+    }
+
+    /** 連携した／外したとき、その店舗のまだ投稿していない分の投稿方法（自動／手動）を合わせる */
+    public static function syncPublishMode(string $storeId, string $channel): void
+    {
+        $mode = self::publishModeFor(['id' => $storeId], $channel);
+        Db::exec("UPDATE sns_post SET publishMode = ? WHERE storeId = ? AND channel = ? AND status IN ('draft', 'approved', 'failed')", [$mode, $storeId, $channel]);
     }
 
     /** 画面向け（トークンの値は出さない） */

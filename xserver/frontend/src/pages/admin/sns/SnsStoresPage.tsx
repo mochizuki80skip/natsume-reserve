@@ -66,7 +66,7 @@ export default function SnsStoresPage() {
   return (
     <div className="space-y-4">
       <SnsNav title="店舗管理" />
-      <p className="-mt-2 text-sm text-slate-600">店舗ごとの SNS の設定状況です。「SNS設定」を押すと、その店舗の地域・差し込み語・投稿の有無と頻度・Google の投稿ページ・{SNS_ONLY ? 'Instagram と Google のログイン情報' : 'Instagram の連携'}を設定できます。</p>
+      <p className="-mt-2 text-sm text-slate-600">店舗ごとの SNS の設定状況です。「SNS設定」を押すと、その店舗の地域・差し込み語・投稿の有無と頻度・Google の投稿ページ・{SNS_ONLY ? 'Instagram の連携、Instagram と Google のログイン情報' : 'Instagram の連携'}を設定できます。</p>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       {todo.length > 0 && <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">設定が終わっていない店舗が {todo.length} 店舗あります（黄色の項目）。</p>}
 
@@ -102,7 +102,7 @@ export default function SnsStoresPage() {
                   <td className="px-2 py-2">
                     {s.igEnabled ? <span className={ok}>投稿する</span> : <span className={off}>投稿しない</span>}
                     {s.igEnabled && <div className="mt-1 text-xs text-slate-500">{describeSchedule(s.effectiveIgSchedule)}</div>}
-                    {!SNS_ONLY && s.igEnabled && <div className="mt-1">{st.ig.connected ? <span className={st.ig.error ? warn : ok}>{st.ig.error ? '要再連携' : `連携中 @${st.ig.username}`}</span> : <span className={off}>未連携（手動投稿）</span>}</div>}
+                    {s.igEnabled && <div className="mt-1">{st.ig.connected ? <span className={st.ig.error ? warn : ok}>{st.ig.error ? '要再連携' : `自動投稿 @${st.ig.username}`}</span> : <span className={warn}>未連携（手動投稿）</span>}</div>}
                     {SNS_ONLY && <CredLine c={st.cred?.ig ?? null} prefix="@" />}
                     {SNS_ONLY && st.igOpenUrl && <a href={st.igOpenUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block whitespace-nowrap text-xs text-pink-700 underline">Instagram を開く↗</a>}
                   </td>

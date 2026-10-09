@@ -5,7 +5,7 @@ import { SNS_ONLY } from '@/lib/mode';
 import { StoreDot } from '@/lib/storeColor';
 import { useFetch } from '@/lib/api';
 
-export interface HomeStatus { pending: number; approved: number; failed: number; ig: { enabled: number; connected: number }; manualOnly?: boolean; google: 'manual' | 'ok' | 'nolocation' | 'none'; googleMapped: number; line: 'ok' | 'mail' | 'none' }
+export interface HomeStatus { pending: number; approved: number; failed: number; ig: { enabled: number; connected: number }; google: 'manual' | 'ok' | 'nolocation' | 'none'; googleMapped: number; line: 'ok' | 'mail' | 'none' }
 interface HomeResp { status: HomeStatus; manual: { id: string }[]; byStore: { code: string; name: string; ig: Record<string, number>; gbp: Record<string, number> }[] }
 
 export default function SnsShell() {
@@ -65,7 +65,7 @@ export default function SnsShell() {
           {st && (
             <div className="mt-auto space-y-1 border-t px-2 pt-3">
               {dot(st.line === 'ok' ? true : st.line === 'mail' ? null : false, 'LINE', st.line === 'ok' ? 'OK' : st.line === 'mail' ? 'メール' : '未設定')}
-              {st.manualOnly ? dot(null, 'Instagram', '手動') : dot(st.ig.enabled === 0 ? null : st.ig.connected >= st.ig.enabled ? true : st.ig.connected > 0 ? null : false, 'Instagram', st.ig.enabled ? `${st.ig.connected}/${st.ig.enabled}` : '未使用')}
+              {dot(st.ig.enabled === 0 ? null : st.ig.connected >= st.ig.enabled ? true : st.ig.connected > 0 ? null : false, 'Instagram', st.ig.enabled ? `${st.ig.connected}/${st.ig.enabled}` : '未使用')}
               {dot(st.google === 'manual' ? null : st.google === 'ok' ? true : false, 'Google', st.google === 'manual' ? '手動' : st.google === 'ok' ? 'OK' : st.google === 'nolocation' ? '拠点未割当' : '承認待ち')}
             </div>
           )}

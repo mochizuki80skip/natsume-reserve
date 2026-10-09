@@ -107,7 +107,7 @@ export default function SnsHomePage() {
         {card(st.failed, '失敗', st.failed ? 'text-red-700' : '')}
         <div className="rounded-lg border bg-white px-5 py-4 text-sm">
           <div className="text-slate-500">接続状況</div>
-          {st.manualOnly ? <div className="text-amber-800">Instagram 手動投稿</div> : <div className={st.ig.enabled && st.ig.connected < st.ig.enabled ? 'text-red-700' : 'text-green-800'}>Instagram {st.ig.enabled ? `${st.ig.connected}/${st.ig.enabled}` : '未使用'}</div>}
+          <div className={st.ig.enabled && st.ig.connected < st.ig.enabled ? 'text-red-700' : 'text-green-800'}>Instagram {st.ig.enabled ? `${st.ig.connected}/${st.ig.enabled}` : '未使用'}</div>
           <div className={st.google === 'ok' ? 'text-green-800' : 'text-amber-800'}>Google {st.google === 'manual' ? '手動投稿' : st.google === 'ok' ? 'OK' : st.google === 'nolocation' ? '拠点未割当' : '承認待ち'}</div>
           <div className={st.line === 'none' ? 'text-red-700' : 'text-green-800'}>{st.line === 'ok' ? 'LINE OK' : st.line === 'mail' ? '通知はメール' : '通知 未設定'}</div>
         </div>

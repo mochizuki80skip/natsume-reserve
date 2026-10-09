@@ -44,6 +44,34 @@ export default function SnsSettingsPage() {
   }
   const str = (k: keyof StoreSetting) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setF({ ...f!, [k]: e.target.value });
   const ig = data.accounts.ig; const gbp = data.accounts.gbp;
+  const igSection = (
+    <section className="rounded border bg-white p-4 text-sm">
+      <h2 className="mb-2 font-bold">Instagram の連携</h2>
+      {ig?.connected ? (
+        <div className="space-y-1">
+          <p>連携中：<span className="font-bold">@{ig.username || ig.externalId}</span></p>
+          <p className="text-xs text-slate-500">トークンの期限 {ig.tokenExpiresAt?.slice(0, 10)}（30 日ごとに自動更新）{ig.tokenRefreshedAt && `・最終更新 ${ig.tokenRefreshedAt.slice(0, 10)}`}</p>
+          {ig.lastError && <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-800">直近のエラー：{ig.lastError}。再連携してください</p>}
+        </div>
+      ) : <p className="text-slate-600">未連携です。連携するまで Instagram は「手動投稿」（本文をコピーしてアプリから投稿）になります。</p>}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {data.igConfigured ? (
+          data.appUrlSet ? <a href={`/api/admin/sns/ig/connect?${storeQ}`} className="rounded bg-pink-600 px-3 py-1 text-white">{ig?.connected ? 'Instagram を再連携' : 'Instagram と連携する'}</a> : <span className="text-xs text-red-700">config.php の APP_URL が未設定のため連携できません</span>
+        ) : <span className="text-xs text-slate-500">Meta のアプリ ID が config.php に未設定です（本部に連絡）</span>}
+      </div>
+      <p className="mt-2 text-xs text-slate-500">この店舗の Instagram がプロアカウント（ビジネス）で、連携するスマホ／PC でそのアカウントにログインしている状態で押してください。ログイン画面が出たら許可を押すと戻ってきます。</p>
+      {data.isHq && (
+        <details className="mt-3 text-xs">
+          <summary className="cursor-pointer text-slate-600">本部向け：トークンを直接登録／連携解除</summary>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Meta のアプリ画面で発行した長期トークン" className="w-80 rounded border px-2 py-1" />
+            <button type="button" onClick={() => pasteToken(false)} className="rounded border bg-white px-2 py-1">登録</button>
+            {ig && <button type="button" onClick={() => confirm('連携を解除しますか？') && pasteToken(true)} className="rounded border bg-white px-2 py-1 text-red-700">連携解除</button>}
+          </div>
+        </details>
+      )}
+    </section>
+  );
 
   return (
     <div className="space-y-4">
@@ -67,7 +95,7 @@ export default function SnsSettingsPage() {
                 </div>
               );
             })}
-            <p className="text-xs text-slate-500">下書きは毎朝 {data.defaults.daysAhead} 日先まで自動で作られます（本部の SNS 管理で変更）。{SNS_ONLY ? '予定時刻になると通知が届き、「手動投稿」の画面からコピーして各サービスに投稿します。' : '投稿は予定時刻以降、5〜10 分おきの自動処理で送られます。'}</p>
+            <p className="text-xs text-slate-500">下書きは毎朝 {data.defaults.daysAhead} 日先まで自動で作られます（本部の SNS 管理で変更）。{SNS_ONLY ? '連携済みの Instagram は予定時刻以降の自動処理（5〜10 分おき）で投稿されます。Google と未連携の Instagram は予定時刻に通知が届き、「手動投稿」の画面から投稿します。' : '投稿は予定時刻以降、5〜10 分おきの自動処理で送られます。'}</p>
           </section>
           <section className="space-y-2">
             <h2 className="font-bold">文章に差し込む情報</h2>
@@ -106,43 +134,19 @@ export default function SnsSettingsPage() {
         <div className="space-y-4">
           <section className="rounded border bg-white p-4 text-sm">
             <h2 className="mb-2 font-bold">投稿ページを開く</h2>
-            <p className="mb-2 text-xs text-slate-500">API は使わず、ここ（または「手動投稿」の画面）から各サービスを開いて投稿します。URL は左の欄で登録します（保存後に反映）。</p>
+            <p className="mb-2 text-xs text-slate-500">Google と、連携していない Instagram は、ここ（または「手動投稿」の画面）から開いて投稿します。URL は左の欄で登録します（保存後に反映）。</p>
             <div className="flex flex-wrap gap-2">
               <a href={data.setting.gbpPostUrl || `https://www.google.com/search?q=${encodeURIComponent(`${data.store.name} ${data.setting.area}`.trim())}`} target="_blank" rel="noreferrer" className="rounded bg-emerald-700 px-3 py-1.5 text-white">{data.setting.gbpPostUrl ? 'Google の投稿ページを開く↗' : 'Google で店名を検索（管理パネル）↗'}</a>
               <a href={data.setting.igProfileUrl || 'https://www.instagram.com/'} target="_blank" rel="noreferrer" className="rounded bg-pink-600 px-3 py-1.5 text-white">{data.setting.igProfileUrl ? 'Instagram のプロフィールを開く↗' : 'Instagram を開く↗'}</a>
             </div>
             {!data.setting.gbpPostUrl && <p className="mt-2 text-xs text-amber-800">Google の投稿ページの URL が未登録です。登録すると、そのページが 1 クリックで開きます。</p>}
           </section>
+          {igSection}
           {data.isHq && <SnsCredentials storeQ={storeQ} />}
         </div>
         ) : (
         <div className="space-y-4">
-          <section className="rounded border bg-white p-4 text-sm">
-            <h2 className="mb-2 font-bold">Instagram の連携</h2>
-            {ig?.connected ? (
-              <div className="space-y-1">
-                <p>連携中：<span className="font-bold">@{ig.username || ig.externalId}</span></p>
-                <p className="text-xs text-slate-500">トークンの期限 {ig.tokenExpiresAt?.slice(0, 10)}（30 日ごとに自動更新）{ig.tokenRefreshedAt && `・最終更新 ${ig.tokenRefreshedAt.slice(0, 10)}`}</p>
-                {ig.lastError && <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-800">直近のエラー：{ig.lastError}。再連携してください</p>}
-              </div>
-            ) : <p className="text-slate-600">未連携です。連携するまで Instagram は「手動投稿」（本文をコピーしてアプリから投稿）になります。</p>}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {data.igConfigured ? (
-                data.appUrlSet ? <a href={`/api/admin/sns/ig/connect?${storeQ}`} className="rounded bg-pink-600 px-3 py-1 text-white">{ig?.connected ? 'Instagram を再連携' : 'Instagram と連携する'}</a> : <span className="text-xs text-red-700">config.php の APP_URL が未設定のため連携できません</span>
-              ) : <span className="text-xs text-slate-500">Meta のアプリ ID が config.php に未設定です（本部に連絡）</span>}
-            </div>
-            <p className="mt-2 text-xs text-slate-500">この店舗の Instagram がプロアカウント（ビジネス）で、連携するスマホ／PC でそのアカウントにログインしている状態で押してください。ログイン画面が出たら許可を押すと戻ってきます。</p>
-            {data.isHq && (
-              <details className="mt-3 text-xs">
-                <summary className="cursor-pointer text-slate-600">本部向け：トークンを直接登録／連携解除</summary>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Meta のアプリ画面で発行した長期トークン" className="w-80 rounded border px-2 py-1" />
-                  <button type="button" onClick={() => pasteToken(false)} className="rounded border bg-white px-2 py-1">登録</button>
-                  {ig && <button type="button" onClick={() => confirm('連携を解除しますか？') && pasteToken(true)} className="rounded border bg-white px-2 py-1 text-red-700">連携解除</button>}
-                </div>
-              </details>
-            )}
-          </section>
+          {igSection}
           {data.gbpManual ? (
             <section className="rounded border bg-white p-4 text-sm">
               <h2 className="mb-2 font-bold">Google ビジネスプロフィール</h2>

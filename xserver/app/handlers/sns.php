@@ -105,7 +105,6 @@ function sns_home(): never
         'status' => [
             'pending' => $pendingCount, 'approved' => $approvedCount, 'failed' => $failedCount,
             'ig' => ['enabled' => $igEnabledStores, 'connected' => $igConnected],
-            'manualOnly' => Config::isSnsOnly(),
             'google' => $g['gbpManual'] ? 'manual' : (($googleHq && $googleHq['refreshToken']) ? ($gbpMapped > 0 ? 'ok' : 'nolocation') : 'none'),
             'googleMapped' => $gbpMapped,
             'line' => Notify::lineEnabled() ? 'ok' : (Notify::mailEnabled() ? 'mail' : 'none'),
