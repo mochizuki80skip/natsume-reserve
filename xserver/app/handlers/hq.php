@@ -58,7 +58,8 @@ function hq_stores_post(): never
     $name = trim((string)($b['name'] ?? ''));
     $phone = trim((string)($b['phone'] ?? ''));
     $password = (string)($b['password'] ?? '');
-    if ($name === '' || mb_strlen($name) > 50 || $phone === '' || mb_strlen($phone) > 20) Http::error('入力内容を確認してください', 400);
+    // SNS 投稿管理だけの設置では電話番号は使わない（空でよい）
+    if ($name === '' || mb_strlen($name) > 50 || ($phone === '' && !Config::isSnsOnly()) || mb_strlen($phone) > 20) Http::error('入力内容を確認してください', 400);
     if (strlen($password) < 8) Http::error('パスワードは8文字以上', 400);
     if (Db::one('SELECT id FROM admin_account WHERE code = ?', [$code])) Http::error('この店舗コードは既に使われています', 409);
     Db::transaction(function () use ($code, $name, $phone, $password) {
@@ -98,7 +99,7 @@ function hq_stores_bulk(): never
         if (Db::one('SELECT id FROM admin_account WHERE code = ?', [$code])) { $errors[] = ($i + 1) . ' 行目（' . $code . '）：このコードは使われています'; continue; }
         Db::transaction(function () use ($code, $name, $phone, $password) {
             $id = Db::newId();
-            Db::exec('INSERT INTO store (id, code, name, phone) VALUES (?, ?, ?, ?)', [$id, $code, $name, $phone !== '' ? $phone : '-']);
+            Db::exec('INSERT INTO store (id, code, name, phone) VALUES (?, ?, ?, ?)', [$id, $code, $name, $phone !== '' ? $phone : (Config::isSnsOnly() ? '' : '-')]);
             Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId) VALUES (?, ?, ?, ?, ?)', [Db::newId(), $code, password_hash($password, PASSWORD_BCRYPT), 'store', $id]);
         });
         $added++;

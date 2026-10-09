@@ -76,6 +76,23 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   const r = await put([{ code: 'S002', area: '沼津市' }]);
   ok('一括保存の応答', r.ok === true && r.saved === 1);
 }
+// 電話番号は使わない：店舗の追加・一括登録に電話番号の欄が無く、無しで登録できる
+{
+  await page.goto(`${BASE}/admin/sns/stores`); await page.waitForSelector('th:has-text("地域")');
+  ok('店舗の追加に電話番号の欄が無い', (await page.locator('input[placeholder="電話番号"]').count()) === 0);
+  const code = `T${Date.now() % 100000}`;
+  await page.fill('input[placeholder="店舗コード (例: S003)"]', code); await page.fill('input[placeholder="店舗名"]', 'テスト院'); await page.fill('input[placeholder="初期パスワード"]', 'password123');
+  await page.getByRole('button', { name: '店舗を追加' }).click();
+  await page.waitForSelector(`text=店舗 ${code} を追加しました`);
+  ok('電話番号なしで店舗を追加できる', true);
+  const cookie = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
+  const code2 = `U${Date.now() % 100000}`;
+  const bulk = await (await fetch(`${BASE}/api/admin/hq/stores/bulk`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: [{ code: code2, name: '一括院', phone: '', password: 'password123' }] }) })).json();
+  ok('一括登録も電話番号なしでできる', bulk.added === 1, JSON.stringify(bulk));
+  const tv = await (await fetch(`${BASE}/api/admin/sns/topics?store=S001`, { headers: { cookie } })).json();
+  ok('差し込み語の一覧に {電話} が無い', Array.isArray(tv.vars) && !tv.vars.some((v) => v.key === '電話'));
+  for (const c of [code, code2]) await fetch(`${BASE}/api/admin/hq/stores`, { method: 'PUT', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ code: c, action: 'delete' }) });
+}
 const ck = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
 ok('Instagram の API 連携は使える', (await fetch(`${BASE}/api/admin/sns/ig/connect?store=S001`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);
 ok('Google の API 連携は止まっている', (await fetch(`${BASE}/api/admin/sns/google/connect`, { headers: { cookie: ck }, redirect: 'manual' })).status === 404);

@@ -531,7 +531,8 @@ function adm_store_put(): never
     $b = Http::body();
     try {
         $name = Http::str($b, 'name', 50);
-        $phone = Http::str($b, 'phone', 20);
+        // SNS 投稿管理だけの設置では電話番号は使わない（送られてこなければ今の値のまま）
+        $phone = Config::isSnsOnly() ? Http::str($b, 'phone', 20, false, (string)$ctx['store']['phone']) : Http::str($b, 'phone', 20);
         $beds = Http::int($b, 'beds', 1, 20);
         $dab = Http::int($b, 'defaultActiveBeds', 0, 20);
         $maxT = Http::int($b, 'maxTherapists', 1, 20);

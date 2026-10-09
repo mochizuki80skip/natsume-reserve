@@ -53,7 +53,7 @@ export default function StoreSettingsForm({ store, globalHours, canChangePasswor
       </div>
       <form onSubmit={save} className="space-y-3 rounded border bg-white p-4">
         <label className="block text-sm">店舗名<input value={f.name} onChange={str('name')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
-        <label className="block text-sm">{SNS_ONLY ? '電話番号（投稿文の {電話} に入ります）' : '電話番号（顧客サイトの電話マークに表示）'}<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
+        {!SNS_ONLY && <label className="block text-sm">電話番号（顧客サイトの電話マークに表示）<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>}
         {!SNS_ONLY && <table className="w-full text-sm">
           <tbody>
             {([

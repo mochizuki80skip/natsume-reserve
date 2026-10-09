@@ -120,7 +120,7 @@ export default function SnsSettingsPage() {
             <label className="block">Instagram のプロフィール URL（手動投稿で開く）<input value={f.igProfileUrl} onChange={str('igProfileUrl')} placeholder="https://www.instagram.com/アカウント名/" className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">運用メモ（下書きを確認する人が毎回見るルール。例：料金は書かない、絵文字なし）<textarea value={f.memo} onChange={str('memo')} rows={3} className="mt-1 w-full rounded border px-2 py-1" /></label>
             {SNS_ONLY && !data.store.bookingUrl.includes('/s/') && null}
-            <div className="text-xs text-slate-500">差し込み語：{'{店舗名}'}＝{data.store.name}、{'{エリア}'}＝地域、{'{電話}'}＝{data.store.phone}、{'{予約URL}'}＝{data.store.bookingUrl}、{'{営業時間}'} {'{住所}'} {'{ハッシュタグ}'} {'{キーワード}'} はこの画面の値。文章の型（書き出し・締め）と差し込み語の項目は本部の SNS 管理で編集します。</div>
+            <div className="text-xs text-slate-500">差し込み語：{'{店舗名}'}＝{data.store.name}、{'{エリア}'}＝地域、{!SNS_ONLY && <>{'{電話}'}＝{data.store.phone}、</>}{'{予約URL}'}＝{data.store.bookingUrl}、{'{営業時間}'} {'{住所}'} {'{ハッシュタグ}'} {'{キーワード}'} はこの画面の値。文章の型（書き出し・締め）と差し込み語の項目は本部の SNS 管理で編集します。</div>
           </section>
           <div className="flex flex-wrap items-center gap-2">
             <button className="rounded bg-brand px-4 py-1.5 text-white">保存</button>

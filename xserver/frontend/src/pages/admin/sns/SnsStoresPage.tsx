@@ -27,8 +27,8 @@ export default function SnsStoresPage() {
   const isHq = me.session.role === 'hq';
   const { data, error, reload } = useFetch<Resp>(isHq ? '/api/admin/hq/sns/stores?all=1' : null);
   const [msg, setMsg] = useState('');
-  const [ns, setNs] = useState({ code: '', name: '', phone: '', password: '' });
-  const [edit, setEdit] = useState<{ code: string; newCode: string; name: string; phone: string } | null>(null);
+  const [ns, setNs] = useState({ code: '', name: '', password: '' });
+  const [edit, setEdit] = useState<{ code: string; newCode: string; name: string } | null>(null);
   if (!isHq) return <Navigate to="/admin/sns/settings" replace />;
   if (error) return <div><SnsNav title="店舗管理" /><p className="text-sm text-red-700">{error.message}</p></div>;
   if (!data) return <div><SnsNav title="店舗管理" /><p className="text-sm text-slate-500">読み込み中…</p></div>;
@@ -41,7 +41,7 @@ export default function SnsStoresPage() {
   }
   async function addStore(e: React.FormEvent) {
     e.preventDefault(); setMsg('');
-    if (await call('POST', '/api/admin/hq/stores', ns)) { setMsg(`店舗 ${ns.code} を追加しました。「SNS設定」から地域や投稿の有無を設定してください`); setNs({ code: '', name: '', phone: '', password: '' }); refresh(); }
+    if (await call('POST', '/api/admin/hq/stores', ns)) { setMsg(`店舗 ${ns.code} を追加しました。「SNS設定」から地域や投稿の有無を設定してください`); setNs({ code: '', name: '', password: '' }); refresh(); }
   }
   async function storeAction(code: string, name: string, action: 'reset' | 'toggle' | 'delete') {
     setMsg('');
@@ -53,7 +53,7 @@ export default function SnsStoresPage() {
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!edit) return;
-    if (await call('PUT', '/api/admin/hq/stores', { code: edit.code, action: 'update', newCode: edit.newCode, name: edit.name, phone: edit.phone })) { setMsg('店舗情報を更新しました'); setEdit(null); refresh(); }
+    if (await call('PUT', '/api/admin/hq/stores', { code: edit.code, action: 'update', newCode: edit.newCode, name: edit.name })) { setMsg('店舗情報を更新しました'); setEdit(null); refresh(); }
   }
   function copyLogin(code: string) {
     const url = `${window.location.origin}/admin/login/${code}`;
@@ -84,10 +84,9 @@ export default function SnsStoresPage() {
                     <form onSubmit={saveEdit} className="flex flex-wrap items-center gap-2">
                       <input value={edit.newCode} onChange={(e) => setEdit({ ...edit, newCode: e.target.value })} placeholder="店舗コード" required className="w-28 rounded border px-2 py-1 font-mono" />
                       <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="店舗名" required className="w-56 rounded border px-2 py-1" />
-                      <input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="電話番号" required className="w-40 rounded border px-2 py-1" />
                       <button type="submit" className="rounded bg-brand px-3 py-1 text-white">保存</button>
                       <button type="button" onClick={() => setEdit(null)} className="rounded border px-3 py-1">やめる</button>
-                      <span className="text-xs text-slate-500">店舗コードを変えるとログインURLも変わります。店舗名は投稿文の {'{店舗名}'} に入ります</span>
+                      <span className="text-xs text-slate-500">店舗名は投稿文の {'{店舗名}'} に入ります。店舗コードを変えると、店舗に渡したログインURLが変わります（本部だけで運用するなら影響なし）</span>
                     </form>
                   </td>
                 </tr>
@@ -96,7 +95,7 @@ export default function SnsStoresPage() {
                 <tr key={st.code} className={`border-t align-top ${st.active ? '' : 'bg-slate-50 text-slate-400'}`}>
                   <td className="min-w-[200px] px-3 py-2">
                     <div className="flex items-center gap-2"><StoreDot code={st.code} /><span className="font-bold">{st.name}</span></div>
-                    <div className="mt-0.5 whitespace-nowrap text-xs text-slate-400"><span className="font-mono">{st.code}</span>・{st.phone}{!st.active && <span className="ml-1 rounded bg-slate-200 px-1 text-slate-600">停止中</span>}</div>
+                    <div className="mt-0.5 whitespace-nowrap text-xs text-slate-400"><span className="font-mono">{st.code}</span>{!st.active && <span className="ml-1 rounded bg-slate-200 px-1 text-slate-600">停止中</span>}</div>
                   </td>
                   <td className="whitespace-nowrap px-2 py-2">{s.area ? s.area : <span className={warn}>未入力</span>}</td>
                   <td className="px-2 py-2">
@@ -119,7 +118,7 @@ export default function SnsStoresPage() {
                     <Link to={`/admin/sns/settings?store=${encodeURIComponent(st.code)}`} className="inline-block rounded bg-brand px-3 py-1 text-white">SNS設定</Link>
                     <div className="mt-1 flex flex-wrap justify-end gap-1 text-xs">
                       <button type="button" onClick={() => copyLogin(st.code)} className="rounded border px-2 py-0.5">ログインURL</button>
-                      <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name, phone: st.phone })} className="rounded border px-2 py-0.5">名前・電話</button>
+                      <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name })} className="rounded border px-2 py-0.5">名前・コード</button>
                       <button type="button" onClick={() => storeAction(st.code, st.name, 'reset')} className="rounded border px-2 py-0.5">PW再設定</button>
                       <button type="button" onClick={() => storeAction(st.code, st.name, 'toggle')} className="rounded border px-2 py-0.5">{st.active ? '停止' : '再開'}</button>
                       <button type="button" onClick={() => storeAction(st.code, st.name, 'delete')} className="rounded border border-red-300 px-2 py-0.5 text-red-700">削除</button>
@@ -136,10 +135,9 @@ export default function SnsStoresPage() {
       <section className="rounded-lg border bg-white p-4 text-sm">
         <h2 className="mb-1 font-bold">店舗を追加</h2>
         <p className="mb-2 text-xs text-slate-500">店舗コードは予約システムと同じにすると、投稿文の {'{予約URL}'} がその店舗の予約ページになります。パスワードは店舗のスタッフがログインに使います（8文字以上）。</p>
-        <form onSubmit={addStore} className="grid grid-cols-2 gap-2 md:grid-cols-5">
+        <form onSubmit={addStore} className="grid grid-cols-2 gap-2 md:grid-cols-4">
           <input placeholder="店舗コード (例: S003)" value={ns.code} onChange={(e) => setNs({ ...ns, code: e.target.value })} required className="rounded border px-2 py-1" />
           <input placeholder="店舗名" value={ns.name} onChange={(e) => setNs({ ...ns, name: e.target.value })} required className="rounded border px-2 py-1" />
-          <input placeholder="電話番号" value={ns.phone} onChange={(e) => setNs({ ...ns, phone: e.target.value })} required className="rounded border px-2 py-1" />
           <input placeholder="初期パスワード" type="password" minLength={8} value={ns.password} onChange={(e) => setNs({ ...ns, password: e.target.value })} required className="rounded border px-2 py-1" />
           <button type="submit" className="rounded bg-brand px-3 py-1 text-white">店舗を追加</button>
         </form>

@@ -124,7 +124,12 @@ export function BulkStoreImport({ onDone }: { onDone: () => void }) {
   const [open, setOpen] = useState(false);
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const rows = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => { const [code, name, phone, password] = l.split(/[,\t]/).map((x) => (x ?? '').trim()); return { code, name, phone, password }; });
+    const rows = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      const c = l.split(/[,\t]/).map((x) => (x ?? '').trim());
+      // SNS 投稿管理だけの設置では電話番号を使わない（店舗コード,店舗名,初期パスワード）
+      if (SNS_ONLY) return { code: c[0], name: c[1], phone: '', password: c[2] };
+      return { code: c[0], name: c[1], phone: c[2], password: c[3] };
+    });
     if (rows.length === 0) { setMsg('行がありません'); return; }
     const r = await fetch('/api/admin/hq/stores/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) });
     const j = await r.json();
@@ -136,8 +141,8 @@ export function BulkStoreImport({ onDone }: { onDone: () => void }) {
     <details open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)} className="mt-3 border-t pt-3 text-sm">
       <summary className="cursor-pointer text-slate-600">店舗をまとめて登録（貼り付け）</summary>
       <form onSubmit={submit} className="mt-2 space-y-2">
-        <p className="text-xs text-slate-500">1 行に「店舗コード,店舗名,電話番号,初期パスワード」をカンマ（または Excel からの貼り付けのタブ）区切りで。既にある店舗コードは店舗名・電話だけ更新します（パスワードを書けば変更）。</p>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={'S001,なつめ接骨院 本店,055-000-0001,password123\nS002,なつめ接骨院 駅前院,055-000-0002,password123'} className="w-full rounded border px-2 py-1 font-mono text-xs" />
+        <p className="text-xs text-slate-500">{SNS_ONLY ? '1 行に「店舗コード,店舗名,初期パスワード」' : '1 行に「店舗コード,店舗名,電話番号,初期パスワード」'}をカンマ（または Excel からの貼り付けのタブ）区切りで。既にある店舗コードは店舗名{SNS_ONLY ? '' : '・電話'}だけ更新します（パスワードを書けば変更）。</p>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={SNS_ONLY ? 'S001,なつめ接骨院 本店,password123\nS002,なつめ接骨院 駅前院,password123' : 'S001,なつめ接骨院 本店,055-000-0001,password123\nS002,なつめ接骨院 駅前院,055-000-0002,password123'} className="w-full rounded border px-2 py-1 font-mono text-xs" />
         <div className="flex items-center gap-2"><button className="rounded bg-brand px-3 py-1 text-white">まとめて登録</button><span className="text-xs">{msg}</span></div>
       </form>
     </details>

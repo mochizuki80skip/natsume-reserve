@@ -5,6 +5,7 @@ import { useFetch } from '@/lib/api';
 import { CHANNEL_JA, IMAGE_KIND_JA, STATUS_CLASS, STATUS_JA, complianceHits, fileToJpegDataUrl, formatScheduled, sendJson, toInputDateTime, type Post } from '@/lib/sns';
 import SnsMediaPicker from '@/components/SnsMediaPicker';
 import { drawPostImage } from '@/components/SnsImageCanvas';
+import { SNS_ONLY } from '@/lib/mode';
 import SnsNav from '@/components/SnsNav';
 import { useAdmin } from '../Layout';
 
@@ -30,7 +31,7 @@ export default function SnsPostPage() {
   useEffect(() => { if (p) { setF({ title: p.title, body: p.body, closing: p.closing, hashtags: p.hashtags, scheduledAt: toInputDateTime(p.scheduledAt) }); setDirect(null); } }, [p?.id, p?.updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!data || !canvasRef.current || !f) return;
-    drawPostImage(canvasRef.current, { storeName: data.store.name, title: f.title, body: f.body, phone: data.store.phone, variant, footer: p?.channel === 'gbp' ? 'ご予約はWEB予約ページ・お電話で' : undefined });
+    drawPostImage(canvasRef.current, { storeName: data.store.name, title: f.title, body: f.body, phone: SNS_ONLY ? '' : data.store.phone, variant, footer: p?.channel === 'gbp' ? (SNS_ONLY ? 'ご予約はWEB予約ページから' : 'ご予約はWEB予約ページ・お電話で') : undefined });
   }, [data, f?.title, f?.body, variant, p?.channel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function run(fn: () => Promise<unknown>, ok?: string) {

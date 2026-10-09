@@ -49,7 +49,7 @@ export function drawPostImage(canvas: HTMLCanvasElement, input: PostImageInput):
   ctx.fillText(fit(ctx, input.footer ?? 'ご予約はプロフィールのリンクから', 640), 70, 1020);
   ctx.textAlign = 'right';
   ctx.font = `bold 34px ${FONT}`;
-  ctx.fillText(`📞 ${input.phone}`, POST_W - 70, 1020);
+  if (input.phone) ctx.fillText(`📞 ${input.phone}`, POST_W - 70, 1020);
 }
 
 /** 日本語の折り返し：幅に収まるように 1 文字ずつ詰める。行頭に句読点を置かない */

@@ -365,7 +365,7 @@ function sns_topics_get(): never
     $rows = Db::all('SELECT * FROM sns_topic WHERE storeId = ? OR storeId IS NULL ORDER BY (storeId IS NULL) ASC, sortOrder ASC, createdAt ASC', [$ctx['store']['id']]);
     $g = Sns::setting();
     $vars = [];
-    foreach (Sns::BUILTIN_VARS as $k => $desc) $vars[] = ['key' => $k, 'label' => $desc, 'builtin' => true];
+    foreach (Sns::builtinVars() as $k => $desc) $vars[] = ['key' => $k, 'label' => $desc, 'builtin' => true];
     foreach ($g['customVars'] as $cv) $vars[] = ['key' => $cv['key'], 'label' => $cv['label'] . ($cv['default'] !== '' ? '（既定：' . $cv['default'] . '）' : ''), 'builtin' => false];
     $storeCount = (int)Db::one('SELECT COUNT(*) AS n FROM store WHERE active = 1')['n'];
     Http::json(['store' => ['code' => $ctx['store']['code'], 'name' => $ctx['store']['name']], 'isHq' => $ctx['session']['role'] === 'hq', 'topics' => array_map([Sns::class, 'topicRow'], $rows), 'vars' => $vars, 'storeCount' => $storeCount]);

@@ -160,6 +160,14 @@ final class Sns
         '月' => '投稿予定の月（数字）', 'キーワード' => 'SNS 設定の検索キーワード（毎回＋日替わり）', '営業時間' => 'SNS 設定の営業時間の表記', '住所' => 'SNS 設定の住所', 'ハッシュタグ' => 'SNS 設定のハッシュタグ（無ければ全店共通）',
     ];
 
+    /** 使える差し込み語（SNS 投稿管理だけの設置では {電話} は使わない：MEO に不要で、店舗の電話番号も登録しない） */
+    public static function builtinVars(): array
+    {
+        $v = self::BUILTIN_VARS;
+        if (Config::isSnsOnly()) unset($v['電話']);
+        return $v;
+    }
+
     public static function saveSetting(array $v): void
     {
         self::setting();
@@ -363,6 +371,7 @@ final class Sns
             '{住所}' => $ss['address'],
             '{ハッシュタグ}' => self::defaultHashtags($store, $ss),
         ];
+        if (Config::isSnsOnly()) unset($ph['{電話}']);
         // 本部が定義した差し込み語：店舗の値 → 無ければ既定値
         foreach (self::setting()['customVars'] as $cv) {
             $val = $ss['vars'][$cv['key']] ?? '';
@@ -374,7 +383,7 @@ final class Sns
     /** 文章の中の {…} で、差し込み語として定義されていないもの */
     public static function unknownPlaceholders(string $text, ?array $ph = null): array
     {
-        $known = $ph !== null ? array_keys($ph) : array_merge(array_map(fn($k) => '{' . $k . '}', array_keys(self::BUILTIN_VARS)), array_map(fn($cv) => '{' . $cv['key'] . '}', self::setting()['customVars']));
+        $known = $ph !== null ? array_keys($ph) : array_merge(array_map(fn($k) => '{' . $k . '}', array_keys(self::builtinVars())), array_map(fn($cv) => '{' . $cv['key'] . '}', self::setting()['customVars']));
         preg_match_all('/\{[^{}\s]{1,20}\}/u', $text, $m);
         return array_values(array_unique(array_filter($m[0], fn($x) => !in_array($x, $known, true))));
     }
