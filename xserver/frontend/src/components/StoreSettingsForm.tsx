@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import HoursEditor from './HoursEditor';
 
-interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number; notifyPhone: string; hoursOverride: string }
+interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; notifyPhone: string; hoursOverride: string }
 interface Props { store: StoreForm; globalHours: string; slotMinutes: number; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void }
 
 function UrlRow({ label, path }: { label: string; path: string }) {
@@ -63,7 +63,6 @@ export default function StoreSettingsForm({ store, globalHours, slotMinutes, can
               ['beds', 'ベッド数', '予約表の列数', 1, 20],
               ['defaultActiveBeds', '既定の施術者数', 'シフト未入力の日に顧客へ見せる枠数', 0, 20],
               ['publishDaysAhead', '公開する日数', '今日から何日先まで顧客が予約できるか', 0, 365],
-              ['maxNewConcurrent', '新規の同時対応数', '同じ時間に受けられる新規（初診・初自）の人数。WEB予約はこの人数に達した時間を×にします（0＝制限なし）', 0, 20],
               ['maxTherapists', '施術者の最大人数', 'スタッフ登録・シフト表の上限', 1, 20],
               ['maxReception', '受付の最大人数', 'スタッフ登録・シフト表の上限', 0, 20],
             ] as const).map(([k, label, help, min, max]) => (
@@ -73,6 +72,12 @@ export default function StoreSettingsForm({ store, globalHours, slotMinutes, can
                 <td className="py-1.5 text-xs text-slate-500">{help}</td>
               </tr>
             ))}
+            <tr className="border-t">
+              <td className="w-40 whitespace-nowrap py-1.5 pr-3 font-medium">新規の同時対応数</td>
+              <td className="w-24 py-1.5 pr-3"><input type="number" min={0} max={20} value={f.maxNewConcurrent ?? ''} placeholder="制限なし" aria-label="新規の同時対応数"
+                onChange={(e) => setF({ ...f, maxNewConcurrent: e.target.value === '' ? null : Number(e.target.value) })} className="w-20 rounded border px-2 py-1 text-right" /></td>
+              <td className="py-1.5 text-xs text-slate-500">同じ時間に WEB で受ける新規（初診・初自）の人数。<b>空欄＝制限なし</b>、<b>0＝新規は WEB で受けない</b>（電話マークにして電話へ案内）、1 以上＝その人数に達した時間を×にします</td>
+            </tr>
           </tbody>
         </table>
         <p className="text-xs text-slate-500">顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>

@@ -12,7 +12,7 @@
 //   'phoneMarkRemaining' => int,
 //   'nowMinutes' => null|int|INF,       今日なら現在時刻、未来日は null、過去日は INF
 //   'webCutoffMinutes' => int, 'phoneCutoffMinutes' => int,
-//   'newLimit' => int,                  新規（初診・初自）を同じ時間に受ける上限（0＝制限なし）
+//   'newLimit' => null|int,             新規（初診・初自）を同じ時間に WEB で受ける上限（null＝制限なし、0＝WEB では受けない）
 //   'newCount' => ['time' => int],      その時間に入っている新規の人数
 //   'countsAsNew' => bool,              今回の予約が新規か（新規のときだけ newLimit を見る）
 // ]
@@ -76,7 +76,7 @@ final class Availability
             $byCapacity = min($byCapacity, self::capacityAt($in, $time) - self::occupiedCountAt($in, $t));
             // 新規の同時対応数：新規の予約は、その時間にすでに入っている新規の人数が上限に達していたら受けない
             // （上限に達するまでは通常どおり。残り 1 人でも「残りわずか」の電話マークにはしない）
-            if (!empty($in['countsAsNew']) && (int)($in['newLimit'] ?? 0) > 0 && (int)($in['newCount'][$t] ?? 0) >= (int)$in['newLimit']) {
+            if (!empty($in['countsAsNew']) && ($in['newLimit'] ?? null) !== null && (int)($in['newCount'][$t] ?? 0) >= (int)$in['newLimit']) {
                 return 0;
             }
         }
@@ -101,13 +101,27 @@ final class Availability
     public static function compute(array $in): array
     {
         $out = [];
+        // 新規を WEB で受けない店舗（0）：空いている時間は電話マークにして、電話での予約に案内する
+        $phoneOnly = self::newByPhoneOnly($in);
+        $free = $phoneOnly ? ['newLimit' => null] + $in : $in;
         foreach ($in['sessions'] as $s) {
             for ($t = $s['start']; $t <= $s['lastStart']; $t += $in['slotMinutes']) {
+                if ($phoneOnly) {
+                    $base = self::remainingAt($free, $t);
+                    $out[] = ['time' => $t, 'status' => self::statusFor($free, $t, $base) === 'closed' ? 'closed' : 'phone', 'remaining' => 0];
+                    continue;
+                }
                 $r = self::remainingAt($in, $t);
                 $out[] = ['time' => $t, 'status' => self::statusFor($in, $t, $r), 'remaining' => $r];
             }
         }
         return $out;
+    }
+
+    /** 新規の予約で、店舗が新規を WEB では受けない設定（0）か */
+    public static function newByPhoneOnly(array $in): bool
+    {
+        return !empty($in['countsAsNew']) && ($in['newLimit'] ?? null) !== null && (int)$in['newLimit'] === 0;
     }
 
     private const NOT_A_PATIENT = ['〃', '"', '✖', '×', 'X', 'x', '-', 'ー', '－', '休', '休み', '上記初診対応', '上記再来対応'];

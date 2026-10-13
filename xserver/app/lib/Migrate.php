@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 6;
+    private const VERSION = 7;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -54,6 +54,11 @@ final class Migrate
             if ($ver < 6) {
                 // 予約表のメニュー（矯正・2回目 など。JSON の配列）
                 if (!self::hasColumn($pdo, 'cell', 'menus')) $pdo->exec("ALTER TABLE `cell` ADD COLUMN `menus` VARCHAR(300) NOT NULL DEFAULT ''");
+            }
+            if ($ver < 7) {
+                // 新規の同時対応数：空欄（NULL）＝制限なし、0＝WEB では受けない。これまでの 0（制限なし）は空欄に置き換える
+                $pdo->exec('ALTER TABLE `store` MODIFY COLUMN `maxNewConcurrent` INT NULL DEFAULT NULL');
+                $pdo->exec('UPDATE `store` SET `maxNewConcurrent` = NULL WHERE `maxNewConcurrent` = 0');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

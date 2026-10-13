@@ -83,6 +83,9 @@ function pub_reserve(array $p): never
             $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
             $in = PublicApi::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $cells);
             $free = Availability::freeBedsAt($in, $time);
+            if (Availability::newByPhoneOnly($in)) {
+                throw new HttpError(409, 'はじめての方のご予約はお電話（' . $store['phone'] . '）で承っております');
+            }
             $status = Availability::statusFor($in, $time, Availability::remainingAt($in, $time));
             if ($status !== 'open') {
                 throw new HttpError(409, $status === 'phone' ? 'この時間はお電話でのみ受付しております' : 'この時間は空きがなくなりました。別の時間をお選びください');

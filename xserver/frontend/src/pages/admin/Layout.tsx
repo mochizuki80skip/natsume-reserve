@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { goLogin, useFetch } from '@/lib/api';
 import type { Me } from '@/lib/types';
 import WebNotifier from '@/components/WebNotifier';
+import { APP_VERSION } from '@/version';
 
 export interface AdminContext { me: Me; refreshMe: () => void }
 
@@ -60,6 +61,7 @@ export default function AdminLayout() {
       {store && <WebNotifier key={store.id} />}
       <div className={`mx-auto ${wide ? 'max-w-none px-4 py-3' : 'max-w-6xl px-4 py-4'}`}>
         <Outlet context={{ me, refreshMe: reload } satisfies AdminContext} />
+        <p className="no-print mt-6 text-right text-[10px] text-slate-400">画面の版 {APP_VERSION}</p>
       </div>
     </div>
   );

@@ -32,8 +32,20 @@ ok('重なる時間の新規は×', n[585] === 'closed' && n[600] === 'closed' &
 ok('重ならない時間の新規は〇', n[630] === 'open');
 ok('通院中の方は影響なし', r[600] === 'open');
 ok('2 人目の新規は受けない', (await req('POST', '/api/public/S001/reserve', { kind: 'NEW', date, time: 600, name: '規則 二', phone: '09033334444' }))[0] === 409);
+ok('初期値は空欄（制限なし）', st.maxNewConcurrent === null, String(st.maxNewConcurrent));
+// 0＝新規は WEB で受けない（空いている時間は電話マーク、予約は断る）。通院中の方は影響なし
 await req('PUT', '/api/admin/store', { ...st, maxNewConcurrent: 0, hoursOverride: null });
-ok('制限なしに戻すと〇', (await slots('NEW'))[600] === 'open');
+n = await slots('NEW'); r = await slots('RETURN');
+ok('0 のとき新規は電話マーク', n[660] === 'phone' && n[600] === 'phone' && Object.values(n).every((x) => x !== 'open'), JSON.stringify([n[660], n[600]]));
+ok('0 のとき通院中の方は〇', r[660] === 'open');
+{
+  const [code, j] = await req('POST', '/api/public/S001/reserve', { kind: 'NEW', date, time: 660, name: '規則 三', phone: '09055556666' });
+  ok('0 のとき新規の WEB予約は断る（電話へ案内）', code === 409 && /お電話/.test(j?.error ?? ''), j?.error);
+}
+ok('0 が保存される', (await req('GET', '/api/admin/settings'))[1].store.maxNewConcurrent === 0);
+await req('PUT', '/api/admin/store', { ...st, maxNewConcurrent: null, hoursOverride: null });
+ok('空欄（制限なし）に戻すと〇', (await slots('NEW'))[600] === 'open');
+ok('空欄が保存される', (await req('GET', '/api/admin/settings'))[1].store.maxNewConcurrent === null);
 
 // ブロック（ベッド単位）。顧客に見せる枠は 3（ベッド1〜3）
 ok('ブロック追加（ベッド1〜3）', (await req('POST', '/api/admin/blocks', { date, start: 660, end: 705, beds: [1, 2, 3], label: '打合せ' }))[0] === 200);

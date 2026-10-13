@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `store` (
   `publishDaysAhead` INT NOT NULL DEFAULT 30,
   `hoursOverride` LONGTEXT NULL,
   `notifyPhone` VARCHAR(20) NULL,
-  `maxNewConcurrent` INT NOT NULL DEFAULT 0, -- 新規（初診・初自）を同じ時間に受ける上限。0＝制限なし
+  `maxNewConcurrent` INT NULL DEFAULT NULL, -- 新規（初診・初自）を同じ時間に WEB で受ける上限。NULL＝制限なし、0＝WEB では受けない（電話のみ）
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

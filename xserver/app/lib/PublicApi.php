@@ -101,7 +101,7 @@ final class PublicApi
             'nowMinutes' => self::nowMinutesFor($date, $now['date'], $now['minutes']),
             'webCutoffMinutes' => $setting['webCutoffMinutes'],
             'phoneCutoffMinutes' => $setting['phoneCutoffMinutes'],
-            'newLimit' => (int)($store['maxNewConcurrent'] ?? 0),
+            'newLimit' => ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'],
             'newCount' => $newCount,
             'countsAsNew' => $kind === 'NEW' || $kind === 'ACCIDENT',
         ];

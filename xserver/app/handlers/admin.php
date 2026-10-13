@@ -667,7 +667,7 @@ function adm_settings_get(): never
         'store' => [
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
             'maxTherapists' => $store['maxTherapists'], 'maxReception' => $store['maxReception'], 'publishDaysAhead' => $store['publishDaysAhead'],
-            'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => (int)($store['maxNewConcurrent'] ?? 0), 'hoursOverride' => ($ho = is_string($store['hoursOverride'] ?? null) ? json_decode($store['hoursOverride'], true) : ($store['hoursOverride'] ?? null)) ? json_encode($ho, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
+            'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'], 'hoursOverride' => ($ho = is_string($store['hoursOverride'] ?? null) ? json_decode($store['hoursOverride'], true) : ($store['hoursOverride'] ?? null)) ? json_encode($ho, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
         ],
         'globalHours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         'slotMinutes' => $setting['slotMinutes'],
@@ -691,7 +691,9 @@ function adm_store_put(): never
         $maxR = Http::int($b, 'maxReception', 0, 20);
         $pub = Http::int($b, 'publishDaysAhead', 0, 365);
         $notify = Http::str($b, 'notifyPhone', 20, false);
-        $maxNew = array_key_exists('maxNewConcurrent', $b) ? Http::int($b, 'maxNewConcurrent', 0, 20) : (int)($ctx['store']['maxNewConcurrent'] ?? 0);
+        // 空欄（null）＝制限なし、0＝WEB では受けない
+        $maxNew = !array_key_exists('maxNewConcurrent', $b) ? ($ctx['store']['maxNewConcurrent'] ?? null)
+            : (($b['maxNewConcurrent'] === null || $b['maxNewConcurrent'] === '') ? null : Http::int($b, 'maxNewConcurrent', 0, 20));
     } catch (HttpError) {
         Http::error('入力内容を確認してください', 400);
     }
