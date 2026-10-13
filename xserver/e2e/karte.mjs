@@ -41,7 +41,7 @@ cookie = '';
 await req('POST', '/api/admin/login', { code: 'HQ', password: process.env.HQ_PASSWORD ?? 'hqpass123' });
 const h = await req('GET', `/api/admin/hq/karte?from=${ym}-01&to=${ym}-30`);
 ok('本部の集計に出る（氏名は返さない）', h[0] === 200 && h[1].rows.length === 2 && !('name' in h[1].rows[0]) && h[1].rows.find((r) => r.kind === 'NEW')?.reached[0] === true);
-ok('店舗アカウントでは本部の集計は見られない', await (async () => { const c = cookie; cookie = ''; await req('POST', '/api/admin/login', { code: 'S001', password: 'password' }); const r = (await req('GET', `/api/admin/hq/karte?from=${ym}-01&to=${ym}-30`))[0]; cookie = c; return r === 403; })());
+ok('店舗アカウントは自店舗の集計だけ見られる', await (async () => { const c = cookie; cookie = ''; await req('POST', '/api/admin/login', { code: 'S001', password: 'password' }); const [st, j] = await req('GET', `/api/admin/hq/karte?from=${ym}-01&to=${ym}-30`); const put = (await req('PUT', '/api/admin/hq/karte/options', { category: 'trigger', labels: ['x'] }))[0]; cookie = c; return st === 200 && j.stores.length === 1 && j.stores[0].code === 'S001' && j.rows.every((r) => r.store === 'S001') && j.areas.length === 0 && put === 403; })());
 ok('エリアを保存', (await req('PUT', '/api/admin/hq/areas', { areas: [{ name: 'テストエリア', stores: ['S001', 'NOPE'] }] }))[0] === 200);
 const o = await req('GET', '/api/admin/hq/karte/options');
 ok('エリアは実在する店舗だけ', o[1].areas.length === 1 && o[1].areas[0].stores.join() === 'S001');

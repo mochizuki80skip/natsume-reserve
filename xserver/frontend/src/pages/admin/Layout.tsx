@@ -1,7 +1,7 @@
 // 管理画面の共通枠（ヘッダー・店舗切替・メニュー）。未ログインならログイン画面へ
 import { useEffect } from 'react';
-import { Link, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
-import { useFetch } from '@/lib/api';
+import { Link, Outlet, useLocation, useOutletContext } from 'react-router-dom';
+import { goLogin, useFetch } from '@/lib/api';
 import type { Me } from '@/lib/types';
 import WebNotifier from '@/components/WebNotifier';
 
@@ -12,14 +12,13 @@ export function useAdmin(): AdminContext {
 }
 
 export default function AdminLayout() {
-  const navigate = useNavigate();
   const location = useLocation();
   // 表の幅が広い画面（初回カルテ集計・本部の集計）は横幅いっぱいに使う
   const wide = location.pathname.startsWith('/admin/karte') || location.pathname.startsWith('/admin/hq/karte');
   const { data: me, error, loading, reload } = useFetch<Me>('/api/admin/me');
   useEffect(() => {
-    if (error && error.status === 401) navigate('/admin/login', { replace: true });
-  }, [error, navigate]);
+    if (error && error.status === 401) goLogin();
+  }, [error]);
   if (loading && !me) return <div className="p-4 text-sm text-slate-500">読み込み中…</div>;
   if (!me) return <div className="p-4 text-sm text-red-700">{error?.status === 401 ? 'ログインしてください' : error?.message ?? '読み込みに失敗しました'}</div>;
   const store = me.store;
@@ -44,6 +43,7 @@ export default function AdminLayout() {
             <Link to="/admin/shifts" className="hover:underline">シフト</Link>
             <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
             <Link to="/admin/karte" className="hover:underline">初回カルテ集計</Link>
+            {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
             <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
             <Link to="/admin/story" className="hover:underline">ストーリー画像</Link>
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>

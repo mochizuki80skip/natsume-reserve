@@ -1,4 +1,4 @@
-// 本部：新患・再来の集計 /admin/hq/karte（全体・エリア・店舗 × 日別・週別・月別、きっかけ別、継続率）
+// 新患・再来の集計。本部 /admin/hq/karte（全体・エリア・店舗 × 日別・週別・月別、きっかけ別、継続率）、店舗 /admin/karte/summary（自店舗だけ）
 import { useMemo, useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { KIND_COLOR, isNewKind, pct, retentionOf, VISIT_COUNT, type DetailFor, type KarteOptions } from '@/lib/karte';
@@ -33,7 +33,15 @@ type Bucket = { label: string; from: string; to: string; title: string };
 export default function KarteHqPage() {
   const { me } = useAdmin();
   const [tab, setTab] = useState<'sum' | 'settings'>('sum');
-  if (me.session.role !== 'hq') return <p>本部アカウントでログインしてください。</p>;
+  // 店舗アカウント：自店舗だけの集計（対象の切替・選択肢の設定はなし）
+  if (me.session.role !== 'hq') {
+    return (
+      <div>
+        <h1 className="mb-3 text-lg font-bold">新患・再来 集計（{me.store?.name ?? '店舗'}）</h1>
+        <Summary storeOnly />
+      </div>
+    );
+  }
   return (
     <div>
       <div className="mb-3 flex items-center gap-3">
@@ -48,9 +56,9 @@ export default function KarteHqPage() {
   );
 }
 
-function Summary() {
+function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
   const now = new Date(Date.now() + 9 * 3600e3);
-  const [target, setTarget] = useState<'all' | 'area' | 'store'>('all');
+  const [target, setTarget] = useState<'all' | 'area' | 'store'>(storeOnly ? 'store' : 'all');
   const [areaIdx, setAreaIdx] = useState(0);
   const [storeCode, setStoreCode] = useState('');
   const [unit, setUnit] = useState<'day' | 'week' | 'month'>('day');
@@ -120,13 +128,13 @@ function Summary() {
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
-        <span>対象</span>
-        <Seg value={target} onChange={(v) => setTarget(v as typeof target)} items={[['all', '全体'], ['area', 'エリア'], ['store', '店舗']]} />
+        {!storeOnly && <span>対象</span>}
+        {!storeOnly && <Seg value={target} onChange={(v) => setTarget(v as typeof target)} items={[['all', '全体'], ['area', 'エリア'], ['store', '店舗']]} />}
         {target === 'area' && (data.areas.length
           ? <select value={areaIdx} onChange={(e) => setAreaIdx(Number(e.target.value))} className="rounded border px-2 py-1">{data.areas.map((a, i) => <option key={i} value={i}>{a.name}（{a.stores.length}店舗）</option>)}</select>
           : <span className="text-xs text-slate-500">エリアは「選択肢・エリアの設定」で作れます</span>)}
-        {target === 'store' && <select value={storeCode || data.stores[0]?.code} onChange={(e) => setStoreCode(e.target.value)} className="rounded border px-2 py-1">{data.stores.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}</select>}
-        <span className="ml-3">単位</span>
+        {target === 'store' && !storeOnly && <select value={storeCode || data.stores[0]?.code} onChange={(e) => setStoreCode(e.target.value)} className="rounded border px-2 py-1">{data.stores.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}</select>}
+        <span className={storeOnly ? '' : 'ml-3'}>単位</span>
         <Seg value={unit} onChange={(v) => setUnit(v as typeof unit)} items={[['day', '日別'], ['week', '週別'], ['month', '月別']]} />
         {unit === 'month' ? (
           <><button type="button" onClick={() => setYear(year - 1)} className="rounded border px-2">‹</button><b>{year}年</b><button type="button" onClick={() => setYear(year + 1)} className="rounded border px-2">›</button></>
@@ -194,7 +202,7 @@ function Summary() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border bg-white p-3">
-        <h2 className="mb-1 text-sm font-bold">店舗別（{periodLabel}）</h2>
+        <h2 className="mb-1 text-sm font-bold">{storeOnly ? '件数と継続率' : '店舗別'}（{periodLabel}）</h2>
         <table className="w-full text-right text-xs tabular-nums">
           <thead>
             <tr className="bg-slate-50 text-[10.5px] text-slate-500">

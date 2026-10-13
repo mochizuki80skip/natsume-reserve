@@ -40,7 +40,7 @@ final class Auth
         if (!is_array($j) || !isset($j['accountId'], $j['role'], $j['exp'])) return null;
         if ($j['exp'] < time()) return null;
         if ($j['role'] !== 'store' && $j['role'] !== 'hq') return null;
-        return ['accountId' => (string)$j['accountId'], 'role' => $j['role'], 'storeId' => isset($j['storeId']) ? (string)$j['storeId'] : null, 'code' => (string)($j['code'] ?? '')];
+        return ['accountId' => (string)$j['accountId'], 'role' => $j['role'], 'storeId' => isset($j['storeId']) ? (string)$j['storeId'] : null, 'code' => (string)($j['code'] ?? ''), 'exp' => (int)$j['exp']];
     }
 
     public static function session(): ?array
@@ -75,6 +75,10 @@ final class Auth
         if (!$s) throw new HttpError(401, 'unauthorized');
         // 本部アカウントは毎回、停止されていないか確かめる（停止したら次の操作から使えなくする）
         if ($s['role'] === 'hq' && !self::account()) throw new HttpError(401, 'unauthorized');
+        // 使っている間はログインを延長する（最後の延長から 1 時間たったら有効期限を 12 時間先に延ばす）
+        if (($s['exp'] ?? 0) - time() < self::MAX_AGE - 3600 && !headers_sent()) {
+            self::setSessionCookie(['accountId' => $s['accountId'], 'role' => $s['role'], 'storeId' => $s['storeId'], 'code' => $s['code']]);
+        }
         return $s;
     }
 

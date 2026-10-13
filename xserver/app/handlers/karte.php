@@ -60,16 +60,22 @@ function karte_delete(): never
 }
 
 // ---------- 本部 ----------
-/** 集計用の行（氏名は返さない）。期間 from〜to、全店 */
+/** 集計用の行（氏名は返さない）。期間 from〜to。本部は全店、店舗アカウントは自店舗だけ */
 function hq_karte_get(): never
 {
-    Auth::requireHq();
+    $s = Auth::requireSession();
     $from = Http::query('from');
     $to = Http::query('to');
     if (!Time::isValidDate($from) || !Time::isValidDate($to) || $from > $to) Http::error('期間が正しくありません', 400);
-    $stores = Db::all('SELECT id, code, name, active FROM store ORDER BY code ASC');
+    if ($s['role'] === 'hq') {
+        $stores = Db::all('SELECT id, code, name, active FROM store ORDER BY code ASC');
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
+    } else {
+        $own = Auth::context()['store'];
+        $stores = [['id' => $own['id'], 'code' => $own['code'], 'name' => $own['name'], 'active' => $own['active']]];
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$own['id'], $from, $to]);
+    }
     $codeOf = array_column($stores, 'code', 'id');
-    $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
     $out = [];
     foreach ($rows as $r) {
         $v = json_decode((string)$r['visits'], true) ?: [];
@@ -79,7 +85,7 @@ function hq_karte_get(): never
             || ($r['kind'] !== 'REVISIT' && ($r['trig'] === '' || (array_key_exists($r['trig'], Karte::DETAIL_FOR) && $r['trigDetail'] === '')));
         $out[] = ['store' => $codeOf[$r['storeId']] ?? '', 'date' => $r['date'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'staff' => $r['staff'], 'reached' => $reached, 'missing' => $missing];
     }
-    $areas = array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
+    $areas = $s['role'] !== 'hq' ? [] : array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
     Http::json([
         'rows' => $out, 'areas' => $areas,
         'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'active' => (bool)$s['active']], $stores),
@@ -89,7 +95,8 @@ function hq_karte_get(): never
 
 function hq_karte_options_get(): never
 {
-    Auth::requireHq();
+    // 選択肢は店舗の集計画面でも使う（店舗にはエリア・店舗一覧は返さない）
+    if (Auth::requireSession()['role'] !== 'hq') Http::json(['options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'areas' => [], 'stores' => []]);
     $areas = array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
     Http::json(['options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'areas' => $areas, 'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name']], Db::all('SELECT code, name FROM store ORDER BY code ASC'))]);
 }

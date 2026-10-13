@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { rememberLoginPath } from '@/lib/api';
 
 export default function LoginForm({ fixedCode }: { fixedCode?: string } = {}) {
   const [code, setCode] = useState(fixedCode ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const expired = new URLSearchParams(window.location.search).get('expired') === '1';
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -12,11 +14,15 @@ export default function LoginForm({ fixedCode }: { fixedCode?: string } = {}) {
     const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, password }) });
     setBusy(false);
     if (!r.ok) { setError((await r.json()).error ?? 'ログインに失敗しました'); return; }
-    window.location.href = '/admin'; // 全体を読み直してログイン状態を反映
+    rememberLoginPath(fixedCode ? `/admin/login/${fixedCode}` : '/admin/login');
+    // ログインが切れて戻ってきたときは、元の画面へ（全体を読み直してログイン状態を反映）
+    const next = new URLSearchParams(window.location.search).get('next') ?? '';
+    window.location.href = next.startsWith('/admin/') && !next.startsWith('/admin/login') ? next : '/admin';
   }
 
   return (
     <form onSubmit={submit} className="rounded-lg border bg-white p-5">
+      {!error && expired && <p className="mb-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">ログインの有効期限が切れたか、別の画面でログアウトされました。もう一度ログインしてください。ログイン後は元の画面に戻ります。</p>}
       {error && <p className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {fixedCode ? (
         <p className="mb-3 text-sm text-slate-600">店舗コード：<span className="font-mono font-bold">{fixedCode}</span></p>

@@ -41,6 +41,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="jibai" element={<JibaiPage />} />
           <Route path="story" element={<StoryPage />} />
           <Route path="karte" element={<KartePage />} />
+          <Route path="karte/summary" element={<KarteHqPage />} />
           <Route path="hq/karte" element={<KarteHqPage />} />
           <Route path="hq/accounts" element={<AccountsPage />} />
           <Route path="hq" element={<HqPage />} />

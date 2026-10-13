@@ -7,8 +7,16 @@ const br = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || 
 const p = await br.newPage({ viewport: { width: 1300, height: 1000 } });
 const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
-const D = '2026-10-27';
 await p.goto(B + '/admin/login/S001'); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
+// 2 週間ほど先で、10:00・11:00 のベッド1 が空いている営業日（ほかの確認と重ならない日）
+const D = await p.evaluate(async () => {
+  for (let i = 14; i < 29; i++) {
+    const d = new Date(Date.now() + 9 * 3600e3 + i * 86400e3).toISOString().slice(0, 10);
+    const j = await (await fetch(`/api/admin/day?date=${d}`)).json();
+    if (j.data.times.includes(600) && j.data.times.includes(660) && !j.data.cells.some((c) => c.time >= 600 && c.time <= 690)) return d;
+  }
+  return '';
+});
 await p.goto(`${B}/admin/day/${D}`); await p.waitForSelector('#grid');
 const cell = (hm, bed) => p.locator('#grid tbody tr').filter({ has: p.locator('td', { hasText: new RegExp(`^(🔒)?${hm}$`) }) }).locator('td.grid-cell').nth(bed - 1).locator('input');
 const web = async (time, name, phone) => (await fetch(`${B}/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'NEW', date: D, time, name, phone }) })).status;
