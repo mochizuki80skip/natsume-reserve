@@ -2,6 +2,7 @@
 // 例：cd xserver && php -S 127.0.0.1:3003 -t public dev-router.php &  BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... node e2e/smoke.mjs
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(new URL('../frontend/package.json', import.meta.url))('playwright'); // frontend の devDependencies を使う
+import { skipWhatsNew } from './seen.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3003';
 const results = [];
@@ -27,6 +28,7 @@ const [D2, D3, D4] = await pickBusinessDays(3);
 console.log('test dates:', D2, D3, D4);
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+skipWhatsNew(browser);
 const ctx = await browser.newContext({ viewport: { width: 420, height: 860 } });
 const page = await ctx.newPage();
 

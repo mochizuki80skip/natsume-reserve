@@ -74,7 +74,7 @@ export default function JibaiHqPage() {
           <tbody>
             {rows.map((r) => (
               <tr key={r.code} className="border-t">
-                <td className="whitespace-nowrap px-2 py-1"><span className="mr-1 font-mono text-xs text-slate-500">{r.code}</span>{r.name}</td>
+                <td className="whitespace-nowrap px-2 py-1">{r.name}</td>
                 <td className="whitespace-nowrap px-2 py-1">{statusBadge(r)}{r.submittedAt && <span className="ml-1 text-xs text-slate-500">{formatDateTime(r.submittedAt)}</span>}{r.lateCount > 0 && <span className="ml-1 rounded bg-amber-100 px-1.5 text-xs text-amber-800" title="他の月の画面で登録された、この月分の明細（この月の合計に含む）">他の月の画面で登録 {r.lateCount}件 {yen(r.lateTotal)}</span>}{r.movedOut > 0 && <span className="ml-1 rounded bg-slate-100 px-1.5 text-xs text-slate-600" title="この月の画面で登録したが、請求月が別の月の明細（その月の合計に含む）">別の月分 {r.movedOut}件</span>}</td>
                 <td className={num}>{r.count}</td>
                 <td className={`${num} font-bold`}>{r.count > 0 ? r.total.toLocaleString('ja-JP') : ''}</td>

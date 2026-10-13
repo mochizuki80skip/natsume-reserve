@@ -2,8 +2,10 @@
 // 例：BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... CHROMIUM_PATH=... node e2e/session.mjs
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(new URL('../frontend/package.json', import.meta.url))('playwright');
+import { skipWhatsNew } from './seen.mjs';
 const B = process.env.BASE_URL ?? 'http://127.0.0.1:3003';
 const br = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+skipWhatsNew(br);
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 const D = '2027-02-03'; // ほかの確認と重ならない月
 async function storeLogin(ctx, code) {
@@ -53,7 +55,7 @@ await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]
 const [hs, hj] = await api(hp, 'GET', `/api/admin/hq/karte?from=${D.slice(0, 7)}-01&to=${D.slice(0, 7)}-28`);
 ok('本部は全店の行', hs === 200 && hj.rows.length === 2 && hj.stores.length >= 2, `rows=${hj?.rows?.length}`);
 await hp.goto(`${B}/admin/hq/karte`); await hp.waitForSelector('text=選択肢・エリアの設定');
-ok('本部の画面は今までどおり', (await hp.textContent('body')).includes('対象'));
+ok('本部の画面は今までどおり', !!(await hp.waitForSelector('text=全体', { timeout: 10000 }).catch(() => null)));
 // ログインの延長：古いログイン（発行から 1 時間以上）は使うと延長される
 const [, me] = await api(hp, 'GET', '/api/admin/me');
 ok('本部のログインは有効', me?.session?.role === 'hq');

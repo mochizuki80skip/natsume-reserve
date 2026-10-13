@@ -22,6 +22,7 @@ import StoryPage from './pages/admin/StoryPage';
 import KartePage from './pages/admin/KartePage';
 import KarteHqPage from './pages/admin/KarteHqPage';
 import AccountsPage from './pages/admin/AccountsPage';
+import UpdatesPage from './pages/admin/UpdatesPage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -46,6 +47,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="karte/summary" element={<KarteHqPage />} />
           <Route path="hq/karte" element={<KarteHqPage />} />
           <Route path="hq/accounts" element={<AccountsPage />} />
+          <Route path="updates" element={<UpdatesPage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />

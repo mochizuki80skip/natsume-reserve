@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { goLogin, useFetch } from '@/lib/api';
 import type { Me } from '@/lib/types';
 import WebNotifier from '@/components/WebNotifier';
+import { UpdateBanner, WhatsNew } from '@/components/UpdateNotice';
 import { APP_VERSION } from '@/version';
 
 export interface AdminContext { me: Me; refreshMe: () => void }
@@ -26,6 +27,8 @@ export default function AdminLayout() {
   const today = me.today;
   return (
     <div className="min-h-screen">
+      <UpdateBanner role={me.session.role} />
+      <WhatsNew role={me.session.role} />
       <header className="no-print border-b bg-white">
         <div className={`mx-auto flex ${wide ? 'max-w-none' : 'max-w-6xl'} flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2`}>
           <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
@@ -53,8 +56,9 @@ export default function AdminLayout() {
             {me.session.role === 'hq' && <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq" className="hover:underline">本部</Link>}
             {me.session.role === 'hq' && <Link to="/admin/hq/accounts" className="hover:underline">アカウント</Link>}
+            <Link to="/admin/updates" className="text-slate-500 hover:underline">更新のお知らせ</Link>
             {store && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer" className="text-slate-500 hover:underline">顧客ページ↗</a>}
-            <form action="/api/admin/logout" method="post"><button className="text-slate-500 hover:underline">ログアウト（{me.session.name || me.session.code}）</button></form>
+            <form action="/api/admin/logout" method="post"><button className="text-slate-500 hover:underline">ログアウト{me.session.name ? `（${me.session.name}）` : ''}</button></form>
           </nav>
         </div>
       </header>

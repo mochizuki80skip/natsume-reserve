@@ -220,7 +220,7 @@ export default function JibaiPage() {
         </select>
         <button type="button" onClick={() => go(addMonths(ym, 1))} className="rounded border bg-white px-3 py-1">翌月 ›</button>
         <button type="button" onClick={() => go(data.currentYm)} className="rounded border bg-white px-3 py-1">今月</button>
-        <span className="ml-auto text-slate-600">{data.store.name}（{data.store.code}）</span>
+        <span className="ml-auto text-slate-600">{data.store.name}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded border bg-white px-4 py-3">

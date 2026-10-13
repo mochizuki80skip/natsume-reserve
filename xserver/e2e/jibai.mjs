@@ -2,6 +2,7 @@
 // 例：cd xserver && php -S 127.0.0.1:3003 -t public dev-router.php &  BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... SHOT=./sample.png node e2e/jibai.mjs
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(new URL('../frontend/package.json', import.meta.url))('playwright');
+import { skipWhatsNew } from './seen.mjs';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:3003';
 const HQ_PASSWORD = process.env.HQ_PASSWORD ?? 'hqpassword';
@@ -10,6 +11,7 @@ const EXPECT = { patientNo: process.env.EXPECT_NO ?? '003862a', amount: process.
 const ok = (name, cond, extra = '') => { console.log(cond ? 'PASS' : 'FAIL', name, extra); if (!cond) process.exitCode = 1; };
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+skipWhatsNew(browser);
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const page = await ctx.newPage();
 page.on('pageerror', (e) => console.log('pageerror:', e.message));

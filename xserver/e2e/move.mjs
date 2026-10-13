@@ -2,8 +2,10 @@
 // 例：BASE_URL=http://127.0.0.1:3003 CHROMIUM_PATH=... node e2e/move.mjs
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(new URL('../frontend/package.json', import.meta.url))('playwright');
+import { skipWhatsNew } from './seen.mjs';
 const B = process.env.BASE_URL ?? 'http://127.0.0.1:3003', O = new URL('./', import.meta.url).pathname + 'out-';
 const br = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+skipWhatsNew(br);
 const p = await br.newPage({ viewport: { width: 1300, height: 1000 } });
 const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('dialog', (d) => { errs.push('dialog:' + d.message()); d.dismiss(); });
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
