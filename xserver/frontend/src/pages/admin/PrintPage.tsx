@@ -85,6 +85,8 @@ export default function PrintPage() {
       </div>
       {d.times.length === 0 ? <p>休診日</p> : (
         <table className="w-full table-fixed border-collapse">
+          {/* 列幅は 1 行目で決まるので colgroup で指定（時間の列は細く、残りをベッドで等分） */}
+          <colgroup><col style={{ width: '10mm' }} />{cols.map((b) => <col key={b} />)}</colgroup>
           <thead>
             {(() => {
               const lo = Math.min(d.capacity.am, d.capacity.pm), hi = Math.max(d.capacity.am, d.capacity.pm), n = cols.length;
