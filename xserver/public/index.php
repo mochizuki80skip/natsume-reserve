@@ -53,6 +53,23 @@ if (!is_file($html)) {
     echo '<!doctype html><meta charset="utf-8"><p style="font-family:sans-serif">画面ファイル（index.html）がありません。frontend をビルドして public/ に配置してください。</p>';
     exit;
 }
+// index.html が指している画面ファイル（assets の JS・CSS）が無いと真っ白になるので、足りないときは案内を出す
+$page = (string)file_get_contents($html);
+preg_match_all('#/assets/([A-Za-z0-9_.-]+\.(?:js|css))#', $page, $m);
+$missing = array_values(array_filter(array_unique($m[1]), fn($f) => !is_file(__DIR__ . '/assets/' . $f)));
+if ($missing) {
+    http_response_code(503);
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-cache');
+    $list = implode('', array_map(fn($f) => '<li><code>assets/' . htmlspecialchars($f) . '</code></li>', $missing));
+    echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>画面ファイルが足りません</title>'
+        . '<div style="font-family:sans-serif;max-width:640px;margin:40px auto;padding:0 16px;line-height:1.7">'
+        . '<h1 style="font-size:20px">画面ファイルが足りません</h1>'
+        . '<p>index.html は更新されていますが、次のファイルがサーバーの <b>assets</b> フォルダにありません。更新ファイルの zip の中の assets フォルダから、このファイルを入れてください。</p>'
+        . '<ul>' . $list . '</ul>'
+        . '<p style="color:#666;font-size:13px">入れたあと、Ctrl + F5 で読み込み直してください。</p></div>';
+    exit;
+}
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-cache');
-readfile($html);
+echo $page;
