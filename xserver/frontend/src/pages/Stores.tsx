@@ -5,9 +5,9 @@ const SKY = '#1eb4ec';
 export default function Stores() {
   return (
     <main className="mx-auto min-h-screen max-w-md bg-white">
-      <div className="flex justify-center px-4 pb-4 pt-6">
-        {/* ロゴは元データ（画像）をそのまま使う。なつめ接骨院グループのロゴができたら差し替え */}
-        <img src="/brand/hachimaru-skip.png" alt="HACHIMARU SKIP　80歳になっても、スキップしよう！" width={889} height={706} className="h-auto w-[200px]" />
+      <div className="flex justify-center px-4 pb-4 pt-5">
+        {/* ロゴは元データ（横長の画像）をそのまま使う。なつめ接骨院グループのロゴができたら差し替え */}
+        <img src="/brand/hachimaru-skip-yoko.png" alt="HACHIMARU SKIP　80歳になっても、スキップしよう！" width={960} height={264} className="h-auto w-full max-w-[300px]" />
       </div>
       <div className="px-4 py-4 text-white" style={{ background: SKY }}>
         <h1 className="text-xl font-bold">店舗のご案内</h1>
