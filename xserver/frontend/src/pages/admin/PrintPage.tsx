@@ -6,6 +6,7 @@ import { formatDateJa, formatDateShort, isValidDate, minToHm } from '@/lib/time'
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { categorizeCell, isContinuationText } from '@/lib/attendance';
+import { menuShort } from '@/lib/menus';
 import type { DayResponse } from '@/lib/types';
 import PrintButton from '@/components/PrintButton';
 
@@ -88,7 +89,7 @@ export default function PrintPage() {
                   const v = visitedOf(t, b);
                   return (
                     <td key={b} className={`overflow-hidden whitespace-nowrap border border-black px-0.5 ${b > (isAm(d.sessions, t) ? d.capacity.am : d.capacity.pm) ? 'bg-slate-100' : ''}`}>
-                      {v && c && !isContinuationText(c.text) ? <span className="mr-0.5 font-bold">✓</span> : null}{c?.text ?? ''}
+                      {v && c && !isContinuationText(c.text) ? <span className="mr-0.5 font-bold">✓</span> : null}{c?.text ?? ''}{c?.menus?.length ? <span className="ml-0.5 text-[8px]">［{c.menus.map(menuShort).join('')}］</span> : null}
                     </td>
                   );
                 })}

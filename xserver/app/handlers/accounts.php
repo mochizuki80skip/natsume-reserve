@@ -87,10 +87,10 @@ function hq_audit_get(): never
 const AUDIT_LABEL = [
     'adm_cells_put' => '予約表の入力', 'adm_visit_put' => '来院チェック', 'adm_cancel_post' => 'キャンセル名簿へ移動', 'adm_cancel_delete' => 'キャンセルを戻す',
     'adm_days_put' => '日の設定（公開・休診・枠数）', 'adm_shifts_put' => 'シフト', 'adm_help_in_put' => 'ヘルプ（他店から）',
-    'adm_block_post' => 'ブロックの追加', 'adm_move_post' => '予約の移動', 'adm_block_delete' => 'ブロックの解除', 'adm_staff_post' => 'スタッフ追加', 'adm_staff_put' => 'スタッフ変更', 'adm_staff_delete' => 'スタッフ削除',
+    'adm_block_post' => 'ブロックの追加', 'adm_move_post' => '予約の移動', 'adm_cell_menus_put' => '予約表のメニュー', 'adm_block_delete' => 'ブロックの解除', 'adm_staff_post' => 'スタッフ追加', 'adm_staff_put' => 'スタッフ変更', 'adm_staff_delete' => 'スタッフ削除',
     'adm_store_put' => '店舗設定', 'adm_store_patch' => '自分のパスワード変更',
     'karte_post' => 'カルテ集計 行の追加', 'karte_patch' => 'カルテ集計 入力', 'karte_delete' => 'カルテ集計 行の削除',
-    'hq_settings_put' => '全店共通設定', 'hq_stores_post' => '店舗の追加', 'hq_karte_options_put' => 'カルテ集計の選択肢', 'hq_areas_put' => 'エリア',
+    'hq_settings_put' => '全店共通設定', 'hq_stores_post' => '店舗の追加', 'hq_karte_options_put' => '選択肢（カルテ・メニュー）', 'hq_areas_put' => 'エリア',
     'hq_accounts_post' => '本部アカウントの発行', 'hq_accounts_put' => '本部アカウントの変更',
     'hq_stores_put' => '店舗の変更・停止・削除', 'hq_jibai_settings_put' => '自賠の設定', 'adm_cancel_patch' => 'キャンセル名簿のメモ', 'adm_reservations_delete' => 'WEB予約の削除',
     'jibai_submit' => '自賠請求の提出', 'jibai_claims_put' => '自賠請求の変更', 'jibai_claims_delete' => '自賠請求の削除', 'jibai_verify' => '自賠請求の確認',

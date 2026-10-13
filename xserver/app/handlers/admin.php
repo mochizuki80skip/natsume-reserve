@@ -110,6 +110,28 @@ function adm_cells_put(): never
     Http::json(['ok' => true, 'conflicts' => $conflicts]);
 }
 
+/** 予約表のセルのメニュー（{ date, time, bed, menus: ["矯正", ...] }）。氏名の入ったセルだけ */
+function adm_cell_menus_put(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    $time = Http::int($b, 'time', 0, 1440);
+    $bed = Http::int($b, 'bed', 1, 20);
+    $list = $b['menus'] ?? null;
+    if (!is_array($list) || count($list) > 10) Http::error('bad request', 400);
+    $menus = [];
+    foreach ($list as $m) {
+        $m = mb_substr(trim((string)$m), 0, 20);
+        if ($m !== '' && !in_array($m, $menus, true)) $menus[] = $m;
+    }
+    $cell = Db::one('SELECT id, text FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed]);
+    if (!$cell || trim((string)$cell['text']) === '') Http::error('先に氏名を入力してください', 404);
+    Db::exec('UPDATE cell SET menus = ? WHERE id = ?', [$menus ? json_encode($menus, JSON_UNESCAPED_UNICODE) : '', $cell['id']]);
+    Http::json(['ok' => true, 'menus' => $menus]);
+}
+
 /** 新しく入った WEB予約（管理画面のお知らせ用）。since より後に受け付けた分を返す。since が無ければ今の時刻だけ返す */
 function adm_web_new_get(): never
 {
@@ -261,7 +283,7 @@ function adm_move_post(): never
             if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
             // 移動先に空文字のセルが残っていれば消してから入れる
             Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($targetTimes) . ')', array_merge([$sid, $toDate, $toBed], $targetTimes));
-            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId']]);
+            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? '')]);
             if ($cont) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime + $step, $toBed, $cont['text'], $cont['reservationId']]);
             if ($cell['reservationId']) Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]);
             return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need];

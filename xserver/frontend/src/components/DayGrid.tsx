@@ -11,6 +11,7 @@ import { formatJpPhone } from '@/lib/format';
 import NextDateInput from './NextDateInput';
 import BlockPanel, { blockBedsText } from './BlockPanel';
 import MoveDialog from './MoveDialog';
+import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
@@ -22,6 +23,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const navigate = useNavigate();
   const [cells, setCells] = useState<Map<string, string>>(() => new Map(data.cells.map((c) => [key(c.time, c.bed), c.text])));
   const [visited, setVisited] = useState<Set<string>>(() => new Set(data.cells.filter((c) => c.visited).map((c) => key(c.time, c.bed))));
+  // 予約ごとのメニュー（矯正・2回目 など）と、メニューを付ける対象として選んでいるセル
+  const [menus, setMenus] = useState<Map<string, string[]>>(() => new Map(data.cells.filter((c) => c.menus?.length).map((c) => [key(c.time, c.bed), c.menus!])));
+  const [sel, setSel] = useState<{ time: number; bed: number } | null>(null);
+  const menuOptions = data.menuOptions ?? [];
   const webInfo = useMemo(() => new Map(data.cells.filter((c) => c.web).map((c) => [key(c.time, c.bed), c.web!])), [data.cells]);
   const [day, setDay] = useState(data.day);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -86,6 +91,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
   function setCell(time: number, bed: number, text: string) {
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), text); return n; });
+    if (!text.trim()) setMenus((m) => { if (!m.has(key(time, bed))) return m; const n = new Map(m); n.delete(key(time, bed)); return n; });
     dirty.current.set(key(time, bed), text);
     touchedAt.current.set(key(time, bed), Date.now());
     schedule();
@@ -105,6 +111,16 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         const v = fresh.get(k) ?? '';
         n.set(k, v);
         serverText.current.set(k, v);
+      }
+      return n;
+    });
+    const freshMenus = new Map(data.cells.filter((c) => c.menus?.length).map((c) => [key(c.time, c.bed), c.menus!]));
+    setMenus((m) => {
+      const n = new Map(m);
+      for (const k of new Set([...m.keys(), ...freshMenus.keys()])) {
+        if (recent(k)) continue;
+        const v = freshMenus.get(k);
+        if (v) n.set(k, v); else n.delete(k);
       }
       return n;
     });
@@ -177,6 +193,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     setCancelDlg(null);
     touchedAt.current.set(key(time, bed), Date.now()); touchedAt.current.set(key(time + data.slotMinutes, bed), Date.now());
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); return n; });
+    setMenus((m) => { const n = new Map(m); n.delete(key(time, bed)); return n; });
     onRefresh();
   }
   // 予約の移動（別の日・時間。ベッドは自動）
@@ -203,9 +220,30 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       return n;
     });
     setVisited((v) => { const n = new Set(v); n.delete(key(time, bed)); return n; });
+    setMenus((m) => {
+      const n = new Map(m);
+      const list = n.get(key(time, bed));
+      n.delete(key(time, bed));
+      if (list && to.date === data.date) n.set(key(to.time, to.bed), list);
+      return n;
+    });
     setMoveMsg({ text: `${moveDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に移動しました`, date: to.date });
     setMoveDlg(null);
     onRefresh();
+  }
+  // メニューの付け外し（先に氏名を保存してから送る）
+  async function toggleMenuAt(time: number, bed: number, label: string) {
+    const k = key(time, bed);
+    const before = menus.get(k) ?? [];
+    const next = toggleMenu(before, label, menuOptions);
+    touchedAt.current.set(k, Date.now());
+    setMenus((m) => { const n = new Map(m); if (next.length) n.set(k, next); else n.delete(k); return n; });
+    await flush();
+    const r = await fetch('/api/admin/cell-menus', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, menus: next }) });
+    if (!r.ok) {
+      setMenus((m) => { const n = new Map(m); if (before.length) n.set(k, before); else n.delete(k); return n; });
+      alert((await r.json().catch(() => ({}))).error ?? 'メニューを保存できませんでした');
+    }
   }
   // 下のセルに「上記初診対応」「上記再来対応」を入れる（手入力の初診・再来用。打ち込まなくてよい）
   function fillBelow(time: number, bed: number, text: string) {
@@ -272,6 +310,19 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     return c;
   }, [cells, visited, data.sessions]);
 
+  // メニュー別の人数（午前・午後）
+  const menuCounts = useMemo(() => {
+    const out = new Map<string, { am: number; pm: number }>();
+    for (const [k, list] of menus) {
+      if (!isPatientText(cells.get(k))) continue;
+      const a = isAm(data.sessions, Number(k.split(':')[0]));
+      for (const m of list) { const c = out.get(m) ?? { am: 0, pm: 0 }; if (a) c.am++; else c.pm++; out.set(m, c); }
+    }
+    for (const m of menuOptions) if (!out.has(m)) out.set(m, { am: 0, pm: 0 });
+    const order = (m: string) => { const i = menuOptions.indexOf(m); return i < 0 ? menuOptions.length : i; };
+    return [...out.entries()].sort((a, b) => order(a[0]) - order(b[0]));
+  }, [menus, cells, data.sessions, menuOptions]);
+
   /** セルの色。2枠目は1枠目（同じベッドの1つ前の枠）の状態に合わせる */
   function stateOf(t: number, b: number): CellState {
     const k = key(t, b);
@@ -319,6 +370,23 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             <tr><td className="pr-2 text-slate-500">自賠</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jPm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm + counts.jPm}</td></tr>
           </tbody>
         </table>
+        {menuOptions.length > 0 && (
+          // メニュー別の人数：行は午前・午後・合計で固定（メニューが増えても高さは変わらない）
+          <div className="max-w-full overflow-x-auto">
+            <table className="text-sm" aria-label="メニュー別の人数">
+              <thead><tr className="text-[11px] text-slate-500"><th></th>{menuCounts.map(([m]) => (
+                <th key={m} className="whitespace-nowrap px-1.5 text-right font-normal" title={m}><i className="mr-0.5 inline-block min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</i>{m.length > 4 ? `${m.slice(0, 4)}…` : m}</th>
+              ))}</tr></thead>
+              <tbody>
+                {(['am', 'pm', 'all'] as const).map((w) => (
+                  <tr key={w}><td className="pr-2 text-slate-500">{w === 'am' ? '午前' : w === 'pm' ? '午後' : '合計'}</td>
+                    {menuCounts.map(([m, c]) => { const v = w === 'am' ? c.am : w === 'pm' ? c.pm : c.am + c.pm; return <td key={m} className={`px-1.5 text-right tabular-nums ${v ? 'font-bold' : 'text-slate-300'}`}>{v}</td>; })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="no-print flex flex-wrap items-center gap-3 text-sm">
           <span className={`rounded px-2 py-0.5 ${published && !day.closed ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>
             顧客サイト：{day.closed ? '臨時休診' : published ? '公開中' : '非公開'}
@@ -379,6 +447,33 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       {rows.length === 0 ? (
         <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日・臨時休診）のため予約表はありません。営業する場合は「臨時休診」を外すか、店舗設定の営業時間を確認してください。</p>
       ) : (
+        <>
+        {menuOptions.length > 0 && (() => {
+          const sk = sel ? key(sel.time, sel.bed) : '';
+          const sText = sel ? cells.get(sk) ?? '' : '';
+          const ok = !!sel && sText.trim() !== '' && !isContinuationText(sText);
+          const cur = ok ? menus.get(sk) ?? [] : [];
+          return (
+            <div className="no-print sticky top-0 z-10 mb-1 flex min-h-[38px] flex-wrap items-center gap-1.5 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
+              <span className="mr-1 text-xs font-bold text-slate-600">メニュー</span>
+              {ok ? (
+                <>
+                  <span className="mr-1 max-w-[16rem] truncate text-xs text-slate-600">{minToHm(sel!.time)} ベッド{sel!.bed}　<b className="text-slate-800">{sText}</b></span>
+                  {menuOptions.map((m) => {
+                    const on = cur.includes(m);
+                    return (
+                      <button key={m} type="button" aria-pressed={on} onMouseDown={(e) => e.preventDefault()} onClick={() => toggleMenuAt(sel!.time, sel!.bed, m)}
+                        className={`rounded border-2 px-2 py-0.5 text-xs font-bold ${on ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'}`}
+                        style={on ? { background: menuColor(m, menuOptions) } : undefined}>{m}</button>
+                    );
+                  })}
+                </>
+              ) : (
+                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここでメニュー（{menuOptions.join('・')}）を付けられます</span>
+              )}
+            </div>
+          );
+        })()}
         <div className="overflow-x-auto rounded border bg-white">
           <table id="grid" className="w-full border-collapse text-sm">
             <thead>
@@ -420,13 +515,20 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                       const bBlock = blk.find((x) => x.beds.includes(b));
                       const bg = STATE_BG[st] || (web ? 'bg-sky-50' : bBlock && !text ? 'bg-slate-300' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '');
                       const hasName = text.trim() !== '' && !cont;
+                      const cellMenus = hasName ? menus.get(k) ?? [] : [];
+                      const isSel = !!sel && sel.time === t && sel.bed === b && hasName && menuOptions.length > 0;
                       return (
-                        <td key={b} className={`grid-cell border p-0 ${bg}`}
+                        <td key={b} className={`grid-cell border p-0 ${bg} ${isSel ? 'outline outline-2 -outline-offset-2 outline-brand' : ''}`}
                           title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
                           <div className="relative flex items-center">
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={() => toggleVisit(t, b)} aria-label={visited.has(k) ? '来院チェックを外す' : '来院チェック'}
                                 className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
+                            )}
+                            {cellMenus.length > 0 && (
+                              <span className="ml-0.5 flex flex-none gap-px" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
+                                {cellMenus.map((m) => <i key={m} className="min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</i>)}
+                              </span>
                             )}
                             <input
                               ref={(el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k); }}
@@ -435,7 +537,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                               onKeyDown={(e) => onKeyDown(e, r, c)}
                               onPaste={(e) => onPaste(e, r, c)}
                               onBlur={flush}
-                              onFocus={(e) => { e.currentTarget.select(); justFocused.current = true; }}
+                              onFocus={(e) => { e.currentTarget.select(); justFocused.current = true; setSel({ time: t, bed: b }); }}
                               onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}
                               placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
                               className={`${hasName ? (st === 'noshow' || st === 'pending' ? 'pr-16' : 'pr-4') : ''} ${bBlock ? 'placeholder:text-slate-600' : ''}`}
@@ -476,6 +578,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <h2 className="mt-4 flex items-center gap-2 text-base font-bold">キャンセル名簿 <span className="text-xs font-normal text-slate-500">この日にキャンセルになった予約。セルからは外れているので枠は空いています。</span></h2>

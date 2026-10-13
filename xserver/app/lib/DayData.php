@@ -12,7 +12,7 @@ final class DayData
         $members = array_values(array_filter($allMembers, fn($m) => Settings::inPeriod($m, $date))); // 入社前・異動後の人は出さない
         $helpIn = Db::one('SELECT status, name FROM help_in WHERE storeId = ? AND date = ?', [$sid, $date]);
         $shifts = Db::all('SELECT staffId, status FROM shift WHERE storeId = ? AND date = ?', [$sid, $date]);
-        $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo
+        $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, c.menus, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo
             FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date = ? AND c.bed > 0', [$sid, $date]);
         $blocks = Db::all('SELECT id, startTime, endTime, beds, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? ORDER BY time ASC, createdAt ASC', [$sid, $date]);
@@ -38,14 +38,22 @@ final class DayData
             'receptionNames' => array_map(fn($m) => $m['name'], $reception),
             'shiftLabels' => array_map(fn($m) => ['name' => $m['name'], 'role' => $m['role'], 'status' => $statusByStaff[$m['id']] ?? 'WORK'], $members),
             'cells' => array_map(fn($c) => [
-                'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'visited' => (bool)$c['visited'],
+                'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'visited' => (bool)$c['visited'], 'menus' => self::menusOf((string)($c['menus'] ?? '')),
                 'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo']] : null,
             ], $cells),
+            'menuOptions' => Karte::options()['menu'] ?? [],
             'blocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'beds' => PublicApi::blockBeds((string)$b['beds'], Settings::allBeds($store)), 'label' => $b['label']], $blocks),
             'cancels' => array_map(fn($c) => [
                 'id' => $c['id'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'name' => $c['name'], 'contText' => $c['contText'], 'kind' => $c['kind'],
                 'source' => $c['source'], 'byCode' => $c['byCode'], 'memo' => $c['memo'], 'nextDate' => $c['nextDate'], 'createdAt' => Time::formatDateTimeShort($c['createdAt']),
             ], $cancels),
         ];
+    }
+
+    /** セルのメニュー（JSON の配列）→ 文字の配列 */
+    public static function menusOf(string $json): array
+    {
+        $a = $json === '' ? [] : json_decode($json, true);
+        return is_array($a) ? array_values(array_filter($a, 'is_string')) : [];
     }
 }

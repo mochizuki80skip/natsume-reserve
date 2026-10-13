@@ -65,6 +65,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
   const [ym, setYm] = useState(iso(now).slice(0, 7));
   const [year, setYear] = useState(now.getUTCFullYear());
   const [openTrig, setOpenTrig] = useState<string | null>(null);
+  const [retKind, setRetKind] = useState<'new' | 're' | 'all'>('new');
 
   const range = unit === 'month' ? { from: `${year - 1}-01-01`, to: `${year}-12-31` } : { from: `${shiftYm(ym, -1)}-01`, to: daysOf(ym).slice(-1)[0] };
   const { data, error } = useFetch<DataResp>(`/api/admin/hq/karte?from=${range.from}&to=${range.to}`);
@@ -113,7 +114,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
     ? [...data.areas.map((a) => ({ name: a.name, codes: a.stores })), { name: 'エリア未設定', codes: storesInTarget.map((s) => s.code).filter((c) => !data.areas.some((a) => a.stores.includes(c))) }].filter((g) => g.codes.length)
     : [{ name: target === 'area' ? view.area?.name ?? '' : storeName.get(storeCode || data.stores[0]?.code) ?? '', codes: storesInTarget.map((s) => s.code) }];
   const StoreLine = ({ label, list, bold, sub }: { label: string; list: HqRow[]; bold?: boolean; sub?: boolean }) => {
-    const ret = retentionOf(list.filter((r) => isNewKind(r.kind)));
+    const ret = retentionOf(list.filter((r) => (retKind === 'new' ? isNewKind(r.kind) : retKind === 're' ? r.kind === 'REVISIT' : true)));
     return (
       <tr className={`${bold ? 'bg-slate-50 font-bold' : ''} border-b border-slate-100`}>
         <td className={`whitespace-nowrap px-2 py-1 text-left ${sub ? 'pl-5' : ''}`}>{label}</td>
@@ -202,7 +203,11 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
       </div>
 
       <div className="overflow-x-auto rounded-lg border bg-white p-3">
-        <h2 className="mb-1 text-sm font-bold">{storeOnly ? '件数と継続率' : '店舗別'}（{periodLabel}）</h2>
+        <div className="mb-1 flex flex-wrap items-center gap-3">
+          <h2 className="text-sm font-bold">{storeOnly ? '件数と継続率' : '店舗別の人数と継続率'}（{periodLabel}）</h2>
+          <span className="text-xs text-slate-600">継続率の対象</span>
+          <Seg value={retKind} onChange={(v) => setRetKind(v as typeof retKind)} items={[['new', '新規（新患＋初自）'], ['re', '再来'], ['all', '全体']]} />
+        </div>
         <table className="w-full text-right text-xs tabular-nums">
           <thead>
             <tr className="bg-slate-50 text-[10.5px] text-slate-500">
@@ -217,7 +222,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
             {target === 'all' && <StoreLine label="全体" list={curRows} bold />}
           </tbody>
         </table>
-        <p className="mt-1 text-[11px] text-slate-500">継続＝新患（初診・初・初自）のうち、2〜6回目の日付が入っている割合（横の数字は人数）。未入力＝カルテ集計で黄色の欄が残っている件数。</p>
+        <p className="mt-1 text-[11px] text-slate-500">継続＝{retKind === 'new' ? '新規（初診・初・初自）' : retKind === 're' ? '再来' : '新規と再来をあわせた人'}のうち、2〜6回目の日付が入っている割合（横の数字は人数）。未入力＝カルテ集計で黄色の欄が残っている件数。</p>
       </div>
     </div>
   );
@@ -260,12 +265,19 @@ function SettingsTab() {
   return (
     <div className="space-y-4">
       {msg && <p className="rounded bg-brand-light px-3 py-1 text-sm">{msg}</p>}
+      <div className="rounded-lg border bg-white p-3">
+        <h2 className="text-sm font-bold">予約表のメニュー（全店共通）</h2>
+        <p className="mb-2 text-xs text-slate-500">予約表で予約ごとに付けるメニューです。1行に1つずつ書き、上からの順番でボタンが並びます。セルの中には先頭の1文字（「2回目」なら「2」）が出ます。名前を変えたり消したりしても、すでに付けた予約のメニューはそのまま残ります。</p>
+        <div className="max-w-xs">
+          <OptBox key={'menu' + (data.options.menu ?? []).join()} label="メニュー" help="例：矯正／2回目／ワンコイン" initial={(data.options.menu ?? []).join('\n')} onSave={(t) => saveOpt('menu', t)} />
+        </div>
+      </div>
       <AreasEditor key={JSON.stringify(data.areas)} areas={data.areas} stores={data.stores} onSaved={() => { setMsg('エリアを保存しました'); reload(); }} />
       <div className="rounded-lg border bg-white p-3">
         <h2 className="text-sm font-bold">カルテ集計の選択肢</h2>
         <p className="mb-2 text-xs text-slate-500">1行に1つずつ書きます。上からの順番でプルダウンに出ます。「イベント」「紹介他事業」「キャンペーン」は内訳と連動するので、名前を変えないでください。</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {CAT_LABEL.map(([cat, label, help]) => <OptBox key={cat + data.options[cat].join()} label={label} help={help} initial={data.options[cat].join('\n')} onSave={(t) => saveOpt(cat, t)} />)}
+          {CAT_LABEL.map(([cat, label, help]) => <OptBox key={cat + (data.options[cat] ?? []).join()} label={label} help={help} initial={(data.options[cat] ?? []).join('\n')} onSave={(t) => saveOpt(cat, t)} />)}
         </div>
       </div>
     </div>

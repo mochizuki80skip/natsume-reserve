@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 5;
+    private const VERSION = 6;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -50,6 +50,10 @@ final class Migrate
                 if (!self::hasColumn($pdo, 'admin_account', 'lastLoginAt')) $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `lastLoginAt` DATETIME NULL');
                 $pdo->exec("UPDATE `admin_account` SET `canManage` = 1, `active` = 1, `name` = IF(`name` = '', '管理者', `name`) WHERE `code` = 'HQ'");
                 $pdo->exec(self::AUDIT_DDL);
+            }
+            if ($ver < 6) {
+                // 予約表のメニュー（矯正・2回目 など。JSON の配列）
+                if (!self::hasColumn($pdo, 'cell', 'menus')) $pdo->exec("ALTER TABLE `cell` ADD COLUMN `menus` VARCHAR(300) NOT NULL DEFAULT ''");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
