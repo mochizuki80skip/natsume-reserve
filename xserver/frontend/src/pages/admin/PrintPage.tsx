@@ -6,9 +6,18 @@ import { formatDateJa, formatDateShort, isValidDate, minToHm } from '@/lib/time'
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { categorizeCell, isContinuationText } from '@/lib/attendance';
-import { menuShort } from '@/lib/menus';
+import { menuColor, menuShort } from '@/lib/menus';
 import type { DayResponse } from '@/lib/types';
 import PrintButton from '@/components/PrintButton';
+
+// 区分ごとのセルの色（印刷・PDF でも色が残るよう、薄めの色にする）
+const KIND_BG = { NEW: '#fde0de', ACCIDENT: '#fde9c4', REVISIT: '#d9e7fb' } as const;
+const KIND_NAME = { NEW: '初診', ACCIDENT: '初自（交通事故）', REVISIT: '再来' } as const;
+type PrintKind = keyof typeof KIND_BG;
+const kindOfText = (text: string): PrintKind | null => {
+  const c = categorizeCell(text);
+  return c.isNew ? (c.isJibai ? 'ACCIDENT' : 'NEW') : c.isRevisit ? 'REVISIT' : null;
+};
 
 export default function PrintPage() {
   const { date = '' } = useParams();
@@ -40,11 +49,22 @@ export default function PrintPage() {
     if (isContinuationText(c.text)) return cell.get(`${t - d.slotMinutes}:${b}`)?.visited ?? false;
     return c.visited;
   };
+  // 2 枠目（上記初診対応・上記再来対応）は 1 枠目と同じ色
+  const kindAt = (t: number, b: number): PrintKind | null => {
+    const c = cell.get(`${t}:${b}`);
+    if (!c) return null;
+    if (isContinuationText(c.text)) { const p = cell.get(`${t - d.slotMinutes}:${b}`); return p ? kindOfText(p.text) : null; }
+    return kindOfText(c.text);
+  };
+  const menuOptions = d.menuOptions ?? [];
+  const usedMenus = [...new Set(d.cells.flatMap((c) => c.menus ?? []))].sort((a, b) => (menuOptions.indexOf(a) + 1 || 99) - (menuOptions.indexOf(b) + 1 || 99));
+  const Chip = ({ m }: { m: string }) => <span className="ml-px inline-block min-w-[9px] rounded-[2px] px-[1px] text-center text-[7px] font-bold leading-[9px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</span>;
   // 行の高さ：A4 縦（有効 約 277mm）に 32 行＋見出し＋名簿を収める
   const rowMm = d.times.length > 30 ? 4.6 : 5.2;
 
   return (
-    <main className="mx-auto max-w-[194mm] bg-white p-3 text-[10px] leading-tight print:p-0">
+    // print-color-adjust：ブラウザの印刷・PDF 保存でも背景の色を残す
+    <main className="mx-auto max-w-[194mm] bg-white p-3 text-[10px] leading-tight print:p-0" style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}>
       <PrintButton />
       <div className="mb-1 flex items-end justify-between">
         <h1 className="text-base font-bold">《予約表》 {data.storeName}　{formatDateJa(date)}</h1>
@@ -58,6 +78,10 @@ export default function PrintPage() {
         <span>午後：{names(d.capacity.namesPm)}（{d.capacity.pm} 枠）</span>
         <span>受付：{names(d.receptionNames)}</span>
         <span>✓＝来院　網掛け＝予約サイト非表示／管理側のみの枠</span>
+      </div>
+      <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[8.5px] text-slate-700">
+        {(Object.keys(KIND_BG) as PrintKind[]).map((k) => <span key={k}><i className="mr-0.5 inline-block h-2 w-3 border border-slate-400 align-[-1px]" style={{ background: KIND_BG[k] }} />{KIND_NAME[k]}</span>)}
+        {usedMenus.length > 0 && <span className="ml-1">メニュー：{usedMenus.map((m) => <span key={m} className="mr-1.5 whitespace-nowrap"><Chip m={m} />{m}</span>)}</span>}
       </div>
       {d.times.length === 0 ? <p>休診日</p> : (
         <table className="w-full table-fixed border-collapse">
@@ -87,9 +111,11 @@ export default function PrintPage() {
                 {cols.map((b) => {
                   const c = cell.get(`${t}:${b}`);
                   const v = visitedOf(t, b);
+                  const kind = kindAt(t, b);
                   return (
-                    <td key={b} className={`overflow-hidden whitespace-nowrap border border-black px-0.5 ${b > (isAm(d.sessions, t) ? d.capacity.am : d.capacity.pm) ? 'bg-slate-100' : ''}`}>
-                      {v && c && !isContinuationText(c.text) ? <span className="mr-0.5 font-bold">✓</span> : null}{c?.text ?? ''}{c?.menus?.length ? <span className="ml-0.5 text-[8px]">［{c.menus.map(menuShort).join('')}］</span> : null}
+                    <td key={b} className={`overflow-hidden whitespace-nowrap border border-black px-0.5 ${!kind && b > (isAm(d.sessions, t) ? d.capacity.am : d.capacity.pm) ? 'bg-slate-100' : ''}`}
+                      style={kind ? { background: KIND_BG[kind] } : undefined}>
+                      {v && c && !isContinuationText(c.text) ? <span className="mr-0.5 font-bold">✓</span> : null}{c?.menus?.length ? <span className="mr-0.5">{c.menus.map((m) => <Chip key={m} m={m} />)}</span> : null}{c?.text ?? ''}
                     </td>
                   );
                 })}

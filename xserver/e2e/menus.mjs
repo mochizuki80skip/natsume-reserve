@@ -50,7 +50,9 @@ const j = await p.evaluate(async (d) => (await (await fetch(`/api/admin/day?date
 ok('移動先にメニューも移る', j.cells.some((c) => c.time === 600 && c.menus?.join() === '矯正'));
 // 印刷に印
 await p.goto(`${B}/admin/print/${D2}`); await p.waitForSelector('text=《予約表》');
-ok('印刷に［矯］', (await p.textContent('body')).includes('山田 初診［矯］'));
+ok('印刷にメニューの色付きの印', (await p.locator('td', { hasText: '山田 初診' }).locator('span[style*="background"]').first().textContent()) === '矯');
+ok('印刷で初診のセルに色', ((await p.locator('td', { hasText: '山田 初診' }).getAttribute('style')) ?? '').includes('background'));
+await p.screenshot({ path: new URL('./out-print-color.png', import.meta.url).pathname, clip: { x: 0, y: 0, width: 800, height: 360 } });
 // 氏名のないセルには付けられない
 const [st] = await p.evaluate(async (d) => { const r = await fetch('/api/admin/cell-menus', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: d, time: 660, bed: 3, menus: ['矯正'] }) }); return [r.status]; }, D);
 ok('氏名のないセルには付けられない', st === 404);
