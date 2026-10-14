@@ -1,4 +1,4 @@
-// 予約表のセルの色（画面と印刷で共用）。初診・再来・新自（初自）を優先し、次に回数（2回目・3回目・6回目…）
+// 予約表のセルの色（画面と印刷で共用）。初診・再来・新自（初自）を優先し、次に回数（2回目・3回目・6回目…）、その次に矯正
 import { categorizeCell } from './attendance';
 
 export const KIND_COLORS = { NEW: '#fde0de', ACCIDENT: '#fde9c4', REVISIT: '#d9e7fb' } as const;
@@ -6,6 +6,8 @@ export const KIND_COLOR_NAMES = { NEW: '初診', ACCIDENT: '新自・初自（�
 /** 回数のメニューは目立つ濃い色（文字は白） */
 export const VISIT_COLORS: Record<string, string> = { '2回目': '#15803d', '3回目': '#6d28d9', '6回目': '#9a3412' };
 const OTHER_VISIT_COLOR = '#334155';
+/** 回数以外で色を付けるメニュー（薄い色・文字は黒） */
+export const MENU_CELL_COLORS: Record<string, string> = { 矯正: '#d9f99d' };
 export const isVisitMenu = (m: string) => /^\d+回目$/.test(m.trim());
 export const visitColor = (m: string) => VISIT_COLORS[m.trim()] ?? OTHER_VISIT_COLOR;
 
@@ -25,5 +27,7 @@ export function cellColor(kindText: string, menus: string[]): { bg: string; dark
   const order = ['2回目', '3回目', '6回目'];
   const visits = menus.filter(isVisitMenu).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
   if (visits.length) return { bg: visitColor(visits[0]), dark: true };
+  const m = menus.find((x) => MENU_CELL_COLORS[x.trim()]);
+  if (m) return { bg: MENU_CELL_COLORS[m.trim()], dark: false };
   return null;
 }

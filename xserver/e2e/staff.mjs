@@ -30,6 +30,8 @@ ok('選んだ件数が出る', (await bar.textContent()).includes('2 件'), awai
 await bar.getByRole('button', { name: '望月' }).click(); await p.waitForTimeout(800);
 ok('担当がセルに出る', (await cell('9:00', 1).textContent()).includes('望月') && (await cell('10:00', 1).textContent()).includes('望月') && !(await cell('9:15', 1).textContent()).includes('望月'));
 await cell('11:00', 2).locator('input').click(); await bar.getByRole('button', { name: '佐藤' }).click(); await p.waitForTimeout(800);
+await bar.getByRole('button', { name: '矯正' }).click(); await p.waitForTimeout(800);
+ok('矯正もセルに色', (await cell('11:00', 2).getAttribute('style') ?? '').includes('217, 249, 157'));
 await p.screenshot({ path: O + 'staff-grid.png', clip: { x: 0, y: 300, width: 1400, height: 520 } });
 // 初回カルテ集計に担当が入る
 const k = (await api('GET', `/api/admin/karte?month=${D1.slice(0, 7)}`))[1];

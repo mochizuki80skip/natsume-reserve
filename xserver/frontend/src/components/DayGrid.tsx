@@ -15,7 +15,7 @@ import CellLogPanel from './CellLogPanel';
 import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
 import { applyKindTag, kindTagOf, type KindTag, KIND_TAGS } from '@/lib/kindTag';
 import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
-import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, VISIT_COLORS } from '@/lib/cellColor';
+import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, VISIT_COLORS } from '@/lib/cellColor';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
@@ -576,7 +576,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
       <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
         {(Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[]).map((kk) => <span key={kk}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: KIND_COLORS[kk] }} />{KIND_COLOR_NAMES[kk]}</span>)}
-        {Object.entries(VISIT_COLORS).map(([m, c]) => <span key={m}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{m}</span>)}
+        {Object.entries({ ...VISIT_COLORS, ...MENU_CELL_COLORS }).map(([m, c]) => <span key={m}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{m}</span>)}
         <span><i className="mr-1 inline-block h-3 w-3 border border-l-4 border-l-green-700 align-[-2px]" />来院チェック済み（左に緑の線）</span>
         <span><span className="mr-1 rounded bg-yellow-600 px-1 text-[10px] text-white">未チェック</span>予約時刻を過ぎて未チェック</span>
         <span><span className="mr-1 rounded-sm border border-sky-600 px-[2px] text-[8px] font-bold text-sky-700">WEB</span>WEB予約</span>

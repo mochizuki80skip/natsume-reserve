@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 15, date: '2026-10-14', title: '矯正のセルにも色', audience: ['店舗', '本部'],
+    items: ['「矯正」のメニューを付けたセルは薄い黄緑になります（初診・再来・新自、2・3・6回目の色が優先）。印刷も同じです。'],
+  },
+  {
     id: 14, date: '2026-10-14', title: '担当者とセルの色', audience: ['店舗', '本部'],
     items: [
       'セルの色を「初診・再来・新自」→「2回目・3回目・6回目」の順で付けます。2・3・6回目は濃い色（文字は白）です。矯正・パイオなどほかのメニューは今までどおり小さな印だけです。',

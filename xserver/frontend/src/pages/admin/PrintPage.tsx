@@ -7,7 +7,7 @@ import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { categorizeCell, isContinuationText } from '@/lib/attendance';
 import { menuColor, menuShort } from '@/lib/menus';
-import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, VISIT_COLORS } from '@/lib/cellColor';
+import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, VISIT_COLORS } from '@/lib/cellColor';
 import type { DayResponse } from '@/lib/types';
 import PrintButton from '@/components/PrintButton';
 import { CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
@@ -79,7 +79,7 @@ export default function PrintPage() {
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[8.5px] text-slate-700">
         {(Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[]).map((k) => <span key={k}><i className="mr-0.5 inline-block h-2 w-3 border border-slate-400 align-[-1px]" style={{ background: KIND_COLORS[k] }} />{KIND_COLOR_NAMES[k]}</span>)}
-        {Object.entries(VISIT_COLORS).map(([m, c]) => <span key={m}><i className="mr-0.5 inline-block h-2 w-3 border border-slate-400 align-[-1px]" style={{ background: c }} />{m}</span>)}
+        {Object.entries({ ...VISIT_COLORS, ...MENU_CELL_COLORS }).map(([m, c]) => <span key={m}><i className="mr-0.5 inline-block h-2 w-3 border border-slate-400 align-[-1px]" style={{ background: c }} />{m}</span>)}
         {usedMenus.length > 0 && <span className="ml-1">メニュー：{usedMenus.map((m) => <span key={m} className="mr-1.5 whitespace-nowrap"><Chip m={m} />{m}</span>)}</span>}
       </div>
       {d.times.length === 0 ? <p>休診日</p> : (

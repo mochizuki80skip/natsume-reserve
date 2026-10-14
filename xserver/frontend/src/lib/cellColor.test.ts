@@ -13,8 +13,13 @@ describe('セルの色', () => {
     expect(a.dark && b.dark && c.dark).toBe(true);
     expect(new Set([a.bg, b.bg, c.bg]).size).toBe(3);
   });
-  it('回数以外のメニューだけなら色なし', () => {
-    expect(cellColor('鈴木', ['矯正', 'パイオ'])).toBeNull();
+  it('矯正は回数の次（薄い色）', () => {
+    expect(cellColor('鈴木', ['矯正', 'パイオ'])).toEqual({ bg: '#d9f99d', dark: false });
+    expect(cellColor('鈴木', ['矯正', '2回目'])!.dark).toBe(true);
+    expect(cellColor('鈴木（初診）', ['矯正'])!.bg).toBe('#fde0de');
+  });
+  it('ほかのメニューだけなら色なし', () => {
+    expect(cellColor('鈴木', ['パイオ', 'テープ'])).toBeNull();
   });
   it('メニューの印も同じ色', () => {
     expect(menuColor('2回目', ['矯正', '2回目'])).toBe(cellColor('a', ['2回目'])!.bg);
