@@ -35,13 +35,24 @@ const page = await ctx.newPage();
 // --- 顧客サイト
 await page.goto(`${BASE}/s/S001`);
 ok('顧客ページ表示', (await page.textContent('h1')).includes('WEB予約'));
-await page.waitForSelector('.wk-head button', { timeout: 15000 });
-ok('最初は何も選ばれていない（空き状況も出ない）', (await page.locator('.wk-head button[aria-pressed="true"]').count()) === 0 && (await page.locator('table.wk').count()) === 0 && (await page.textContent('main')).includes('どちらかをお選びください'));
-await page.getByRole('button', { name: /はじめての方/ }).click();
-ok('区分を選んでも内容はまだ未選択', (await page.locator('.wk-head [role="radio"][aria-checked="true"]').count()) === 0 && (await page.locator('table.wk').count()) === 0);
-await page.getByRole('radio', { name: /ケガ・痛み・不調/ }).click();
 await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
-ok('内容を選ぶと週間一覧が出る', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('はじめての方'));
+ok('最初は何も選ばれていない（日時の一覧は見られる）', (await page.locator('.wk-head button[aria-pressed="true"]').count()) === 0 && (await page.textContent('main')).includes('どちらかをお選びください'));
+{
+  let o = page.locator('td.o button').first();
+  for (let i = 0; i < 4 && (await o.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); o = page.locator('td.o button').first(); }
+  await o.click();
+  ok('区分を選ぶまで予約へ進めない', (await page.getByRole('button', { name: 'この日時で予約へ進む' }).count()) === 0 && (await page.getByRole('button', { name: '来院区分を選ぶ' }).count()) === 1);
+  await page.getByRole('button', { name: '来院区分を選ぶ' }).click();
+  await page.getByRole('button', { name: /はじめての方/ }).click();
+  ok('区分を選んでも内容はまだ未選択', (await page.locator('.wk-head [role="radio"][aria-checked="true"]').count()) === 0 && (await page.getByRole('button', { name: 'この日時で予約へ進む' }).count()) === 0);
+  await page.getByRole('radio', { name: /ケガ・痛み・不調/ }).click();
+  await page.waitForTimeout(1000);
+  ok('内容を選ぶと（その日時が空いていれば）予約へ進める', (await page.getByRole('button', { name: 'この日時で予約へ進む' }).count()) === 1 || (await page.textContent('main')).includes('この内容では予約できません'));
+  await page.goto(`${BASE}/s/S001`); await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+  await page.getByRole('button', { name: /はじめての方/ }).click();
+  await page.getByRole('radio', { name: /ケガ・痛み・不調/ }).click(); await page.waitForTimeout(800);
+}
+ok('週間一覧', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('はじめての方'));
 // 〇 が無い週なら翌週へ進む
 let openSlot = page.locator('td.o button').first();
 for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) {

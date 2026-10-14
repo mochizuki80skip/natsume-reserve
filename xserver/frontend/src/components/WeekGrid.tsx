@@ -24,7 +24,7 @@ export interface Selection { date: string; time: number; status: SlotStatus }
 
 interface Props {
   storeCode: string;
-  kind: Kind | null; // null＝まだ選ばれていない（最初は何も選ばれていない状態から始める）
+  kind: Kind | null; // null＝まだ選ばれていない（最初は何も選ばれていない状態。日時は見られるが、区分を選ぶまで先へ進めない）
   onKindChange: (k: Kind | null) => void;
   onProceed: (sel: Selection) => void;
   phone: string;
@@ -40,6 +40,8 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
   const [error, setError] = useState('');
   const [sel, setSel] = useState<Selection | null>(null);
   const [group, setGroup] = useState<Group | null>(kind ? groupOf(kind) : null);
+  const [needKind, setNeedKind] = useState(false); // 区分を選ばずに進もうとした → 区分の欄を目立たせる
+  const [notice, setNotice] = useState('');
   const headRef = useRef<HTMLDivElement>(null);
 
   // 固定ヘッダーの高さを測って、曜日行の固定位置に反映
@@ -54,10 +56,10 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
   }, []);
 
   useEffect(() => {
-    if (!kind) { setData(null); return; }
     let alive = true;
     setLoading(true); setError('');
-    const q = new URLSearchParams({ kind });
+    // 区分が未選択の間は「現在通院中」の空き状況を見せる（選んだあとに、その区分の空き状況で確かめ直す）
+    const q = new URLSearchParams({ kind: kind ?? 'RETURN' });
     if (weekStart) q.set('start', weekStart);
     fetch(`/api/public/${encodeURIComponent(storeCode)}/week?${q}`)
       .then((r) => r.json())
@@ -67,7 +69,18 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
     return () => { alive = false; };
   }, [storeCode, kind, weekStart]);
 
-  useEffect(() => { setSel(null); }, [kind, weekStart]);
+  useEffect(() => { setSel(null); setNotice(''); }, [weekStart]);
+  useEffect(() => { if (kind) setNeedKind(false); }, [kind]);
+  // 区分を選び直したら、選んでいた日時がその区分でも予約できるか確かめる
+  useEffect(() => {
+    if (!data) return;
+    setSel((cur) => {
+      if (!cur) return cur;
+      const st = data.days.find((d) => d.date === cur.date)?.slots.find((x) => x.time === cur.time)?.status;
+      if (!st || st === 'closed') { setNotice('選んでいた日時は、この内容では予約できません。別の日時をお選びください。'); return null; }
+      return st === cur.status ? cur : { ...cur, status: st };
+    });
+  }, [data]);
 
   const rows = useMemo(() => {
     if (!data) return [] as number[];
@@ -91,7 +104,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
 
   return (
     <div className={sel ? 'pb-28' : ''}>
-      <div className="wk-head" ref={headRef}>
+      <div className={`wk-head ${needKind ? 'ring-4 ring-red-400' : ''}`} ref={headRef}>
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="来院区分">
           {(['FIRST', 'VISITED'] as Group[]).map((g) => (
             <button key={g} type="button" aria-pressed={group === g} onClick={() => { if (group === g) return; setGroup(g); onKindChange(null); }}
@@ -101,7 +114,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
             </button>
           ))}
         </div>
-        {!group && <p className="mt-2 text-center text-[13px] font-semibold text-brand-dark">まず、どちらかをお選びください</p>}
+        {!group && <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>まず、どちらかをお選びください</p>}
         {group && <div className="mt-1.5 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="ご来院の内容">
           {GROUP_LABEL[group].kinds.map(([k, label]) => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => onKindChange(k)}
@@ -110,8 +123,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
             </button>
           ))}
         </div>}
-        {group && !kind && <p className="mt-2 text-center text-[13px] font-semibold text-brand-dark">ご来院の内容をお選びください</p>}
-        {kind && <>
+        {group && !kind && <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>ご来院の内容をお選びください</p>}
         <div className="mt-2 flex items-center justify-between gap-2">
           <button type="button" disabled={prevDisabled} onClick={() => weekStart && setWeekStart(addDays(weekStart, -7))} className="rounded border bg-white px-2.5 py-1.5 text-sm disabled:opacity-40">‹ 前週</button>
           <div className="text-[15px] font-bold tabular-nums">
@@ -125,12 +137,12 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
           <span><span className="x">×</span> 空きなし・受付終了</span>
           <span><span className="sw" /> 定休日・祝日</span>
         </div>
-        </>}
       </div>
 
       {error && <p className="mt-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      {kind && <div className="wk-wrap">
+      {notice && <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900">{notice}</p>}
+      <div className="wk-wrap">
         <table className="wk" aria-label="1週間の空き状況">
           <thead>
             <tr>
@@ -149,12 +161,12 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
               const isPmStart = ri > 0 && rows[ri - 1] < NOON && t >= NOON;
               return (
                 <RowGroup key={t} t={t} ri={ri} isPmStart={isPmStart} days={days} amRows={amRows} pmRows={pmRows} statusMap={statusMap} sel={sel}
-                  onPick={(date, time, status) => setSel({ date, time, status })} />
+                  onPick={(date, time, status) => { setSel({ date, time, status }); setNotice(''); }} />
               );
             })}
           </tbody>
         </table>
-      </div>}
+      </div>
       {loading && <p className="mt-2 text-sm text-slate-500">読み込み中…</p>}
 
       {sel && (
@@ -162,9 +174,11 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
           <div className="mx-auto flex max-w-lg items-center gap-3">
             <div className="min-w-0 flex-1">
               <b className="block text-base">{md(sel.date)}（{WEEKDAY_JA[weekdayOf(sel.date)]}）{minToHm(sel.time)}〜</b>
-              <span className="text-xs text-slate-500">{sel.status === 'open' && kind ? KIND_TEXT[kind] : '残りわずか／直前のためお電話でご予約ください'}</span>
+              <span className={`text-xs ${sel.status === 'open' && !kind ? 'font-bold text-red-600' : 'text-slate-500'}`}>{sel.status !== 'open' ? '残りわずか／直前のためお電話でご予約ください' : kind ? KIND_TEXT[kind] : '上で来院区分を選ぶと予約へ進めます'}</span>
             </div>
-            {sel.status === 'open'
+            {sel.status === 'open' && !kind
+              ? <button type="button" onClick={() => { setNeedKind(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="whitespace-nowrap rounded-lg border-2 border-brand bg-white px-4 py-3 text-sm font-bold text-brand">来院区分を選ぶ</button>
+              : sel.status === 'open'
               ? <button type="button" onClick={() => onProceed(sel)} className="whitespace-nowrap rounded-lg bg-brand px-4 py-3 text-sm font-bold text-white">この日時で予約へ進む</button>
               : <a href={phoneHref} className="whitespace-nowrap rounded-lg bg-amber-700 px-4 py-3 text-sm font-bold text-white">📞 {phone}</a>}
             <button type="button" onClick={() => setSel(null)} aria-label="閉じる" className="px-1 text-xl text-slate-500">×</button>

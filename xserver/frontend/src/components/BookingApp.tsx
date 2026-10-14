@@ -88,7 +88,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
 
       {step === 1 && (
         <section>
-          <p className="mb-2 text-xs text-slate-600">「はじめての方」か「ご通院したことがある方」を選び、内容を選ぶと空き状況が表示されます。ご希望の日時の〇を押してください。</p>
+          <p className="mb-2 text-xs text-slate-600">「はじめての方」か「ご通院したことがある方」と内容を選び、ご希望の日時の〇を押してください（来院区分を選ぶまで予約へは進めません）。</p>
           {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone}
             onProceed={(s) => { setSel(s); setStep(2); setError(''); }} />
