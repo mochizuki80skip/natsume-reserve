@@ -2,7 +2,10 @@
 import { Link, useParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { formatDateJa, minToHm } from '@/lib/time';
-import { KIND_TEXT, type Kind } from '@/components/WeekGrid';
+import type { Kind } from '@/components/WeekGrid';
+
+// 1 行に収まる短い書き方（スマホの幅で折り返さないように）
+const KIND_SHORT: Record<Kind, string> = { NEW: 'はじめて（ケガ・痛み・不調）', ACCIDENT: 'はじめて（交通事故）', RETURN: '現在通院中', REVISIT: '1ヶ月以上ぶりのご来院' };
 
 interface View {
   state: 'BOOKED' | 'PAST' | 'CANCELLED' | 'ENDED';
@@ -31,7 +34,7 @@ export default function ReservationView() {
   return (
     <main className="mx-auto max-w-lg px-3 pb-8 pt-4">
       <h1 className="text-lg font-bold">ご予約の確認</h1>
-      <p className="mt-1 text-xs text-slate-600">予約された方だけが開けるページです（URL を他の人に教えないでください）。</p>
+      <p className="mt-1 text-xs text-slate-600">※ このページの URL は他の人に教えないでください</p>
       <section className="mt-3 overflow-hidden rounded-lg border bg-white">
         <div className={`flex items-center justify-between px-4 py-2.5 text-white ${data.state === 'BOOKED' ? 'bg-brand' : 'bg-slate-500'}`}>
           <b className="text-sm">{head}</b>
@@ -40,11 +43,11 @@ export default function ReservationView() {
         {data.state === 'ENDED' ? (
           <p className="px-4 py-4 text-sm text-slate-600">予約日の翌日を過ぎたため、内容は表示されません。</p>
         ) : (
-          <dl className="divide-y px-4 text-sm">
-            <div className="flex gap-3 py-2.5"><dt className="w-20 shrink-0 text-slate-500">日時</dt><dd className={`text-base font-bold ${data.state === 'CANCELLED' ? 'line-through' : ''}`}>{formatDateJa(data.date!)} {minToHm(data.time!)}〜</dd></div>
-            <div className="flex gap-3 py-2.5"><dt className="w-20 shrink-0 text-slate-500">店舗</dt><dd>{store.name}</dd></div>
-            <div className="flex gap-3 py-2.5"><dt className="w-20 shrink-0 text-slate-500">ご来院</dt><dd>{KIND_TEXT[data.kind!] ?? ''}</dd></div>
-            <div className="flex gap-3 py-2.5"><dt className="w-20 shrink-0 text-slate-500">お名前</dt><dd>{data.name} 様</dd></div>
+          <dl className="divide-y px-4 text-sm [&_dd]:whitespace-nowrap">
+            <div className="flex gap-3 py-2.5"><dt className="w-14 shrink-0 text-slate-500">日時</dt><dd className={`text-[15px] font-bold ${data.state === 'CANCELLED' ? 'line-through' : ''}`}>{formatDateJa(data.date!)} {minToHm(data.time!)}〜</dd></div>
+            <div className="flex gap-3 py-2.5"><dt className="w-14 shrink-0 text-slate-500">店舗</dt><dd>{store.name}</dd></div>
+            <div className="flex gap-3 py-2.5"><dt className="w-14 shrink-0 text-slate-500">ご来院</dt><dd>{KIND_SHORT[data.kind!] ?? ''}</dd></div>
+            <div className="flex gap-3 py-2.5"><dt className="w-14 shrink-0 text-slate-500">お名前</dt><dd>{data.name} 様</dd></div>
           </dl>
         )}
       </section>

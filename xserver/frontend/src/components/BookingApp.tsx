@@ -172,7 +172,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
           <p className="mt-1 text-sm text-slate-600">{store.name}</p>
           {done.smsStatus === 'SENT'
             ? <p className="mt-3 text-sm">確認のSMSをお送りしました。</p>
-            : <p className="mt-3 text-sm text-slate-600">この画面を保存（スクリーンショット）しておいてください。</p>}
+            : !done.token && <p className="mt-3 text-sm text-slate-600">この画面を保存（スクリーンショット）しておいてください。</p>}
           <ul className="mt-4 space-y-2 rounded-lg border border-brand bg-brand-light px-4 py-3 text-sm leading-relaxed text-brand-dark">
             <li><b>お支払いは現金のみ</b>となります。</li>
             <li><b>マイナンバーカード（保険証）</b>と、お持ちの方は<b>各種受給者証</b>を必ずお持ちください。</li>
@@ -181,7 +181,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
           {done.token && (
             <>
               <Link to={`/r/${done.token}`} className="mt-4 block rounded-lg bg-brand px-4 py-3 text-center text-base font-bold text-white no-underline">ご予約の確認ページを開く</Link>
-              <p className="mt-1 text-xs text-slate-600">このページをブックマーク（お気に入り）に入れておくと、あとから予約の日時を確かめられます（予約日の翌日まで）。{done.smsStatus === 'SENT' ? 'SMS にも同じページのリンクをお送りしました。' : ''}</p>
+              <p className="mt-1 text-center text-[11.5px] text-slate-600">ブックマークしておくと予約日の翌日まで確認できます</p>
             </>
           )}
           <label className="mt-3 flex items-start gap-2 text-sm">
