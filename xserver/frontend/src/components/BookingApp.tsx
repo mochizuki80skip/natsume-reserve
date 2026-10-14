@@ -2,7 +2,9 @@
 import { useState } from 'react';
 import { formatDateJa, minToHm } from '@/lib/time';
 import { formatJpPhone } from '@/lib/format';
+import { Link } from 'react-router-dom';
 import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
+import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
 
 interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean }
 
@@ -15,7 +17,11 @@ export default function BookingApp({ store, smsEnabled }: Props) {
   const [form, setForm] = useState({ cardNo: '', name: '', phone: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState<{ date: string; time: number; smsStatus: string } | null>(null);
+  const [done, setDone] = useState<{ date: string; time: number; smsStatus: string; token?: string } | null>(null);
+  // この端末で前に予約した方の情報（次回は入力欄に最初から入れる）。「別の方の予約をする」で今回は使わない
+  const [memory, setMemory] = useState(loadPatient);
+  const [useMemory, setUseMemory] = useState(true);
+  const [remember, setRemember] = useState(true);
   const [gridKey, setGridKey] = useState(0);
 
   const api = (path: string) => `/api/public/${encodeURIComponent(store.code)}${path}`;
@@ -45,6 +51,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
         return;
       }
       setDone(j); setStep(4); window.scrollTo(0, 0);
+      if (remember) { const m = { name: form.name, phone: form.phone, cardNo: form.cardNo || (useMemory ? memory?.cardNo ?? '' : '') }; savePatient(m); setMemory(m); }
     } catch { setError('通信に失敗しました'); } finally { setLoading(false); }
   }
 
@@ -88,10 +95,20 @@ export default function BookingApp({ store, smsEnabled }: Props) {
 
       {step === 1 && (
         <section>
-          <p className="mb-2 text-xs text-slate-600">「はじめての方」か「ご通院したことがある方」と内容を選び、ご希望の日時の〇を押してください（来院区分を選ぶまで予約へは進めません）。</p>
+          {memory && useMemory && (
+            <div className="mb-3 rounded-lg border border-brand bg-brand-light px-3 py-2 text-sm text-brand-dark">
+              <b>{memory.name} 様</b>、いつもありがとうございます。<br />
+              <span className="text-xs">お名前・電話番号{memory.cardNo ? '・診察券番号' : ''}は前回の内容が入ります。</span>
+              <button type="button" className="ml-1 text-xs underline" onClick={() => { setUseMemory(false); setForm({ cardNo: '', name: '', phone: '' }); }}>別の方（ご家族など）の予約をする</button>
+            </div>
+          )}
           {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone}
-            onProceed={(s) => { setSel(s); setStep(2); setError(''); }} />
+            onProceed={(s) => {
+              setSel(s); setStep(2); setError('');
+              // 前回の内容を入力欄に入れる（空欄のときだけ）
+              if (memory && useMemory) setForm((f) => ({ cardNo: f.cardNo || memory.cardNo, name: f.name || memory.name, phone: f.phone || memory.phone }));
+            }} />
           {notes}
           {phoneBanner}
         </section>
@@ -161,9 +178,22 @@ export default function BookingApp({ store, smsEnabled }: Props) {
             <li><b>マイナンバーカード（保険証）</b>と、お持ちの方は<b>各種受給者証</b>を必ずお持ちください。</li>
             <li>お時間に余裕をもってご来院ください。{kind !== 'RETURN' && '初めての方・久しぶりの方は10分前にお越しください。'}</li>
           </ul>
+          {done.token && (
+            <>
+              <Link to={`/r/${done.token}`} className="mt-4 block rounded-lg bg-brand px-4 py-3 text-center text-base font-bold text-white no-underline">ご予約の確認ページを開く</Link>
+              <p className="mt-1 text-xs text-slate-600">このページをブックマーク（お気に入り）に入れておくと、あとから予約の日時を確かめられます（予約日の翌日まで）。{done.smsStatus === 'SENT' ? 'SMS にも同じページのリンクをお送りしました。' : ''}</p>
+            </>
+          )}
+          <label className="mt-3 flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0" checked={remember} onChange={(e) => {
+              setRemember(e.target.checked);
+              if (e.target.checked) { const m = { name: form.name, phone: form.phone, cardNo: form.cardNo }; savePatient(m); setMemory(m); } else { forgetPatient(); setMemory(null); }
+            }} />
+            <span><b>次回のために、この端末にお名前・電話番号・診察券番号を覚えておく</b><span className="block text-xs text-slate-600">このスマホの中だけに保存します。共用の端末ではチェックを外してください。</span></span>
+          </label>
           {notes}
           <p className="mt-3 text-sm">変更・キャンセルはお電話（{phoneLink}）へお願いいたします。</p>
-          <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setKind(null); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
+          <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setKind(null); setUseMemory(true); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
         </section>
       )}
 

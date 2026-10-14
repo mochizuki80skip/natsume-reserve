@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 7;
+    private const VERSION = 8;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -59,6 +59,10 @@ final class Migrate
                 // 新規の同時対応数：空欄（NULL）＝制限なし、0＝WEB では受けない。これまでの 0（制限なし）は空欄に置き換える
                 $pdo->exec('ALTER TABLE `store` MODIFY COLUMN `maxNewConcurrent` INT NULL DEFAULT NULL');
                 $pdo->exec('UPDATE `store` SET `maxNewConcurrent` = NULL WHERE `maxNewConcurrent` = 0');
+            }
+            if ($ver < 8) {
+                // 患者様の「ご予約の確認ページ」用の合言葉（推測できない長い文字列）
+                if (!self::hasColumn($pdo, 'reservation', 'viewToken')) $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `viewToken` VARCHAR(40) NULL, ADD UNIQUE KEY `res_view_token` (`viewToken`)');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './globals.css';
 import Home from './pages/Home';
 import Booking from './pages/Booking';
+import ReservationView from './pages/ReservationView';
 import Stores from './pages/Stores';
 import Login from './pages/Login';
 import AdminLayout from './pages/admin/Layout';
@@ -30,6 +31,7 @@ createRoot(document.getElementById('root')!).render(
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/s/:code" element={<Booking />} />
+        <Route path="/r/:token" element={<ReservationView />} />
         <Route path="/stores" element={<Stores />} />
         <Route path="/admin/login" element={<Login />} />
         <Route path="/admin/login/:code" element={<Login />} />

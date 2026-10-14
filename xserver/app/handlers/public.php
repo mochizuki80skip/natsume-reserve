@@ -92,21 +92,25 @@ function pub_reserve(array $p): never
             }
             $bed = $free[0];
             $rid = Db::newId();
-            Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', Time::nowJstDateTime()]);
+            $token = bin2hex(random_bytes(16)); // 確認ページの URL に使う（推測できない）
+            Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, viewToken, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', $token, Time::nowJstDateTime()]);
             for ($k = 0; $k < $in['neededSlots']; $k++) {
                 $text = $k === 0 ? PublicApi::cellName($kind, $name) : PublicApi::contText($kind);
                 Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)',
                     [Db::newId(), $store['id'], $date, $time + $k * $setting['slotMinutes'], $bed, $text, $rid]);
             }
-            return ['id' => $rid, 'bed' => $bed];
+            return ['id' => $rid, 'bed' => $bed, 'token' => $token];
         });
     } finally {
         Db::one('SELECT RELEASE_LOCK(?) AS r', [$lockName]);
     }
 
+    $viewUrl = pub_base_url() . '/r/' . $result['token'];
     $smsBody = "【{$store['name']}】ご予約を承りました。\n" . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . "〜\n"
         . ($kind !== 'RETURN' ? "初めての方・久しぶりの方は10分前にお越しください。\n" : '')
+        . "お支払いは現金のみです。マイナンバーカード・受給者証をお持ちください。\n"
+        . "ご予約の確認：{$viewUrl}\n"
         . "変更・キャンセルはお電話（{$store['phone']}）へお願いします。";
     $smsStatus = Sms::send($phone, $smsBody);
     Db::exec('UPDATE reservation SET smsStatus = ? WHERE id = ?', [$smsStatus, $result['id']]);
@@ -114,5 +118,36 @@ function pub_reserve(array $p): never
         $to = Text::normalizeJpPhone($store['notifyPhone']);
         if ($to) Sms::send($to, '【WEB予約】' . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . ' ' . PublicApi::KIND_JA[$kind] . " {$name} 様");
     }
-    Http::json(['ok' => true, 'id' => $result['id'], 'date' => $date, 'time' => $time, 'smsStatus' => $smsStatus]);
+    Http::json(['ok' => true, 'id' => $result['id'], 'token' => $result['token'], 'date' => $date, 'time' => $time, 'smsStatus' => $smsStatus]);
+}
+
+/** SMS に載せる URL の頭（APP_URL が空なら開かれている URL から作る） */
+function pub_base_url(): string
+{
+    $u = rtrim(Config::str('APP_URL'), '/');
+    if ($u !== '') return $u;
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+    return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+}
+
+/** お名前の最後の 1 文字を伏せる（確認ページは URL を知っている人なら開けるため） */
+function pub_mask_name(string $name): string
+{
+    $n = mb_strlen($name);
+    return $n <= 1 ? '＊' : mb_substr($name, 0, $n - 1) . '＊';
+}
+
+/** 患者様の「ご予約の確認ページ」。予約日の翌日まで見られる。変更・キャンセルは電話のみ */
+function pub_reservation_view(array $p): never
+{
+    if (!RateLimit::allow('rview:' . Http::clientIp(), 60, 10 * 60)) Http::error('短時間に多くの操作がありました。しばらくしてからお試しください。', 429);
+    $r = Db::one('SELECT r.date, r.time, r.kind, r.name, r.status, s.code, s.name AS storeName, s.phone AS storePhone FROM reservation r JOIN store s ON s.id = r.storeId WHERE r.viewToken = ?', [$p[1]]);
+    if (!$r) Http::error('ご予約が見つかりません', 404);
+    $today = Time::nowJst()['date'];
+    $store = ['code' => $r['code'], 'name' => $r['storeName'], 'phone' => $r['storePhone']];
+    $daysLeft = (int)((strtotime($r['date'] . ' 00:00:00 UTC') - strtotime($today . ' 00:00:00 UTC')) / 86400);
+    // 予約日の翌日を過ぎたら中身は出さない
+    if ($daysLeft < -1) Http::json(['state' => 'ENDED', 'store' => $store]);
+    $state = $r['status'] === 'CANCELLED' ? 'CANCELLED' : ($daysLeft < 0 ? 'PAST' : 'BOOKED');
+    Http::json(['state' => $state, 'store' => $store, 'date' => $r['date'], 'time' => (int)$r['time'], 'kind' => $r['kind'], 'name' => pub_mask_name($r['name']), 'daysLeft' => $daysLeft, 'today' => $today]);
 }

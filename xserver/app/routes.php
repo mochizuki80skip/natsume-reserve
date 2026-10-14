@@ -20,6 +20,7 @@ function route_table(): array
         ['GET', '#^/api/public/([^/]+)/slots$#', 'pub_slots'],
         ['GET', '#^/api/public/([^/]+)/calendar$#', 'pub_calendar'],
         ['POST', '#^/api/public/([^/]+)/reserve$#', 'pub_reserve'],
+        ['GET', '#^/api/public-reservation/([0-9a-f]{32})$#', 'pub_reservation_view'],
         // ログイン
         ['POST', '#^/api/admin/login$#', 'adm_login'],
         ['POST', '#^/api/admin/logout$#', 'adm_logout'],

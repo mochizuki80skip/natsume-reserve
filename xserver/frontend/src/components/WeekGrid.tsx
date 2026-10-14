@@ -105,6 +105,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
   return (
     <div className={sel ? 'pb-28' : ''}>
       <div className={`wk-head ${needKind ? 'ring-4 ring-red-400' : ''}`} ref={headRef}>
+        <p className={`mb-1 text-[14px] font-bold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>① どちらかを選択してください</p>
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="来院区分">
           {(['FIRST', 'VISITED'] as Group[]).map((g) => (
             <button key={g} type="button" aria-pressed={group === g} onClick={() => { if (group === g) return; setGroup(g); onKindChange(null); }}
@@ -114,7 +115,6 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
             </button>
           ))}
         </div>
-        {!group && <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>まず、どちらかをお選びください</p>}
         {group && <div className="mt-1.5 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="ご来院の内容">
           {GROUP_LABEL[group].kinds.map(([k, label]) => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => onKindChange(k)}
@@ -124,7 +124,8 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
           ))}
         </div>}
         {group && !kind && <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>ご来院の内容をお選びください</p>}
-        <div className="mt-2 flex items-center justify-between gap-2">
+        <p className="mt-2.5 text-[14px] font-bold text-brand-dark">② ご希望の日時を選択してください</p>
+        <div className="mt-1 flex items-center justify-between gap-2">
           <button type="button" disabled={prevDisabled} onClick={() => weekStart && setWeekStart(addDays(weekStart, -7))} className="rounded border bg-white px-2.5 py-1.5 text-sm disabled:opacity-40">‹ 前週</button>
           <div className="text-[15px] font-bold tabular-nums">
             {days.length ? `${md(days[0].date)}（${WEEKDAY_JA[weekdayOf(days[0].date)]}）〜 ${md(days[6].date)}（${WEEKDAY_JA[weekdayOf(days[6].date)]}）` : ''}

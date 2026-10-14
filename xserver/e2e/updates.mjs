@@ -15,7 +15,7 @@ try {
   const dlg = p.getByRole('dialog', { name: '更新のお知らせ' });
   await dlg.waitFor({ timeout: 5000 });
   const t = await dlg.textContent();
-  ok('初めては一番新しい日のお知らせが出る', t.includes('更新のお知らせを表示') && t.includes('新規の同時対応数'));
+  ok('初めては一番新しい日のお知らせが出る', t.includes('予約確認ページ') && t.includes('患者様の予約ページを変更') && !t.includes('新規の同時対応数'));
   ok('店舗には本部向けのお知らせを出さない', !t.includes('紹介カードの QR の案内ページ'));
   await dlg.getByRole('button', { name: '確認しました' }).click();
   await p.reload(); await p.waitForSelector('#grid'); await p.waitForTimeout(500);

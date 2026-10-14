@@ -36,7 +36,7 @@ const page = await ctx.newPage();
 await page.goto(`${BASE}/s/S001`);
 ok('顧客ページ表示', (await page.textContent('h1')).includes('WEB予約'));
 await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
-ok('最初は何も選ばれていない（日時の一覧は見られる）', (await page.locator('.wk-head button[aria-pressed="true"]').count()) === 0 && (await page.textContent('main')).includes('どちらかをお選びください'));
+ok('最初は何も選ばれていない（日時の一覧は見られる）', (await page.locator('.wk-head button[aria-pressed="true"]').count()) === 0 && (await page.textContent('main')).includes('① どちらかを選択してください') && (await page.textContent('main')).includes('② ご希望の日時を選択してください'));
 {
   let o = page.locator('td.o button').first();
   for (let i = 0; i < 4 && (await o.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); o = page.locator('td.o button').first(); }
@@ -94,6 +94,26 @@ ok('予約確定', true, `${dateTitle} ${slotLabel}`);
 const doneText = await page.textContent('main');
 ok('完了画面の案内（現金のみ・マイナンバーカード・受給者証・時間に余裕）', ['現金のみ', 'マイナンバーカード', '受給者証', '余裕をもって'].every((w) => doneText.includes(w)));
 await page.screenshot({ path: 'e2e/out-customer-done.png' });
+// ご予約の確認ページ（名前の最後の 1 文字は伏せる）
+await page.getByRole('link', { name: 'ご予約の確認ページを開く' }).click();
+await page.waitForSelector('text=ご予約中', { timeout: 15000 });
+const viewText = await page.textContent('main');
+ok('確認ページに日時と伏せた名前', viewText.includes('テスト 太＊') && !viewText.includes('テスト 太郎') && /月.*日/.test(viewText) && viewText.includes('現金のみ'), viewText.slice(0, 120));
+ok('確認ページの URL は推測できない長さ', /\/r\/[0-9a-f]{32}$/.test(page.url()), page.url());
+ok('合言葉が違えば見つからない', (await fetch(`${BASE}/api/public-reservation/${'0'.repeat(32)}`)).status === 404);
+// 同じ端末の 2 回目：前回の内容が入っている
+await page.getByRole('link', { name: '次回のご予約をとる' }).click();
+await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+ok('2 回目はお名前の案内が出る', (await page.textContent('main')).includes('テスト 太郎 様'));
+await page.getByRole('button', { name: /ご通院したことがある方/ }).click();
+await page.getByRole('radio', { name: /現在通院中/ }).click(); await page.waitForTimeout(800);
+{
+  let o = page.locator('td.o button').first();
+  for (let i = 0; i < 4 && (await o.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); o = page.locator('td.o button').first(); }
+  await o.click();
+  await page.getByRole('button', { name: 'この日時で予約へ進む' }).click();
+  ok('2 回目は氏名・電話番号が入っている', (await page.inputValue('input[placeholder*="山田"]')) === 'テスト 太郎' && (await page.inputValue('input[type="tel"]')) === '09012345678');
+}
 
 // 同じ枠が 2 枠使われたか（初回=30分）は管理画面で確認する
 // --- 管理画面
@@ -230,6 +250,8 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   const wk2 = await ap.evaluate(async (d) => (await fetch(`/api/public/S001/week?start=${d}&kind=RETURN`)).json(), d2);
   const slot = wk2.days.find((x) => x.date === d2)?.slots.find((s) => s.time === 600);
   ok('取消後は顧客側で空きに戻る', slot && slot.status !== 'closed', JSON.stringify(slot));
+  const view1 = await (await fetch(`${BASE}/api/public-reservation/${r1.token}`)).json();
+  ok('キャンセルすると確認ページは「キャンセル済み」', view1.state === 'CANCELLED', JSON.stringify(view1));
   // 文字を消して即 F5
   const c = rowOf('10:30').locator('input').nth(1);
   await c.fill('すぐ消す'); await c.press('Tab'); await ap.waitForSelector('text=保存しました', { timeout: 10000 });

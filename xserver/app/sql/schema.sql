@@ -137,8 +137,10 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `phone` VARCHAR(20) NOT NULL,
   `status` VARCHAR(10) NOT NULL DEFAULT 'BOOKED',
   `smsStatus` VARCHAR(10) NULL,
+  `viewToken` VARCHAR(40) NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `res_view_token` (`viewToken`),
   KEY `res_store_date` (`storeId`, `date`),
   KEY `res_created` (`createdAt`),
   CONSTRAINT `fk_res_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
