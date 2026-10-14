@@ -604,24 +604,24 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           const tag = ok ? kindTagOf(sText) : null;
           const multi = !!range && rangeSize(range) > 1;
           const curStaff = ok && !multi ? staffMap.get(sk) ?? '' : '';
+          // 担当は 2 行目に分けて出す
           const staffBtns = staffOptions.length > 0 && (ok || multi) && (
-            <>
-              <span className="mx-0.5 h-5 w-px bg-slate-300" aria-hidden="true" />
-              <span className="text-xs font-bold text-slate-600">担当</span>
+            <div className="flex flex-wrap items-center gap-1.5 border-t pt-1" role="group" aria-label="担当">
+              <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">担当</span>
               {staffOptions.map((n) => (
                 <button key={n} type="button" aria-pressed={curStaff === n} onMouseDown={(e) => e.preventDefault()} onClick={() => setStaffFor(n)}
                   className={`rounded-full border-2 px-2 py-0.5 text-xs font-bold ${curStaff === n ? 'border-brand bg-brand text-white' : 'border-brand/40 bg-white text-brand-dark hover:border-brand'}`}>{n}</button>
               ))}
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setStaffFor('')} className="rounded-full border px-2 py-0.5 text-xs text-slate-500 hover:border-slate-400">担当を外す</button>
-            </>
+            </div>
           );
           return (
-            <div className="no-print sticky top-0 z-10 mb-1 flex min-h-[38px] flex-wrap items-center gap-1.5 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
-              <span className="mr-1 text-xs font-bold text-slate-600">メニュー</span>
+            <div className="no-print sticky top-0 z-10 mb-1 flex flex-col gap-1 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
+            <div className="flex min-h-[30px] flex-wrap items-center gap-1.5">
+              <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">メニュー</span>
               {multi ? (
                 <>
-                  <span className="mr-1 text-xs text-slate-600"><b className="text-slate-800">{targetCells().length} 件</b>選択中（Shift＋クリックで範囲を選ぶと、担当をまとめて付けられます）</span>
-                  {staffBtns}
+                  <span className="mr-1 text-xs text-slate-600"><b className="text-slate-800">{targetCells().length} 件</b>選択中（下の担当を押すと、まとめて付けられます）</span>
                 </>
               ) : ok ? (
                 <>
@@ -641,11 +641,12 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                         style={on ? { background: menuColor(m, menuOptions) } : undefined}>{m}</button>
                     );
                   })}
-                  {staffBtns}
                 </>
               ) : (
                 <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自{menuOptions.length ? `・メニュー（${menuOptions.join('・')}）` : ''}・担当を付けられます</span>
               )}
+            </div>
+            {staffBtns}
             </div>
           );
         })()}
