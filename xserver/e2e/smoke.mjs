@@ -35,8 +35,13 @@ const page = await ctx.newPage();
 // --- 顧客サイト
 await page.goto(`${BASE}/s/S001`);
 ok('顧客ページ表示', (await page.textContent('h1')).includes('WEB予約'));
+await page.waitForSelector('.wk-head button', { timeout: 15000 });
+ok('最初は何も選ばれていない（空き状況も出ない）', (await page.locator('.wk-head button[aria-pressed="true"]').count()) === 0 && (await page.locator('table.wk').count()) === 0 && (await page.textContent('main')).includes('どちらかをお選びください'));
+await page.getByRole('button', { name: /はじめての方/ }).click();
+ok('区分を選んでも内容はまだ未選択', (await page.locator('.wk-head [role="radio"][aria-checked="true"]').count()) === 0 && (await page.locator('table.wk').count()) === 0);
+await page.getByRole('radio', { name: /ケガ・痛み・不調/ }).click();
 await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
-ok('最初の画面が週間一覧', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('はじめての方'));
+ok('内容を選ぶと週間一覧が出る', (await page.locator('.wk-head button[aria-pressed="true"]').textContent()).includes('はじめての方'));
 // 〇 が無い週なら翌週へ進む
 let openSlot = page.locator('td.o button').first();
 for (let i = 0; i < 4 && (await openSlot.count()) === 0; i++) {
@@ -75,6 +80,8 @@ await page.getByRole('button', { name: '入力内容を確認する' }).click();
 await page.getByRole('button', { name: 'この内容で予約する' }).click();
 await page.waitForSelector('text=ご予約が確定しました', { timeout: 15000 });
 ok('予約確定', true, `${dateTitle} ${slotLabel}`);
+const doneText = await page.textContent('main');
+ok('完了画面の案内（現金のみ・マイナンバーカード・受給者証・時間に余裕）', ['現金のみ', 'マイナンバーカード', '受給者証', '余裕をもって'].every((w) => doneText.includes(w)));
 await page.screenshot({ path: 'e2e/out-customer-done.png' });
 
 // 同じ枠が 2 枠使われたか（初回=30分）は管理画面で確認する

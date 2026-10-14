@@ -9,7 +9,7 @@ interface Props { store: { code: string; name: string; phone: string }; smsEnabl
 export default function BookingApp({ store, smsEnabled }: Props) {
   // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=確認, 4=完了
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [kind, setKind] = useState<Kind>('NEW');
+  const [kind, setKind] = useState<Kind | null>(null); // 最初は未選択
   const submitKind = kind;
   const [sel, setSel] = useState<Selection | null>(null);
   const [form, setForm] = useState({ cardNo: '', name: '', phone: '' });
@@ -30,7 +30,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
 
   // 確認画面で「この内容で予約する」を押したときに初めて予約を送る
   async function submit() {
-    if (!sel || loading) return;
+    if (!sel || !kind || loading) return;
     setLoading(true); setError('');
     try {
       const r = await fetch(api('/reserve'), {
@@ -88,7 +88,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
 
       {step === 1 && (
         <section>
-          <p className="mb-2 text-xs text-slate-600">上で「はじめての方」か「ご通院したことがある方」を選び、内容を選んでから、ご希望の日時の〇を押してください。</p>
+          <p className="mb-2 text-xs text-slate-600">「はじめての方」か「ご通院したことがある方」を選び、内容を選ぶと空き状況が表示されます。ご希望の日時の〇を押してください。</p>
           {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
           <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone}
             onProceed={(s) => { setSel(s); setStep(2); setError(''); }} />
@@ -97,7 +97,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
         </section>
       )}
 
-      {step === 2 && sel && (
+      {step === 2 && sel && kind && (
         <form onSubmit={toConfirm}>
           <h2 className="mb-1 font-bold">{formatDateJa(sel.date)} {minToHm(sel.time)}〜</h2>
           <p className="mb-4 text-xs text-slate-500">{KIND_TEXT[kind]}</p>
@@ -123,7 +123,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
         </form>
       )}
 
-      {step === 3 && sel && (
+      {step === 3 && sel && kind && (
         <section>
           <h2 className="mb-1 font-bold">ご予約内容の確認</h2>
           <p className="mb-3 text-sm text-slate-600">以下の内容でお間違いありませんか？</p>
@@ -156,10 +156,14 @@ export default function BookingApp({ store, smsEnabled }: Props) {
           {done.smsStatus === 'SENT'
             ? <p className="mt-3 text-sm">確認のSMSをお送りしました。</p>
             : <p className="mt-3 text-sm text-slate-600">この画面を保存（スクリーンショット）しておいてください。</p>}
-          {kind !== 'RETURN' && <p className="mt-3 text-sm">初めての方・久しぶりの方は10分前にお越しください。</p>}
+          <ul className="mt-4 space-y-2 rounded-lg border border-brand bg-brand-light px-4 py-3 text-sm leading-relaxed text-brand-dark">
+            <li><b>お支払いは現金のみ</b>となります。</li>
+            <li><b>マイナンバーカード（保険証）</b>と、お持ちの方は<b>各種受給者証</b>を必ずお持ちください。</li>
+            <li>お時間に余裕をもってご来院ください。{kind !== 'RETURN' && '初めての方・久しぶりの方は10分前にお越しください。'}</li>
+          </ul>
           {notes}
           <p className="mt-3 text-sm">変更・キャンセルはお電話（{phoneLink}）へお願いいたします。</p>
-          <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
+          <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setKind(null); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
         </section>
       )}
 
