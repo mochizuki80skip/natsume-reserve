@@ -45,7 +45,7 @@ final class DayData
             'blocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'beds' => PublicApi::blockBeds((string)$b['beds'], Settings::allBeds($store)), 'label' => $b['label']], $blocks),
             'cancels' => array_map(fn($c) => [
                 'id' => $c['id'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'name' => $c['name'], 'contText' => $c['contText'], 'kind' => $c['kind'],
-                'source' => $c['source'], 'byCode' => $c['byCode'], 'memo' => $c['memo'], 'nextDate' => $c['nextDate'], 'createdAt' => Time::formatDateTimeShort($c['createdAt']),
+                'source' => $c['source'], 'byCode' => $c['byCode'], 'memo' => $c['memo'], 'nextDate' => $c['nextDate'], 'nextTime' => isset($c['nextTime']) ? (int)$c['nextTime'] : null, 'createdAt' => Time::formatDateTimeShort($c['createdAt']),
             ], $cancels),
         ];
     }

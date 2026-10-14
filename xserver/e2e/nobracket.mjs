@@ -30,8 +30,8 @@ await p.waitForTimeout(800);
 ok('上記初診対応を入れても人数は変わらない', await num('初診') === '2' && (await cell('9:15', 1).locator('input').inputValue()) === '上記初診対応');
 // 移動で 2 枠まとめて動く
 await cell('9:00', 1).getByLabel('メニュー').click();
-await p.getByText('別の日・時間に移動…').click();
-ok('括弧なしでも 2 枠ごと移動の扱い', await p.getByText('※2枠ごと移動します').isVisible());
+await p.getByText('キャンセル・予約変更…').click();
+ok('括弧なしでも 2 枠ごと移動の扱い', await p.getByText('※2枠ごと').isVisible());
 await p.getByRole('button', { name: 'やめる' }).click();
 // 来院チェック → 初回カルテ集計に名前だけで入る
 await cell('9:00', 1).getByLabel('来院チェック').click();

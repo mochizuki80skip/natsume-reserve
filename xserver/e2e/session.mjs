@@ -33,6 +33,9 @@ ok('店舗は選択肢を変えられない', st2 === 403, String(st2));
 await p.getByRole('link', { name: '新患・再来集計' }).click();
 await p.waitForSelector('text=新患・再来 集計（サンプル本店）');
 await p.locator('button', { hasText: '‹' }).first().click(); await p.locator('button', { hasText: '›' }).first().click();
+// 確認用のデータを入れた月（D）まで進める（ほかの確認のデータに頼らない）
+const want = `${Number(D.slice(0, 4))}年${Number(D.slice(5, 7))}月`;
+for (let i = 0; i < 24 && !(await p.textContent('body')).includes(want); i++) { await p.locator('button', { hasText: '›' }).first().click(); await p.waitForTimeout(150); }
 await p.waitForTimeout(800);
 const body = await p.textContent('body');
 ok('店舗の集計画面（対象の切替・設定タブなし）', !body.includes('選択肢・エリアの設定') && !body.includes('エリア未設定') && body.includes('件数と継続率'));

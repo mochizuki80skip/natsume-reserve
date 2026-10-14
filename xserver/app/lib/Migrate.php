@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 8;
+    private const VERSION = 9;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -64,12 +64,32 @@ final class Migrate
                 // 患者様の「ご予約の確認ページ」用の合言葉（推測できない長い文字列）
                 if (!self::hasColumn($pdo, 'reservation', 'viewToken')) $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `viewToken` VARCHAR(40) NULL, ADD UNIQUE KEY `res_view_token` (`viewToken`)');
             }
+            if ($ver < 9) {
+                // 予約変更の記録（変更先の時刻）と、消した・書き換えた入力の記録（元に戻す用）
+                if (!self::hasColumn($pdo, 'cancel_log', 'nextTime')) $pdo->exec('ALTER TABLE `cancel_log` ADD COLUMN `nextTime` INT NULL');
+                $pdo->exec(self::CELL_LOG_DDL);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const CELL_LOG_DDL = 'CREATE TABLE IF NOT EXISTS `cell_log` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `time` INT NOT NULL,
+  `bed` INT NOT NULL,
+  `before` VARCHAR(100) NOT NULL,
+  `after` VARCHAR(100) NOT NULL DEFAULT \'\',
+  `byCode` VARCHAR(20) NOT NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `cell_log_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_cell_log_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const AUDIT_DDL = 'CREATE TABLE IF NOT EXISTS `audit_log` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,

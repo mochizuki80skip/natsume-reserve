@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { formatDateShort, minToHm } from '@/lib/time';
 import NextDateInput from '@/components/NextDateInput';
+import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
 import { useAdmin } from './Layout';
 
 const STATUS_JA: Record<string, string> = { BOOKED: '予約中', CANCELLED: '取消' };
@@ -11,7 +12,7 @@ const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交
 
 interface Filter { tab: 'web' | 'cancel'; from: string; to: string; status: string; q: string }
 interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string }
-interface CancelRow { id: string; date: string; time: number; bed: number; name: string; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; createdAtText: string }
+interface CancelRow { id: string; date: string; time: number; bed: number; name: string; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAtText: string }
 interface Resp { filter: Filter; rows: (WebRow | CancelRow)[] }
 
 export default function ReservationsPage() {
@@ -73,10 +74,10 @@ export default function ReservationsPage() {
                   <td className="whitespace-nowrap px-2 py-1">{formatDateShort(c.date)} {minToHm(c.time)}</td>
                   <td className="px-2 py-1">{c.bed}</td>
                   <td className="px-2 py-1">{c.name}</td>
-                  <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${c.kind === 'ADVANCE' ? 'bg-brand-light text-brand-dark' : 'bg-red-100 text-red-800'}`}>{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</span></td>
+                  <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${CANCEL_KIND_CLASS[c.kind] ?? ''}`}>{CANCEL_KIND_JA[c.kind] ?? c.kind}</span></td>
                   <td className="px-2 py-1 text-xs">{c.source === 'WEB' ? 'WEB予約' : '電話・窓口'}</td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs text-slate-500">{c.createdAtText} {c.byCode}</td>
-                  <td className="whitespace-nowrap px-2 py-1"><NextDateInput id={c.id} value={c.nextDate} /></td>
+                  <td className="whitespace-nowrap px-2 py-1">{c.kind === 'CHANGE' ? <span className="text-xs">→ {changeTargetText(c.nextDate, c.nextTime)}</span> : <NextDateInput id={c.id} value={c.nextDate} />}</td>
                   <td className="px-2 py-1 text-xs">{c.memo ?? ''}</td>
                   <td className="px-2 py-1"><Link to={`/admin/day/${c.date}`} className="text-brand underline">予約表</Link></td>
                 </tr>

@@ -18,7 +18,7 @@ const bar = p.getByRole('group', { name: '予約のメニュー' });
 ok('メニューの帯（未選択の案内）', (await bar.textContent()).includes('名前の入ったセルをクリックすると'));
 await cell('9:00', 1).locator('input').click(); await p.keyboard.type('山田 初診'); await p.keyboard.press('Enter'); await p.waitForSelector('text=保存しました');
 await cell('9:00', 1).locator('input').click();
-const names = await bar.getByRole('button').allTextContents();
+const names = (await bar.getByRole('button').allTextContents()).filter((n) => !['新患', '再来', '新自'].includes(n));
 ok('8つのメニューが並ぶ', names.join(',') === '矯正,2回目,3回目,6回目,パイオ,テープ,追加メニュー,ワンコイン', names.join(','));
 const y0 = (await cell('9:00', 1).boundingBox()).y;
 await bar.getByRole('button', { name: 'テープ' }).click();
@@ -42,12 +42,12 @@ await cell('9:00', 1).locator('input').click(); await bar.getByRole('button', { 
 ok('外せる', (await cell('9:00', 1).getByLabel(/^メニュー：/).textContent()) === '矯');
 // 移動するとメニューも移る
 await cell('9:00', 1).getByLabel('メニュー', { exact: true }).click();
-await p.getByText('別の日・時間に移動…').click();
-await p.locator('form:has-text("予約を移動") input[type=date]').fill(D2);
-await p.waitForTimeout(500);
-await p.locator('form:has-text("予約を移動") select').selectOption('600');
-await p.getByRole('button', { name: '移動する' }).click();
-await p.waitForSelector('text=に移動しました');
+await p.getByText('キャンセル・予約変更…').click();
+await p.locator('form[aria-label="キャンセル・予約変更"] input[type=date]').fill(D2);
+await p.waitForTimeout(800);
+await p.locator('form[aria-label="キャンセル・予約変更"] select').selectOption('600');
+await p.getByRole('button', { name: 'この日時に変更する' }).click();
+await p.waitForSelector('text=に変更しました');
 const j = await p.evaluate(async (d) => (await (await fetch(`/api/admin/day?date=${d}`)).json()).data, D2);
 ok('移動先にメニューも移る', j.cells.some((c) => c.time === 600 && c.menus?.join() === '矯正'));
 // 印刷に印

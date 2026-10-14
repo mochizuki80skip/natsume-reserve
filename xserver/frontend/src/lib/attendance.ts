@@ -23,9 +23,9 @@ export function categorizeCell(text: string | null | undefined): CellCategories 
   const t = (text ?? '').trim();
   if (isContinuationText(t)) return { isNew: false, isRevisit: false, isJibai: false };
   return {
-    isNew: /[（(]初(診|自)?[）)]|初診|初自/.test(t),
+    isNew: /[（(]初(診|自)?[）)]|初診|初自|新自/.test(t),
     isRevisit: /[（(]再[）)]|再来|再診/.test(t),
-    isJibai: /自賠|事故|初自/.test(t),
+    isJibai: /自賠|事故|初自|新自/.test(t),
   };
 }
 

@@ -120,7 +120,7 @@ function hq_overview(): never
         $d = DayData::load($store, $setting, $date);
         $r = ['code' => $store['code'], 'name' => $store['name'], 'closed' => $d['day']['closed'], 'published' => $d['day']['published'],
             'rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0,
-            'cancel' => count($d['cancels']), 'noshow' => count(array_filter($d['cancels'], fn($c) => $c['kind'] === 'NOSHOW'))];
+            'cancel' => count(array_filter($d['cancels'], fn($c) => $c['kind'] !== 'CHANGE')), 'noshow' => count(array_filter($d['cancels'], fn($c) => $c['kind'] === 'NOSHOW'))];
         foreach ($d['cells'] as $c) {
             if (!Availability::isPatientText($c['text'])) continue;
             $a = Hours::isAm($d['sessions'], $c['time']);

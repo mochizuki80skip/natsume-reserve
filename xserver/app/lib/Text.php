@@ -28,9 +28,9 @@ final class Text
         $t = trim($text ?? '');
         if (self::isContinuationText($t)) return ['isNew' => false, 'isRevisit' => false, 'isJibai' => false];
         return [
-            'isNew' => (bool)preg_match('/[（(]初(診|自)?[）)]|初診|初自/u', $t),
+            'isNew' => (bool)preg_match('/[（(]初(診|自)?[）)]|初診|初自|新自/u', $t),
             'isRevisit' => (bool)preg_match('/[（(]再[）)]|再来|再診/u', $t),
-            'isJibai' => (bool)preg_match('/自賠|事故|初自/u', $t),
+            'isJibai' => (bool)preg_match('/自賠|事故|初自|新自/u', $t),
         ];
     }
 

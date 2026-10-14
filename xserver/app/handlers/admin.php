@@ -77,7 +77,8 @@ function adm_cells_put(): never
     $sid = $ctx['store']['id'];
     $beds = (int)$ctx['store']['beds'];
     $conflicts = [];
-    Db::transaction(function () use ($cells, $sid, $beds, $date, &$conflicts) {
+    $by = (string)($ctx['session']['code'] ?? '');
+    Db::transaction(function () use ($cells, $sid, $beds, $date, &$conflicts, $by) {
         $touched = [];
         foreach ($cells as $c) {
             if (!is_array($c)) throw new HttpError(400, 'bad request');
@@ -92,6 +93,12 @@ function adm_cells_put(): never
                     $conflicts[] = ['time' => $time, 'bed' => $bed, 'text' => (string)$cur['text']];
                     continue;
                 }
+            }
+            // 消した・別の名前に書き換えた入力を記録する（「元に戻す」用。1 文字ずつの打ち直しは記録しない）
+            $was = Db::one('SELECT text FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
+            $wasText = trim((string)($was['text'] ?? ''));
+            if ($wasText !== '' && !Text::isContinuationText($wasText) && $wasText !== $text && ($text === '' || (!str_starts_with($text, $wasText) && !str_starts_with($wasText, $text)))) {
+                Db::exec('INSERT INTO cell_log (id, storeId, date, time, bed, `before`, `after`, byCode, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $date, $time, $bed, $wasText, $text, $by, Time::nowJstDateTime()]);
             }
             if ($text === '') {
                 $old = Db::one('SELECT reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
@@ -236,6 +243,8 @@ function adm_move_post(): never
     } catch (HttpError) {
         Http::error('入力内容を確認してください', 400);
     }
+    $allowOver = !empty($b['allowOver']); // 予約サイトの枠がいっぱいでも、空いているベッド（管理側だけのベッド）に入れる
+    $memo = mb_substr(trim((string)($b['memo'] ?? '')), 0, 200);
     $store = $ctx['store'];
     $sid = $store['id'];
     $setting = Settings::global();
@@ -260,7 +269,12 @@ function adm_move_post(): never
         if (!$g || (int)$g['ok'] !== 1) Http::error('混み合っています。もう一度お試しください', 503);
     }
     try {
-        $moved = Db::transaction(function () use ($sid, $store, $date, $toDate, $toTime, $need, $step, $cell, $cont) {
+        $moved = Db::transaction(function () use ($sid, $store, $setting, $date, $toDate, $toTime, $need, $step, $cell, $cont, $allowOver, $memo, $ctx) {
+            // 予約サイトに出している枠（施術者の人数）がいっぱいなら、確認なしでは入れない
+            if (!$allowOver) {
+                $left = adm_slot_left($store, $setting, $toDate, $toTime, $need, [$cell['id'], $cont['id'] ?? '']);
+                if ($left !== null && $left <= 0) throw new HttpError(409, 'この時間は予約サイトの枠（施術者の人数）がいっぱいです。枠を超えて入れる場合は「枠を超えて入れる」にチェックしてください。');
+            }
             // 空いているベッド：移動先の枠がすべて空で、ブロックもかかっていないベッド（番号の小さい順）
             $targetTimes = [];
             for ($k = 0; $k < $need; $k++) $targetTimes[] = $toTime + $k * $step;
@@ -286,12 +300,81 @@ function adm_move_post(): never
             Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? '')]);
             if ($cont) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime + $step, $toBed, $cont['text'], $cont['reservationId']]);
             if ($cell['reservationId']) Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]);
+            // キャンセル・変更名簿に「予約変更」として残す（元の日の名簿に出る。予約表には戻せない）
+            Db::exec('INSERT INTO cancel_log (id, storeId, date, time, bed, name, contText, kind, source, reservationId, byCode, memo, nextDate, nextTime, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                Db::newId(), $sid, $date, (int)$cell['time'], (int)$cell['bed'], $cell['text'], $cont['text'] ?? null, 'CHANGE', $cell['reservationId'] ? 'WEB' : 'MANUAL', $cell['reservationId'], $ctx['session']['code'], $memo !== '' ? $memo : null, $toDate, $toTime, Time::nowJstDateTime(),
+            ]);
             return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need];
         });
     } finally {
         foreach ($locks as $l) Db::one('SELECT RELEASE_LOCK(?) AS r', [$l]);
     }
     Http::json(['ok' => true, 'moved' => $moved]);
+}
+
+/**
+ * その時間に予約サイトの枠（施術者の人数）があと何人分残っているか。$exclude のセル（動かす予約そのもの）は数えない。
+ * 営業時間外は null
+ */
+function adm_slot_left(array $store, array $setting, string $date, int $time, int $need, array $exclude): ?int
+{
+    $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
+    $cells = array_values(array_filter(Db::all('SELECT id, time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]), fn($c) => !in_array($c['id'], $exclude, true)));
+    $in = PublicApi::buildInput($store, $setting, $date, $need >= 2 ? 'NEW' : 'RETURN', $day['closed'] ?? false, $cells, null);
+    $left = PHP_INT_MAX;
+    for ($k = 0; $k < $need; $k++) {
+        $t = $time + $k * $setting['slotMinutes'];
+        $left = min($left, Availability::capacityAt($in, $time) - Availability::occupiedCountAt($in, $t));
+    }
+    return $left === PHP_INT_MAX ? null : $left;
+}
+
+/** 予約変更ダイアログ用：その日の時間ごとの「枠の残り」と「空いているベッド」（{ date, slots: 1|2, from: {date,time,bed} }） */
+function adm_move_slots(): never
+{
+    $ctx = Auth::context();
+    $store = $ctx['store'];
+    $setting = Settings::global();
+    $date = Http::query('date', '');
+    if (!Time::isValidDate($date)) Http::error('日付が正しくありません', 400);
+    $need = Http::query('slots') === '2' ? 2 : 1;
+    $exclude = [];
+    $fd = Http::query('fromDate', '');
+    if ($fd === $date) {
+        $ft = (int)Http::query('fromTime', '0');
+        $fb = (int)Http::query('fromBed', '0');
+        foreach (Db::all('SELECT id FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (?, ?)', [$store['id'], $date, $fb, $ft, $ft + $setting['slotMinutes']]) as $c) $exclude[] = $c['id'];
+    }
+    $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
+    $times = Hours::slotTimes(Settings::storeSessions($store, $setting, $date, $day['closed'] ?? false), $setting['slotMinutes'], true);
+    $cells = array_values(array_filter(Db::all('SELECT id, time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]), fn($c) => !in_array($c['id'], $exclude, true)));
+    $in = PublicApi::buildInput($store, $setting, $date, $need >= 2 ? 'NEW' : 'RETURN', $day['closed'] ?? false, $cells, null);
+    $out = [];
+    foreach ($times as $t) {
+        $ok = true;
+        for ($k = 0; $k < $need; $k++) if (!in_array($t + $k * $setting['slotMinutes'], $times, true)) $ok = false;
+        if (!$ok) continue;
+        $left = PHP_INT_MAX;
+        $beds = 0;
+        foreach (Settings::allBeds($store) as $bb) {
+            $free = true;
+            for ($k = 0; $k < $need; $k++) if (isset($in['occupied'][Availability::key($t + $k * $setting['slotMinutes'], $bb)])) $free = false;
+            if ($free) $beds++;
+        }
+        for ($k = 0; $k < $need; $k++) $left = min($left, Availability::capacityAt($in, $t) - Availability::occupiedCountAt($in, $t + $k * $setting['slotMinutes']));
+        $out[] = ['time' => $t, 'left' => max(0, $left), 'beds' => $beds];
+    }
+    Http::json(['date' => $date, 'slots' => $out]);
+}
+
+/** その日に消した・書き換えた入力（新しい順。元に戻す用） */
+function adm_cell_log_get(): never
+{
+    $ctx = Auth::context();
+    $date = Http::query('date', '');
+    if (!Time::isValidDate($date)) Http::error('日付が正しくありません', 400);
+    $rows = Db::all('SELECT id, time, bed, `before`, `after`, byCode, createdAt FROM cell_log WHERE storeId = ? AND date = ? ORDER BY createdAt DESC LIMIT 50', [$ctx['store']['id'], $date]);
+    Http::json(['rows' => array_map(fn($r) => ['id' => $r['id'], 'time' => (int)$r['time'], 'bed' => (int)$r['bed'], 'before' => $r['before'], 'after' => $r['after'], 'byCode' => $r['byCode'], 'createdAt' => $r['createdAt']], $rows)]);
 }
 
 /** 名簿から予約表に戻す */
@@ -303,6 +386,7 @@ function adm_cancel_delete(): never
     $sid = $ctx['store']['id'];
     $log = Db::one('SELECT * FROM cancel_log WHERE id = ? AND storeId = ?', [$id, $sid]);
     if (!$log) Http::error('not found', 404);
+    if ($log['kind'] === 'CHANGE') Http::error('予約変更の記録は予約表に戻せません（変更先の日に予約があります）', 409);
     $step = Settings::global()['slotMinutes'];
     $times = $log['contText'] ? [(int)$log['time'], (int)$log['time'] + $step] : [(int)$log['time']];
     $busy = Db::all('SELECT text FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($times) . ')', array_merge([$sid, $log['date'], $log['bed']], $times));
@@ -421,8 +505,8 @@ function adm_reservations_export(): never
     $list = adm_log_rows($store, $f, 5000);
     if ($f['tab'] === 'cancel') {
         $header = ['予約日', '時刻', 'ベッド', '氏名', '区分', '種別', '登録日時', '登録者', '次回予約', 'メモ'];
-        $rows = array_map(fn($c) => [$c['date'], Time::minToHm((int)$c['time']), (int)$c['bed'], $c['name'], $c['kind'] === 'ADVANCE' ? '事前連絡' : '無断', $c['source'] === 'WEB' ? 'WEB予約' : '電話・窓口', $c['createdAt'], $c['byCode'], $c['nextDate'] ?? '', $c['memo'] ?? ''], $list);
-        $label = 'キャンセル名簿';
+        $rows = array_map(fn($c) => [$c['date'], Time::minToHm((int)$c['time']), (int)$c['bed'], $c['name'], ($c['kind'] === 'ADVANCE' ? '事前連絡' : ($c['kind'] === 'CHANGE' ? '予約変更' : '無断')), $c['source'] === 'WEB' ? 'WEB予約' : '電話・窓口', $c['createdAt'], $c['byCode'], trim(($c['nextDate'] ?? '') . ($c['nextTime'] !== null ? ' ' . Time::minToHm((int)$c['nextTime']) : '')), $c['memo'] ?? ''], $list);
+        $label = 'キャンセル・変更名簿';
     } else {
         $header = ['受付日時', '予約日', '時刻', 'ベッド', '区分', '氏名', '診察券番号', '電話番号', '状態'];
         $rows = array_map(fn($r) => [$r['createdAt'], $r['date'], Time::minToHm((int)$r['time']), (int)$r['bed'], ADM_KIND_JA[$r['kind']] ?? $r['kind'], $r['name'], $r['cardNo'] ?? '', Text::formatJpPhone($r['phone']), ADM_STATUS_JA[$r['status']] ?? $r['status']], $list);

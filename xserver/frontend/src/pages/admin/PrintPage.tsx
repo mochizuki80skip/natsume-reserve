@@ -9,10 +9,11 @@ import { categorizeCell, isContinuationText } from '@/lib/attendance';
 import { menuColor, menuShort } from '@/lib/menus';
 import type { DayResponse } from '@/lib/types';
 import PrintButton from '@/components/PrintButton';
+import { CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
 
 // 区分ごとのセルの色（印刷・PDF でも色が残るよう、薄めの色にする）
 const KIND_BG = { NEW: '#fde0de', ACCIDENT: '#fde9c4', REVISIT: '#d9e7fb' } as const;
-const KIND_NAME = { NEW: '初診', ACCIDENT: '初自（交通事故）', REVISIT: '再来' } as const;
+const KIND_NAME = { NEW: '初診', ACCIDENT: '初自・新自（交通事故）', REVISIT: '再来' } as const;
 type PrintKind = keyof typeof KIND_BG;
 const kindOfText = (text: string): PrintKind | null => {
   const c = categorizeCell(text);
@@ -59,8 +60,11 @@ export default function PrintPage() {
   const menuOptions = d.menuOptions ?? [];
   const usedMenus = [...new Set(d.cells.flatMap((c) => c.menus ?? []))].sort((a, b) => (menuOptions.indexOf(a) + 1 || 99) - (menuOptions.indexOf(b) + 1 || 99));
   const Chip = ({ m }: { m: string }) => <span className="ml-px inline-block min-w-[9px] rounded-[2px] px-[1px] text-center text-[7px] font-bold leading-[9px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</span>;
-  // 行の高さ：A4 縦（有効 約 277mm）に 32 行＋見出し＋名簿を収める
-  const rowMm = d.times.length > 30 ? 4.6 : 5.2;
+  // 行の高さ：A4 縦いっぱい（余白 8mm を除いた高さ 281mm）から、見出し・表の見出し・名簿・メモの高さを引いた残りを行数で割る
+  const cancelMm = 4 + (d.cancels.length ? 4.5 + d.cancels.length * 4.3 : 5);
+  const memoMm = d.day.memo ? 5 + d.day.memo.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 30)), 0) * 3.6 : 0;
+  const fixedMm = 7 + 4.5 + 4.5 + 9 + Math.max(cancelMm, memoMm) + 6; // 見出し・名簿の行・凡例・表の見出し 2 行・名簿／メモ・ゆとり
+  const rowMm = Math.max(4.6, Math.min(9, (281 - fixedMm) / Math.max(1, d.times.length)));
 
   return (
     // print-color-adjust：ブラウザの印刷・PDF 保存でも背景の色を残す
@@ -106,7 +110,8 @@ export default function PrintPage() {
               {cols.map((b) => <th key={b} className={`border border-black px-0.5 ${b > Math.max(d.capacity.am, d.capacity.pm) ? 'bg-slate-200' : ''}`}>{b}</th>)}
             </tr>
           </thead>
-          <tbody>
+          {/* 行が高いときは文字も少し大きく */}
+          <tbody style={rowMm >= 6.5 ? { fontSize: '12px' } : undefined}>
             {d.times.map((t, r) => (
               <tr key={t} className={r > 0 && isAm(d.sessions, d.times[r - 1]) && !isAm(d.sessions, t) ? 'border-t-2 border-t-black' : ''} style={{ height: `${rowMm}mm` }}>
                 <td className={`border border-black px-0.5 text-center font-mono ${d.customerTimes.includes(t) ? '' : 'bg-slate-100'}`}>{minToHm(t)}</td>
@@ -128,13 +133,13 @@ export default function PrintPage() {
       )}
       <div className="mt-1 flex gap-2">
         <div className="flex-1">
-          <div className="text-[9px] font-bold">キャンセル名簿</div>
+          <div className="text-[9px] font-bold">キャンセル・変更名簿</div>
           {d.cancels.length === 0 ? <div className="border border-black px-1 py-0.5 text-[9px] text-slate-500">なし</div> : (
             <table className="w-full border-collapse text-[9px]">
               <thead><tr><th className="border border-black px-1 text-left">時刻</th><th className="border border-black px-1">ベッド</th><th className="border border-black px-1 text-left">氏名</th><th className="border border-black px-1">区分</th><th className="border border-black px-1">種別</th><th className="border border-black px-1">次回予約</th><th className="border border-black px-1 text-left">メモ</th></tr></thead>
               <tbody>
                 {d.cancels.map((c) => (
-                  <tr key={c.id}><td className="border border-black px-1 font-mono">{minToHm(c.time)}</td><td className="border border-black px-1 text-center">{c.bed}</td><td className="border border-black px-1">{c.name}</td><td className="border border-black px-1 text-center">{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</td><td className="border border-black px-1 text-center">{c.source === 'WEB' ? 'WEB' : '電話'}</td><td className="border border-black px-1 text-center">{c.nextDate ? formatDateShort(c.nextDate) : ''}</td><td className="border border-black px-1">{c.memo ?? ''}</td></tr>
+                  <tr key={c.id}><td className="border border-black px-1 font-mono">{minToHm(c.time)}</td><td className="border border-black px-1 text-center">{c.bed}</td><td className="border border-black px-1">{c.name}</td><td className="border border-black px-1 text-center">{CANCEL_KIND_JA[c.kind] ?? c.kind}</td><td className="border border-black px-1 text-center">{c.source === 'WEB' ? 'WEB' : '電話'}</td><td className="border border-black px-1 text-center">{c.kind === 'CHANGE' ? `→${changeTargetText(c.nextDate, c.nextTime)}` : c.nextDate ? formatDateShort(c.nextDate) : ''}</td><td className="border border-black px-1">{c.memo ?? ''}</td></tr>
                 ))}
               </tbody>
             </table>

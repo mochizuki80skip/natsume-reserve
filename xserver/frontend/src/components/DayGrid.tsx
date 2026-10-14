@@ -10,7 +10,10 @@ import { categorizeCell, cellState, isContinuationText, type CellState } from '@
 import { formatJpPhone } from '@/lib/format';
 import NextDateInput from './NextDateInput';
 import BlockPanel, { blockBedsText } from './BlockPanel';
-import MoveDialog from './MoveDialog';
+import ChangeDialog, { type ChangeFrom } from './ChangeDialog';
+import CellLogPanel from './CellLogPanel';
+import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
+import { applyKindTag, kindTagOf, type KindTag, KIND_TAGS } from '@/lib/kindTag';
 import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
@@ -39,6 +42,14 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const [conflictMsg, setConflictMsg] = useState('');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef(new Map<string, HTMLInputElement>());
+  // 元に戻す：変更のまとまり（セルごとの「前」と「後」）を新しい順に積む。画面を開いている間だけ
+  const history = useRef<{ k: string; before: string; after: string }[][]>([]);
+  const [historyLen, setHistoryLen] = useState(0);
+  const focusSnap = useRef<{ k: string; val: string } | null>(null);
+  // 複数セルの選択（Shift＋クリック／Shift＋矢印）。家族・親子などをまとめてコピー・貼り付け
+  const anchor = useRef<{ r: number; c: number } | null>(null);
+  const [range, setRange] = useState<{ r0: number; c0: number; r1: number; c1: number } | null>(null);
+  const extending = useRef(false);
 
   // 現在時刻（日本時間）。当日は毎分更新して「未チェック」「未来院」の表示を切り替える
   const [nowMin, setNowMin] = useState<number | null>(() => (data.date < today ? Infinity : data.date === today ? nowJst().minutes : null));
@@ -97,6 +108,38 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     schedule();
   }
 
+  // ---------- 元に戻す ----------
+  function pushHistory(batch: { k: string; before: string; after: string }[]) {
+    const b = batch.filter((x) => x.before !== x.after);
+    if (!b.length) return;
+    history.current.push(b);
+    if (history.current.length > 50) history.current.shift();
+    setHistoryLen(history.current.length);
+  }
+  /** まとめて書き換えて、元に戻せるように記録する */
+  function setCellsTracked(changes: { time: number; bed: number; text: string }[]) {
+    const batch = changes.map((c) => ({ k: key(c.time, c.bed), before: cells.get(key(c.time, c.bed)) ?? '', after: c.text }));
+    for (const c of changes) setCell(c.time, c.bed, c.text);
+    pushHistory(batch);
+    syncSnap(changes);
+  }
+  // 入力中のセルをボタンなどで書き換えたときは、そのセルの「入力前の内容」も合わせる（二重に記録しない）
+  function syncSnap(changes: { time: number; bed: number; text: string }[]) {
+    const snap = focusSnap.current;
+    if (!snap) return;
+    const hit = changes.find((c) => key(c.time, c.bed) === snap.k);
+    if (hit) focusSnap.current = { k: snap.k, val: hit.text };
+  }
+  function undo() {
+    const b = history.current.pop();
+    setHistoryLen(history.current.length);
+    if (!b) return;
+    for (const x of [...b].reverse()) { const [time, bed] = x.k.split(':').map(Number); setCell(time, bed, x.before); }
+    syncSnap(b.map((x) => { const [time, bed] = x.k.split(':').map(Number); return { time, bed, text: x.before }; }));
+    const first = b[0].k.split(':').map(Number);
+    setPasteInfo(`元に戻しました（${b.length} セル：${minToHm(first[0])} ベッド${first[1]} など）`);
+  }
+
   // ---------- 自動更新（30 秒ごと・画面に戻ったとき） ----------
   // 新しく読み込んだ内容を画面に反映する。入力中・直前（15 秒以内）に触ったセルはそのまま（保存時にサーバーが確認する）
   const firstLoad = useRef(true);
@@ -145,6 +188,30 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     inputs.current.get(key(rows[r], cols[c]))?.focus();
   }
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>, r: number, c: number) {
+    // Ctrl+Z：打ちかけの文字が無ければ、この画面での変更を 1 つ戻す（打ちかけはブラウザの元に戻すに任せる）
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && e.currentTarget.value === (focusSnap.current?.val ?? e.currentTarget.value)) {
+      if (history.current.length) { e.preventDefault(); undo(); }
+      return;
+    }
+    // Shift＋矢印：選択を広げる
+    const ext: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    if (e.shiftKey && e.key in ext) {
+      e.preventDefault();
+      const nr = Math.max(0, Math.min(rows.length - 1, r + ext[e.key][0])), nc = Math.max(0, Math.min(cols.length - 1, c + ext[e.key][1]));
+      const a = anchor.current ?? { r, c };
+      anchor.current = a;
+      extending.current = true;
+      setRange({ r0: Math.min(a.r, nr), c0: Math.min(a.c, nc), r1: Math.max(a.r, nr), c1: Math.max(a.c, nc) });
+      focusCell(nr, nc);
+      return;
+    }
+    if (e.key === 'Escape') { setRange(null); return; }
+    // 複数セルを選んでいるときの Delete：まとめて消す（元に戻せる）
+    if ((e.key === 'Delete' || e.key === 'Backspace') && range && rangeSize(range) > 1) {
+      e.preventDefault();
+      clearRange(range);
+      return;
+    }
     const nav: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], Enter: [1, 0] };
     if (e.key in nav) { e.preventDefault(); focusCell(r + nav[e.key][0], c + nav[e.key][1]); return; }
     if (e.key === 'Tab') { e.preventDefault(); focusCell(r, c + (e.shiftKey ? -1 : 1)); return; }
@@ -157,16 +224,41 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     if (!text.includes('\n') && !text.includes('\t')) return;
     e.preventDefault();
     const plan = planPaste(text, rows, r);
-    let n = 0;
+    const changes: { time: number; bed: number; text: string }[] = [];
     for (const cell of plan.cells) {
       const cc = c + cell.col;
-      if (cell.row < rows.length && cc < cols.length) { setCell(rows[cell.row], cols[cc], cell.text); n++; }
+      if (cell.row < rows.length && cc < cols.length) changes.push({ time: rows[cell.row], bed: cols[cc], text: cell.text });
     }
+    setCellsTracked(changes);
+    const n = changes.length;
+    if (n > 1) setRange({ r0: plan.timeAligned ? Math.min(...plan.cells.map((x) => x.row)) : r, c0: c, r1: Math.min(rows.length - 1, Math.max(...plan.cells.map((x) => x.row))), c1: Math.min(cols.length - 1, c + Math.max(...plan.cells.map((x) => x.col))) });
     const notes = [`${n} セルを貼り付けました`];
     if (plan.timeAligned) notes.push('時間列で行を合わせました');
     if (plan.mergedCollapsed) notes.push('結合セル（2列=1ベッド）を1列にまとめました');
     if (plan.skippedTimes.length) notes.push(`予約表に無い時刻は飛ばしました：${plan.skippedTimes.join('、')}`);
-    setPasteInfo(notes.join('。'));
+    setPasteInfo(notes.join('。') + '（間違えたときは「元に戻す」）');
+  }
+  // ---------- 複数セルのコピー・切り取り・消去 ----------
+  const rangeSize = (g: { r0: number; c0: number; r1: number; c1: number }) => (g.r1 - g.r0 + 1) * (g.c1 - g.c0 + 1);
+  const inRange = (r: number, c: number) => !!range && r >= range.r0 && r <= range.r1 && c >= range.c0 && c <= range.c1;
+  function rangeText(g: { r0: number; c0: number; r1: number; c1: number }) {
+    const lines: string[] = [];
+    for (let r = g.r0; r <= g.r1; r++) { const row: string[] = []; for (let c = g.c0; c <= g.c1; c++) row.push(cells.get(key(rows[r], cols[c])) ?? ''); lines.push(row.join('\t')); }
+    return lines.join('\n');
+  }
+  function clearRange(g: { r0: number; c0: number; r1: number; c1: number }) {
+    const changes: { time: number; bed: number; text: string }[] = [];
+    for (let r = g.r0; r <= g.r1; r++) for (let c = g.c0; c <= g.c1; c++) if ((cells.get(key(rows[r], cols[c])) ?? '') !== '') changes.push({ time: rows[r], bed: cols[c], text: '' });
+    setCellsTracked(changes);
+    setPasteInfo(`${changes.length} セルを消しました（間違えたときは「元に戻す」）`);
+  }
+  function onCopyCut(e: React.ClipboardEvent<HTMLInputElement>, cut: boolean) {
+    if (!range || rangeSize(range) <= 1) return;
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', rangeText(range));
+    const n = rangeSize(range);
+    if (cut) clearRange(range);
+    else setPasteInfo(`${n} セルをコピーしました。貼り付けたい場所の左上のセルを押して Ctrl+V`);
   }
 
   // ---------- 来院チェック・キャンセル ----------
@@ -178,36 +270,26 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     const r = await fetch('/api/admin/visit', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, visited: next }) });
     if (!r.ok) { setVisited((s) => { const n = new Set(s); if (next) n.delete(k); else n.add(k); return n; }); alert('来院チェックの保存に失敗しました'); }
   }
-  // キャンセル：メモと次回予約日を入力する小さなダイアログを出してから名簿へ移す
-  const [cancelDlg, setCancelDlg] = useState<{ time: number; bed: number; kind: 'ADVANCE' | 'NOSHOW'; name: string; memo: string; nextDate: string } | null>(null);
-  async function cancelCell(time: number, bed: number, kind: 'ADVANCE' | 'NOSHOW') {
+  // キャンセル・予約変更（1 つのダイアログ）
+  const [changeDlg, setChangeDlg] = useState<ChangeFrom | null>(null);
+  const [moveMsg, setMoveMsg] = useState<{ text: string; date: string } | null>(null);
+  async function openChange(time: number, bed: number) {
     setMenu(null);
     await flush();
-    setCancelDlg({ time, bed, kind, name: cells.get(key(time, bed)) ?? '', memo: '', nextDate: '' });
+    setChangeDlg({ date: data.date, time, bed, name: cells.get(key(time, bed)) ?? '', twoSlots: isContinuationText(cells.get(key(time + data.slotMinutes, bed))) });
   }
-  async function submitCancel() {
-    if (!cancelDlg) return;
-    const { time, bed, kind, memo, nextDate } = cancelDlg;
-    const r = await fetch('/api/admin/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, kind, memo, nextDate }) });
-    if (!r.ok) { alert((await r.json()).error ?? 'キャンセルに失敗しました'); return; }
-    setCancelDlg(null);
+  function cancelled() {
+    if (!changeDlg) return;
+    const { time, bed } = changeDlg;
     touchedAt.current.set(key(time, bed), Date.now()); touchedAt.current.set(key(time + data.slotMinutes, bed), Date.now());
     setCells((m) => { const n = new Map(m); n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); return n; });
     setMenus((m) => { const n = new Map(m); n.delete(key(time, bed)); return n; });
+    setChangeDlg(null);
     onRefresh();
   }
-  // 予約の移動（別の日・時間。ベッドは自動）
-  const [moveDlg, setMoveDlg] = useState<{ date: string; time: number; bed: number; name: string; twoSlots: boolean } | null>(null);
-  const [moveMsg, setMoveMsg] = useState<{ text: string; date: string } | null>(null);
-  async function openMove(time: number, bed: number) {
-    setMenu(null);
-    await flush();
-    const name = cells.get(key(time, bed)) ?? '';
-    setMoveDlg({ date: data.date, time, bed, name, twoSlots: isContinuationText(cells.get(key(time + data.slotMinutes, bed))) });
-  }
   function moved(to: { date: string; time: number; bed: number; slots: number }) {
-    if (!moveDlg) return;
-    const { time, bed, twoSlots } = moveDlg;
+    if (!changeDlg) return;
+    const { time, bed, twoSlots } = changeDlg;
     for (const k of [key(time, bed), key(time + data.slotMinutes, bed), key(to.time, to.bed), key(to.time + data.slotMinutes, to.bed)]) touchedAt.current.set(k, Date.now());
     setCells((m) => {
       const n = new Map(m);
@@ -215,7 +297,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       const cont = n.get(key(time + data.slotMinutes, bed)) ?? '';
       n.set(key(time, bed), '');
       if (twoSlots) n.set(key(time + data.slotMinutes, bed), '');
-      // 同じ日の中で動かしたときは、移動先にも表示する
+      // 同じ日の中で動かしたときは、変更先にも表示する
       if (to.date === data.date) { n.set(key(to.time, to.bed), name); if (twoSlots) n.set(key(to.time + data.slotMinutes, to.bed), cont); }
       return n;
     });
@@ -227,8 +309,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       if (list && to.date === data.date) n.set(key(to.time, to.bed), list);
       return n;
     });
-    setMoveMsg({ text: `${moveDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に移動しました`, date: to.date });
-    setMoveDlg(null);
+    setMoveMsg({ text: `${changeDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に変更しました`, date: to.date });
+    setChangeDlg(null);
     onRefresh();
   }
   // メニューの付け外し（先に氏名を保存してから送る）
@@ -245,22 +327,36 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       alert((await r.json().catch(() => ({}))).error ?? 'メニューを保存できませんでした');
     }
   }
+  // 新患・再来・新自：氏名の後ろに（初診）（再来）（新自）を付け外しし、下のセルの「上記初診対応」「上記再来対応」も合わせる
+  function setKindTag(time: number, bed: number, tag: KindTag) {
+    const text = cells.get(key(time, bed)) ?? '';
+    const { text: next, cont } = applyKindTag(text, tag);
+    const changes = [{ time, bed, text: next }];
+    const t2 = time + data.slotMinutes;
+    const below = cells.get(key(t2, bed)) ?? '';
+    if (rows.includes(t2)) {
+      if (cont && (below.trim() === '' || isContinuationText(below))) changes.push({ time: t2, bed, text: cont });
+      else if (!cont && isContinuationText(below)) changes.push({ time: t2, bed, text: '' });
+    }
+    setCellsTracked(changes);
+    inputs.current.get(key(time, bed))?.focus();
+  }
   // 下のセルに「上記初診対応」「上記再来対応」を入れる（手入力の初診・再来用。打ち込まなくてよい）
   function fillBelow(time: number, bed: number, text: string) {
     setMenu(null);
     const t2 = time + data.slotMinutes;
     if (!rows.includes(t2)) { alert('下の時間が予約表にないため入れられません'); return; }
     if ((cells.get(key(t2, bed)) ?? '').trim()) { alert('下のセルにすでに入力があります'); return; }
-    setCell(t2, bed, text);
+    setCellsTracked([{ time: t2, bed, text }]);
   }
   // セルをクリックしたら文字を全部選ぶ（そのまま Ctrl+C でコピー、入力すると置き換え）
   const justFocused = useRef(false);
   function deleteCell(time: number, bed: number) {
     setMenu(null);
-    if (!confirm('この入力を削除します（名簿には残しません）。よろしいですか？')) return;
-    setCell(time, bed, '');
-    const k2 = key(time + data.slotMinutes, bed);
-    if (isContinuationText(cells.get(k2))) setCell(time + data.slotMinutes, bed, '');
+    const changes = [{ time, bed, text: '' }];
+    if (isContinuationText(cells.get(key(time + data.slotMinutes, bed)))) changes.push({ time: time + data.slotMinutes, bed, text: '' });
+    setCellsTracked(changes);
+    setPasteInfo('削除しました（間違えたときは「元に戻す」）');
   }
   async function restore(id: string) {
     const r = await fetch('/api/admin/cancel', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
@@ -323,6 +419,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     return [...out.entries()].sort((a, b) => order(a[0]) - order(b[0]));
   }, [menus, cells, data.sessions, menuOptions]);
 
+  // 「未来院」の赤は出さない（予約時刻を過ぎて未チェックの黄色だけで見る）
+  const noRed = (st: CellState): CellState => (st === 'noshow' ? 'pending' : st);
   /** セルの色。2枠目は1枠目（同じベッドの1つ前の枠）の状態に合わせる */
   function stateOf(t: number, b: number): CellState {
     const k = key(t, b);
@@ -332,9 +430,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       const pt = t - data.slotMinutes;
       const ptext = cells.get(key(pt, b)) ?? '';
       if (!ptext.trim()) return 'none';
-      return cellState(visited.has(key(pt, b)), pt, nowMin);
+      return noRed(cellState(visited.has(key(pt, b)), pt, nowMin));
     }
-    return cellState(visited.has(k), t, nowMin);
+    return noRed(cellState(visited.has(k), t, nowMin));
   }
   const shiftLabel: Record<string, string> = { WORK: '〇', OFF: '休', AM_OFF: '前休', PM_OFF: '後休', PAID: '有給', AM_PAID: '前有', PM_PAID: '後有', HELP: 'ヘルプ', AM_HELP: '前ヘルプ', PM_HELP: '後ヘルプ' };
 
@@ -344,7 +442,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, -1)}`)}>‹ 前日</button>
         <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1" />
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, 1)}`)}>翌日 ›</button>
-        <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${today}`)}>今日</button>
+        <button type="button" className={`rounded px-4 py-1 font-bold ${data.date === today ? 'border border-brand bg-brand-light text-brand-dark' : 'bg-brand text-white'}`} onClick={() => navigate(`/admin/day/${today}`)} aria-current={data.date === today ? 'date' : undefined}>本日</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={undo} disabled={historyLen === 0} className="rounded border bg-white px-3 py-1 disabled:opacity-40" title="この画面で入力・削除・貼り付けしたものを 1 つずつ戻します（Ctrl+Z）">↶ 元に戻す{historyLen ? `（${historyLen}）` : ''}</button>
         <span className="ml-auto text-xs text-slate-500">
           {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '保存しました' : saveState === 'error' ? '保存に失敗しました' : '入力すると自動保存されます'}
           <span className="ml-2 text-slate-400">（30秒ごとに最新の内容に自動更新）</span>
@@ -432,7 +531,6 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <span><i className="mr-1 inline-block h-3 w-3 border bg-sky-50 align-[-2px]" />WEB予約</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-green-100 align-[-2px]" />来院チェック済み</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-yellow-100 align-[-2px]" />予約時刻を過ぎて未チェック</span>
-        <span><i className="mr-1 inline-block h-3 w-3 border bg-red-100 align-[-2px]" />未来院（予約時刻＋30分）</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
       </div>
@@ -448,17 +546,25 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日・臨時休診）のため予約表はありません。営業する場合は「臨時休診」を外すか、店舗設定の営業時間を確認してください。</p>
       ) : (
         <>
-        {menuOptions.length > 0 && (() => {
+        {(() => {
           const sk = sel ? key(sel.time, sel.bed) : '';
           const sText = sel ? cells.get(sk) ?? '' : '';
           const ok = !!sel && sText.trim() !== '' && !isContinuationText(sText);
           const cur = ok ? menus.get(sk) ?? [] : [];
+          const tag = ok ? kindTagOf(sText) : null;
           return (
             <div className="no-print sticky top-0 z-10 mb-1 flex min-h-[38px] flex-wrap items-center gap-1.5 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
               <span className="mr-1 text-xs font-bold text-slate-600">メニュー</span>
               {ok ? (
                 <>
                   <span className="mr-1 max-w-[16rem] truncate text-xs text-slate-600">{minToHm(sel!.time)} ベッド{sel!.bed}　<b className="text-slate-800">{sText}</b></span>
+                  {KIND_TAGS.map((kt) => (
+                    <button key={kt.tag} type="button" aria-pressed={tag === kt.tag} onMouseDown={(e) => e.preventDefault()} onClick={() => setKindTag(sel!.time, sel!.bed, kt.tag)}
+                      title={`氏名の後ろに${kt.suffix}を付けます（もう一度押すと外れます）。下のセルに「${kt.cont}」も入ります`}
+                      className={`rounded border-2 px-2 py-0.5 text-xs font-bold ${tag === kt.tag ? 'border-transparent text-slate-900' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'}`}
+                      style={tag === kt.tag ? { background: kt.color } : undefined}>{kt.tag}</button>
+                  ))}
+                  <span className="mx-0.5 h-5 w-px bg-slate-300" aria-hidden="true" />
                   {menuOptions.map((m) => {
                     const on = cur.includes(m);
                     return (
@@ -469,7 +575,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                   })}
                 </>
               ) : (
-                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここでメニュー（{menuOptions.join('・')}）を付けられます</span>
+                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自{menuOptions.length ? `とメニュー（${menuOptions.join('・')}）` : ''}を付けられます</span>
               )}
             </div>
           );
@@ -516,9 +622,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                       const bg = STATE_BG[st] || (web ? 'bg-sky-50' : bBlock && !text ? 'bg-slate-300' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '');
                       const hasName = text.trim() !== '' && !cont;
                       const cellMenus = hasName ? menus.get(k) ?? [] : [];
-                      const isSel = !!sel && sel.time === t && sel.bed === b && hasName && menuOptions.length > 0;
+                      const isSel = !!sel && sel.time === t && sel.bed === b && hasName;
+                      const ranged = inRange(r, c);
                       return (
-                        <td key={b} className={`grid-cell border p-0 ${bg} ${isSel ? 'outline outline-2 -outline-offset-2 outline-brand' : ''}`}
+                        <td key={b} className={`grid-cell border p-0 ${ranged ? 'bg-indigo-100' : bg} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''}`}
                           title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
                           <div className="relative flex items-center">
                             {hasName && (
@@ -536,13 +643,31 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                               onChange={(e) => setCell(t, b, e.target.value)}
                               onKeyDown={(e) => onKeyDown(e, r, c)}
                               onPaste={(e) => onPaste(e, r, c)}
-                              onBlur={flush}
-                              onFocus={(e) => { e.currentTarget.select(); justFocused.current = true; setSel({ time: t, bed: b }); }}
+                              onCopy={(e) => onCopyCut(e, false)}
+                              onCut={(e) => onCopyCut(e, true)}
+                              onMouseDown={(e) => {
+                                // Shift＋クリック：最初に押したセルからここまでをまとめて選ぶ
+                                if (e.shiftKey && anchor.current) {
+                                  e.preventDefault();
+                                  const a = anchor.current;
+                                  setRange({ r0: Math.min(a.r, r), c0: Math.min(a.c, c), r1: Math.max(a.r, r), c1: Math.max(a.c, c) });
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const snap = focusSnap.current;
+                                if (snap && snap.k === k && snap.val !== e.currentTarget.value) pushHistory([{ k, before: snap.val, after: e.currentTarget.value }]);
+                                focusSnap.current = null;
+                                void flush();
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.select(); justFocused.current = true; setSel({ time: t, bed: b });
+                                focusSnap.current = { k, val: e.currentTarget.value };
+                                if (extending.current) extending.current = false; else { anchor.current = { r, c }; setRange(null); }
+                              }}
                               onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}
                               placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
-                              className={`${hasName ? (st === 'noshow' || st === 'pending' ? 'pr-16' : 'pr-4') : ''} ${bBlock ? 'placeholder:text-slate-600' : ''}`}
+                              className={`${hasName ? (st === 'pending' ? 'pr-16' : 'pr-4') : ''} ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
-                            {hasName && st === 'noshow' && <span className="no-print pointer-events-none absolute right-4 rounded bg-red-600 px-1 text-[10px] leading-4 text-white">未来院</span>}
                             {hasName && st === 'pending' && <span className="no-print pointer-events-none absolute right-4 rounded bg-yellow-600 px-1 text-[10px] leading-4 text-white">未チェック</span>}
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); setMenu(menu === k ? null : k); }} aria-label="メニュー"
@@ -557,10 +682,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                                     <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => fillBelow(t, b, '上記再来対応')}>下のセルに「上記再来対応」</button>
                                   </>
                                 )}
-                                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => openMove(t, b)}>別の日・時間に移動…</button>
                                 <div className="my-1 border-t" />
-                                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => cancelCell(t, b, 'ADVANCE')}>キャンセル（連絡あり）→ 名簿へ</button>
-                                <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => cancelCell(t, b, 'NOSHOW')}>無断キャンセル → 名簿へ</button>
+                                <button type="button" className="block w-full px-3 py-1.5 text-left font-bold hover:bg-brand-light" onClick={() => openChange(t, b)}>キャンセル・予約変更…</button>
                                 <div className="my-1 border-t" />
                                 <button type="button" className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50" onClick={() => deleteCell(t, b)}>削除（入力ミス・名簿に残さない）</button>
                               </div>
@@ -581,7 +704,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         </>
       )}
 
-      <h2 className="mt-4 flex items-center gap-2 text-base font-bold">キャンセル名簿 <span className="text-xs font-normal text-slate-500">この日にキャンセルになった予約。セルからは外れているので枠は空いています。</span></h2>
+      <h2 className="mt-4 flex items-center gap-2 text-base font-bold">キャンセル・変更名簿 <span className="text-xs font-normal text-slate-500">この日にキャンセル・予約変更になった予約。セルからは外れているので枠は空いています。</span></h2>
       <div className="mt-1 overflow-x-auto rounded border bg-white">
         <table className="w-full text-sm">
           <thead><tr className="bg-slate-100 text-left text-xs"><th className="px-2 py-1">時刻</th><th className="px-2 py-1">ベッド</th><th className="px-2 py-1">氏名</th><th className="px-2 py-1">区分</th><th className="px-2 py-1">種別</th><th className="px-2 py-1">登録</th><th className="px-2 py-1">次回予約</th><th className="px-2 py-1">メモ</th><th className="no-print"></th></tr></thead>
@@ -591,45 +714,31 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                 <td className="px-2 py-1 font-mono">{minToHm(c.time)}</td>
                 <td className="px-2 py-1 text-center">{c.bed}</td>
                 <td className="px-2 py-1">{c.name}</td>
-                <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${c.kind === 'ADVANCE' ? 'bg-brand-light text-brand-dark' : 'bg-red-100 text-red-800'}`}>{c.kind === 'ADVANCE' ? '事前連絡' : '無断'}</span></td>
+                <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${CANCEL_KIND_CLASS[c.kind] ?? ''}`}>{CANCEL_KIND_JA[c.kind] ?? c.kind}</span></td>
                 <td className="px-2 py-1 text-xs">{c.source === 'WEB' ? 'WEB予約' : '電話・窓口'}</td>
                 <td className="px-2 py-1 text-xs text-slate-500">{c.createdAt} {c.byCode}</td>
-                <td className="whitespace-nowrap px-2 py-1"><NextDateInput key={c.id + (c.nextDate ?? '')} id={c.id} value={c.nextDate} /></td>
+                <td className="whitespace-nowrap px-2 py-1">{c.kind === 'CHANGE'
+                  ? (c.nextDate && c.nextDate !== data.date ? <button type="button" className="text-xs text-violet-800 underline" onClick={() => navigate(`/admin/day/${c.nextDate}`)}>→ {changeTargetText(c.nextDate, c.nextTime)}</button> : <span className="text-xs text-violet-800">→ {changeTargetText(c.nextDate, c.nextTime)}</span>)
+                  : <NextDateInput key={c.id + (c.nextDate ?? '')} id={c.id} value={c.nextDate} />}</td>
                 <td className="px-2 py-1"><input defaultValue={c.memo ?? ''} onBlur={(e) => e.target.value !== (c.memo ?? '') && saveMemo(c.id, e.target.value)} placeholder="メモ" className="w-full rounded border px-1 text-xs" /></td>
-                <td className="no-print px-2 py-1 text-right"><button type="button" onClick={() => restore(c.id)} className="text-xs text-brand underline">予約表に戻す</button></td>
+                <td className="no-print px-2 py-1 text-right">{c.kind !== 'CHANGE' && <button type="button" onClick={() => restore(c.id)} className="text-xs text-brand underline">予約表に戻す</button>}</td>
               </tr>
             ))}
-            {data.cancels.length === 0 && <tr><td colSpan={9} className="px-2 py-2 text-xs text-slate-400">キャンセルはありません</td></tr>}
+            {data.cancels.length === 0 && <tr><td colSpan={9} className="px-2 py-2 text-xs text-slate-400">キャンセル・変更はありません</td></tr>}
           </tbody>
         </table>
       </div>
 
-      {moveDlg && <MoveDialog from={moveDlg} onClose={() => setMoveDlg(null)} onMoved={moved} />}
+      {changeDlg && <ChangeDialog from={changeDlg} onClose={() => setChangeDlg(null)} onMoved={moved} onCancelled={cancelled} />}
       {moveMsg && (
         <div className="no-print fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
           {moveMsg.text}
-          {moveMsg.date !== data.date && <button type="button" onClick={() => { setMoveMsg(null); navigate(`/admin/day/${moveMsg.date}`); }} className="rounded bg-white/20 px-2 py-0.5 underline">移動先の日を開く</button>}
+          {moveMsg.date !== data.date && <button type="button" onClick={() => { setMoveMsg(null); navigate(`/admin/day/${moveMsg.date}`); }} className="rounded bg-white/20 px-2 py-0.5 underline">変更先の日を開く</button>}
           <button type="button" onClick={() => setMoveMsg(null)} aria-label="閉じる" className="text-white/70">✕</button>
         </div>
       )}
-      {cancelDlg && (
-        <div className="no-print fixed inset-0 z-30 flex items-center justify-center bg-black/30 p-4" onClick={() => setCancelDlg(null)}>
-          <div className="w-full max-w-md rounded-lg border bg-white p-4 text-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold">{cancelDlg.kind === 'ADVANCE' ? 'キャンセル（連絡あり）' : '無断キャンセル'}</h3>
-            <p className="mt-1 text-slate-600">「{cancelDlg.name}」（{minToHm(cancelDlg.time)} ベッド{cancelDlg.bed}）をキャンセル名簿に移します。枠は空きます。</p>
-            <label className="mt-3 block">次回予約が取れている場合はその日付<span className="ml-1 text-xs text-slate-500">（無ければ空欄）</span>
-              <input type="date" value={cancelDlg.nextDate} onChange={(e) => setCancelDlg({ ...cancelDlg, nextDate: e.target.value })} className="mt-1 block rounded border px-2 py-1" />
-            </label>
-            <label className="mt-3 block">メモ<span className="ml-1 text-xs text-slate-500">（空欄可）</span>
-              <input value={cancelDlg.memo} onChange={(e) => setCancelDlg({ ...cancelDlg, memo: e.target.value })} maxLength={200} className="mt-1 w-full rounded border px-2 py-1" placeholder="例）体調不良のため" />
-            </label>
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setCancelDlg(null)} className="rounded border px-3 py-1">やめる</button>
-              <button type="button" onClick={submitCancel} className="rounded bg-brand px-3 py-1 text-white">名簿へ移す</button>
-            </div>
-          </div>
-        </div>
-      )}
+
+      <CellLogPanel date={data.date} isEmpty={(time, bed) => !(cells.get(key(time, bed)) ?? '').trim()} onRestore={(time, bed, text) => { setCellsTracked([{ time, bed, text }]); setPasteInfo(`${minToHm(time)} ベッド${bed} に「${text}」を戻しました`); }} />
 
       <div className="mt-3">
         <label className="block text-sm text-slate-600">メモ（電話・とびこみ など）
@@ -639,7 +748,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       <p className="no-print mt-2 text-xs text-slate-500">
         セルに氏名を入力すると自動保存されます。Excel／スプレッドシートからの貼り付けは、<b>時間の列を含めて</b>（例：B7:L36）コピーし、9:00 のベッド1 のセルで Ctrl+V。
         時刻で行を合わせ、結合セル（2列で1ベッド）は自動で1列にまとめます。矢印キー／Enter／Tab で移動。
-        氏名の左の □ で来院チェック、右の「⋯」でキャンセル（名簿へ）や削除。初診の 2 枠目「上記初診対応」、再来の「上記再来対応」は 1 枠目と同じ色になり、人数には数えません。初診・再来は「山田 初診」「山田 再来」のように括弧なしでも数えます（「初」「再」1文字のときは「（初）」「（再）」と括弧が必要）。内訳の「自賠」は、セルに「自賠」または「事故」と入力すると数えます（例：山田 自賠）。
+        氏名の左の □ で来院チェック、右の「⋯」でキャンセル・予約変更や削除。Shift＋クリック（または Shift＋矢印）で複数のセルを選んで Ctrl+C／Ctrl+X／Delete、貼り付けは左上のセルで Ctrl+V。間違えたら「↶ 元に戻す」（Ctrl+Z）。初診の 2 枠目「上記初診対応」、再来の「上記再来対応」は 1 枠目と同じ色になり、人数には数えません。初診・再来は「山田 初診」「山田 再来」のように括弧なしでも数えます（「初」「再」1文字のときは「（初）」「（再）」と括弧が必要）。内訳の「自賠」は、セルに「自賠」または「事故」と入力すると数えます（例：山田 自賠）。
         黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません。
       </p>
     </div>

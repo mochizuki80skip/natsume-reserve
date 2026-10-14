@@ -179,10 +179,26 @@ CREATE TABLE IF NOT EXISTS `cancel_log` (
   `byCode` VARCHAR(20) NOT NULL,
   `memo` VARCHAR(200) NULL,
   `nextDate` CHAR(10) NULL,
+  `nextTime` INT NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `cancel_store_date` (`storeId`, `date`),
   CONSTRAINT `fk_cancel_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `cell_log` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `time` INT NOT NULL,
+  `bed` INT NOT NULL,
+  `before` VARCHAR(100) NOT NULL,
+  `after` VARCHAR(100) NOT NULL DEFAULT '',
+  `byCode` VARCHAR(20) NOT NULL,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `cell_log_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_cell_log_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `rate_limit` (
