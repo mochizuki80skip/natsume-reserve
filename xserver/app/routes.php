@@ -32,6 +32,8 @@ function route_table(): array
         ['GET', '#^/api/admin/web-new$#', 'adm_web_new_get'],
         ['PUT', '#^/api/admin/cell-menus$#', 'adm_cell_menus_put'],
         ['GET', '#^/api/admin/move-slots$#', 'adm_move_slots'],
+        ['PUT', '#^/api/admin/cell-staff$#', 'adm_cell_staff_put'],
+        ['GET', '#^/api/admin/staff-counts$#', 'adm_staff_counts'],
         ['GET', '#^/api/admin/cell-log$#', 'adm_cell_log_get'],
         ['PUT', '#^/api/admin/days$#', 'adm_days_put'],
         ['PUT', '#^/api/admin/visit$#', 'adm_visit_put'],

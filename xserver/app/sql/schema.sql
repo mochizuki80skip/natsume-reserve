@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS `cell` (
   `visited` TINYINT(1) NOT NULL DEFAULT 0,
   `reservationId` VARCHAR(32) NULL,
   `menus` VARCHAR(300) NOT NULL DEFAULT '',
+  `staff` VARCHAR(30) NOT NULL DEFAULT '',
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `cell_pos` (`storeId`, `date`, `time`, `bed`),

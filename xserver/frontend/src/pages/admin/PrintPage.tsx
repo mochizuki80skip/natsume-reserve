@@ -7,18 +7,12 @@ import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { categorizeCell, isContinuationText } from '@/lib/attendance';
 import { menuColor, menuShort } from '@/lib/menus';
+import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, VISIT_COLORS } from '@/lib/cellColor';
 import type { DayResponse } from '@/lib/types';
 import PrintButton from '@/components/PrintButton';
 import { CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
 
-// 区分ごとのセルの色（印刷・PDF でも色が残るよう、薄めの色にする）
-const KIND_BG = { NEW: '#fde0de', ACCIDENT: '#fde9c4', REVISIT: '#d9e7fb' } as const;
-const KIND_NAME = { NEW: '初診', ACCIDENT: '初自・新自（交通事故）', REVISIT: '再来' } as const;
-type PrintKind = keyof typeof KIND_BG;
-const kindOfText = (text: string): PrintKind | null => {
-  const c = categorizeCell(text);
-  return c.isNew ? (c.isJibai ? 'ACCIDENT' : 'NEW') : c.isRevisit ? 'REVISIT' : null;
-};
+// セルの色は画面と同じ（初診・再来・新自 → 回数の 2・3・6回目）
 
 export default function PrintPage() {
   const { date = '' } = useParams();
@@ -51,11 +45,11 @@ export default function PrintPage() {
     return c.visited;
   };
   // 2 枠目（上記初診対応・上記再来対応）は 1 枠目と同じ色
-  const kindAt = (t: number, b: number): PrintKind | null => {
+  const colorAt = (t: number, b: number) => {
     const c = cell.get(`${t}:${b}`);
-    if (!c) return null;
-    if (isContinuationText(c.text)) { const p = cell.get(`${t - d.slotMinutes}:${b}`); return p ? kindOfText(p.text) : null; }
-    return kindOfText(c.text);
+    if (!c || !c.text.trim()) return null;
+    if (isContinuationText(c.text)) { const p = cell.get(`${t - d.slotMinutes}:${b}`); return p ? cellColor(p.text, p.menus ?? []) : null; }
+    return cellColor(c.text, c.menus ?? []);
   };
   const menuOptions = d.menuOptions ?? [];
   const usedMenus = [...new Set(d.cells.flatMap((c) => c.menus ?? []))].sort((a, b) => (menuOptions.indexOf(a) + 1 || 99) - (menuOptions.indexOf(b) + 1 || 99));
@@ -84,7 +78,8 @@ export default function PrintPage() {
         <span>✓＝来院　網掛け＝予約サイト非表示／管理側のみの枠</span>
       </div>
       <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[8.5px] text-slate-700">
-        {(Object.keys(KIND_BG) as PrintKind[]).map((k) => <span key={k}><i className="mr-0.5 inline-block h-2 w-3 border border-slate-400 align-[-1px]" style={{ background: KIND_BG[k] }} />{KIND_NAME[k]}</span>)}
+        {(Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[]).map((k) => <span key={k}><i className="mr-0.5 inline-block h-2 w-3 border border-slate-400 align-[-1px]" style={{ background: KIND_COLORS[k] }} />{KIND_COLOR_NAMES[k]}</span>)}
+        {Object.entries(VISIT_COLORS).map(([m, c]) => <span key={m}><i className="mr-0.5 inline-block h-2 w-3 border border-slate-400 align-[-1px]" style={{ background: c }} />{m}</span>)}
         {usedMenus.length > 0 && <span className="ml-1">メニュー：{usedMenus.map((m) => <span key={m} className="mr-1.5 whitespace-nowrap"><Chip m={m} />{m}</span>)}</span>}
       </div>
       {d.times.length === 0 ? <p>休診日</p> : (
@@ -118,11 +113,11 @@ export default function PrintPage() {
                 {cols.map((b) => {
                   const c = cell.get(`${t}:${b}`);
                   const v = visitedOf(t, b);
-                  const kind = kindAt(t, b);
+                  const color = colorAt(t, b);
                   return (
-                    <td key={b} className={`overflow-hidden whitespace-nowrap border border-black px-0.5 ${!kind && b > (isAm(d.sessions, t) ? d.capacity.am : d.capacity.pm) ? 'bg-slate-100' : ''}`}
-                      style={kind ? { background: KIND_BG[kind] } : undefined}>
-                      {v && c && !isContinuationText(c.text) ? <span className="mr-0.5 font-bold">✓</span> : null}{c?.menus?.length ? <span className="mr-0.5">{c.menus.map((m) => <Chip key={m} m={m} />)}</span> : null}{c?.text ?? ''}
+                    <td key={b} className={`overflow-hidden whitespace-nowrap border border-black px-0.5 ${!color && b > (isAm(d.sessions, t) ? d.capacity.am : d.capacity.pm) ? 'bg-slate-100' : ''}`}
+                      style={color ? { background: color.bg, color: color.dark ? '#fff' : undefined, fontWeight: color.dark ? 700 : undefined } : undefined}>
+                      {v && c && !isContinuationText(c.text) ? <span className="mr-0.5 font-bold">✓</span> : null}{c?.menus?.length ? <span className="mr-0.5">{c.menus.map((m) => <Chip key={m} m={m} />)}</span> : null}{c?.text ?? ''}{c?.staff && !isContinuationText(c.text) ? <span className="ml-1 rounded-full border border-current px-1 text-[8px] font-bold">{c.staff}</span> : null}
                     </td>
                   );
                 })}

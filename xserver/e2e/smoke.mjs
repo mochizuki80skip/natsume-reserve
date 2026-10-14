@@ -295,7 +295,7 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   await ap.reload(); await ap.waitForSelector('table');
   const visitedCount = await ap.locator('td.text-green-700').nth(1).textContent();
   ok('来院チェック → 午後の来院人数 1', visitedCount.trim() === '1', visitedCount);
-  ok('来院チェック済みは2枠目も緑', (await rowOf('15:15').locator('td.bg-green-100').count()) === 1);
+  ok('来院チェック済みは2枠目も緑', (await rowOf('15:15').locator('td[class*="inset_4px_0_0"]').count()) === 1);
   // 名簿へ
   await rowOf('15:00').locator('button[aria-label="メニュー"]').first().click();
   await ap.getByRole('button', { name: 'キャンセル・予約変更…' }).click();

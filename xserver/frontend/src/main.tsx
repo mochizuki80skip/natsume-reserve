@@ -22,6 +22,7 @@ import JibaiHqPage from './pages/admin/JibaiHqPage';
 import StoryPage from './pages/admin/StoryPage';
 import KartePage from './pages/admin/KartePage';
 import KarteHqPage from './pages/admin/KarteHqPage';
+import StaffCountsPage from './pages/admin/StaffCountsPage';
 import AccountsPage from './pages/admin/AccountsPage';
 import UpdatesPage from './pages/admin/UpdatesPage';
 
@@ -47,6 +48,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="story" element={<StoryPage />} />
           <Route path="karte" element={<KartePage />} />
           <Route path="karte/summary" element={<KarteHqPage />} />
+          <Route path="staff-counts" element={<StaffCountsPage />} />
           <Route path="hq/karte" element={<KarteHqPage />} />
           <Route path="hq/accounts" element={<AccountsPage />} />
           <Route path="updates" element={<UpdatesPage />} />

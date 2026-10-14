@@ -15,12 +15,12 @@ import CellLogPanel from './CellLogPanel';
 import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
 import { applyKindTag, kindTagOf, type KindTag, KIND_TAGS } from '@/lib/kindTag';
 import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
+import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, VISIT_COLORS } from '@/lib/cellColor';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
 const key = (time: number, bed: number) => `${time}:${bed}`;
 const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
-const STATE_BG: Record<CellState, string> = { visited: 'bg-green-100', noshow: 'bg-red-100', pending: 'bg-yellow-100', none: '' };
 
 export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const navigate = useNavigate();
@@ -30,6 +30,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const [menus, setMenus] = useState<Map<string, string[]>>(() => new Map(data.cells.filter((c) => c.menus?.length).map((c) => [key(c.time, c.bed), c.menus!])));
   const [sel, setSel] = useState<{ time: number; bed: number } | null>(null);
   const menuOptions = data.menuOptions ?? [];
+  // 予約ごとの担当者と、初回の担当が同姓同名で決められなかったセル（「担当を確認」）
+  const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map(data.cells.filter((c) => c.staff).map((c) => [key(c.time, c.bed), c.staff!])));
+  const [staffCheck, setStaffCheck] = useState<Set<string>>(() => new Set(data.cells.filter((c) => c.staffCheck).map((c) => key(c.time, c.bed))));
+  const staffOptions = data.staffOptions ?? [];
   const webInfo = useMemo(() => new Map(data.cells.filter((c) => c.web).map((c) => [key(c.time, c.bed), c.web!])), [data.cells]);
   const [day, setDay] = useState(data.day);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -167,6 +171,17 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       }
       return n;
     });
+    const freshStaff = new Map(data.cells.filter((c) => c.staff).map((c) => [key(c.time, c.bed), c.staff!]));
+    setStaffMap((m) => {
+      const n = new Map(m);
+      for (const k of new Set([...m.keys(), ...freshStaff.keys()])) {
+        if (recent(k)) continue;
+        const v = freshStaff.get(k);
+        if (v) n.set(k, v); else n.delete(k);
+      }
+      return n;
+    });
+    setStaffCheck(new Set(data.cells.filter((c) => c.staffCheck).map((c) => key(c.time, c.bed))));
     const freshVisited = new Set(data.cells.filter((c) => c.visited).map((c) => key(c.time, c.bed)));
     setVisited((v) => {
       const n = new Set(freshVisited);
@@ -309,6 +324,13 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       if (list && to.date === data.date) n.set(key(to.time, to.bed), list);
       return n;
     });
+    setStaffMap((m) => {
+      const n = new Map(m);
+      const st = n.get(key(time, bed));
+      n.delete(key(time, bed));
+      if (st && to.date === data.date) n.set(key(to.time, to.bed), st);
+      return n;
+    });
     setMoveMsg({ text: `${changeDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に変更しました`, date: to.date });
     setChangeDlg(null);
     onRefresh();
@@ -325,7 +347,32 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     if (!r.ok) {
       setMenus((m) => { const n = new Map(m); if (before.length) n.set(k, before); else n.delete(k); return n; });
       alert((await r.json().catch(() => ({}))).error ?? 'メニューを保存できませんでした');
+      return;
     }
+    // 2回目・3回目などを付けると、初回を担当したスタッフが担当に入る
+    const j = await r.json().catch(() => ({})) as { staff?: string; staffCheck?: boolean };
+    if (j.staff) setStaffMap((m) => new Map(m).set(k, j.staff!));
+    setStaffCheck((s) => { const n = new Set(s); if (j.staffCheck) n.add(k); else n.delete(k); return n; });
+  }
+  // 担当者をまとめて付ける・外す（選んだ範囲の、氏名の入ったセル）
+  function targetCells(): { time: number; bed: number }[] {
+    const out: { time: number; bed: number }[] = [];
+    const add = (r: number, c: number) => { const t = rows[r], b = cols[c]; const v = cells.get(key(t, b)) ?? ''; if (v.trim() && !isContinuationText(v)) out.push({ time: t, bed: b }); };
+    if (range && rangeSize(range) > 1) { for (let r = range.r0; r <= range.r1; r++) for (let c = range.c0; c <= range.c1; c++) add(r, c); }
+    else if (sel) add(rows.indexOf(sel.time), cols.indexOf(sel.bed));
+    return out;
+  }
+  async function setStaffFor(name: string) {
+    const list = targetCells();
+    if (!list.length) return;
+    await flush();
+    const before = new Map(staffMap);
+    for (const c of list) touchedAt.current.set(key(c.time, c.bed), Date.now());
+    setStaffMap((m) => { const n = new Map(m); for (const c of list) { if (name) n.set(key(c.time, c.bed), name); else n.delete(key(c.time, c.bed)); } return n; });
+    setStaffCheck((s) => { const n = new Set(s); for (const c of list) n.delete(key(c.time, c.bed)); return n; });
+    const r = await fetch('/api/admin/cell-staff', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: list, staff: name }) });
+    if (!r.ok) { setStaffMap(before); alert((await r.json().catch(() => ({}))).error ?? '担当を保存できませんでした'); return; }
+    setPasteInfo(name ? `${list.length} 件に担当「${name}」を付けました` : `${list.length} 件の担当を外しました`);
   }
   // 新患・再来・新自：氏名の後ろに（初診）（再来）（新自）を付け外しし、下のセルの「上記初診対応」「上記再来対応」も合わせる
   function setKindTag(time: number, bed: number, tag: KindTag) {
@@ -528,9 +575,12 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       </div>
 
       <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-        <span><i className="mr-1 inline-block h-3 w-3 border bg-sky-50 align-[-2px]" />WEB予約</span>
-        <span><i className="mr-1 inline-block h-3 w-3 border bg-green-100 align-[-2px]" />来院チェック済み</span>
-        <span><i className="mr-1 inline-block h-3 w-3 border bg-yellow-100 align-[-2px]" />予約時刻を過ぎて未チェック</span>
+        {(Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[]).map((kk) => <span key={kk}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: KIND_COLORS[kk] }} />{KIND_COLOR_NAMES[kk]}</span>)}
+        {Object.entries(VISIT_COLORS).map(([m, c]) => <span key={m}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{m}</span>)}
+        <span><i className="mr-1 inline-block h-3 w-3 border border-l-4 border-l-green-700 align-[-2px]" />来院チェック済み（左に緑の線）</span>
+        <span><span className="mr-1 rounded bg-yellow-600 px-1 text-[10px] text-white">未チェック</span>予約時刻を過ぎて未チェック</span>
+        <span><span className="mr-1 rounded-sm border border-sky-600 px-[2px] text-[8px] font-bold text-sky-700">WEB</span>WEB予約</span>
+        <span><span className="mr-1 rounded-full border border-brand px-1.5 text-[10px] font-bold text-brand-dark">名前</span>担当</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
       </div>
@@ -552,10 +602,28 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           const ok = !!sel && sText.trim() !== '' && !isContinuationText(sText);
           const cur = ok ? menus.get(sk) ?? [] : [];
           const tag = ok ? kindTagOf(sText) : null;
+          const multi = !!range && rangeSize(range) > 1;
+          const curStaff = ok && !multi ? staffMap.get(sk) ?? '' : '';
+          const staffBtns = staffOptions.length > 0 && (ok || multi) && (
+            <>
+              <span className="mx-0.5 h-5 w-px bg-slate-300" aria-hidden="true" />
+              <span className="text-xs font-bold text-slate-600">担当</span>
+              {staffOptions.map((n) => (
+                <button key={n} type="button" aria-pressed={curStaff === n} onMouseDown={(e) => e.preventDefault()} onClick={() => setStaffFor(n)}
+                  className={`rounded-full border-2 px-2 py-0.5 text-xs font-bold ${curStaff === n ? 'border-brand bg-brand text-white' : 'border-brand/40 bg-white text-brand-dark hover:border-brand'}`}>{n}</button>
+              ))}
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setStaffFor('')} className="rounded-full border px-2 py-0.5 text-xs text-slate-500 hover:border-slate-400">担当を外す</button>
+            </>
+          );
           return (
             <div className="no-print sticky top-0 z-10 mb-1 flex min-h-[38px] flex-wrap items-center gap-1.5 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
               <span className="mr-1 text-xs font-bold text-slate-600">メニュー</span>
-              {ok ? (
+              {multi ? (
+                <>
+                  <span className="mr-1 text-xs text-slate-600"><b className="text-slate-800">{targetCells().length} 件</b>選択中（Shift＋クリックで範囲を選ぶと、担当をまとめて付けられます）</span>
+                  {staffBtns}
+                </>
+              ) : ok ? (
                 <>
                   <span className="mr-1 max-w-[16rem] truncate text-xs text-slate-600">{minToHm(sel!.time)} ベッド{sel!.bed}　<b className="text-slate-800">{sText}</b></span>
                   {KIND_TAGS.map((kt) => (
@@ -573,9 +641,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                         style={on ? { background: menuColor(m, menuOptions) } : undefined}>{m}</button>
                     );
                   })}
+                  {staffBtns}
                 </>
               ) : (
-                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自{menuOptions.length ? `とメニュー（${menuOptions.join('・')}）` : ''}を付けられます</span>
+                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自{menuOptions.length ? `・メニュー（${menuOptions.join('・')}）` : ''}・担当を付けられます</span>
               )}
             </div>
           );
@@ -619,19 +688,26 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                       const cont = isContinuationText(text);
                       const st = stateOf(t, b);
                       const bBlock = blk.find((x) => x.beds.includes(b));
-                      const bg = STATE_BG[st] || (web ? 'bg-sky-50' : bBlock && !text ? 'bg-slate-300' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '');
                       const hasName = text.trim() !== '' && !cont;
                       const cellMenus = hasName ? menus.get(k) ?? [] : [];
+                      // セルの色：初診・再来・新自 → 回数（2・3・6回目）。2 枠目は 1 枠目に合わせる
+                      const pk = key(t - data.slotMinutes, b);
+                      const color = !text.trim() ? null : cont ? cellColor(cells.get(pk) ?? '', menus.get(pk) ?? []) : cellColor(text, cellMenus);
+                      const bg = color ? '' : bBlock && !text ? 'bg-slate-300' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '';
+                      const staffName = hasName ? staffMap.get(k) ?? '' : '';
+                      const needCheck = hasName && !staffName && staffCheck.has(k);
                       const isSel = !!sel && sel.time === t && sel.bed === b && hasName;
                       const ranged = inRange(r, c);
                       return (
-                        <td key={b} className={`grid-cell border p-0 ${ranged ? 'bg-indigo-100' : bg} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''}`}
+                        <td key={b} className={`grid-cell border p-0 ${ranged ? 'bg-indigo-100' : bg} ${color?.dark && !ranged ? 'dark-cell' : ''} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''} ${st === 'visited' ? 'shadow-[inset_4px_0_0_#15803d]' : ''}`}
+                          style={color && !ranged ? { background: color.bg } : undefined}
                           title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
-                          <div className="relative flex items-center">
+                          <div className={`relative flex items-center ${hasName ? 'pr-4' : ''}`}>
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={() => toggleVisit(t, b)} aria-label={visited.has(k) ? '来院チェックを外す' : '来院チェック'}
                                 className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
                             )}
+                            {web && hasName && <span className="ml-0.5 flex-none rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700" title="WEB予約">WEB</span>}
                             {cellMenus.length > 0 && (
                               <span className="ml-0.5 flex flex-none gap-px" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
                                 {cellMenus.map((m) => <i key={m} className="min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</i>)}
@@ -666,9 +742,11 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                               }}
                               onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}
                               placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
-                              className={`${hasName ? (st === 'pending' ? 'pr-16' : 'pr-4') : ''} ${bBlock ? 'placeholder:text-slate-600' : ''}`}
+                              className={`min-w-0 flex-1 ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
-                            {hasName && st === 'pending' && <span className="no-print pointer-events-none absolute right-4 rounded bg-yellow-600 px-1 text-[10px] leading-4 text-white">未チェック</span>}
+                            {hasName && st === 'pending' && <span className="no-print pointer-events-none flex-none rounded bg-yellow-600 px-1 text-[10px] leading-4 text-white">未チェック</span>}
+                            {staffName && <span className="ml-0.5 flex-none rounded-full border border-brand bg-white px-1.5 text-[10px] font-bold leading-4 text-brand-dark" title={`担当：${staffName}`}>{staffName}</span>}
+                            {needCheck && <span className="no-print ml-0.5 flex-none rounded bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white" title="同じ名前の初回の患者様が複数いるため、担当を自動で付けられませんでした">担当を確認</span>}
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); setMenu(menu === k ? null : k); }} aria-label="メニュー"
                                 className="no-print absolute right-0 top-0 h-full w-4 text-xs text-slate-400 hover:text-slate-700">⋯</button>

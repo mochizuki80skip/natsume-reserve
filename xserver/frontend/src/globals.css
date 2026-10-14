@@ -10,6 +10,9 @@ body { @apply bg-slate-50 text-slate-800; }
   @apply w-full h-full px-1 py-0.5 text-sm bg-transparent outline-none;
 }
 .grid-cell input:focus { @apply bg-yellow-50 ring-2 ring-brand; }
+/* 回数（2回目など）の濃い色のセルは文字を白に（入力中は読みやすいよう黒） */
+.grid-cell.dark-cell input:not(:focus) { color: #fff; font-weight: 700; }
+.grid-cell.dark-cell input::placeholder { color: #e2e8f0; }
 
  /* 顧客サイト 週間一覧 */
 .wk-head { position: sticky; top: 0; z-index: 5; background: #f8fafc; padding-bottom: 6px; }

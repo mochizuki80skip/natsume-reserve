@@ -59,8 +59,8 @@ final class Karte
     /** 「山田 太郎（初診）」「山田 太郎 初診」→「山田 太郎」 */
     public static function nameOfText(string $text): string
     {
-        $t = preg_replace('/\s*[（(](初診|初自|初|再)[）)]\s*/u', ' ', $text) ?? $text;
-        $t = preg_replace('/\s*(初診|初自|再来|再診)\s*/u', ' ', $t) ?? $t;
+        $t = preg_replace('/\s*[（(](初診|初自|初|再|再来|新自)[）)]\s*/u', ' ', $text) ?? $text;
+        $t = preg_replace('/\s*(初診|初自|新自|再来|再診)\s*/u', ' ', $t) ?? $t;
         return trim(preg_replace('/\s+/u', ' ', $t) ?? $t);
     }
 
@@ -73,7 +73,7 @@ final class Karte
         $dates = Time::datesOfMonth($ym);
         $first = $dates[0];
         $last = $dates[count($dates) - 1];
-        $cells = Db::all('SELECT date, time, bed, text, visited FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0', [$store['id'], $first, $last]);
+        $cells = Db::all('SELECT date, time, bed, text, visited, staff FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0', [$store['id'], $first, $last]);
         $want = [];
         $exists = [];
         foreach ($cells as $c) {
@@ -81,7 +81,7 @@ final class Karte
             $exists[$k] = true;
             if (!(int)$c['visited']) continue;
             $kind = self::kindOfText((string)$c['text']);
-            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text'])];
+            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? '')];
         }
         $rows = Db::all('SELECT id, date, srcTime, srcBed, edited FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? AND auto = 1', [$store['id'], $first, $last]);
         $have = [];
@@ -94,11 +94,82 @@ final class Karte
         }
         foreach ($want as $k => $w) {
             if (isset($have[$k])) continue;
-            Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, symptomCat, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)', [
+            Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)', [
                 Db::newId(), $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr($w['name'], 0, 40),
-                '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', self::emptyVisits(),
+                '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
         }
+    }
+
+    /** メニューの「2回目」〜「6回目」から回数を返す（初回カルテ集計の到達に数えるのは 2〜6 回目まで） */
+    public static function visitNo(array $menus): ?int
+    {
+        foreach ($menus as $m) {
+            if (preg_match('/^(\d+)回目$/u', trim((string)$m), $mm)) {
+                $n = (int)$mm[1];
+                if ($n >= 2 && $n <= 1 + self::VISITS) return $n;
+            }
+        }
+        return null;
+    }
+
+    /** 回数のメニュー（2回目・3回目・12回目 など）が付いているか */
+    public static function hasCountMenu(array $menus): bool
+    {
+        foreach ($menus as $m) if (preg_match('/^\d+回目$/u', trim((string)$m))) return true;
+        return false;
+    }
+
+    /**
+     * その患者様の初回（初診・再来）の行。同じ店舗で名前が同じ、その日より前の初回のうち一番新しいもの。
+     * 半年以内に別の担当の同じ名前の初回があるとき（同姓同名の可能性）は ambiguous
+     * @return array{row: ?array, ambiguous: bool}
+     */
+    public static function firstVisitOf(array $store, string $text, string $date): array
+    {
+        $name = self::nameOfText($text);
+        if ($name === '') return ['row' => null, 'ambiguous' => false];
+        $rows = Db::all('SELECT id, date, staff, visits, edited FROM karte WHERE storeId = ? AND name = ? AND date < ? ORDER BY date DESC LIMIT 5', [$store['id'], $name, $date]);
+        if (!$rows) return ['row' => null, 'ambiguous' => false];
+        $amb = false;
+        foreach (array_slice($rows, 1) as $r) {
+            if ($r['date'] >= Time::addDays($rows[0]['date'], -183) && $r['staff'] !== '' && $rows[0]['staff'] !== '' && $r['staff'] !== $rows[0]['staff']) $amb = true;
+        }
+        return ['row' => $rows[0], 'ambiguous' => $amb];
+    }
+
+    /**
+     * 予約表のセルの内容を初回カルテ集計に反映する。
+     * - 初診・再来のセル：来院チェック済みなら行を作り、担当を「担当」に入れる（手で直した行は、担当が空のときだけ入れる）
+     * - 2〜6回目のセル：来院チェック済みなら、その患者様の初回の行の「n回目」に日付と担当を入れる（空のときだけ。チェックを外したら消す）
+     */
+    public static function reflectCell(array $store, string $date, int $time, int $bed): void
+    {
+        $c = Db::one('SELECT text, visited, menus, staff FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$store['id'], $date, $time, $bed]);
+        if (!$c) return;
+        $text = (string)$c['text'];
+        $staff = (string)$c['staff'];
+        if (self::kindOfText($text)) {
+            self::sync($store, substr($date, 0, 7));
+            if ($staff !== '') Db::exec("UPDATE karte SET staff = ? WHERE storeId = ? AND date = ? AND srcTime = ? AND srcBed = ? AND (edited = 0 OR staff = '')", [$staff, $store['id'], $date, $time, $bed]);
+            return;
+        }
+        $n = self::visitNo(DayData::menusOf((string)$c['menus']));
+        if ($n === null) return;
+        $fv = self::firstVisitOf($store, $text, $date);
+        if (!$fv['row'] || $fv['ambiguous']) return;
+        $v = json_decode((string)$fv['row']['visits'], true);
+        if (!is_array($v)) $v = [];
+        for ($i = 0; $i < self::VISITS; $i++) $v[$i] = ['d' => (string)($v[$i]['d'] ?? ''), 's' => (string)($v[$i]['s'] ?? ''), 't' => (string)($v[$i]['t'] ?? '')];
+        $i = $n - 2;
+        $changed = false;
+        if ((int)$c['visited']) {
+            if ($v[$i]['d'] === '') { $v[$i]['d'] = $date; $changed = true; }
+            if ($v[$i]['d'] === $date && $staff !== '' && $v[$i]['s'] !== $staff) { $v[$i]['s'] = $staff; $changed = true; }
+        } elseif ($v[$i]['d'] === $date) {
+            $v[$i]['d'] = ''; $changed = true;
+        }
+        if ($changed) Db::exec('UPDATE karte SET visits = ? WHERE id = ?', [json_encode($v, JSON_UNESCAPED_UNICODE), $fv['row']['id']]);
     }
 
     public static function emptyVisits(): string

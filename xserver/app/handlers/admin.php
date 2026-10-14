@@ -133,10 +133,82 @@ function adm_cell_menus_put(): never
         $m = mb_substr(trim((string)$m), 0, 20);
         if ($m !== '' && !in_array($m, $menus, true)) $menus[] = $m;
     }
-    $cell = Db::one('SELECT id, text FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed]);
+    $cell = Db::one('SELECT id, text, staff FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed]);
     if (!$cell || trim((string)$cell['text']) === '') Http::error('先に氏名を入力してください', 404);
     Db::exec('UPDATE cell SET menus = ? WHERE id = ?', [$menus ? json_encode($menus, JSON_UNESCAPED_UNICODE) : '', $cell['id']]);
-    Http::json(['ok' => true, 'menus' => $menus]);
+    // 2回目・3回目などを付けたら、担当が空なら初回を担当したスタッフを入れる（同姓同名で決められないときは「担当を確認」）
+    $staff = (string)$cell['staff'];
+    $check = false;
+    if ($staff === '' && Karte::hasCountMenu($menus)) {
+        $fv = Karte::firstVisitOf($ctx['store'], (string)$cell['text'], $date);
+        if ($fv['ambiguous']) $check = true;
+        elseif ($fv['row'] && $fv['row']['staff'] !== '') { $staff = $fv['row']['staff']; Db::exec('UPDATE cell SET staff = ? WHERE id = ?', [$staff, $cell['id']]); }
+    }
+    Karte::reflectCell($ctx['store'], $date, $time, $bed);
+    Http::json(['ok' => true, 'menus' => $menus, 'staff' => $staff, 'staffCheck' => $check]);
+}
+
+/** 担当者をまとめて付ける・外す（{ date, cells: [{time, bed}], staff: "名前" | "" }）。氏名の入ったセルだけ */
+function adm_cell_staff_put(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    $list = $b['cells'] ?? null;
+    if (!is_array($list) || count($list) === 0 || count($list) > 200) Http::error('bad request', 400);
+    $staff = mb_substr(trim((string)($b['staff'] ?? '')), 0, 30);
+    $n = 0;
+    foreach ($list as $c) {
+        if (!is_array($c)) Http::error('bad request', 400);
+        $time = Http::int($c, 'time', 0, 1440);
+        $bed = Http::int($c, 'bed', 1, 20);
+        $cell = Db::one('SELECT id, text FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed]);
+        if (!$cell || trim((string)$cell['text']) === '' || Text::isContinuationText((string)$cell['text']) || Availability::isBlockMark((string)$cell['text'])) continue;
+        Db::exec('UPDATE cell SET staff = ? WHERE id = ?', [$staff, $cell['id']]);
+        Karte::reflectCell($ctx['store'], $date, $time, $bed);
+        $n++;
+    }
+    Http::json(['ok' => true, 'updated' => $n]);
+}
+
+/** 担当者ごとの数（{ month: YYYY-MM }）。来院チェック済みの予約だけ数える */
+function adm_staff_counts(): never
+{
+    $ctx = Auth::context();
+    $store = $ctx['store'];
+    $ym = Http::query('month', '');
+    if (!preg_match('/^\d{4}-\d{2}$/', $ym)) Http::error('月が正しくありません', 400);
+    $dates = Time::datesOfMonth($ym);
+    $cells = Db::all('SELECT text, menus, staff FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0 AND visited = 1', [$store['id'], $dates[0], $dates[count($dates) - 1]]);
+    $out = [];
+    $row = fn() => ['total' => 0, 'new' => 0, 'revisit' => 0, 'jibai' => 0, 'counts' => [], 'firsts' => 0, 'reached2' => 0];
+    foreach ($cells as $c) {
+        $text = (string)$c['text'];
+        if (!Availability::isPatientText($text)) continue;
+        $s = (string)$c['staff'];
+        $out[$s] ??= $row();
+        $out[$s]['total']++;
+        $cat = Text::categorize($text);
+        if ($cat['isNew'] && !$cat['isJibai']) $out[$s]['new']++;
+        if ($cat['isNew'] && $cat['isJibai']) $out[$s]['jibai']++;
+        if ($cat['isRevisit']) $out[$s]['revisit']++;
+        foreach (DayData::menusOf((string)$c['menus']) as $m) if (preg_match('/^\d+回目$/u', $m)) $out[$s]['counts'][$m] = ($out[$s]['counts'][$m] ?? 0) + 1;
+    }
+    // 2回目到達率：その月に初回（初診・再来）を担当した患者様のうち、2回目に来た割合（初回カルテ集計から）
+    Karte::sync($store, $ym);
+    foreach (Db::all('SELECT staff, visits FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$store['id'], $dates[0], $dates[count($dates) - 1]]) as $k) {
+        $s = (string)$k['staff'];
+        $out[$s] ??= $row();
+        $out[$s]['firsts']++;
+        $v = json_decode((string)$k['visits'], true);
+        if (is_array($v) && !empty($v[0]['d'])) $out[$s]['reached2']++;
+    }
+    $rows = [];
+    foreach ($out as $name => $r) $rows[] = ['staff' => $name] + $r;
+    usort($rows, fn($a, $b) => ($a['staff'] === '') <=> ($b['staff'] === '') ?: $b['total'] <=> $a['total']);
+    $oldest = Time::addDays(Time::nowJst()['date'], -Settings::global()['retentionDays']);
+    Http::json(['month' => $ym, 'rows' => $rows, 'partial' => $dates[0] < $oldest]);
 }
 
 /** 新しく入った WEB予約（管理画面のお知らせ用）。since より後に受け付けた分を返す。since が無ければ今の時刻だけ返す */
@@ -190,6 +262,7 @@ function adm_visit_put(): never
     $n = Db::exec('UPDATE cell SET visited = ? WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$visited ? 1 : 0, $ctx['store']['id'], $date, $time, $bed]);
     $exists = Db::one('SELECT id FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed]);
     if (!$exists) Http::error('セルが空です', 404);
+    Karte::reflectCell($ctx['store'], $date, $time, $bed);
     Http::json(['ok' => true, 'updated' => $n]);
 }
 
@@ -297,7 +370,7 @@ function adm_move_post(): never
             if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
             // 移動先に空文字のセルが残っていれば消してから入れる
             Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($targetTimes) . ')', array_merge([$sid, $toDate, $toBed], $targetTimes));
-            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? '')]);
+            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus, staff) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? ''), (string)($cell['staff'] ?? '')]);
             if ($cont) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime + $step, $toBed, $cont['text'], $cont['reservationId']]);
             if ($cell['reservationId']) Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]);
             // キャンセル・変更名簿に「予約変更」として残す（元の日の名簿に出る。予約表には戻せない）

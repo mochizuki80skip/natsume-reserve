@@ -48,6 +48,7 @@ export default function AdminLayout() {
             <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
             <Link to="/admin/karte" className="hover:underline">初回カルテ集計</Link>
             {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
+            <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
             <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
             <Link to="/admin/story" className="hover:underline">ストーリー画像</Link>
             <Link to="/admin/settings" className="hover:underline">店舗設定</Link>

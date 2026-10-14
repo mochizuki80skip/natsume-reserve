@@ -12,7 +12,7 @@ final class DayData
         $members = array_values(array_filter($allMembers, fn($m) => Settings::inPeriod($m, $date))); // 入社前・異動後の人は出さない
         $helpIn = Db::one('SELECT status, name FROM help_in WHERE storeId = ? AND date = ?', [$sid, $date]);
         $shifts = Db::all('SELECT staffId, status FROM shift WHERE storeId = ? AND date = ?', [$sid, $date]);
-        $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, c.menus, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo
+        $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, c.menus, c.staff, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo
             FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date = ? AND c.bed > 0', [$sid, $date]);
         $blocks = Db::all('SELECT id, startTime, endTime, beds, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? ORDER BY time ASC, createdAt ASC', [$sid, $date]);
@@ -24,6 +24,15 @@ final class DayData
         $reception = array_values(array_filter($members, fn($m) => $m['role'] === 'RECEPTION'));
         $allTherapists = array_values(array_filter($allMembers, fn($m) => $m['role'] === 'THERAPIST'));
         $cap = Settings::capacityFromShifts($store, $allTherapists, $statusByStaff, $day ? ['capacityAm' => $day['capacityAm'], 'capacityPm' => $day['capacityPm']] : null, $date, $helpIn);
+        // 担当に選べる施術者：その日に出勤している人を先に、ほかの在籍の施術者を後ろに
+        $working = array_values(array_unique(array_merge($cap['namesAm'], $cap['namesPm'])));
+        $others = array_values(array_filter(array_map(fn($m) => $m['name'], array_filter($members, fn($m) => $m['role'] === 'THERAPIST')), fn($n) => !in_array($n, $working, true)));
+        // 回数（2回目など）のセルで担当が空のもの：初回の担当が同姓同名で決められないときは「担当を確認」を出す
+        $staffCheck = [];
+        foreach ($cells as $c) {
+            if ((string)($c['staff'] ?? '') !== '' || !Karte::hasCountMenu(self::menusOf((string)($c['menus'] ?? '')))) continue;
+            if (Karte::firstVisitOf($store, (string)$c['text'], $date)['ambiguous']) $staffCheck[(int)$c['time'] . ':' . (int)$c['bed']] = true;
+        }
 
         return [
             'date' => $date,
@@ -37,8 +46,10 @@ final class DayData
             'hasStaff' => count($allTherapists) > 0,
             'receptionNames' => array_map(fn($m) => $m['name'], $reception),
             'shiftLabels' => array_map(fn($m) => ['name' => $m['name'], 'role' => $m['role'], 'status' => $statusByStaff[$m['id']] ?? 'WORK'], $members),
+            'staffOptions' => array_merge($working, $others),
             'cells' => array_map(fn($c) => [
                 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'visited' => (bool)$c['visited'], 'menus' => self::menusOf((string)($c['menus'] ?? '')),
+                'staff' => (string)($c['staff'] ?? ''), 'staffCheck' => isset($staffCheck[(int)$c['time'] . ':' . (int)$c['bed']]),
                 'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo']] : null,
             ], $cells),
             'menuOptions' => Karte::options()['menu'] ?? [],

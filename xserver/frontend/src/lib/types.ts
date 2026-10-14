@@ -2,7 +2,7 @@
 
 export interface ResolvedSession { start: number; lastStart: number; lastAdmin: number }
 
-export interface GridCell { time: number; bed: number; text: string; visited: boolean; menus?: string[]; web?: { id: string; kind: string; phone: string; cardNo: string | null } | null }
+export interface GridCell { time: number; bed: number; text: string; visited: boolean; menus?: string[]; staff?: string; staffCheck?: boolean; web?: { id: string; kind: string; phone: string; cardNo: string | null } | null }
 export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAt: string }
 export interface SlotBlock { id: string; start: number; end: number; beds: number[]; label: string }
 export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[] }
@@ -20,6 +20,8 @@ export interface DayData {
   receptionNames: string[];
   shiftLabels: { name: string; role: string; status: string }[];
   cells: GridCell[];
+  /** 担当に選べる施術者（その日の出勤者が先） */
+  staffOptions?: string[];
   cancels: CancelRow[];
   blocks: SlotBlock[];
   /** 予約表で選べるメニュー（本部の「選択肢の設定」で変更） */

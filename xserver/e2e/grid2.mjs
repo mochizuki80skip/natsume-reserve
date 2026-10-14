@@ -74,7 +74,7 @@ ok('画面を開き直しても履歴から戻せる', (await cell('9:00', 1).in
 const past = '2026-10-06';
 await api('PUT', '/api/admin/cells', { date: past, cells: [{ time: 540, bed: 1, text: '過去 未チェック' }] });
 await p.goto(`${B}/admin/day/${past}`); await p.waitForSelector('#grid');
-ok('未来院の赤・タグは出ない', (await p.locator('#grid td.bg-red-100').count()) === 0 && (await p.locator('#grid').getByText('未来院').count()) === 0 && (await p.locator('#grid td.bg-yellow-100').count()) >= 1);
+ok('未来院の赤・タグは出ない', (await p.locator('#grid td.bg-red-100').count()) === 0 && (await p.locator('#grid').getByText('未来院').count()) === 0 && (await p.locator('#grid').getByText('未チェック').count()) >= 1);
 
 // ③ 印刷：A4 1 枚で、行の高さが広がる
 const pp = await ctx.newPage();

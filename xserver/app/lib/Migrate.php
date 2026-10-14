@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 9;
+    private const VERSION = 10;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -68,6 +68,10 @@ final class Migrate
                 // 予約変更の記録（変更先の時刻）と、消した・書き換えた入力の記録（元に戻す用）
                 if (!self::hasColumn($pdo, 'cancel_log', 'nextTime')) $pdo->exec('ALTER TABLE `cancel_log` ADD COLUMN `nextTime` INT NULL');
                 $pdo->exec(self::CELL_LOG_DDL);
+            }
+            if ($ver < 10) {
+                // 予約ごとの担当者（施術者の名前）
+                if (!self::hasColumn($pdo, 'cell', 'staff')) $pdo->exec("ALTER TABLE `cell` ADD COLUMN `staff` VARCHAR(30) NOT NULL DEFAULT ''");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
