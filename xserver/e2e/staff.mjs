@@ -59,7 +59,12 @@ const sc = (await api('GET', `/api/admin/staff-counts?month=${D1.slice(0, 7)}`))
 const mo = sc.rows.find((r) => r.staff === '望月'), sa = sc.rows.find((r) => r.staff === '佐藤');
 ok('担当数（来院チェック済み）', mo?.total === 3 && mo.new === 1 && mo.revisit === 1 && mo.counts['2回目'] === 1 && sa?.total === 1, JSON.stringify(sc.rows));
 ok('2回目到達率の元', mo?.firsts === 2 && mo.reached2 === 1, JSON.stringify(mo));
+ok('日ごとの人数', mo?.days?.[D1] === 2 && mo.days[D2] === 1 && sa?.days?.[D1] === 1, JSON.stringify(mo?.days));
 await p.goto(`${B}/admin/staff-counts`); await p.waitForSelector('table');
-ok('担当数の画面', (await p.textContent('table')).includes('望月'));
+// 今月の画面で、望月の行の「月の合計」が 3、日ごとに 2・1
+const row = p.locator('table[aria-label="日ごとの施術人数"] tr').filter({ hasText: '望月' });
+const cellsTxt = await row.locator('td').allTextContents();
+ok('担当数の画面（日ごと→月の合計）', cellsTxt[0] === '望月' && cellsTxt[1] === '3' && cellsTxt[7] === '2' && cellsTxt[14] === '1', JSON.stringify(cellsTxt));
+await p.screenshot({ path: O + 'staff-daily.png', fullPage: true });
 console.log('errors', errs);
 await br.close();

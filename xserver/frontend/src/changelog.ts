@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 17, date: '2026-10-15', title: '担当数に日ごとの施術人数', audience: ['店舗', '本部'],
+    items: ['「担当数」の画面で、スタッフごとに何人の施術に入ったかを日ごとに出し、月の合計も出します（来院チェック済みの予約を数えます）。「新患・再来・回数」のタブで今までの表も見られます。'],
+  },
+  {
     id: 16, date: '2026-10-15', title: 'セルの色を初回担当の色に', audience: ['店舗', '本部'],
     items: [
       '初診（赤）・再来（青）・新自（オレンジ）は、担当が無くても色が付きます。',

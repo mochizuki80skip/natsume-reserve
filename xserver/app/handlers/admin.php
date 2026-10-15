@@ -180,15 +180,16 @@ function adm_staff_counts(): never
     $ym = Http::query('month', '');
     if (!preg_match('/^\d{4}-\d{2}$/', $ym)) Http::error('月が正しくありません', 400);
     $dates = Time::datesOfMonth($ym);
-    $cells = Db::all('SELECT text, menus, staff FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0 AND visited = 1', [$store['id'], $dates[0], $dates[count($dates) - 1]]);
+    $cells = Db::all('SELECT date, text, menus, staff FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0 AND visited = 1', [$store['id'], $dates[0], $dates[count($dates) - 1]]);
     $out = [];
-    $row = fn() => ['total' => 0, 'new' => 0, 'revisit' => 0, 'jibai' => 0, 'counts' => [], 'firsts' => 0, 'reached2' => 0];
+    $row = fn() => ['total' => 0, 'new' => 0, 'revisit' => 0, 'jibai' => 0, 'counts' => [], 'firsts' => 0, 'reached2' => 0, 'days' => []];
     foreach ($cells as $c) {
         $text = (string)$c['text'];
         if (!Availability::isPatientText($text)) continue;
         $s = (string)$c['staff'];
         $out[$s] ??= $row();
         $out[$s]['total']++;
+        $out[$s]['days'][$c['date']] = ($out[$s]['days'][$c['date']] ?? 0) + 1; // 日ごとの人数
         $cat = Text::categorize($text);
         if ($cat['isNew'] && !$cat['isJibai']) $out[$s]['new']++;
         if ($cat['isNew'] && $cat['isJibai']) $out[$s]['jibai']++;
@@ -208,7 +209,7 @@ function adm_staff_counts(): never
     foreach ($out as $name => $r) $rows[] = ['staff' => $name] + $r;
     usort($rows, fn($a, $b) => ($a['staff'] === '') <=> ($b['staff'] === '') ?: $b['total'] <=> $a['total']);
     $oldest = Time::addDays(Time::nowJst()['date'], -Settings::global()['retentionDays']);
-    Http::json(['month' => $ym, 'rows' => $rows, 'partial' => $dates[0] < $oldest]);
+    Http::json(['month' => $ym, 'dates' => $dates, 'rows' => array_map(fn($r) => ['days' => (object)$r['days']] + $r, $rows), 'partial' => $dates[0] < $oldest]);
 }
 
 /** 新しく入った WEB予約（管理画面のお知らせ用）。since より後に受け付けた分を返す。since が無ければ今の時刻だけ返す */
