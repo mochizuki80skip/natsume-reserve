@@ -61,10 +61,13 @@ ok('担当数（来院チェック済み）', mo?.total === 3 && mo.new === 1 &&
 ok('2回目到達率の元', mo?.firsts === 2 && mo.reached2 === 1, JSON.stringify(mo));
 ok('日ごとの人数', mo?.days?.[D1] === 2 && mo.days[D2] === 1 && sa?.days?.[D1] === 1, JSON.stringify(mo?.days));
 await p.goto(`${B}/admin/staff-counts`); await p.waitForSelector('table');
-// 今月の画面で、望月の行の「月の合計」が 3、日ごとに 2・1
-const row = p.locator('table[aria-label="日ごとの施術人数"] tr').filter({ hasText: '望月' });
-const cellsTxt = await row.locator('td').allTextContents();
-ok('担当数の画面（日ごと→月の合計）', cellsTxt[0] === '望月' && cellsTxt[1] === '3' && cellsTxt[7] === '2' && cellsTxt[14] === '1', JSON.stringify(cellsTxt));
+// 縦＝日付・横＝施術者。月の合計の行で望月 3、10/6 の行で望月 2・合計 3
+const t = p.locator('table[aria-label="日ごとの施術人数"]');
+const heads = await t.locator('thead tr').first().locator('th').allTextContents();
+const mi = heads.indexOf('望月');
+const totalRow = await t.locator('thead tr').nth(1).locator('td').allTextContents();
+const d6 = await t.locator('tbody tr').filter({ hasText: '10/6（火）' }).locator('td').allTextContents();
+ok('担当数の画面（縦＝日付・横＝施術者）', mi > 0 && totalRow[mi] === '3' && d6[mi] === '2' && d6[d6.length - 1] === '3', JSON.stringify([heads, totalRow, d6]));
 await p.screenshot({ path: O + 'staff-daily.png', fullPage: true });
 console.log('errors', errs);
 await br.close();

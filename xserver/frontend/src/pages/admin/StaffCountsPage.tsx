@@ -22,15 +22,16 @@ export default function StaffCountsPage() {
   const sumHeader = ['担当', '施術人数（月）', '新患', '再来', '新自', ...visitCols, '初回担当', '2回目到達率'];
   const sumLine = (r: Row) => [label(r), r.total, r.new, r.revisit, r.jibai, ...visitCols.map((m) => r.counts[m] ?? 0), r.firsts, rate(r)];
 
-  // 日ごと（施術に入った人数）。人数のある日だけでなく、月の全日を並べる
+  // 日ごと（施術に入った人数）：縦＝日付、横＝施術者。月の全日を並べ、いちばん上に月の合計
   const dayTotal = (d: string) => rows.reduce((n, r) => n + (r.days[d] ?? 0), 0);
-  const dailyHeader = ['担当', '月の合計', ...dates.map((d) => `${Number(d.slice(8))}日`)];
-  const dailyLine = (r: Row) => [label(r), r.total, ...dates.map((d) => r.days[d] ?? 0)];
+  const monthTotal = rows.reduce((n, r) => n + r.total, 0);
+  const dayLabel = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}（${WEEKDAY_JA[weekdayOf(d)]}）`;
+  const dailyHeader = ['日付', ...rows.map(label), '合計'];
 
   function copy() {
     if (!data) return;
     const table = view === 'daily'
-      ? [dailyHeader, ...rows.map(dailyLine), ['合計', rows.reduce((n, r) => n + r.total, 0), ...dates.map(dayTotal)]]
+      ? [dailyHeader, ['月の合計', ...rows.map((r) => r.total), monthTotal], ...dates.map((d) => [dayLabel(d), ...rows.map((r) => r.days[d] ?? 0), dayTotal(d)])]
       : [sumHeader, ...rows.map(sumLine)];
     navigator.clipboard.writeText(table.map((x) => x.join('\t')).join('\n')).catch(() => {});
   }
@@ -57,28 +58,31 @@ export default function StaffCountsPage() {
       {!data ? <p className="text-sm text-slate-500">読み込み中…</p> : rows.length === 0 ? (
         <p className="rounded border bg-white px-3 py-3 text-sm text-slate-500">この月の来院チェック済みの予約はありません</p>
       ) : view === 'daily' ? (
-        <div className="overflow-x-auto rounded border bg-white">
+        <div className="max-h-[75vh] w-fit max-w-full overflow-auto rounded border bg-white">
           <table className="text-sm tabular-nums" aria-label="日ごとの施術人数">
-            <thead>
+            <thead className="sticky top-0 z-20">
               <tr className="bg-slate-100 text-xs">
-                <th className="sticky left-0 z-10 bg-slate-100 px-2 py-1 text-left">担当</th>
-                <th className="bg-brand-light px-2 py-1 text-right">月の合計</th>
-                {dates.map((d) => { const w = weekdayOf(d); return <th key={d} className={`min-w-[2.2rem] px-1 py-1 text-center font-normal ${w === 0 ? 'text-red-600' : w === 6 ? 'text-blue-600' : ''}`}>{Number(d.slice(8))}<span className="block text-[10px]">{WEEKDAY_JA[w]}</span></th>; })}
+                <th className="sticky left-0 z-10 bg-slate-100 px-2 py-1 text-left">日付</th>
+                {rows.map((r) => <th key={r.staff || '-'} className={`min-w-[4.5rem] px-2 py-1 text-right ${r.staff ? '' : 'font-normal text-slate-500'}`}>{label(r)}</th>)}
+                <th className="min-w-[4rem] bg-slate-200 px-2 py-1 text-right">合計</th>
+              </tr>
+              <tr className="bg-brand-light font-bold">
+                <td className="sticky left-0 z-10 bg-brand-light px-2 py-1">月の合計</td>
+                {rows.map((r) => <td key={r.staff || '-'} className="px-2 py-1 text-right text-base">{r.total}</td>)}
+                <td className="px-2 py-1 text-right text-base">{monthTotal}</td>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.staff || '-'} className="border-t">
-                  <td className={`sticky left-0 z-10 whitespace-nowrap bg-white px-2 py-1 font-bold ${r.staff ? '' : 'text-slate-500'}`}>{label(r)}</td>
-                  <td className="bg-brand-light px-2 py-1 text-right text-base font-bold">{r.total}</td>
-                  {dates.map((d) => <td key={d} className={`px-1 py-1 text-center ${r.days[d] ? '' : 'text-slate-300'}`}>{r.days[d] ?? '·'}</td>)}
-                </tr>
-              ))}
-              <tr className="border-t-2 bg-slate-50 font-bold">
-                <td className="sticky left-0 z-10 bg-slate-50 px-2 py-1">合計</td>
-                <td className="bg-brand-light px-2 py-1 text-right text-base">{rows.reduce((n, r) => n + r.total, 0)}</td>
-                {dates.map((d) => <td key={d} className="px-1 py-1 text-center">{dayTotal(d) || ''}</td>)}
-              </tr>
+              {dates.map((d) => {
+                const w = weekdayOf(d);
+                return (
+                  <tr key={d} className="border-t">
+                    <td className={`sticky left-0 z-10 whitespace-nowrap bg-white px-2 py-0.5 ${w === 0 ? 'text-red-600' : w === 6 ? 'text-blue-600' : ''}`}>{dayLabel(d)}</td>
+                    {rows.map((r) => <td key={r.staff || '-'} className={`px-2 py-0.5 text-right ${r.days[d] ? '' : 'text-slate-300'}`}>{r.days[d] ?? '·'}</td>)}
+                    <td className="bg-slate-50 px-2 py-0.5 text-right font-bold">{dayTotal(d) || ''}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
