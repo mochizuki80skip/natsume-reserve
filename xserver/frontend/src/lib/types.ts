@@ -22,6 +22,8 @@ export interface DayData {
   cells: GridCell[];
   /** 担当に選べる施術者（その日の出勤者が先） */
   staffOptions?: string[];
+  /** 予約表の色を持つ施術者（初回・再来を担当する人。color が空なら自動） */
+  colorStaff?: { name: string; color: string }[];
   cancels: CancelRow[];
   blocks: SlotBlock[];
   /** 予約表で選べるメニュー（本部の「選択肢の設定」で変更） */

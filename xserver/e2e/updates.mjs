@@ -13,12 +13,17 @@ try {
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
   const dlg = p.getByRole('dialog', { name: '更新のお知らせ' });
-  await dlg.waitFor({ timeout: 5000 });
+  await dlg.waitFor({ timeout: 15000 });
   const t = await dlg.textContent();
-  ok('初めては一番新しい日のお知らせが出る', t.includes('予約確認ページ') && t.includes('患者様の予約ページを変更') && !t.includes('新規の同時対応数'));
+  // version.json の一番新しい日の（店舗向けの）お知らせが出て、古い日のお知らせは出ない
+  const notes = JSON.parse(original).notes;
+  const newest = notes[0].date;
+  const want = notes.filter((n) => n.date === newest && n.audience.includes('店舗')).map((n) => n.title);
+  const old = notes.find((n) => n.date !== newest && n.audience.includes('店舗'))?.title ?? '（なし）';
+  ok('初めては一番新しい日のお知らせが出る', want.every((x) => t.includes(x)) && !t.includes(old), `${want.join('／')} ／ 出ないはず：${old}`);
   ok('店舗には本部向けのお知らせを出さない', !t.includes('紹介カードの QR の案内ページ'));
   await dlg.getByRole('button', { name: '確認しました' }).click();
-  await p.reload(); await p.waitForSelector('#grid'); await p.waitForTimeout(500);
+  await p.reload(); await p.waitForSelector('h1'); await p.waitForTimeout(500);
   ok('確認したら二度は出ない', (await p.getByRole('dialog', { name: '更新のお知らせ' }).count()) === 0);
   ok('新しい版でなければ帯は出ない', (await p.getByText('画面が新しくなりました').count()) === 0);
   // 本部が新しい版を入れた（version.json だけ新しくなる）

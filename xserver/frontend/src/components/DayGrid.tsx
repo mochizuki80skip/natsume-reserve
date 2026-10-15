@@ -15,7 +15,7 @@ import CellLogPanel from './CellLogPanel';
 import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
 import { applyKindTag, kindTagOf, type KindTag, KIND_TAGS } from '@/lib/kindTag';
 import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
-import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, VISIT_COLORS } from '@/lib/cellColor';
+import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, staffColorMap } from '@/lib/cellColor';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
 
@@ -34,6 +34,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map(data.cells.filter((c) => c.staff).map((c) => [key(c.time, c.bed), c.staff!])));
   const [staffCheck, setStaffCheck] = useState<Set<string>>(() => new Set(data.cells.filter((c) => c.staffCheck).map((c) => key(c.time, c.bed))));
   const staffOptions = data.staffOptions ?? [];
+  // 担当の色（2・3・6・12回目のセルに使う）
+  const staffColors = useMemo(() => staffColorMap(data.colorStaff), [data.colorStaff]);
   const webInfo = useMemo(() => new Map(data.cells.filter((c) => c.web).map((c) => [key(c.time, c.bed), c.web!])), [data.cells]);
   const [day, setDay] = useState(data.day);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -576,7 +578,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
       <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
         {(Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[]).map((kk) => <span key={kk}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: KIND_COLORS[kk] }} />{KIND_COLOR_NAMES[kk]}</span>)}
-        {Object.entries({ ...VISIT_COLORS, ...MENU_CELL_COLORS }).map(([m, c]) => <span key={m}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{m}</span>)}
+        {[...staffColors.entries()].map(([n, c]) => <span key={'s' + n}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{n}（2・3・6・12回目）</span>)}
+        {Object.entries(MENU_CELL_COLORS).map(([m, c]) => <span key={m}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{m}</span>)}
         <span><i className="mr-1 inline-block h-3 w-3 border border-l-4 border-l-green-700 align-[-2px]" />来院チェック済み（左に緑の線）</span>
         <span><span className="mr-1 rounded bg-yellow-600 px-1 text-[10px] text-white">未チェック</span>予約時刻を過ぎて未チェック</span>
         <span><span className="mr-1 rounded-sm border border-sky-600 px-[2px] text-[8px] font-bold text-sky-700">WEB</span>WEB予約</span>
@@ -693,7 +696,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                       const cellMenus = hasName ? menus.get(k) ?? [] : [];
                       // セルの色：初診・再来・新自 → 回数（2・3・6回目）。2 枠目は 1 枠目に合わせる
                       const pk = key(t - data.slotMinutes, b);
-                      const color = !text.trim() ? null : cont ? cellColor(cells.get(pk) ?? '', menus.get(pk) ?? []) : cellColor(text, cellMenus);
+                      const color = !text.trim() ? null : cont ? cellColor(cells.get(pk) ?? '', menus.get(pk) ?? [], staffMap.get(pk) ?? '', staffColors) : cellColor(text, cellMenus, staffMap.get(k) ?? '', staffColors);
                       const bg = color ? '' : bBlock && !text ? 'bg-slate-300' : b > capacityAt(t) ? 'bg-slate-50' : adminOnly ? 'bg-amber-50/40' : '';
                       const staffName = hasName ? staffMap.get(k) ?? '' : '';
                       const needCheck = hasName && !staffName && staffCheck.has(k);

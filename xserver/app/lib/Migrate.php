@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 10;
+    private const VERSION = 11;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -72,6 +72,22 @@ final class Migrate
             if ($ver < 10) {
                 // 予約ごとの担当者（施術者の名前）
                 if (!self::hasColumn($pdo, 'cell', 'staff')) $pdo->exec("ALTER TABLE `cell` ADD COLUMN `staff` VARCHAR(30) NOT NULL DEFAULT ''");
+            }
+            if ($ver < 11) {
+                // 施術者ごとの「初回を担当する」「再来を担当する」と予約表の色。メニューに「12回目」を足す
+                if (!self::hasColumn($pdo, 'staff_member', 'canFirst')) $pdo->exec('ALTER TABLE `staff_member` ADD COLUMN `canFirst` TINYINT(1) NOT NULL DEFAULT 0');
+                if (!self::hasColumn($pdo, 'staff_member', 'canRevisit')) $pdo->exec('ALTER TABLE `staff_member` ADD COLUMN `canRevisit` TINYINT(1) NOT NULL DEFAULT 0');
+                if (!self::hasColumn($pdo, 'staff_member', 'color')) $pdo->exec("ALTER TABLE `staff_member` ADD COLUMN `color` VARCHAR(10) NOT NULL DEFAULT ''");
+                if (self::hasTable($pdo, 'karte_option')) {
+                    $has = $pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'menu'")->fetch();
+                    $dup = $pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'menu' AND label = '12回目'")->fetch();
+                    if ((int)$has['n'] > 0 && (int)$dup['n'] === 0) {
+                        $six = $pdo->query("SELECT sortOrder FROM karte_option WHERE category = 'menu' AND label = '6回目'")->fetch();
+                        $at = $six ? (int)$six['sortOrder'] + 1 : (int)$pdo->query("SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM karte_option WHERE category = 'menu'")->fetch()['n'];
+                        $pdo->exec("UPDATE karte_option SET sortOrder = sortOrder + 1 WHERE category = 'menu' AND sortOrder >= $at");
+                        $pdo->exec("INSERT INTO karte_option (category, label, sortOrder) VALUES ('menu', '12回目', $at)");
+                    }
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

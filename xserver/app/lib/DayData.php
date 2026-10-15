@@ -8,7 +8,7 @@ final class DayData
     {
         $sid = $store['id'];
         $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$sid, $date]));
-        $allMembers = Db::all('SELECT id, name, role, startDate, endDate FROM staff_member WHERE storeId = ? AND active = 1 ORDER BY sortOrder ASC', [$sid]);
+        $allMembers = Db::all('SELECT id, name, role, startDate, endDate, canFirst, canRevisit, color FROM staff_member WHERE storeId = ? AND active = 1 ORDER BY sortOrder ASC', [$sid]);
         $members = array_values(array_filter($allMembers, fn($m) => Settings::inPeriod($m, $date))); // 入社前・異動後の人は出さない
         $helpIn = Db::one('SELECT status, name FROM help_in WHERE storeId = ? AND date = ?', [$sid, $date]);
         $shifts = Db::all('SELECT staffId, status FROM shift WHERE storeId = ? AND date = ?', [$sid, $date]);
@@ -47,6 +47,8 @@ final class DayData
             'receptionNames' => array_map(fn($m) => $m['name'], $reception),
             'shiftLabels' => array_map(fn($m) => ['name' => $m['name'], 'role' => $m['role'], 'status' => $statusByStaff[$m['id']] ?? 'WORK'], $members),
             'staffOptions' => array_merge($working, $others),
+            // 予約表の色を持つ施術者（初回・再来を担当する人。並び順のとおり。color が空なら画面で自動の色）
+            'colorStaff' => array_values(array_map(fn($m) => ['name' => $m['name'], 'color' => (string)$m['color']], array_filter($allTherapists, fn($m) => (int)$m['canFirst'] || (int)$m['canRevisit']))),
             'cells' => array_map(fn($c) => [
                 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'visited' => (bool)$c['visited'], 'menus' => self::menusOf((string)($c['menus'] ?? '')),
                 'staff' => (string)($c['staff'] ?? ''), 'staffCheck' => isset($staffCheck[(int)$c['time'] . ':' . (int)$c['bed']]),

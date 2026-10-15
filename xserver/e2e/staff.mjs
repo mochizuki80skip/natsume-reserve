@@ -12,6 +12,9 @@ const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); 
 await p.goto(B + '/admin/login/S001'); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
 const api = (m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
 for (const n of ['望月', '佐藤']) await api('POST', '/api/admin/staff-members', { name: n, role: 'THERAPIST' });
+// 望月は「初回を担当する」→ 予約表の色（自動で 1 色目の緑）
+const mem = (await api('GET', '/api/admin/settings'))[1].members;
+await api('PUT', '/api/admin/staff-members', { id: mem.find((m) => m.name === '望月').id, canFirst: true });
 const D1 = '2026-10-06', D2 = '2026-10-13'; // 火曜
 // 初回（初診）2 人と、ほかの 1 人
 await api('PUT', '/api/admin/cells', { date: D1, cells: [{ time: 540, bed: 1, text: '担当 太郎（初診）' }, { time: 555, bed: 1, text: '上記初診対応' }, { time: 600, bed: 1, text: '担当 花子（再来）' }, { time: 615, bed: 1, text: '上記再来対応' }, { time: 660, bed: 2, text: 'ほか 一郎' }] });
@@ -21,8 +24,9 @@ const rowOf = (t) => p.locator('#grid tbody tr').filter({ has: p.locator('td', {
 const cell = (t, b) => rowOf(t).locator('td').nth(b);
 const bar = p.getByRole('group', { name: '予約のメニュー' });
 // 色：初診は薄い赤、来院済みは左に緑の線
-ok('初診のセルに色', (await cell('9:00', 1).getAttribute('style') ?? '').includes('253, 224, 222'));
-ok('2 枠目も同じ色', (await cell('9:15', 1).getAttribute('style') ?? '').includes('253, 224, 222'));
+ok('初診のセルは赤（担当なしでも）', (await cell('9:00', 1).getAttribute('style') ?? '').includes('252, 165, 165'));
+ok('2 枠目も同じ色', (await cell('9:15', 1).getAttribute('style') ?? '').includes('252, 165, 165'));
+ok('再来のセルは青', (await cell('10:00', 1).getAttribute('style') ?? '').includes('147, 197, 253'));
 // まとめて担当を付ける（9:00〜10:00 のベッド1 を選ぶ → 名前のある 2 件）
 await cell('9:00', 1).locator('input').click();
 await cell('10:00', 1).locator('input').click({ modifiers: ['Shift'] });
@@ -31,7 +35,7 @@ await bar.getByRole('button', { name: '望月' }).click(); await p.waitForTimeou
 ok('担当がセルに出る', (await cell('9:00', 1).textContent()).includes('望月') && (await cell('10:00', 1).textContent()).includes('望月') && !(await cell('9:15', 1).textContent()).includes('望月'));
 await cell('11:00', 2).locator('input').click(); await bar.getByRole('button', { name: '佐藤' }).click(); await p.waitForTimeout(800);
 await bar.getByRole('button', { name: '矯正' }).click(); await p.waitForTimeout(800);
-ok('矯正もセルに色', (await cell('11:00', 2).getAttribute('style') ?? '').includes('217, 249, 157'));
+ok('矯正は黄緑の斜線', (await cell('11:00', 2).getAttribute('style') ?? '').includes('repeating-linear-gradient'));
 await p.screenshot({ path: O + 'staff-grid.png', clip: { x: 0, y: 300, width: 1400, height: 520 } });
 // 初回カルテ集計に担当が入る
 const k = (await api('GET', `/api/admin/karte?month=${D1.slice(0, 7)}`))[1];
@@ -41,9 +45,11 @@ ok('初回カルテ集計に担当が自動で入る', kt?.staff === '望月', J
 await api('PUT', '/api/admin/cells', { date: D2, cells: [{ time: 540, bed: 1, text: '担当 太郎' }] });
 await p.goto(`${B}/admin/day/${D2}`); await p.waitForSelector('#grid');
 await cell('9:00', 1).locator('input').click();
-await bar.getByRole('button', { name: '2回目' }).click(); await p.waitForTimeout(800);
+await bar.getByRole('button', { name: '2回目', exact: true }).click(); await p.waitForTimeout(800);
 ok('2回目を付けると初回の担当が自動で入る', (await cell('9:00', 1).textContent()).includes('望月'));
-ok('2回目は濃い色・白い文字', (await cell('9:00', 1).getAttribute('class')).includes('dark-cell') && (await cell('9:00', 1).getAttribute('style') ?? '').includes('21, 128, 61'));
+ok('2回目は初回担当（望月）の色', (await cell('9:00', 1).getAttribute('style') ?? '').includes('187, 247, 208'), await cell('9:00', 1).getAttribute('style'));
+ok('回数は数字の印', (await cell('9:00', 1).getByLabel(/^メニュー：/).textContent()) === '2');
+ok('凡例に担当の色', (await p.textContent('body')).includes('望月（2・3・6・12回目）'));
 await cell('9:00', 1).getByLabel('来院チェック').click(); await p.waitForTimeout(800);
 const k2 = (await api('GET', `/api/admin/karte?month=${D1.slice(0, 7)}`))[1].rows.find((r) => r.name === '担当 太郎');
 ok('初回カルテ集計の 2 回目に日付と担当が入る', k2?.visits?.[0]?.d === D2 && k2.visits[0].s === '望月', JSON.stringify(k2?.visits?.[0]));

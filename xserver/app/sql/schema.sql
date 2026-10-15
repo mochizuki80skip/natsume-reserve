@@ -80,6 +80,9 @@ CREATE TABLE IF NOT EXISTS `staff_member` (
   `startDate` CHAR(10) NULL,  -- 所属開始日（新入社員の入社日・異動してきた日）。空なら制限なし
   `endDate` CHAR(10) NULL,    -- 所属終了日（異動で出ていく前日など）。空なら制限なし
   `joinType` VARCHAR(10) NULL, -- NEW=新入社員 / TRANSFER=異動（開始日から 1 か月シフト表に印を出す）
+  `canFirst` TINYINT(1) NOT NULL DEFAULT 0,   -- 初回（初診・新自）を担当する
+  `canRevisit` TINYINT(1) NOT NULL DEFAULT 0, -- 再来を担当する
+  `color` VARCHAR(10) NOT NULL DEFAULT '',    -- 予約表の色（空＝自動）
   PRIMARY KEY (`id`),
   KEY `staff_store` (`storeId`),
   CONSTRAINT `fk_staff_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE

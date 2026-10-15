@@ -773,6 +773,13 @@ function adm_staff_put(): never
     if (isset($b['name'])) { $n = trim((string)$b['name']); if ($n === '' || mb_strlen($n) > 30) Http::error('bad request', 400); $set[] = 'name = ?'; $params[] = $n; }
     if (isset($b['role'])) { if (!in_array($b['role'], ['THERAPIST', 'RECEPTION'], true)) Http::error('bad request', 400); $set[] = 'role = ?'; $params[] = $b['role']; }
     if (array_key_exists('active', $b)) { $set[] = 'active = ?'; $params[] = Http::bool($b, 'active') ? 1 : 0; }
+    if (array_key_exists('canFirst', $b)) { $set[] = 'canFirst = ?'; $params[] = Http::bool($b, 'canFirst') ? 1 : 0; }
+    if (array_key_exists('canRevisit', $b)) { $set[] = 'canRevisit = ?'; $params[] = Http::bool($b, 'canRevisit') ? 1 : 0; }
+    if (array_key_exists('color', $b)) {
+        $c = (string)$b['color'];
+        if ($c !== '' && !preg_match('/^#[0-9a-fA-F]{6}$/', $c)) Http::error('bad request', 400);
+        $set[] = 'color = ?'; $params[] = strtolower($c);
+    }
     if (array_key_exists('startDate', $b) || array_key_exists('endDate', $b) || array_key_exists('joinType', $b)) {
         [$sd, $ed, $jt] = staff_period_from($b, $m);
         array_push($set, 'startDate = ?', 'endDate = ?', 'joinType = ?');
@@ -819,7 +826,7 @@ function adm_settings_get(): never
     $ctx = Auth::context();
     $store = $ctx['store'];
     $setting = Settings::global();
-    $members = Db::all('SELECT id, name, role, active, startDate, endDate, joinType FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$store['id']]);
+    $members = Db::all('SELECT id, name, role, active, startDate, endDate, joinType, canFirst, canRevisit, color FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$store['id']]);
     Http::json([
         'store' => [
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
@@ -830,7 +837,8 @@ function adm_settings_get(): never
         'slotMinutes' => $setting['slotMinutes'],
         'canChangePassword' => true,
         'smsEnabled' => Sms::enabled(),
-        'members' => array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'role' => $m['role'], 'active' => (bool)$m['active'], 'startDate' => $m['startDate'], 'endDate' => $m['endDate'], 'joinType' => $m['joinType']], $members),
+        'members' => array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'role' => $m['role'], 'active' => (bool)$m['active'], 'startDate' => $m['startDate'], 'endDate' => $m['endDate'], 'joinType' => $m['joinType'],
+            'canFirst' => (bool)$m['canFirst'], 'canRevisit' => (bool)$m['canRevisit'], 'color' => (string)$m['color']], $members),
     ]);
 }
 

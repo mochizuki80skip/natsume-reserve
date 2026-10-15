@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { STAFF_PALETTE } from '@/lib/cellColor';
 
-interface Member { id: string; name: string; role: string; active: boolean; startDate?: string | null; endDate?: string | null; joinType?: string | null }
+interface Member { id: string; name: string; role: string; active: boolean; startDate?: string | null; endDate?: string | null; joinType?: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string }
 
 export default function StaffList({ members, maxTherapists, maxReception, onRefresh }: { members: Member[]; maxTherapists: number; maxReception: number; onRefresh: () => void }) {
   const [name, setName] = useState('');
@@ -23,6 +24,9 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
   }
 
   const th = members.filter((m) => m.role === 'THERAPIST');
+  // 予約表の色：初回・再来を担当する施術者に、上から順に自動で色を付ける（店舗設定で選び直せる）
+  const colored = th.filter((m) => m.active && (m.canFirst || m.canRevisit));
+  const autoColor = (m: Member) => { const i = colored.findIndex((x) => x.id === m.id); return i < 0 ? '' : STAFF_PALETTE[i % STAFF_PALETTE.length].color; };
   const rc = members.filter((m) => m.role === 'RECEPTION');
   const Row = ({ m }: { m: Member }) => (
     <div className={`flex flex-wrap items-center gap-x-2 gap-y-1 border-t py-1.5 ${m.active ? '' : 'text-slate-400'}`}>
@@ -38,6 +42,21 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
       </select>
       <button type="button" onClick={() => call('PUT', { id: m.id, active: !m.active })} className="rounded border px-2 py-1 text-xs">{m.active ? '休職・停止' : '復帰'}</button>
       <button type="button" onClick={() => confirm(`${m.name} を削除しますか？シフトも消えます。`) && call('DELETE', { id: m.id })} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">削除</button>
+      {m.role === 'THERAPIST' && (
+        <span className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-1 text-xs text-slate-700">
+          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canFirst} onChange={(e) => call('PUT', { id: m.id, canFirst: e.target.checked })} />初回（初診・新自）を担当する</label>
+          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canRevisit} onChange={(e) => call('PUT', { id: m.id, canRevisit: e.target.checked })} />再来を担当する</label>
+          {(m.canFirst || m.canRevisit) && (
+            <label className="flex items-center gap-1">予約表の色
+              <i className="inline-block h-4 w-6 rounded border" style={{ background: m.color || autoColor(m) }} aria-hidden="true" />
+              <select value={m.color ?? ''} onChange={(e) => call('PUT', { id: m.id, color: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 予約表の色`}>
+                <option value="">自動（{STAFF_PALETTE.find((p) => p.color === autoColor(m))?.name ?? '－'}）</option>
+                {STAFF_PALETTE.map((p) => <option key={p.color} value={p.color}>{p.name}</option>)}
+              </select>
+            </label>
+          )}
+        </span>
+      )}
       <span className="flex basis-full flex-wrap items-center gap-1 pl-1 text-xs text-slate-600">
         所属期間
         <input type="date" defaultValue={m.startDate ?? ''} onBlur={(e) => e.target.value !== (m.startDate ?? '') && call('PUT', { id: m.id, startDate: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 所属開始日`} />
@@ -88,6 +107,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
         新入社員は入社日を「所属開始日」にして登録します（前もって登録しても、開始日までは枠に数えません）。
         異動は、元の店舗で「終了日」（例：20日）を入れ、新しい店舗で「開始日」（例：21日）を入れて登録します。
         区分を選ぶと、開始日から1か月間シフト表に「新人」「異動」の印が出ます。
+        「初回を担当する」「再来を担当する」にチェックした施術者には予約表の色が付き、その人が初回を担当した患者様の 2・3・6・12回目のセルがその色になります。
       </p>
     </section>
   );
