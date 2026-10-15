@@ -6,8 +6,9 @@ function hq_get(): never
 {
     Auth::requireHq();
     $setting = Settings::global();
-    $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'phone' => $r['phone'], 'beds' => (int)$r['beds'], 'active' => (bool)$r['active']],
-        Db::all('SELECT code, name, phone, beds, active FROM store ORDER BY code ASC'));
+    $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'phone' => $r['phone'], 'beds' => (int)$r['beds'], 'active' => (bool)$r['active'],
+        'address' => (string)$r['address'], 'lat' => $r['lat'] !== null ? (float)$r['lat'] : null, 'lng' => $r['lng'] !== null ? (float)$r['lng'] : null, 'listed' => (bool)$r['listed']],
+        Db::all('SELECT code, name, phone, beds, active, address, lat, lng, listed FROM store ORDER BY code ASC'));
     Http::json([
         'stores' => $stores,
         'setting' => [
@@ -16,7 +17,18 @@ function hq_get(): never
             'closeOnHolidays' => $setting['closeOnHolidays'], 'adminExtraSlots' => $setting['adminExtraSlots'], 'retentionDays' => $setting['retentionDays'],
             'hours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ],
+        'storesPageOpen' => $setting['storesPageOpen'],
     ]);
+}
+
+/** 店舗えらびページの公開・非公開（{ open: true|false }） */
+function hq_stores_page_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    Settings::global();
+    Db::exec('UPDATE global_setting SET storesPageOpen = ? WHERE id = 1', [Http::bool(Http::body(), 'open') ? 1 : 0]);
+    Http::json(['ok' => true]);
 }
 
 function hq_settings_put(): never
@@ -95,6 +107,13 @@ function hq_stores_put(): never
             Db::exec('UPDATE store SET code = ?, name = ?, phone = ? WHERE id = ?', [$newCode ?? $store['code'], $name ?? $store['name'], $phone ?? $store['phone'], $store['id']]);
             if ($newCode !== null && $newCode !== $store['code']) Db::exec('UPDATE admin_account SET code = ? WHERE storeId = ? AND role = ?', [$newCode, $store['id'], 'store']);
         });
+    } elseif ($action === 'listing') {
+        // 店舗えらびページの情報（住所・地図の位置・載せるか）
+        $address = mb_substr(trim((string)($b['address'] ?? '')), 0, 200);
+        $lat = ($b['lat'] ?? '') === '' || ($b['lat'] ?? null) === null ? null : (float)$b['lat'];
+        $lng = ($b['lng'] ?? '') === '' || ($b['lng'] ?? null) === null ? null : (float)$b['lng'];
+        if (($lat !== null && ($lat < 20 || $lat > 46)) || ($lng !== null && ($lng < 122 || $lng > 154)) || (($lat === null) !== ($lng === null))) Http::error('地図の位置（緯度・経度）が正しくありません', 400);
+        Db::exec('UPDATE store SET address = ?, lat = ?, lng = ?, listed = ? WHERE id = ?', [$address, $lat, $lng, !empty($b['listed']) ? 1 : 0, $store['id']]);
     } elseif ($action === 'reset') {
         $password = (string)($b['password'] ?? '');
         if (strlen($password) < 8) Http::error('パスワードは8文字以上', 400);

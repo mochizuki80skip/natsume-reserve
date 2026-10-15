@@ -888,3 +888,68 @@ function adm_store_patch(): never
     Db::exec('UPDATE admin_account SET passwordHash = ? WHERE id = ?', [password_hash($next, PASSWORD_BCRYPT), $acc['id']]);
     Http::json(['ok' => true]);
 }
+
+// ---------- 患者一覧（診察券番号 → 氏名） ----------
+/** 診察券番号をそろえる（数字だけ・頭の 0 を取る。末尾の x（自費）・a（自賠）・r（労災）などの印は無視） */
+function patient_no(string $v): string
+{
+    $d = preg_replace('/\D/', '', $v) ?? '';
+    if ($d === '') return '';
+    $d = ltrim($d, '0');
+    return $d === '' ? '0' : substr($d, 0, 12);
+}
+
+/** 取り込み済みの件数と日時 */
+function adm_patients_get(): never
+{
+    $ctx = Auth::context();
+    $n = (int)Db::one('SELECT COUNT(*) AS n FROM patient_card WHERE storeId = ?', [$ctx['store']['id']])['n'];
+    $at = Db::one('SELECT patientsImportedAt FROM store WHERE id = ?', [$ctx['store']['id']])['patientsImportedAt'] ?? null;
+    Http::json(['count' => $n, 'importedAt' => $at]);
+}
+
+/**
+ * 患者一覧の取り込み（{ rows: [{ no, name, kana }] }）。この店舗の一覧を置き換える。
+ * CSV は画面（ブラウザ）で読み、診察券番号・氏名・フリガナだけを送る（住所・電話・生年月日はサーバーに来ない）
+ */
+function adm_patients_post(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $rows = Http::body()['rows'] ?? null;
+    if (!is_array($rows) || count($rows) > 100000) Http::error('一覧が大きすぎるか、形式が正しくありません', 400);
+    $sid = $ctx['store']['id'];
+    $seen = [];
+    $list = [];
+    foreach ($rows as $r) {
+        if (!is_array($r)) continue;
+        $no = patient_no((string)($r['no'] ?? ''));
+        $name = trim(preg_replace('/[\s\x{3000}]+/u', ' ', (string)($r['name'] ?? '')) ?? '');
+        if ($no === '' || $name === '' || isset($seen[$no])) continue; // 同じ番号（自費・自賠などの別の行）は最初の行だけ
+        $seen[$no] = true;
+        $list[] = [$no, mb_substr($name, 0, 40), mb_substr(trim((string)($r['kana'] ?? '')), 0, 60)];
+    }
+    if (!$list) Http::error('診察券番号と氏名が読み取れませんでした。レセコンから出した CSV を選んでください。', 400);
+    Db::transaction(function () use ($sid, $list) {
+        Db::exec('DELETE FROM patient_card WHERE storeId = ?', [$sid]);
+        foreach (array_chunk($list, 500) as $chunk) {
+            $ph = implode(',', array_fill(0, count($chunk), '(?, ?, ?, ?)'));
+            $params = [];
+            foreach ($chunk as [$no, $name, $kana]) array_push($params, $sid, $no, $name, $kana);
+            Db::exec("INSERT INTO patient_card (storeId, cardNo, name, kana) VALUES $ph", $params);
+        }
+        Db::exec('UPDATE store SET patientsImportedAt = ? WHERE id = ?', [Time::nowJstDateTime(), $sid]);
+    });
+    Http::json(['ok' => true, 'count' => count($list), 'skipped' => count($rows) - count($list)]);
+}
+
+/** 診察券番号から氏名（{ no } → { name: "…" | null }） */
+function adm_patients_lookup(): never
+{
+    $ctx = Auth::context();
+    $no = patient_no(Http::query('no', ''));
+    if ($no === '') Http::json(['name' => null]);
+    $r = Db::one('SELECT name FROM patient_card WHERE storeId = ? AND cardNo = ?', [$ctx['store']['id'], $no]);
+    Http::json(['no' => $no, 'name' => $r['name'] ?? null]);
+}
+

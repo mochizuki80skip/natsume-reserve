@@ -21,6 +21,7 @@ function route_table(): array
         ['GET', '#^/api/public/([^/]+)/calendar$#', 'pub_calendar'],
         ['POST', '#^/api/public/([^/]+)/reserve$#', 'pub_reserve'],
         ['GET', '#^/api/public-reservation/([0-9a-f]{32})$#', 'pub_reservation_view'],
+        ['GET', '#^/api/public-stores$#', 'pub_stores'],
         // ログイン
         ['POST', '#^/api/admin/login$#', 'adm_login'],
         ['POST', '#^/api/admin/logout$#', 'adm_logout'],
@@ -34,6 +35,9 @@ function route_table(): array
         ['GET', '#^/api/admin/move-slots$#', 'adm_move_slots'],
         ['PUT', '#^/api/admin/cell-staff$#', 'adm_cell_staff_put'],
         ['GET', '#^/api/admin/staff-counts$#', 'adm_staff_counts'],
+        ['GET', '#^/api/admin/patients$#', 'adm_patients_get'],
+        ['POST', '#^/api/admin/patients$#', 'adm_patients_post'],
+        ['GET', '#^/api/admin/patients/lookup$#', 'adm_patients_lookup'],
         ['GET', '#^/api/admin/cell-log$#', 'adm_cell_log_get'],
         ['PUT', '#^/api/admin/days$#', 'adm_days_put'],
         ['PUT', '#^/api/admin/visit$#', 'adm_visit_put'],
@@ -77,6 +81,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/hq/settings$#', 'hq_settings_put'],
         ['POST', '#^/api/admin/hq/stores$#', 'hq_stores_post'],
         ['PUT', '#^/api/admin/hq/stores$#', 'hq_stores_put'],
+        ['PUT', '#^/api/admin/hq/stores-page$#', 'hq_stores_page_put'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
         // 自賠責請求の速報集計
         ['GET', '#^/api/admin/jibai$#', 'jibai_get'],

@@ -73,7 +73,7 @@ final class Karte
         $dates = Time::datesOfMonth($ym);
         $first = $dates[0];
         $last = $dates[count($dates) - 1];
-        $cells = Db::all('SELECT date, time, bed, text, visited, staff FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0', [$store['id'], $first, $last]);
+        $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
         $want = [];
         $exists = [];
         foreach ($cells as $c) {
@@ -81,7 +81,7 @@ final class Karte
             $exists[$k] = true;
             if (!(int)$c['visited']) continue;
             $kind = self::kindOfText((string)$c['text']);
-            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? '')];
+            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1];
         }
         $rows = Db::all('SELECT id, date, srcTime, srcBed, edited FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? AND auto = 1', [$store['id'], $first, $last]);
         $have = [];
@@ -96,7 +96,7 @@ final class Karte
             if (isset($have[$k])) continue;
             Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)', [
                 Db::newId(), $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr($w['name'], 0, 40),
-                '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
+                $w['card'] ? 'ギフトカード' : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
         }
     }

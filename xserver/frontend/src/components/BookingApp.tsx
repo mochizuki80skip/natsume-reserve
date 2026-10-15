@@ -6,9 +6,9 @@ import { Link } from 'react-router-dom';
 import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
 import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
 
-interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean }
+interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card' }
 
-export default function BookingApp({ store, smsEnabled }: Props) {
+export default function BookingApp({ store, smsEnabled, via }: Props) {
   // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=確認, 4=完了
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [kind, setKind] = useState<Kind | null>(null); // 最初は未選択
@@ -41,7 +41,7 @@ export default function BookingApp({ store, smsEnabled }: Props) {
     try {
       const r = await fetch(api('/reserve'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: submitKind, date: sel.date, time: sel.time, ...form }),
+        body: JSON.stringify({ kind: submitKind, date: sel.date, time: sel.time, ...form, via }), // via=card：紹介カード（店舗えらびページ）から
       });
       const j = await r.json();
       if (!r.ok) {

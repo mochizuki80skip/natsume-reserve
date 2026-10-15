@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 11;
+    private const VERSION = 12;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -89,12 +89,33 @@ final class Migrate
                     }
                 }
             }
+            if ($ver < 12) {
+                // 診察券番号 → 氏名（レセコンの患者一覧を店舗ごとに取り込む）。取り込んだ日時は store に
+                $pdo->exec(self::PATIENT_CARD_DDL);
+                if (!self::hasColumn($pdo, 'store', 'patientsImportedAt')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `patientsImportedAt` DATETIME NULL');
+                // 店舗えらびページ：住所・地図の位置・載せるか、ページ全体の公開、紹介カード経由の予約
+                if (!self::hasColumn($pdo, 'store', 'address')) $pdo->exec("ALTER TABLE `store` ADD COLUMN `address` VARCHAR(200) NOT NULL DEFAULT ''");
+                if (!self::hasColumn($pdo, 'store', 'lat')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `lat` DECIMAL(9,6) NULL');
+                if (!self::hasColumn($pdo, 'store', 'lng')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `lng` DECIMAL(9,6) NULL');
+                if (!self::hasColumn($pdo, 'store', 'listed')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `listed` TINYINT(1) NOT NULL DEFAULT 1');
+                if (!self::hasColumn($pdo, 'global_setting', 'storesPageOpen')) $pdo->exec('ALTER TABLE `global_setting` ADD COLUMN `storesPageOpen` TINYINT(1) NOT NULL DEFAULT 0');
+                if (!self::hasColumn($pdo, 'reservation', 'viaCard')) $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `viaCard` TINYINT(1) NOT NULL DEFAULT 0');
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const PATIENT_CARD_DDL = 'CREATE TABLE IF NOT EXISTS `patient_card` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `cardNo` VARCHAR(12) NOT NULL,
+  `name` VARCHAR(40) NOT NULL,
+  `kana` VARCHAR(60) NOT NULL DEFAULT \'\',
+  PRIMARY KEY (`storeId`, `cardNo`),
+  CONSTRAINT `fk_patient_card_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const CELL_LOG_DDL = 'CREATE TABLE IF NOT EXISTS `cell_log` (
   `id` VARCHAR(32) NOT NULL,

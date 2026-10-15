@@ -56,6 +56,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const anchor = useRef<{ r: number; c: number } | null>(null);
   const [range, setRange] = useState<{ r0: number; c0: number; r1: number; c1: number } | null>(null);
   const extending = useRef(false);
+  // 診察券番号 → 氏名（店舗設定で取り込んだ患者一覧から）。数字だけを入れると候補を出し、Enter で氏名に置き換える
+  const numCache = useRef(new Map<string, string | null>());
+  const numTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [numHint, setNumHint] = useState<{ k: string; no: string; name: string | null } | null>(null);
 
   // 現在時刻（日本時間）。当日は毎分更新して「未チェック」「未来院」の表示を切り替える
   const [nowMin, setNowMin] = useState<number | null>(() => (data.date < today ? Infinity : data.date === today ? nowJst().minutes : null));
@@ -112,6 +116,33 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     dirty.current.set(key(time, bed), text);
     touchedAt.current.set(key(time, bed), Date.now());
     schedule();
+  }
+
+  // ---------- 診察券番号 → 氏名 ----------
+  const isCardNo = (v: string) => /^\d{1,10}$/.test(v.trim());
+  async function lookupNo(no: string): Promise<string | null> {
+    const key0 = String(Number(no));
+    if (numCache.current.has(key0)) return numCache.current.get(key0)!;
+    try {
+      const j = await (await fetch(`/api/admin/patients/lookup?no=${encodeURIComponent(no)}`)).json();
+      numCache.current.set(key0, j.name ?? null);
+      return j.name ?? null;
+    } catch { return null; }
+  }
+  function onCellInput(time: number, bed: number, v: string) {
+    setCell(time, bed, v);
+    const k = key(time, bed);
+    if (numTimer.current) clearTimeout(numTimer.current);
+    if (isCardNo(v)) numTimer.current = setTimeout(async () => setNumHint({ k, no: v.trim(), name: await lookupNo(v.trim()) }), 250);
+    else setNumHint((h) => (h?.k === k ? null : h));
+  }
+  async function applyCardNo(time: number, bed: number, r: number, c: number, no: string) {
+    const name = await lookupNo(no);
+    setNumHint(null);
+    if (name) { setCellsTracked([{ time, bed, text: name }]); setPasteInfo(`診察券番号 ${no} → ${name}`); }
+    else setPasteInfo(`診察券番号 ${no} は患者一覧にありません（番号のまま残しました。店舗設定で患者一覧を取り込み直すと出るようになります）`);
+    // 画面に氏名が出てから次の行へ（先に移ると、入力前の内容の記録がずれて「元に戻す」が 1 回余分になる）
+    setTimeout(() => focusCell(r + 1, c), 0);
   }
 
   // ---------- 元に戻す ----------
@@ -222,7 +253,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       focusCell(nr, nc);
       return;
     }
-    if (e.key === 'Escape') { setRange(null); return; }
+    if (e.key === 'Escape') { setRange(null); setNumHint(null); return; }
+    // 数字だけのときの Enter：診察券番号として氏名に置き換える
+    if (e.key === 'Enter' && isCardNo(e.currentTarget.value)) { e.preventDefault(); void applyCardNo(rows[r], cols[c], r, c, e.currentTarget.value.trim()); return; }
     // 複数セルを選んでいるときの Delete：まとめて消す（元に戻せる）
     if ((e.key === 'Delete' || e.key === 'Backspace') && range && rangeSize(range) > 1) {
       e.preventDefault();
@@ -720,7 +753,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                             <input
                               ref={(el) => { if (el) inputs.current.set(k, el); else inputs.current.delete(k); }}
                               value={text}
-                              onChange={(e) => setCell(t, b, e.target.value)}
+                              onChange={(e) => onCellInput(t, b, e.target.value)}
                               onKeyDown={(e) => onKeyDown(e, r, c)}
                               onPaste={(e) => onPaste(e, r, c)}
                               onCopy={(e) => onCopyCut(e, false)}
@@ -754,6 +787,11 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); setMenu(menu === k ? null : k); }} aria-label="メニュー"
                                 className="no-print absolute right-0 top-0 h-full w-4 text-xs text-slate-400 hover:text-slate-700">⋯</button>
+                            )}
+                            {numHint?.k === k && (
+                              <div className={`no-print absolute left-0 top-full z-30 whitespace-nowrap rounded border px-2 py-0.5 text-xs shadow ${numHint.name ? 'border-brand bg-white text-slate-800' : 'border-amber-400 bg-amber-50 text-amber-900'}`} role="status">
+                                {numHint.name ? <>{numHint.no} → <b>{numHint.name}</b>　Enter で入れる</> : <>{numHint.no} は患者一覧にありません</>}
+                              </div>
                             )}
                             {menu === k && (
                               <div data-menu className="absolute right-0 top-full z-20 min-w-[200px] rounded border bg-white py-1 text-left text-sm shadow-lg">

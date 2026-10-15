@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS `global_setting` (
   `adminExtraSlots` INT NOT NULL DEFAULT 1,
   `retentionDays` INT NOT NULL DEFAULT 60,
   `hours` LONGTEXT NOT NULL,
+  `storesPageOpen` TINYINT(1) NOT NULL DEFAULT 0, -- 店舗えらびページを公開する（それまでは「準備中」）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -29,6 +30,11 @@ CREATE TABLE IF NOT EXISTS `store` (
   `publishDaysAhead` INT NOT NULL DEFAULT 30,
   `hoursOverride` LONGTEXT NULL,
   `notifyPhone` VARCHAR(20) NULL,
+  `patientsImportedAt` DATETIME NULL,          -- 患者一覧（診察券番号）を取り込んだ日時
+  `address` VARCHAR(200) NOT NULL DEFAULT '',   -- 店舗えらびページの住所
+  `lat` DECIMAL(9,6) NULL,                      -- 地図の位置（近い順に使う）
+  `lng` DECIMAL(9,6) NULL,
+  `listed` TINYINT(1) NOT NULL DEFAULT 1,       -- 店舗えらびページに載せる
   `maxNewConcurrent` INT NULL DEFAULT NULL, -- 新規（初診・初自）を同じ時間に WEB で受ける上限。NULL＝制限なし、0＝WEB では受けない（電話のみ）
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -141,6 +147,7 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `status` VARCHAR(10) NOT NULL DEFAULT 'BOOKED',
   `smsStatus` VARCHAR(10) NULL,
   `viewToken` VARCHAR(40) NULL,
+  `viaCard` TINYINT(1) NOT NULL DEFAULT 0,  -- 紹介カード（店舗えらびページ）から来た予約
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `res_view_token` (`viewToken`),
@@ -203,6 +210,15 @@ CREATE TABLE IF NOT EXISTS `cell_log` (
   PRIMARY KEY (`id`),
   KEY `cell_log_store_date` (`storeId`, `date`),
   CONSTRAINT `fk_cell_log_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `patient_card` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `cardNo` VARCHAR(12) NOT NULL,
+  `name` VARCHAR(40) NOT NULL,
+  `kana` VARCHAR(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`storeId`, `cardNo`),
+  CONSTRAINT `fk_patient_card_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `rate_limit` (

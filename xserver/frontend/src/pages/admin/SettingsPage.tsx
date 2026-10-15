@@ -1,6 +1,7 @@
 import { useFetch } from '@/lib/api';
 import StoreSettingsForm from '@/components/StoreSettingsForm';
 import StaffList from '@/components/StaffList';
+import PatientImport from '@/components/PatientImport';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -23,6 +24,7 @@ export default function SettingsPage() {
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
         <StoreSettingsForm store={data.store} globalHours={data.globalHours} slotMinutes={data.slotMinutes ?? 15} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
         <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}:${m.canFirst}:${m.canRevisit}:${m.color}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
+        <PatientImport />
       </div>
     </div>
   );
