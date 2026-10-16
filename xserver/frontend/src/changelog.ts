@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 22, date: '2026-10-16', title: '「表をコピー」ボタンを外しました', audience: ['店舗', '本部'],
+    items: ['予約表の上の「表をコピー」ボタンを外しました（1 日分の名前をまとめてコピーしないように）。紙や PDF は「印刷／PDF」、一部を写すときは範囲を選んで Ctrl+C／Ctrl+V をお使いください。'],
+  },
+  {
     id: 21, date: '2026-10-16', title: '診察券番号は全角でも', audience: ['店舗', '本部'],
     items: ['予約表のセルに入れる診察券番号は、全角の数字（３８４２）でも半角（3842）でも名前が出ます。日本語入力のままのときは、Enter で文字を確定したあと、もう一度 Enter で名前に置き換わります。'],
   },

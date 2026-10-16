@@ -480,12 +480,6 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     if (v !== null && Number.isNaN(v)) return;
     await updateDay({ [which]: v } as Partial<typeof day>);
   }
-  function copyAll() {
-    const header = ['時間', ...cols.map((b) => `ベッド${b}`)].join('\t');
-    const body = rows.map((t) => [minToHm(t), ...cols.map((b) => cells.get(key(t, b)) ?? '')].join('\t')).join('\n');
-    navigator.clipboard.writeText(`${header}\n${body}`);
-  }
-
   // ---------- 集計 ----------
   const counts = useMemo(() => {
     // 予約／来院の人数に加えて、内訳（初診＝（初診）（初自）（初）、再来＝（再）、自賠＝（初自）または「自賠」「事故」の手入力）を数える
@@ -548,7 +542,6 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           <span className="ml-2 hidden text-slate-400 2xl:inline">（30秒ごとに最新の内容に自動更新）</span>
         </span>
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white">印刷／PDF</a>
-        <button type="button" onClick={copyAll} className="rounded border bg-white px-3 py-1">表をコピー</button>
       </div>
 
       <div className="mb-3 flex flex-wrap items-end gap-x-6 gap-y-2">
