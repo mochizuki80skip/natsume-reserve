@@ -39,6 +39,13 @@ await p.keyboard.type('9999'); await p.keyboard.press('Enter'); await p.waitForT
 ok('一覧に無い番号はそのまま', (await cell('9:15', 1).inputValue()) === '9999' && (await p.textContent('body')).includes('9999 は患者一覧にありません'));
 await p.getByRole('button', { name: /元に戻す/ }).click(); await p.getByRole('button', { name: /元に戻す/ }).click(); await p.waitForTimeout(300);
 ok('元に戻すで番号に戻る', (await cell('9:00', 1).inputValue()) === '3842', [await cell('9:00', 1).inputValue(), await cell('9:15', 1).inputValue(), await p.getByRole('button', { name: /元に戻す/ }).textContent()].join('|'));
+// 全角の数字でも同じ
+await cell('10:00', 1).click(); await p.keyboard.type('３８４２'); await p.waitForTimeout(800);
+ok('全角の番号でも候補が出る', (await p.getByRole('status').filter({ hasText: '3842 → テスト 太郎' }).count()) === 1);
+await p.keyboard.press('Enter'); await p.waitForTimeout(500);
+ok('全角の番号でも Enter で氏名に', (await cell('10:00', 1).inputValue()) === 'テスト 太郎');
+await cell('10:15', 1).click(); await p.keyboard.type('０００００５'); await p.keyboard.press('Enter'); await p.waitForTimeout(500);
+ok('全角で頭に 0 があっても', (await cell('10:15', 1).inputValue()) === '見本 花子');
 const p2 = await login('S002', 'password');
 ok('ほかの店舗の一覧は見えない', (await api(p2, 'GET', '/api/admin/patients/lookup?no=3842'))[1].name === null);
 

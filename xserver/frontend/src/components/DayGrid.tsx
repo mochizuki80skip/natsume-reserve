@@ -131,7 +131,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   }
 
   // ---------- 診察券番号 → 氏名 ----------
-  const isCardNo = (v: string) => /^\d{1,10}$/.test(v.trim());
+  // 全角の数字（０〜９）も半角にそろえてから見る（日本語入力のままでも使えるように）
+  const halfDigits = (v: string) => v.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0)).replace(/\u3000/g, ' ').trim();
+  const isCardNo = (v: string) => /^\d{1,10}$/.test(halfDigits(v));
   async function lookupNo(no: string): Promise<string | null> {
     const key0 = String(Number(no));
     if (numCache.current.has(key0)) return numCache.current.get(key0)!;
@@ -145,7 +147,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     setCell(time, bed, v);
     const k = key(time, bed);
     if (numTimer.current) clearTimeout(numTimer.current);
-    if (isCardNo(v)) numTimer.current = setTimeout(async () => setNumHint({ k, no: v.trim(), name: await lookupNo(v.trim()) }), 250);
+    if (isCardNo(v)) { const no = halfDigits(v); numTimer.current = setTimeout(async () => setNumHint({ k, no, name: await lookupNo(no) }), 250); }
     else setNumHint((h) => (h?.k === k ? null : h));
   }
   async function applyCardNo(time: number, bed: number, r: number, c: number, no: string) {
@@ -267,7 +269,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     }
     if (e.key === 'Escape') { setRange(null); setNumHint(null); return; }
     // 数字だけのときの Enter：診察券番号として氏名に置き換える
-    if (e.key === 'Enter' && isCardNo(e.currentTarget.value)) { e.preventDefault(); void applyCardNo(rows[r], cols[c], r, c, e.currentTarget.value.trim()); return; }
+    // 日本語入力で変換を確定する Enter（入力中の文字に下線がある間）は、確定だけにして次の Enter で置き換える
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229 && isCardNo(e.currentTarget.value)) { e.preventDefault(); void applyCardNo(rows[r], cols[c], r, c, halfDigits(e.currentTarget.value)); return; }
+    if (e.key === 'Enter' && (e.nativeEvent.isComposing || e.keyCode === 229)) return;
     // 複数セルを選んでいるときの Delete：まとめて消す（元に戻せる）
     if ((e.key === 'Delete' || e.key === 'Backspace') && range && rangeSize(range) > 1) {
       e.preventDefault();

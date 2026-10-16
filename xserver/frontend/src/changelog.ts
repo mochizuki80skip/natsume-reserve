@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 21, date: '2026-10-16', title: '診察券番号は全角でも', audience: ['店舗', '本部'],
+    items: ['予約表のセルに入れる診察券番号は、全角の数字（３８４２）でも半角（3842）でも名前が出ます。日本語入力のままのときは、Enter で文字を確定したあと、もう一度 Enter で名前に置き換わります。'],
+  },
+  {
     id: 20, date: '2026-10-16', title: '日付の帯を上に固定', audience: ['店舗', '本部'],
     items: ['予約表を下にスクロールしても、「前日・日付（カレンダー）・翌日・本日・元に戻す」と日付が画面の上に残ります。メニュー・担当の帯もそのすぐ下に残ります。'],
   },
