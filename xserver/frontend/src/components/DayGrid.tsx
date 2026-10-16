@@ -56,6 +56,18 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const anchor = useRef<{ r: number; c: number } | null>(null);
   const [range, setRange] = useState<{ r0: number; c0: number; r1: number; c1: number } | null>(null);
   const extending = useRef(false);
+  // 日付の操作の帯（前日・日付・翌日・本日）は画面の上に固定。その高さぶん、メニューの帯をすぐ下に固定する
+  const navRef = useRef<HTMLDivElement>(null);
+  const [navH, setNavH] = useState(0);
+  useEffect(() => {
+    const el = navRef.current;
+    if (!el) return;
+    const apply = () => setNavH(el.offsetHeight);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   // 診察券番号 → 氏名（店舗設定で取り込んだ患者一覧から）。数字だけを入れると候補を出し、Enter で氏名に置き換える
   const numCache = useRef(new Map<string, string | null>());
   const numTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -520,15 +532,16 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
-      <div className="no-print mb-3 flex flex-wrap items-center gap-2">
+      <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, -1)}`)}>‹ 前日</button>
-        <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1" />
+        <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1" aria-label="日付を選ぶ" />
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, 1)}`)}>翌日 ›</button>
+        <b className="whitespace-nowrap text-base text-slate-800">{formatDateJa(data.date)}</b>
         <button type="button" className={`rounded px-4 py-1 font-bold ${data.date === today ? 'border border-brand bg-brand-light text-brand-dark' : 'bg-brand text-white'}`} onClick={() => navigate(`/admin/day/${today}`)} aria-current={data.date === today ? 'date' : undefined}>本日</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={undo} disabled={historyLen === 0} className="rounded border bg-white px-3 py-1 disabled:opacity-40" title="この画面で入力・削除・貼り付けしたものを 1 つずつ戻します（Ctrl+Z）">↶ 元に戻す{historyLen ? `（${historyLen}）` : ''}</button>
         <span className="ml-auto text-xs text-slate-500">
           {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '保存しました' : saveState === 'error' ? '保存に失敗しました' : '入力すると自動保存されます'}
-          <span className="ml-2 text-slate-400">（30秒ごとに最新の内容に自動更新）</span>
+          <span className="ml-2 hidden text-slate-400 2xl:inline">（30秒ごとに最新の内容に自動更新）</span>
         </span>
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white">印刷／PDF</a>
         <button type="button" onClick={copyAll} className="rounded border bg-white px-3 py-1">表をコピー</button>
@@ -652,7 +665,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             </div>
           );
           return (
-            <div className="no-print sticky top-0 z-10 mb-1 flex flex-col gap-1 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
+            <div style={{ top: navH }} className="no-print sticky z-10 mb-1 flex flex-col gap-1 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
             <div className="flex min-h-[30px] flex-wrap items-center gap-1.5">
               <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">メニュー</span>
               {multi ? (

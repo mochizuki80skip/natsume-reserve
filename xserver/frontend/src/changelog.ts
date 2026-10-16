@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 20, date: '2026-10-16', title: '日付の帯を上に固定', audience: ['店舗', '本部'],
+    items: ['予約表を下にスクロールしても、「前日・日付（カレンダー）・翌日・本日・元に戻す」と日付が画面の上に残ります。メニュー・担当の帯もそのすぐ下に残ります。'],
+  },
+  {
     id: 19, date: '2026-10-16', title: '店舗えらびページ（本部）', audience: ['本部'],
     items: [
       '本部画面のいちばん下に「店舗えらびページ（紹介カードの QR）」を足しました。店舗ごとに載せるか・住所・地図の位置（「住所から調べる」で自動）を入れます。',
