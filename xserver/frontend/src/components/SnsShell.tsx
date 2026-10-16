@@ -39,7 +39,7 @@ export default function SnsShell() {
             {item('/admin/sns/calendar', 'カレンダー')}
             {item('/admin/sns/posts', '投稿一覧')}
             {item('/admin/sns/topics', '定型投稿・ネタ')}
-            {item('/admin/sns/vars', '差し込み語（MEO）')}
+            {item('/admin/sns/vars', '店舗の一括設定')}
             {item('/admin/sns/media', '画像')}
             {item('/admin/sns/insights', '分析')}
             {isHq ? item('/admin/sns/schedule', '設定') : item('/admin/sns/settings', '設定')}

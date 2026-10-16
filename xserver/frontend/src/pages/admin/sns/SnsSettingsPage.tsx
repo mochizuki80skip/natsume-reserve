@@ -76,7 +76,7 @@ export default function SnsSettingsPage() {
   return (
     <div className="space-y-4">
       <SnsNav title={`SNS 設定：${data.store.name}`} />
-      {data.isHq && <Link to="/admin/sns/stores" className="-mt-2 inline-block text-sm text-brand underline">← 店舗管理に戻る</Link>}
+      {data.isHq && <div className="-mt-2 flex flex-wrap gap-4 text-sm"><Link to="/admin/sns/stores" className="text-brand underline">← 店舗管理に戻る</Link><Link to="/admin/sns/vars" className="text-brand underline">全店舗まとめて入力するなら「店舗の一括設定」</Link></div>}
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       <div className="grid gap-4 xl:grid-cols-2 xl:items-start">
         <form onSubmit={save} className="space-y-4 rounded border bg-white p-4 text-sm">
@@ -100,11 +100,11 @@ export default function SnsSettingsPage() {
           <section className="space-y-2">
             <h2 className="font-bold">文章に差し込む情報</h2>
             <label className="block">地域（例：沼津市）<input value={f.area} onChange={str('area')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-            <label className="block">住所（Google の投稿の末尾に付けます。空なら付けない）<input value={f.address} onChange={str('address')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-            <label className="block">営業時間の表記（同上。例：平日 9:00〜12:00 / 15:00〜20:00、木・日休）<input value={f.hoursText} onChange={str('hoursText')} className="mt-1 w-full rounded border px-2 py-1" /></label>
+            <label className="block">住所（Instagram の定型文の {'{住所}'} に入ります。Google の投稿には入りません。空でよい）<input value={f.address} onChange={str('address')} className="mt-1 w-full rounded border px-2 py-1" /></label>
+            <label className="block">営業時間の表記（Instagram の {'{営業時間}'} 用。Google には入りません。例：平日 9:00〜12:00 / 15:00〜20:00、木・日休）<input value={f.hoursText} onChange={str('hoursText')} className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">Instagram のハッシュタグ（空なら全店共通：{data.defaults.hashtagBase || '店名・#接骨院・#地域'}）<input value={f.hashtags} onChange={str('hashtags')} placeholder="#なつめ接骨院 #沼津 #接骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">Google：毎回入れる検索キーワード（読点区切り）<input value={f.keywordsFixed} onChange={str('keywordsFixed')} placeholder="接骨院、整骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
-            <label className="block">Google：日替わりで入れるキーワード（読点区切り。1 投稿に 1 つ）<input value={f.keywordsRotation} onChange={str('keywordsRotation')} placeholder="腰痛、肩こり、交通事故、スポーツのケガ" className="mt-1 w-full rounded border px-2 py-1" /></label>
+            <label className="block">症状・施術のキーワード（読点区切り。本文の内容に合うものを 1 つ選んで締めの文に入れます）<input value={f.keywordsRotation} onChange={str('keywordsRotation')} placeholder="腰痛、肩こり、交通事故、スポーツのケガ" className="mt-1 w-full rounded border px-2 py-1" /></label>
             {data.customVars.length > 0 && (
               <div className="rounded border p-3">
                 <div className="mb-1 font-bold">この店舗の差し込み語（定型投稿の {'{…}'} に入る言葉）</div>

@@ -406,11 +406,33 @@ final class Sns
         if (!$store) return 0;
         $ss = self::storeSetting($store);
         $n = 0;
-        foreach (Db::all("SELECT id, channel, postText, scheduledAt, patternIdx FROM sns_post WHERE storeId = ? AND status IN ('draft', 'failed') AND postText LIKE ?", [$storeId, '%{%']) as $r) {
-            $ph = self::placeholders($store, $ss, $r['scheduledAt'], self::keywordFor($ss, (int)$r['patternIdx']));
+        foreach (Db::all("SELECT id, channel, title, body, postText, scheduledAt, patternIdx FROM sns_post WHERE storeId = ? AND status IN ('draft', 'failed') AND postText LIKE ?", [$storeId, '%{%']) as $r) {
+            $ph = self::placeholders($store, $ss, $r['scheduledAt'], self::keywordFor($ss, (int)$r['patternIdx'], $r['title'] . "\n" . $r['body']));
             if ($r['channel'] === 'gbp') foreach (self::GBP_FORBIDDEN_VARS as $k) unset($ph['{' . $k . '}']);
             $t = self::fill($r['postText'], $ph);
             if ($t !== $r['postText']) { Db::exec('UPDATE sns_post SET postText = ? WHERE id = ?', [$t, $r['id']]); $n++; }
+        }
+        return $n;
+    }
+
+    /**
+     * 自動で作った確認待ちの下書きを、今の店舗の設定で作り直す（本文に合うキーワードの選び方など）。
+     * 手で直した下書きは触らない：今の設定で以前のしかたで作った文章と一致するものだけを作り直す。@return 作り直した件数
+     */
+    public static function recomposeAutoDrafts(string $storeId): int
+    {
+        $store = Settings::findStoreById($storeId);
+        if (!$store) return 0;
+        $ss = self::storeSetting($store);
+        $n = 0;
+        foreach (Db::all("SELECT * FROM sns_post WHERE storeId = ? AND status = 'draft' AND source = 'auto'", [$storeId]) as $r) {
+            $args = [$r['channel'], $store, $ss, $r['scheduledAt'], (string)$r['title'], (string)$r['body'], (int)$r['patternIdx'], null, null, (bool)$r['standalone']];
+            $new = self::compose(...$args);
+            if ($new['fullText'] === $r['postText']) continue;
+            $old = self::compose(...array_merge($args, [true]));
+            if ($old['fullText'] !== $r['postText']) continue; // 手で直してある
+            Db::exec('UPDATE sns_post SET closing = ?, hashtags = ?, postText = ? WHERE id = ?', [$new['closing'], $new['hashtags'], $new['fullText'], $r['id']]);
+            $n++;
         }
         return $n;
     }
@@ -439,14 +461,62 @@ final class Sns
         return (Http::isHttps() ? 'https' : 'http') . '://' . $host;
     }
 
-    /** 検索キーワード：毎回入れる語＋日替わりの語（patternIdx で巡回） */
-    public static function keywordFor(array $ss, int $idx): string
+    /**
+     * 検索キーワード：毎回入れる語＋日替わりの語 1 つ。
+     * 本文（$text）を渡したときは、日替わりの語から本文の内容に合うものを選ぶ（例：腰の張りの話なら「腰痛」）。
+     * 合うものが無ければ日替わりの語は入れない（関係のない症状を締めの文に入れないため）。
+     * $text が null のときは以前の動き（patternIdx で順番に巡回）。
+     */
+    public static function keywordFor(array $ss, int $idx, ?string $text = null): string
     {
         $fixed = self::splitList($ss['keywordsFixed']);
         $rot = self::splitList($ss['keywordsRotation']);
         $parts = $fixed;
-        if ($rot) $parts[] = $rot[$idx % count($rot)];
+        if ($rot) {
+            if ($text === null) $parts[] = $rot[$idx % count($rot)];
+            elseif (($best = self::bestKeyword($rot, $text, $idx)) !== null) $parts[] = $best;
+        }
         return implode('・', array_unique($parts));
+    }
+
+    /** 本文に一番関係のある語。同点なら patternIdx で順番に（毎回同じ語にならないように）。無関係なら null */
+    public static function bestKeyword(array $words, string $text, int $idx = 0): ?string
+    {
+        $text = preg_replace('/\s+/u', '', $text);
+        $n = count($words);
+        $best = null; $bestScore = 0;
+        for ($i = 0; $i < $n; $i++) {
+            $w = $words[($idx + $i) % $n];
+            $score = self::keywordScore($w, $text);
+            if ($score > $bestScore) { $best = $w; $bestScore = $score; }
+        }
+        return $best;
+    }
+
+    /** 語と本文の関係の強さ：そのまま含む ＞ 語の一部（2 文字以上）を含む ＞ 語の中の漢字を含む */
+    /** どの症状の文にも出てくる漢字（1 文字だけの一致では関係があるとみなさない） */
+    private const GENERIC_KANJI = '痛症状体方院治療的時人日気中大小多少事故後前感部全身';
+
+    public static function keywordScore(string $word, string $text): int
+    {
+        // 全角カタカナは平仮名にそろえる（ムチウチ／むちうち を同じに扱う）
+        $w = mb_convert_kana(preg_replace('/\s+/u', '', $word), 'c', 'UTF-8');
+        $text = mb_convert_kana($text, 'c', 'UTF-8');
+        if ($w === '' || $text === '') return 0;
+        if (str_contains($text, $w)) return 1000 + mb_strlen($w);
+        // 語の一部（2 文字以上の連続）を含む：長く一致するほど強い（例：「交通事故」と本文の「追突事故」）
+        $wl = mb_strlen($w);
+        for ($len = $wl - 1; $len >= 2; $len--) {
+            for ($i = 0; $i + $len <= $wl; $i++) {
+                $sub = mb_substr($w, $i, $len);
+                if (preg_match('/^[\p{Hiragana}ー]+$/u', $sub) && $len < 3) continue; // 「のケ」などの短い平仮名だけの一致は数えない
+                if (str_contains($text, $sub)) return 500 + $len * 10 + ($i === 0 ? 5 : 0);
+            }
+        }
+        $score = 0;
+        preg_match_all('/\p{Han}/u', $w, $m);
+        foreach (array_unique($m[0]) as $ch) if (!str_contains(self::GENERIC_KANJI, $ch) && str_contains($text, $ch)) $score += 10;
+        return $score;
     }
 
     public static function splitList(string $s): array
@@ -458,11 +528,12 @@ final class Sns
      * 見出し・本文から投稿文を組み立てる。
      * @return array{fullText:string, closing:string, hashtags:string}
      */
-    public static function compose(string $channel, array $store, array $ss, string $scheduledAt, string $title, string $body, int $idx, ?string $closingOverride = null, ?string $hashtagsOverride = null, bool $standalone = false): array
+    public static function compose(string $channel, array $store, array $ss, string $scheduledAt, string $title, string $body, int $idx, ?string $closingOverride = null, ?string $hashtagsOverride = null, bool $standalone = false, bool $legacyKeyword = false): array
     {
         $p = self::setting()['patterns'][$channel];
         $idx = max(0, $idx);
-        $kw = self::keywordFor($ss, $idx);
+        // キーワードは本文の内容に合うものを選ぶ（$legacyKeyword は以前の巡回のしかた。作り直しの判定用）
+        $kw = self::keywordFor($ss, $idx, $legacyKeyword ? null : $title . "\n" . $body);
         $ph = self::placeholders($store, $ss, $scheduledAt, $kw);
         if ($channel === 'gbp') foreach (self::GBP_FORBIDDEN_VARS as $k) unset($ph['{' . $k . '}']); // Google の投稿には GBP に載っている情報を入れない（置き換えずに残して気づけるようにする）
         if ($standalone) {

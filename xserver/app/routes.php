@@ -84,6 +84,7 @@ function route_table(): array
         ['GET', '#^/api/admin/sns/drafts$#', 'sns_drafts_get'],
         ['GET', '#^/api/admin/sns/vars$#', 'sns_vars_get'],
         ['PUT', '#^/api/admin/sns/vars$#', 'sns_vars_put'],
+        ['POST', '#^/api/admin/sns/recompose$#', 'sns_recompose_post'],
         ['GET', '#^/api/admin/sns/credentials$#', 'sns_credentials_get'],
         ['PUT', '#^/api/admin/sns/credentials$#', 'sns_credentials_put'],
         ['POST', '#^/api/admin/sns/credentials/reveal$#', 'sns_credentials_reveal'],

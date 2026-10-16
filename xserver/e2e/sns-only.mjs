@@ -23,7 +23,7 @@ ok('ログイン後は SNS ホーム', true);
 const nav = (await page.locator('header nav').textContent()).replace(/\s+/g, '');
 const side = (await page.locator('aside').textContent()).replace(/\s+/g, '');
 ok('メニューに予約表・シフト・自賠請求が無い', !nav.includes('予約表') && !nav.includes('シフト') && !nav.includes('自賠'));
-ok('左メニューにホーム・下書き（全店）・手動投稿・カレンダー・差し込み語・接続状況がある', side.includes('ホーム') && side.includes('下書き（全店）') && side.includes('手動投稿') && side.includes('カレンダー') && side.includes('差し込み語（MEO）') && side.includes('接続状況'));
+ok('左メニューにホーム・下書き（全店）・手動投稿・カレンダー・店舗の一括設定・接続状況がある', side.includes('ホーム') && side.includes('下書き（全店）') && side.includes('手動投稿') && side.includes('カレンダー') && side.includes('店舗の一括設定') && side.includes('接続状況'));
 ok('ヘッダーに店舗設定・店舗管理がある', nav.includes('店舗設定') && nav.includes('店舗管理'));
 await page.goto(`${BASE}/admin/hq`); await page.waitForSelector('h1:has-text("店舗管理")');
 ok('店舗管理に共通設定（営業時間）が無い', (await page.locator('text=全店共通設定').count()) === 0);
@@ -75,6 +75,29 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   ok('差し込み語ページに全店舗の行がある', (await page.locator('tbody tr').count()) >= 2);
   const r = await put([{ code: 'S002', area: '沼津市' }]);
   ok('一括保存の応答', r.ok === true && r.saved === 1);
+  // 一括設定：URL・ハッシュタグ・投稿の有無も保存できる
+  const r2 = await put([{ code: 'S002', gbpPostUrl: 'https://business.google.com/n/123/posts', hashtags: '#テスト', gbpEnabled: true, memo: '料金は書かない' }]);
+  const v2 = (await (await fetch(`${BASE}/api/admin/sns/vars`, { headers: { cookie } })).json()).stores.find((x) => x.code === 'S002');
+  ok('一括設定で URL・タグ・メモ・投稿の有無を保存', r2.ok && v2.gbpPostUrl === 'https://business.google.com/n/123/posts' && v2.hashtags === '#テスト' && v2.gbpEnabled === true && v2.memo === '料金は書かない');
+  const bad = await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: [{ code: 'S002', gbpPostUrl: 'business.google.com' }] }) });
+  ok('https で始まらない URL は保存しない', bad.status === 400);
+  // キーワードは本文に合うものが入る（腰の話 → 腰痛。ムチウチにはならない）
+  await put([{ code: 'S002', area: '三島市谷田', keywordsFixed: '', keywordsRotation: '交通事故、ムチウチ、腰痛、子どものケガ' }]);
+  const kp = await (await fetch(`${BASE}/api/admin/sns/posts?store=S002`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-02-01 10:00', title: '朝起きたときの腰の張り', body: '朝、起き上がるときに腰が重いと感じる方は、寝ている間に体が冷えて筋肉がこわばっていることが多いです。' }) })).json();
+  const kpost = await (await fetch(`${BASE}/api/admin/sns/posts/${kp.id}`, { headers: { cookie } })).json();
+  const ktext = kpost.post?.fullText ?? '';
+  ok('Google の締めのキーワードが本文に合う（腰痛）', ktext.includes('腰痛') && !ktext.includes('ムチウチ'), ktext.split('\n').slice(-3).join(' / '));
+  // 貼り付け（見出し行あり）で表に反映できる
+  await page.goto(`${BASE}/admin/sns/vars`); await page.waitForSelector('th:has-text("エリア")');
+  await page.locator('summary:has-text("Excel から貼り付けて")').click();
+  await page.locator('textarea').fill('店舗コード\tエリア\nS002\t三島市');
+  await page.getByRole('button', { name: '表に反映' }).click();
+  ok('見出し付きの貼り付けで反映', await page.waitForSelector('text=1 店舗に反映しました', { timeout: 5000 }).then(() => true, () => false));
+  await page.getByRole('button', { name: /保存（1 店舗）/ }).click();
+  await page.waitForSelector('text=店舗を保存しました');
+  const v3 = (await (await fetch(`${BASE}/api/admin/sns/vars`, { headers: { cookie } })).json()).stores.find((x) => x.code === 'S002');
+  ok('貼り付けた値が保存される', v3.area === '三島市');
+  await put([{ code: 'S002', area: '沼津市', gbpPostUrl: '', hashtags: '', memo: '' }]);
 }
 // 電話番号は使わない：店舗の追加・一括登録に電話番号の欄が無く、無しで登録できる
 {

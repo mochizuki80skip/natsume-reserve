@@ -1,7 +1,10 @@
 // 差し込み語の入力欄（店舗ごとの値）。下書きページと差し込み語ページで共用する
 import type { VarDef } from './sns';
 
-export interface StoreVars { code: string; name: string; area: string; keywordsFixed: string; keywordsRotation: string; vars: Record<string, string>; igEnabled: boolean; gbpEnabled: boolean; unfilled?: number }
+export interface StoreVars {
+  code: string; name: string; area: string; keywordsFixed: string; keywordsRotation: string; vars: Record<string, string>; igEnabled: boolean; gbpEnabled: boolean; unfilled?: number;
+  hashtags?: string; gbpPostUrl?: string; igProfileUrl?: string; address?: string; hoursText?: string; memo?: string;
+}
 
 /** 投稿文に残った {…} → 入力欄。null は「この画面では入れられない（SNS設定で入れる／Google では使えない）」 */
 export type VarField = { kind: 'name' | 'area' | 'keywordsFixed' } | { kind: 'var'; key: string };

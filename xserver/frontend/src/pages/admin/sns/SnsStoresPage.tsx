@@ -67,6 +67,7 @@ export default function SnsStoresPage() {
     <div className="space-y-4">
       <SnsNav title="店舗管理" />
       <p className="-mt-2 text-sm text-slate-600">店舗ごとの SNS の設定状況です。「SNS設定」を押すと、その店舗の地域・差し込み語・投稿の有無と頻度・Google の投稿ページ・{SNS_ONLY ? 'Instagram の連携、Instagram と Google のログイン情報' : 'Instagram の連携'}を設定できます。</p>
+      <p className="-mt-2 text-sm"><Link to="/admin/sns/vars" className="text-brand underline">エリア・キーワード・投稿ページ URL などを全店舗まとめて入力する（店舗の一括設定）→</Link></p>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       {todo.length > 0 && <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">設定が終わっていない店舗が {todo.length} 店舗あります（黄色の項目）。</p>}
 

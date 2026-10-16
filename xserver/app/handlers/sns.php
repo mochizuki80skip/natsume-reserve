@@ -687,7 +687,7 @@ function sns_settings_put(): never
         'igProfileUrl' => array_key_exists('igProfileUrl', $b) ? sns_url_or_empty(Http::str($b, 'igProfileUrl', 300, false)) : $cur['igProfileUrl'],
     ];
     Sns::saveStoreSetting($ctx['store']['id'], $v);
-    Http::json(['ok' => true, 'refilled' => Sns::refillDrafts($ctx['store']['id'])]);
+    Http::json(['ok' => true, 'refilled' => Sns::refillDrafts($ctx['store']['id']) + Sns::recomposeAutoDrafts($ctx['store']['id'])]);
 }
 
 /** 投稿文の見本（設定画面でパターンを確かめる） */
@@ -1129,7 +1129,8 @@ function sns_visible_stores(array $s): array
 function sns_store_vars_row(array $st, array $ss): array
 {
     return ['code' => $st['code'], 'name' => $st['name'], 'area' => $ss['area'], 'keywordsFixed' => $ss['keywordsFixed'], 'keywordsRotation' => $ss['keywordsRotation'], 'vars' => (object)$ss['vars'],
-        'igEnabled' => $ss['igEnabled'], 'gbpEnabled' => $ss['gbpEnabled']];
+        'igEnabled' => $ss['igEnabled'], 'gbpEnabled' => $ss['gbpEnabled'], 'hashtags' => $ss['hashtags'], 'gbpPostUrl' => $ss['gbpPostUrl'], 'igProfileUrl' => $ss['igProfileUrl'],
+        'address' => $ss['address'], 'hoursText' => $ss['hoursText'], 'memo' => $ss['memo']];
 }
 
 /** GET /api/admin/sns/drafts?channel=&store=：確認待ち・失敗の下書きを全店まとめて */
@@ -1200,10 +1201,31 @@ function sns_vars_put(): never
             if (array_key_exists('keywordsFixed', $row)) $v['keywordsFixed'] = Http::str($row, 'keywordsFixed', 300, false);
             if (array_key_exists('keywordsRotation', $row)) $v['keywordsRotation'] = Http::str($row, 'keywordsRotation', 500, false);
             if (array_key_exists('vars', $row)) $v['vars'] = array_merge($cur['vars'], Sns::parseVars($row['vars']));
+            foreach (['hashtags' => 500, 'address' => 100, 'hoursText' => 200, 'memo' => 2000] as $k => $max) {
+                if (array_key_exists($k, $row)) $v[$k] = Http::str($row, $k, $max, false);
+            }
+            foreach (['gbpPostUrl', 'igProfileUrl'] as $k) {
+                if (!array_key_exists($k, $row)) continue;
+                $url = Http::str($row, $k, 300, false);
+                if ($url !== '' && !preg_match('#^https://\S+$#u', $url)) throw new HttpError(400, $st['name'] . '：URL は https:// から始まるものを入れてください（空白は入れない）');
+                $v[$k] = sns_url_or_empty($url);
+            }
+            foreach (['igEnabled', 'gbpEnabled'] as $k) if (array_key_exists($k, $row)) $v[$k] = Http::bool($row, $k);
             Sns::saveStoreSetting($st['id'], $v);
             $saved++;
             $refilled += Sns::refillDrafts($st['id']);
+            $refilled += Sns::recomposeAutoDrafts($st['id']);
         }
     });
     Http::json(['ok' => true, 'saved' => $saved, 'refilled' => $refilled]);
+}
+
+/** POST /api/admin/sns/recompose：見られる店舗の、自動で作った確認待ちの下書きを今の設定で作り直す（手で直したものは除く） */
+function sns_recompose_post(): never
+{
+    Sns::ensureTables();
+    $s = Auth::requireSession();
+    $n = 0;
+    foreach (sns_visible_stores($s) as $st) $n += Sns::recomposeAutoDrafts($st['id']);
+    Http::json(['ok' => true, 'recomposed' => $n]);
 }
