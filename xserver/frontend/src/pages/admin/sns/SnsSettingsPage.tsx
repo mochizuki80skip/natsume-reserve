@@ -103,7 +103,7 @@ export default function SnsSettingsPage() {
             <label className="block">住所（Instagram の定型文の {'{住所}'} に入ります。Google の投稿には入りません。空でよい）<input value={f.address} onChange={str('address')} className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">営業時間の表記（Instagram の {'{営業時間}'} 用。Google には入りません。例：平日 9:00〜12:00 / 15:00〜20:00、木・日休）<input value={f.hoursText} onChange={str('hoursText')} className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">Instagram のハッシュタグ（空なら全店共通：{data.defaults.hashtagBase || '店名・#接骨院・#地域'}）<input value={f.hashtags} onChange={str('hashtags')} placeholder="#なつめ接骨院 #沼津 #接骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
-            <label className="block">Google：毎回入れる検索キーワード（読点区切り）<input value={f.keywordsFixed} onChange={str('keywordsFixed')} placeholder="接骨院、整骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
+            <label className="block">メインキーワード（MEO で一番狙う語。先頭の語を Google の投稿に毎回「エリア＋この語」で入れます。例：接骨院）<input value={f.keywordsFixed} onChange={str('keywordsFixed')} placeholder="接骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block">症状・施術のキーワード（読点区切り。本文の内容に合うものを 1 つ選んで締めの文に入れます）<input value={f.keywordsRotation} onChange={str('keywordsRotation')} placeholder="腰痛、肩こり、交通事故、スポーツのケガ" className="mt-1 w-full rounded border px-2 py-1" /></label>
             {data.customVars.length > 0 && (
               <div className="rounded border p-3">

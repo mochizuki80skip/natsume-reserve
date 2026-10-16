@@ -1,4 +1,4 @@
-// 定型投稿（文章＋画像）の一覧と編集。文章には {店舗名} {エリア} {最寄駅} などの差し込み語を書き、店舗ごとの設定の値に置き換わる
+// 定型投稿（文章＋画像）の一覧と編集。文章には {店舗名} {エリア} {メインキーワード} などの差し込み語を書き、店舗ごとの設定の値に置き換わる
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
@@ -75,7 +75,7 @@ export default function SnsTopicsPage() {
           <table className="w-full"><tbody>
             {data.vars.map((v) => <tr key={v.key} className="border-t"><td className="whitespace-nowrap px-2 py-0.5"><code className="rounded bg-slate-100 px-1">{`{${v.key}}`}</code></td><td className="px-2 py-0.5">{v.label}{!v.builtin && <span className="ml-1 text-slate-400">（本部が定義）</span>}</td><td className="px-2 py-0.5"><button type="button" onClick={() => insertVar(v.key)} className="text-brand underline">本文に挿入</button></td></tr>)}
           </tbody></table>
-          {data.isHq && <p className="mt-2 text-slate-500">「最寄駅」「駐車場」など店舗ごとに変わる言葉は、本部の SNS 管理「差し込み語の定義」で項目を追加し、各店舗の SNS 設定で値を入れます。</p>}
+          {data.isHq && <p className="mt-2 text-slate-500">「駐車場」など店舗ごとに変わる言葉は、本部の SNS 管理「差し込み語の定義」で項目を追加し、各店舗の SNS 設定で値を入れます。</p>}
         </div>
       )}
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
@@ -89,7 +89,7 @@ export default function SnsTopicsPage() {
           <label className="flex items-center gap-1" title="オフにすると、見出し＋本文として扱い、書き出し・締め・ハッシュタグ・営業時間の型で囲みます"><input type="checkbox" checked={nf.standalone} onChange={(e) => setNf({ ...nf, standalone: e.target.checked })} />本文をそのまま投稿文にする</label>
         </div>
         <input value={nf.title} onChange={(e) => setNf({ ...nf, title: e.target.value })} placeholder={nf.standalone ? '名前（一覧用。投稿文には入りません。例：駅チカ案内）' : '見出し（投稿文の先頭に入ります）'} className="w-full rounded border px-2 py-1" />
-        <textarea value={nf.body} onChange={(e) => setNf({ ...nf, body: e.target.value })} required rows={6} placeholder={nf.standalone ? '投稿文（差し込み語入り）。例：{エリア}で接骨院をお探しなら{店舗名}へ。{最寄駅}から徒歩3分。\n\nご予約はこちら {予約URL}\n\n{ハッシュタグ}' : '本文（店名・締め・ハッシュタグは型から自動で付きます）'} className="w-full rounded border px-2 py-1" />
+        <textarea value={nf.body} onChange={(e) => setNf({ ...nf, body: e.target.value })} required rows={6} placeholder={nf.standalone ? '投稿文（差し込み語入り）。例：{エリア}で{メインキーワード}をお探しなら{店舗名}へ。\n\nご予約はこちら {予約URL}\n\n{ハッシュタグ}' : '本文（店名・締め・ハッシュタグは型から自動で付きます）'} className="w-full rounded border px-2 py-1" />
         <div className="flex flex-wrap items-center gap-2">
           <button className="rounded bg-brand px-3 py-1 text-white">追加</button>
           <button type="button" onClick={() => doPreview(nf.body, nf.standalone, nf.channel)} className="rounded border bg-white px-3 py-1">{data.store.name} での見本</button>
@@ -169,7 +169,7 @@ function BroadcastDialog({ bc, setBc, topic, storeCount, onRun }: { bc: { id: st
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 p-4" onClick={() => setBc(null)}>
       <div className="w-full max-w-lg space-y-3 rounded border bg-white p-4 text-sm shadow-lg" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-bold">「{topic.title || topic.body.slice(0, 20)}」を全店舗に一斉配信</h3>
-        <p className="text-xs text-slate-600">稼働中の {storeCount} 店舗それぞれに、店舗ごとの差し込み語（店舗名・エリア・最寄駅など）で置き換えた下書きを作ります。媒体を「使わない」設定の店舗には作りません。</p>
+        <p className="text-xs text-slate-600">稼働中の {storeCount} 店舗それぞれに、店舗ごとの差し込み語（店舗名・エリア・メインキーワードなど）で置き換えた下書きを作ります。媒体を「使わない」設定の店舗には作りません。</p>
         <div className="flex flex-wrap items-center gap-2">
           <select value={bc.channel} onChange={(e) => setBc({ ...bc, channel: e.target.value as Channel })} className="rounded border px-2 py-1">
             {(topic.channel === 'both' ? (['ig', 'gbp'] as Channel[]) : [topic.channel as Channel]).map((c) => <option key={c} value={c}>{CHANNEL_JA[c]}</option>)}

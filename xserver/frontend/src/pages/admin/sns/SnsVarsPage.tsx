@@ -32,8 +32,8 @@ export default function SnsVarsPage() {
     return [
       { id: 'name', tab: 'meo', label: '店舗名', hint: '{店舗名}', ph: '例：あかり接骨院', get: str('name'), set: put('name'), width: 'min-w-44', required: true },
       { id: 'area', tab: 'meo', label: 'エリア', hint: '{エリア}', ph: '例：三島市谷田', get: str('area'), set: put('area'), width: 'min-w-36', required: true },
-      { id: 'kf', tab: 'meo', label: '毎回入れるキーワード', hint: '{キーワード}', ph: '例：接骨院、整骨院', get: str('keywordsFixed'), set: put('keywordsFixed'), width: 'min-w-44', required: true },
-      { id: 'kr', tab: 'meo', label: '症状・施術のキーワード', hint: '本文に合うものを 1 つ', ph: '例：交通事故、ムチウチ、腰痛', get: str('keywordsRotation'), set: put('keywordsRotation'), width: 'min-w-56' },
+      { id: 'kf', tab: 'meo', label: 'メインキーワード', hint: '{メインキーワード} 先頭の語を毎回', ph: '例：接骨院', get: str('keywordsFixed'), set: put('keywordsFixed'), width: 'min-w-44', required: true },
+      { id: 'kr', tab: 'meo', label: '症状・施術のキーワード', hint: '{症状} 本文に合うもの 1 つ', ph: '例：交通事故、ムチウチ、腰痛', get: str('keywordsRotation'), set: put('keywordsRotation'), width: 'min-w-56' },
       ...(data?.customVars ?? []).map((cv): Col => ({ id: `var:${cv.key}`, tab: 'meo', label: cv.label, hint: `{${cv.key}}`, ph: cv.default ? `既定：${cv.default}` : '', get: (s) => s.vars[cv.key] ?? '', set: (s, v) => ({ ...s, vars: { ...s.vars, [cv.key]: v } }), width: 'min-w-36', required: !cv.default })),
       { id: 'hashtags', tab: 'link', label: 'Instagram のハッシュタグ', hint: '空なら全店共通', ph: '例：#あかり接骨院 #三島市', get: str('hashtags'), set: put('hashtags'), width: 'min-w-64' },
       { id: 'gbpPostUrl', tab: 'link', label: 'Google の投稿ページ URL', hint: '手動投稿で開く', ph: 'https://…', get: str('gbpPostUrl'), set: put('gbpPostUrl'), width: 'min-w-72' },
@@ -118,7 +118,7 @@ export default function SnsVarsPage() {
         <button type="button" onClick={downloadCsv} className="rounded border bg-white px-3 py-1">Excel 用に書き出す（CSV）</button>
         <button type="button" disabled={busy} onClick={recomposeAll} className="rounded border bg-white px-3 py-1 disabled:opacity-50">下書きを今の設定で作り直す</button>
       </div>
-      {tab === 'meo' && <p className="text-xs text-slate-500">Google の締めの文（「{'{エリア}'}で{'{キーワード}'}のことなら…」）には、「毎回入れるキーワード」と、「症状・施術のキーワード」のうち<b>本文の内容に合うもの 1 つ</b>が入ります（合うものが無ければ毎回のキーワードだけ）。</p>}
+      {tab === 'meo' && <p className="text-xs text-slate-500">Google の投稿には毎回「<b>エリア＋メインキーワード</b>」（例：三島市谷田で接骨院をお探しの方は…）が入ります。MEO で一番狙う語（例：接骨院）を先頭に 1 つ入れてください。「症状・施術のキーワード」は、本文の内容に合うものがあるときだけ 1 つ添えます（例：腰の話 →「腰痛のご相談も承っています」）。</p>}
       {tab === 'link' && <p className="text-xs text-slate-500">Google の投稿ページ URL の取り方：オーナーの Google アカウントでログイン → business.google.com/locations で店舗を開く（または Google 検索で店名を検索）→「最新情報を追加」→ アドレスバーの URL をコピー。</p>}
 
       <section className="overflow-x-auto rounded-lg border bg-white">
@@ -155,7 +155,7 @@ export default function SnsVarsPage() {
           <li>見出し行を含めて表全体を選んでコピーし、下に貼り付けて「表に反映」→ 右下の「保存」。</li>
           <li>見出し行なしで貼るときは、列の順を「店舗コード、{shown.map((c) => c.label).join('、')}」にします（今開いているタブの列）。空のセルは変更しません。「投稿の有無」は ○ で投稿する、空で投稿しない。</li>
         </ol>
-        <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder={`店舗コード\t店舗名\tエリア\t毎回入れるキーワード\t症状・施術のキーワード\nS001\tあかり接骨院\t三島市谷田\t接骨院、整骨院\t交通事故、ムチウチ、腰痛`} className="mt-2 w-full rounded border px-2 py-1 font-mono text-xs" />
+        <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder={`店舗コード\t店舗名\tエリア\tメインキーワード\t症状・施術のキーワード\nS001\tあかり接骨院\t三島市谷田\t接骨院\t交通事故、ムチウチ、腰痛`} className="mt-2 w-full rounded border px-2 py-1 font-mono text-xs" />
         <button type="button" onClick={applyPaste} disabled={!paste.trim()} className="mt-1 rounded border bg-white px-3 py-1 disabled:opacity-40">表に反映</button>
       </details>
 

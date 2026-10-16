@@ -13,7 +13,7 @@ export function fieldFor(token: string, customVars: VarDef[]): VarField | null {
   const k = token.replace(/^\{|\}$/g, '');
   if (k === '店舗名') return { kind: 'name' };
   if (k === 'エリア' || k === '地域') return { kind: 'area' };
-  if (k === 'キーワード') return { kind: 'keywordsFixed' };
+  if (k === 'キーワード' || k === 'メインキーワード') return { kind: 'keywordsFixed' };
   if (customVars.some((cv) => cv.key === k)) return { kind: 'var', key: k };
   return null;
 }
@@ -28,7 +28,7 @@ export function fieldLabel(f: VarField, customVars: VarDef[]): string {
   }
   if (f.kind === 'name') return '店舗名 {店舗名}';
   if (f.kind === 'area') return 'エリア {エリア}';
-  return '毎回入れるキーワード {キーワード}';
+  return 'メインキーワード {メインキーワード}';
 }
 
 export function getValue(s: StoreVars, f: VarField): string {

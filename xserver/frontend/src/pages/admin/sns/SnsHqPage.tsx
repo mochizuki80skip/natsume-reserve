@@ -137,14 +137,14 @@ export default function SnsHqPage() {
         </div>
         <label className="block">全店共通のハッシュタグ（店舗で指定が無いとき）<input value={s.hashtagBase} onChange={(e) => setS({ ...s, hashtagBase: e.target.value })} placeholder="#なつめ接骨院 #接骨院" className="mt-1 w-full rounded border px-2 py-1" /></label>
         <div>
-          <div className="mb-1 font-bold">差し込み語の定義（店舗ごとに値が変わる言葉。定型投稿に {'{最寄駅}'} のように書く）</div>
+          <div className="mb-1 font-bold">差し込み語の定義（店舗ごとに値が変わる言葉。定型投稿に {'{駐車場}'} のように書く）</div>
           <p className="mb-2 text-xs text-slate-500">{'{店舗名}'} {'{エリア}'} {!SNS_ONLY && '{電話} '}{'{予約URL}'} {'{月}'} {'{キーワード}'} {'{営業時間}'} {'{住所}'} {'{ハッシュタグ}'} は最初から使えます。ここで追加した項目は、各店舗の SNS 設定に入力欄が出ます。値が空の店舗には既定値が入ります。</p>
           <table className="w-full text-xs"><thead><tr className="text-left text-slate-500"><th className="px-1">名前（{'{ }'} の中）</th><th className="px-1">説明（店舗の入力欄に出す）</th><th className="px-1">既定値（店舗が空のとき）</th><th></th></tr></thead>
             <tbody>
               {s.customVars.map((cv, i) => (
                 <tr key={i}>
-                  <td className="px-1 py-0.5"><input value={cv.key} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, key: e.target.value.replace(/[{}\s]/g, '') } : x) })} placeholder="最寄駅" className="w-full rounded border px-2 py-1" /></td>
-                  <td className="px-1 py-0.5"><input value={cv.label} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, label: e.target.value } : x) })} placeholder="最寄駅からの案内（例：沼津駅から徒歩5分）" className="w-full rounded border px-2 py-1" /></td>
+                  <td className="px-1 py-0.5"><input value={cv.key} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, key: e.target.value.replace(/[{}\s]/g, '') } : x) })} placeholder="駐車場" className="w-full rounded border px-2 py-1" /></td>
+                  <td className="px-1 py-0.5"><input value={cv.label} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, label: e.target.value } : x) })} placeholder="駐車場の案内（例：駐車場10台あり）" className="w-full rounded border px-2 py-1" /></td>
                   <td className="px-1 py-0.5"><input value={cv.default} onChange={(e) => setS({ ...s, customVars: s.customVars.map((x, j) => j === i ? { ...x, default: e.target.value } : x) })} className="w-full rounded border px-2 py-1" /></td>
                   <td className="px-1 py-0.5"><button type="button" onClick={() => setS({ ...s, customVars: s.customVars.filter((_, j) => j !== i) })} className="text-red-700 underline">削除</button></td>
                 </tr>
@@ -156,7 +156,7 @@ export default function SnsHqPage() {
         <label className="block">広告規制で使わない語（読点・改行区切り。Google はこれが含まれると承認できない、Instagram は警告）<textarea value={s.forbiddenWords.join('、')} onChange={(e) => setS({ ...s, forbiddenWords: e.target.value.split(/[、,\n]+/).map((x) => x.trim()).filter(Boolean) })} rows={3} className="mt-1 w-full rounded border px-2 py-1" /></label>
         <details>
           <summary className="cursor-pointer font-bold">文章の型（書き出し・締め・キーワードの文）を編集</summary>
-          <p className="my-1 text-xs text-slate-500">1 つの型を <code>---</code> だけの行で区切ります。使える差し込み語：{SNS_ONLY ? '{店舗名} {地域} {予約URL} {月} {キーワード}' : '{店舗名} {地域} {電話} {予約URL} {月} {キーワード}'}。「別のパターン」で順番に切り替わります。</p>
+          <p className="my-1 text-xs text-slate-500">1 つの型を <code>---</code> だけの行で区切ります。使える差し込み語：{SNS_ONLY ? '{店舗名} {地域} {予約URL} {月} {メインキーワード} {症状} {キーワード}' : '{店舗名} {地域} {電話} {予約URL} {月} {メインキーワード} {症状} {キーワード}'}。{'{症状}'} を含む型は、本文に合う症状があるときだけ使われます。「別のパターン」で順番に切り替わります。</p>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="block text-xs">Instagram 書き出し<textarea value={patternText(s.patterns.ig.openings)} onChange={(e) => setPattern('ig', 'openings', e.target.value)} rows={6} className="mt-1 w-full rounded border px-2 py-1" /></label>
             <label className="block text-xs">Instagram 締め<textarea value={patternText(s.patterns.ig.closings)} onChange={(e) => setPattern('ig', 'closings', e.target.value)} rows={6} className="mt-1 w-full rounded border px-2 py-1" /></label>

@@ -92,12 +92,15 @@ final class Sns
             'gbp' => [
                 'openings' => [
                     "{地域}の{店舗名}です。",
-                    "こんにちは。{地域}で接骨院をお探しの方へ、{店舗名}からのお知らせです。",
+                    "こんにちは。{地域}で{メインキーワード}をお探しの方へ、{店舗名}からのお知らせです。",
                     "{店舗名}（{地域}）です。いつもご利用ありがとうございます。",
                 ],
+                // MEO：「エリア＋メインキーワード（例：三島市 接骨院）」を毎回入れる。{症状} は本文に合うものがあるときだけ使う文
                 'keywordLines' => [
-                    "「{地域} {キーワード}」でお探しの方は、{店舗名}へお気軽にご相談ください。",
-                    "{地域}で{キーワード}のことなら、{店舗名}までご相談ください。",
+                    "{地域}で{メインキーワード}をお探しの方は、{店舗名}へお気軽にご相談ください。",
+                    "{地域}の{メインキーワード}・{店舗名}では、{症状}のご相談も承っています。",
+                    "{症状}でお困りの方は、{地域}の{メインキーワード}・{店舗名}へご相談ください。",
+                    "{地域}で{症状}にお悩みの方は、{店舗名}までご相談ください。",
                 ],
                 'closings' => [
                     "ご予約はこの投稿の「予約」ボタンからどうぞ。",
@@ -157,7 +160,7 @@ final class Sns
     /** 最初から使える差し込み語と説明 */
     public const BUILTIN_VARS = [
         '店舗名' => '店舗設定の店舗名', 'エリア' => 'SNS 設定の地域（例：沼津市）', '地域' => '「エリア」と同じ', '電話' => '店舗設定の電話番号', '予約URL' => 'この店舗の WEB 予約ページ',
-        '月' => '投稿予定の月（数字）', 'キーワード' => 'SNS 設定の検索キーワード（毎回＋日替わり）', '営業時間' => 'SNS 設定の営業時間の表記', '住所' => 'SNS 設定の住所', 'ハッシュタグ' => 'SNS 設定のハッシュタグ（無ければ全店共通）',
+        '月' => '投稿予定の月（数字）', 'メインキーワード' => 'MEO で一番狙う語（「メインキーワード」の先頭の語。例：接骨院）', '症状' => '「症状・施術のキーワード」から本文に合うもの 1 つ', 'キーワード' => 'メインキーワード＋本文に合う症状（例：接骨院・腰痛）', '営業時間' => 'SNS 設定の営業時間の表記', '住所' => 'SNS 設定の住所', 'ハッシュタグ' => 'SNS 設定のハッシュタグ（無ければ全店共通）',
     ];
 
     /** 使える差し込み語（SNS 投稿管理だけの設置では {電話} は使わない：MEO に不要で、店舗の電話番号も登録しない） */
@@ -177,8 +180,26 @@ final class Sns
     }
 
     /** 保存された型に、足りない項目があれば既定値で補う */
+    /** 以前の既定の Google の文型（そのまま使っている場合は新しい既定に置き換える） */
+    private const OLD_GBP_OPENINGS = ["{地域}の{店舗名}です。", "こんにちは。{地域}で接骨院をお探しの方へ、{店舗名}からのお知らせです。", "{店舗名}（{地域}）です。いつもご利用ありがとうございます。"];
+    private const OLD_GBP_KEYWORD_LINES = ["「{地域} {キーワード}」でお探しの方は、{店舗名}へお気軽にご相談ください。", "{地域}で{キーワード}のことなら、{店舗名}までご相談ください。"];
+
+    /** 以前の作り方（文型・キーワードの選び方）の文型。手で直していない下書きかを判定するために使う */
+    private static function legacyPatterns(string $channel): array
+    {
+        $p = self::setting()['patterns'][$channel];
+        if ($channel === 'gbp') {
+            $d = self::defaultPatterns()['gbp'];
+            if ($p['openings'] === $d['openings']) $p['openings'] = self::OLD_GBP_OPENINGS;
+            if ($p['keywordLines'] === $d['keywordLines']) $p['keywordLines'] = self::OLD_GBP_KEYWORD_LINES;
+        }
+        return $p;
+    }
+
     private static function mergePatterns(array $p): array
     {
+        if (($p['gbp']['openings'] ?? null) === self::OLD_GBP_OPENINGS) unset($p['gbp']['openings']);
+        if (($p['gbp']['keywordLines'] ?? null) === self::OLD_GBP_KEYWORD_LINES) unset($p['gbp']['keywordLines']);
         $d = self::defaultPatterns();
         foreach ($d as $ch => $groups) {
             foreach ($groups as $g => $list) {
@@ -355,10 +376,12 @@ final class Sns
 
     // ---------- 文章の組み立て ----------
     /** 差し込み語の一覧 */
-    public static function placeholders(array $store, array $ss, string $scheduledAt, string $keyword = ''): array
+    public static function placeholders(array $store, array $ss, string $scheduledAt, string $keyword = '', string $symptom = ''): array
     {
         $month = (int)substr($scheduledAt, 5, 2);
         $ph = [
+            '{メインキーワード}' => self::mainKeyword($ss),
+            '{症状}' => $symptom,
             '{店舗名}' => $store['name'],
             // 地域が未入力なら置き換えずに {エリア} のまま残す（MEO の語が抜けたまま投稿されないように）
             '{地域}' => $ss['area'],
@@ -407,7 +430,8 @@ final class Sns
         $ss = self::storeSetting($store);
         $n = 0;
         foreach (Db::all("SELECT id, channel, title, body, postText, scheduledAt, patternIdx FROM sns_post WHERE storeId = ? AND status IN ('draft', 'failed') AND postText LIKE ?", [$storeId, '%{%']) as $r) {
-            $ph = self::placeholders($store, $ss, $r['scheduledAt'], self::keywordFor($ss, (int)$r['patternIdx'], $r['title'] . "\n" . $r['body']));
+            $text = $r['title'] . "\n" . $r['body'];
+            $ph = self::placeholders($store, $ss, $r['scheduledAt'], self::keywordFor($ss, (int)$r['patternIdx'], $text), self::symptomFor($ss, (int)$r['patternIdx'], $text));
             if ($r['channel'] === 'gbp') foreach (self::GBP_FORBIDDEN_VARS as $k) unset($ph['{' . $k . '}']);
             $t = self::fill($r['postText'], $ph);
             if ($t !== $r['postText']) { Db::exec('UPDATE sns_post SET postText = ? WHERE id = ?', [$t, $r['id']]); $n++; }
@@ -429,8 +453,9 @@ final class Sns
             $args = [$r['channel'], $store, $ss, $r['scheduledAt'], (string)$r['title'], (string)$r['body'], (int)$r['patternIdx'], null, null, (bool)$r['standalone']];
             $new = self::compose(...$args);
             if ($new['fullText'] === $r['postText']) continue;
-            $old = self::compose(...array_merge($args, [true]));
-            if ($old['fullText'] !== $r['postText']) continue; // 手で直してある
+            $untouched = false;
+            foreach ([1, 2] as $mode) { if (self::compose(...array_merge($args, [$mode]))['fullText'] === $r['postText']) { $untouched = true; break; } }
+            if (!$untouched) continue; // 手で直してある
             Db::exec('UPDATE sns_post SET closing = ?, hashtags = ?, postText = ? WHERE id = ?', [$new['closing'], $new['hashtags'], $new['fullText'], $r['id']]);
             $n++;
         }
@@ -477,6 +502,21 @@ final class Sns
             elseif (($best = self::bestKeyword($rot, $text, $idx)) !== null) $parts[] = $best;
         }
         return implode('・', array_unique($parts));
+    }
+
+    /** MEO で一番狙う語：「メインキーワード」（毎回入れるキーワード）の先頭の語 */
+    public static function mainKeyword(array $ss): string
+    {
+        return self::splitList($ss['keywordsFixed'])[0] ?? '';
+    }
+
+    /** 本文に合う症状・施術のキーワード（無ければ ''）。$text が null なら以前の巡回 */
+    public static function symptomFor(array $ss, int $idx, ?string $text): string
+    {
+        $rot = self::splitList($ss['keywordsRotation']);
+        if (!$rot) return '';
+        if ($text === null) return $rot[$idx % count($rot)];
+        return self::bestKeyword($rot, $text, $idx) ?? '';
     }
 
     /** 本文に一番関係のある語。同点なら patternIdx で順番に（毎回同じ語にならないように）。無関係なら null */
@@ -528,33 +568,60 @@ final class Sns
      * 見出し・本文から投稿文を組み立てる。
      * @return array{fullText:string, closing:string, hashtags:string}
      */
-    public static function compose(string $channel, array $store, array $ss, string $scheduledAt, string $title, string $body, int $idx, ?string $closingOverride = null, ?string $hashtagsOverride = null, bool $standalone = false, bool $legacyKeyword = false): array
+    /**
+     * $legacy：0＝今の作り方、1＝以前の文型＋キーワードを順番に、2＝以前の文型＋本文に合うキーワード（どちらも作り直しの判定用）
+     */
+    public static function compose(string $channel, array $store, array $ss, string $scheduledAt, string $title, string $body, int $idx, ?string $closingOverride = null, ?string $hashtagsOverride = null, bool $standalone = false, int $legacy = 0): array
     {
-        $p = self::setting()['patterns'][$channel];
+        $p = $legacy ? self::legacyPatterns($channel) : self::setting()['patterns'][$channel];
         $idx = max(0, $idx);
-        // キーワードは本文の内容に合うものを選ぶ（$legacyKeyword は以前の巡回のしかた。作り直しの判定用）
-        $kw = self::keywordFor($ss, $idx, $legacyKeyword ? null : $title . "\n" . $body);
-        $ph = self::placeholders($store, $ss, $scheduledAt, $kw);
+        // キーワードは本文の内容に合うものを選ぶ
+        $text = $legacy === 1 ? null : $title . "\n" . $body;
+        $kw = self::keywordFor($ss, $idx, $text);
+        $ph = self::placeholders($store, $ss, $scheduledAt, $kw, $legacy ? '' : self::symptomFor($ss, $idx, $text));
         if ($channel === 'gbp') foreach (self::GBP_FORBIDDEN_VARS as $k) unset($ph['{' . $k . '}']); // Google の投稿には GBP に載っている情報を入れない（置き換えずに残して気づけるようにする）
         if ($standalone) {
             // 定型投稿：本文をそのまま投稿文にする（差し込み語だけ置き換える）
             return ['fullText' => trim(self::fill(trim($body), $ph)), 'closing' => '', 'hashtags' => ''];
         }
         if ($channel !== 'gbp') $kw = '';
-        $opening = self::fill($p['openings'][$idx % count($p['openings'])], $ph);
-        $closing = $closingOverride ?? self::fill($p['closings'][$idx % count($p['closings'])], $ph);
+        $opening = self::fill(self::pickTemplate($p['openings'], $idx, $ph, true), $ph);
+        $closing = $closingOverride ?? self::fill(self::pickTemplate($p['closings'], $idx, $ph, true), $ph);
         $title = self::fill(trim($title), $ph); $body = self::fill(trim($body), $ph);
         if ($channel === 'ig') {
             $hashtags = $hashtagsOverride ?? self::defaultHashtags($store, $ss);
             $parts = [$opening, ($title !== '' ? "■{$title}\n" : '') . $body, $closing, $hashtags];
         } else {
             $hashtags = '';
-            $kwLine = $kw !== '' ? self::fill($p['keywordLines'][$idx % count($p['keywordLines'])], $ph) : '';
+            $kwLine = $kw !== '' ? self::fill(self::pickTemplate($p['keywordLines'], $idx, $ph, false, true), $ph) : '';
             // 営業時間・住所などの定型ブロックは付けない（GBP に載っている情報は投稿文に入れないルール）
             $parts = [$opening, ($title !== '' ? "{$title}\n" : '') . $body, trim($kwLine . "\n" . $closing)];
         }
         $full = implode("\n\n", array_filter(array_map('trim', $parts), fn($s) => $s !== ''));
         return ['fullText' => $full, 'closing' => $closing, 'hashtags' => $hashtags];
+    }
+
+    /**
+     * 文型を 1 つ選ぶ。{メインキーワード} {症状} {電話} の値が空の店舗・投稿では、それを含む文型は使わない。
+     * $preferSymptom：締めの文。メインキーワードを含む型を優先し、本文に合う症状があればそれも含む型を優先する
+     */
+    private static function pickTemplate(array $list, int $idx, array $ph, bool $fallbackAll, bool $preferSymptom = false): string
+    {
+        $usable = array_values(array_filter($list, function ($t) use ($ph) {
+            // 値が無いと文が崩れる語（電話番号を使わない設置の {電話} も含む）
+            foreach (['{メインキーワード}', '{症状}', '{電話}'] as $k) if (str_contains($t, $k) && ($ph[$k] ?? '') === '') return false;
+            return true;
+        }));
+        // 締めの文：メインキーワードを含む型 → その中で本文に合う症状も含む型、の順に優先する
+        if ($preferSymptom) {
+            foreach (['{メインキーワード}', '{症状}'] as $k) {
+                if (($ph[$k] ?? '') === '') continue;
+                $with = array_values(array_filter($usable, fn($t) => str_contains($t, $k)));
+                if ($with) $usable = $with;
+            }
+        }
+        if (!$usable) { if (!$fallbackAll || !$list) return ''; $usable = $list; }
+        return $usable[$idx % count($usable)];
     }
 
     public static function defaultHashtags(array $store, array $ss): string

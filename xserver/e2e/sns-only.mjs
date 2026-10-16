@@ -82,11 +82,24 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   const bad = await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: [{ code: 'S002', gbpPostUrl: 'business.google.com' }] }) });
   ok('https で始まらない URL は保存しない', bad.status === 400);
   // キーワードは本文に合うものが入る（腰の話 → 腰痛。ムチウチにはならない）
-  await put([{ code: 'S002', area: '三島市谷田', keywordsFixed: '', keywordsRotation: '交通事故、ムチウチ、腰痛、子どものケガ' }]);
+  await put([{ code: 'S002', area: '三島市谷田', keywordsFixed: '接骨院', keywordsRotation: '交通事故、ムチウチ、腰痛、子どものケガ' }]);
   const kp = await (await fetch(`${BASE}/api/admin/sns/posts?store=S002`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-02-01 10:00', title: '朝起きたときの腰の張り', body: '朝、起き上がるときに腰が重いと感じる方は、寝ている間に体が冷えて筋肉がこわばっていることが多いです。' }) })).json();
   const kpost = await (await fetch(`${BASE}/api/admin/sns/posts/${kp.id}`, { headers: { cookie } })).json();
   const ktext = kpost.post?.fullText ?? '';
   ok('Google の締めのキーワードが本文に合う（腰痛）', ktext.includes('腰痛') && !ktext.includes('ムチウチ'), ktext.split('\n').slice(-3).join(' / '));
+  ok('Google の投稿に「エリア＋メインキーワード」が入る', ktext.includes('三島市谷田の接骨院') || ktext.includes('三島市谷田で接骨院'), ktext.split('\n').slice(-3).join(' / '));
+  ok('埋まらない差し込み語が残らない', !/\{[^{}\s]{1,20}\}/u.test(ktext));
+  const kp2 = await (await fetch(`${BASE}/api/admin/sns/posts?store=S002`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-02-02 10:00', title: '季節の変わり目の体調管理', body: '朝晩の寒暖差で体がだるくなりやすい時期です。' }) })).json();
+  const t2 = (await (await fetch(`${BASE}/api/admin/sns/posts/${kp2.id}`, { headers: { cookie } })).json()).post?.fullText ?? '';
+  ok('合う症状が無い本文は症状を入れず、メインキーワードだけ', t2.includes('接骨院') && !/交通事故|ムチウチ|腰痛|子どものケガ/.test(t2), t2.split('\n').slice(-2).join(' / '));
+  const ip = await (await fetch(`${BASE}/api/admin/sns/posts?store=S002`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'ig', scheduledAt: '2099-02-03 10:00', title: 'テスト', body: '本文', patternIdx: 1 }) })).json();
+  let telLeft = false;
+  for (let i = 0; i < 3; i++) {
+    const t = (await (await fetch(`${BASE}/api/admin/sns/posts/${ip.id}`, { headers: { cookie } })).json()).post?.fullText ?? '';
+    if (t.includes('{電話}') || t.includes('お電話')) telLeft = true;
+    await fetch(`${BASE}/api/admin/sns/posts/${ip.id}/action`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'regenerate' }) });
+  }
+  ok('Instagram の文型を切り替えても {電話} の文が使われない', !telLeft);
   // 貼り付け（見出し行あり）で表に反映できる
   await page.goto(`${BASE}/admin/sns/vars`); await page.waitForSelector('th:has-text("エリア")');
   await page.locator('summary:has-text("Excel から貼り付けて")').click();
