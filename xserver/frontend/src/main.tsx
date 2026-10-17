@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useSearchParams } from 'react-router-dom';
 import './globals.css';
 import Home from './pages/Home';
 import Booking from './pages/Booking';
@@ -10,7 +10,6 @@ import Login from './pages/Login';
 import AdminLayout from './pages/admin/Layout';
 import AdminIndex from './pages/admin/Index';
 import DayPage from './pages/admin/DayPage';
-import CalendarPage from './pages/admin/CalendarPage';
 import ShiftsPage from './pages/admin/ShiftsPage';
 import ReservationsPage from './pages/admin/ReservationsPage';
 import SettingsPage from './pages/admin/SettingsPage';
@@ -24,6 +23,13 @@ import KartePage from './pages/admin/KartePage';
 import KarteHqPage from './pages/admin/KarteHqPage';
 import StaffCountsPage from './pages/admin/StaffCountsPage';
 import AccountsPage from './pages/admin/AccountsPage';
+
+/** 前の「カレンダー」の URL（/admin/calendar?month=…）は、店舗設定の中のカレンダーへ（月はそのまま） */
+function OldCalendar() {
+  const [sp] = useSearchParams();
+  const month = sp.get('month');
+  return <Navigate to={`/admin/settings?tab=calendar${month ? `&month=${encodeURIComponent(month)}` : ''}`} replace />;
+}
 import UpdatesPage from './pages/admin/UpdatesPage';
 
 createRoot(document.getElementById('root')!).render(
@@ -40,7 +46,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminIndex />} />
           <Route path="day/:date" element={<DayPage />} />
-          <Route path="calendar" element={<CalendarPage />} />
+          <Route path="calendar" element={<OldCalendar />} />
           <Route path="shifts" element={<ShiftsPage />} />
           <Route path="reservations" element={<ReservationsPage />} />
           <Route path="settings" element={<SettingsPage />} />

@@ -1,4 +1,6 @@
+import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
+import CalendarPage from './CalendarPage';
 import StoreSettingsForm from '@/components/StoreSettingsForm';
 import StaffList from '@/components/StaffList';
 import PatientImport from '@/components/PatientImport';
@@ -11,6 +13,25 @@ interface Resp {
 }
 
 export default function SettingsPage() {
+  const [sp] = useSearchParams();
+  const tab = sp.get('tab') === 'calendar' ? 'calendar' : 'store';
+  const { me } = useAdmin();
+  if (!me.store) return <p>店舗が登録されていません。</p>;
+  const tabCls = (on: boolean) => `rounded-t border border-b-0 px-4 py-1.5 text-sm no-underline ${on ? 'bg-white font-bold text-brand-dark' : 'bg-slate-100 text-slate-600 hover:bg-slate-50'}`;
+  return (
+    <div className="max-w-6xl">
+      <h1 className="mb-3 text-xl font-bold">店舗設定：{me.store.name}</h1>
+      {/* 店舗設定の中に「カレンダー（WEB 予約の公開日・臨時休診）」を入れる */}
+      <div className="mb-4 flex gap-1 border-b" role="tablist">
+        <Link to="/admin/settings" role="tab" aria-selected={tab === 'store'} className={tabCls(tab === 'store')}>店舗・スタッフ</Link>
+        <Link to="/admin/settings?tab=calendar" role="tab" aria-selected={tab === 'calendar'} className={tabCls(tab === 'calendar')}>カレンダー（公開日・臨時休診）</Link>
+      </div>
+      {tab === 'calendar' ? <CalendarPage /> : <StoreSettings />}
+    </div>
+  );
+}
+
+function StoreSettings() {
   const { me, refreshMe } = useAdmin();
   const { data, error, reload } = useFetch<Resp>('/api/admin/settings');
   if (!me.store) return <p>店舗が登録されていません。</p>;
@@ -18,8 +39,7 @@ export default function SettingsPage() {
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   const refresh = () => { reload(); refreshMe(); };
   return (
-    <div className="max-w-6xl">
-      <h1 className="mb-4 text-xl font-bold">店舗設定：{data.store.name}</h1>
+    <div>
       {/* 画面が広いときは 2 列（左：店舗設定、右：スタッフ・シフト）、半面では 1 列 */}
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
         <StoreSettingsForm store={data.store} globalHours={data.globalHours} slotMinutes={data.slotMinutes ?? 15} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />

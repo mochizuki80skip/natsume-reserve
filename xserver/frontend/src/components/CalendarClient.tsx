@@ -30,9 +30,9 @@ export default function CalendarClient({ month, today, days, publishDaysAhead, o
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Link to={`/admin/calendar?month=${shiftMonth(month, -1)}`} className="rounded border bg-white px-3 py-1">‹ 前月</Link>
-        <h1 className="text-xl font-bold">{Number(month.slice(0, 4))}年{Number(month.slice(5))}月</h1>
-        <Link to={`/admin/calendar?month=${shiftMonth(month, 1)}`} className="rounded border bg-white px-3 py-1">翌月 ›</Link>
+        <Link to={`/admin/settings?tab=calendar&month=${shiftMonth(month, -1)}`} className="rounded border bg-white px-3 py-1">‹ 前月</Link>
+        <h2 className="text-xl font-bold">{Number(month.slice(0, 4))}年{Number(month.slice(5))}月</h2>
+        <Link to={`/admin/settings?tab=calendar&month=${shiftMonth(month, 1)}`} className="rounded border bg-white px-3 py-1">翌月 ›</Link>
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-3 rounded border bg-white p-2 text-sm">
         <span>日付をクリックしたときの操作：</span>
