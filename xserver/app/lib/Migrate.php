@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 13;
+    private const VERSION = 14;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -114,6 +114,17 @@ final class Migrate
                             $ins = $pdo->prepare("INSERT INTO karte_option (category, label, sortOrder) VALUES ('menu', ?, ?)");
                             $ins->execute([$label, $at]);
                         }
+                    }
+                }
+            }
+            if ($ver < 14) {
+                // メニューを「メニュー」と「物販」に分ける：パイオ・テープ・プロテイン・ODAIJINI は物販へ（＋サポーター）。追加メニューは消す
+                if (self::hasTable($pdo, 'karte_option')) {
+                    $pdo->exec("DELETE FROM karte_option WHERE category = 'menu' AND label IN ('追加メニュー', 'パイオ', 'テープ', 'プロテイン', 'ODAIJINI')");
+                    $has = $pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'goods'")->fetch();
+                    if ((int)$has['n'] === 0) {
+                        $ins = $pdo->prepare("INSERT INTO karte_option (category, label, sortOrder) VALUES ('goods', ?, ?)");
+                        foreach (['パイオ', 'テープ', 'プロテイン', 'ODAIJINI', 'サポーター'] as $i => $label) $ins->execute([$label, $i]);
                     }
                 }
             }

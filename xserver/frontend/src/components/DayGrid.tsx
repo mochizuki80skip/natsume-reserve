@@ -33,6 +33,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const [menus, setMenus] = useState<Map<string, string[]>>(() => new Map(data.cells.filter((c) => c.menus?.length).map((c) => [key(c.time, c.bed), c.menus!])));
   const [sel, setSel] = useState<{ time: number; bed: number } | null>(null);
   const menuOptions = data.menuOptions ?? [];
+  // 帯は 2 段：1 段目＝新患・再来・新自とメニュー、2 段目＝物販
+  const goodsOptions = data.goodsOptions ?? [];
+  const menuOnly = menuOptions.filter((m) => !goodsOptions.includes(m));
   // 予約ごとの担当者と、初回の担当が同姓同名で決められなかったセル（「担当を確認」）
   const [staffMap, setStaffMap] = useState<Map<string, string>>(() => new Map(data.cells.filter((c) => c.staff).map((c) => [key(c.time, c.bed), c.staff!])));
   const [staffCheck, setStaffCheck] = useState<Set<string>>(() => new Set(data.cells.filter((c) => c.staffCheck).map((c) => key(c.time, c.bed))));
@@ -746,14 +749,17 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           const multi = !!range && rangeSize(range) > 1;
           const curStaff = ok && !multi ? staffMap.get(sk) ?? '' : '';
           // 担当は 2 行目に分けて出す
-          const staffBtns = staffOptions.length > 0 && (ok || multi) && (
-            <div className="flex flex-wrap items-center gap-1.5 border-t pt-1" role="group" aria-label="担当">
+          // 段は選んでいなくても出しておく（セルを押したときに予約表が下にずれないように）
+          const staffBtns = staffOptions.length > 0 && (
+            <div className="flex min-h-[26px] flex-wrap items-center gap-1.5 border-t pt-1" role="group" aria-label="担当">
               <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">担当</span>
+              {!(ok || multi) ? <span className="text-xs text-slate-400">名前の入ったセルを選ぶと付けられます</span> : <>
               {staffOptions.map((n) => (
                 <button key={n} type="button" aria-pressed={curStaff === n} onMouseDown={(e) => e.preventDefault()} onClick={() => setStaffFor(n)}
                   className={`rounded-full border-2 px-2 py-0.5 text-xs font-bold ${curStaff === n ? 'border-brand bg-brand text-white' : 'border-brand/40 bg-white text-brand-dark hover:border-brand'}`}>{n}</button>
               ))}
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setStaffFor('')} className="rounded-full border px-2 py-0.5 text-xs text-slate-500 hover:border-slate-400">担当を外す</button>
+              </>}
             </div>
           );
           return (
@@ -774,7 +780,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                       style={tag === kt.tag ? { background: kt.color } : undefined}>{kt.tag}</button>
                   ))}
                   <span className="mx-0.5 h-5 w-px bg-slate-300" aria-hidden="true" />
-                  {menuOptions.map((m) => {
+                  {menuOnly.map((m) => {
                     const on = cur.includes(m);
                     return (
                       <button key={m} type="button" aria-pressed={on} onMouseDown={(e) => e.preventDefault()} onClick={() => toggleMenuAt(sel!.time, sel!.bed, m)}
@@ -784,9 +790,22 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                   })}
                 </>
               ) : (
-                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自{menuOptions.length ? `・メニュー（${menuOptions.join('・')}）` : ''}・担当を付けられます</span>
+                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自・メニュー・物販・担当を付けられます</span>
               )}
             </div>
+            {goodsOptions.length > 0 && (
+              <div className="flex min-h-[26px] flex-wrap items-center gap-1.5 border-t pt-1" role="group" aria-label="物販">
+                <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">物販</span>
+                {!ok || multi ? <span className="text-xs text-slate-400">{multi ? '物販は 1 件ずつ付けます' : '名前の入ったセルを選ぶと付けられます'}</span> : goodsOptions.map((m) => {
+                  const on = cur.includes(m);
+                  return (
+                    <button key={m} type="button" aria-pressed={on} onMouseDown={(e) => e.preventDefault()} onClick={() => toggleMenuAt(sel!.time, sel!.bed, m)}
+                      className={`rounded border-2 px-2 py-0.5 text-xs font-bold ${on ? 'border-transparent text-white' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400'}`}
+                      style={on ? { background: menuColor(m, menuOptions) } : undefined}>{m}</button>
+                  );
+                })}
+              </div>
+            )}
             {staffBtns}
             </div>
           );

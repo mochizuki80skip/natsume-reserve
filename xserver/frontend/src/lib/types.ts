@@ -28,6 +28,8 @@ export interface DayData {
   blocks: SlotBlock[];
   /** 予約表で選べるメニュー（本部の「選択肢の設定」で変更） */
   menuOptions?: string[];
+  /** 物販（menuOptions のうち、予約表の帯で別の段に出すもの） */
+  goodsOptions?: string[];
 }
 
 export interface DayResponse { data: DayData; storeName: string; storeCode: string; published: boolean; today: string }

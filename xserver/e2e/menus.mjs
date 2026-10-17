@@ -19,7 +19,9 @@ ok('メニューの帯（未選択の案内）', (await bar.textContent()).inclu
 await cell('9:00', 1).locator('input').click(); await p.keyboard.type('山田 初診'); await p.keyboard.press('Enter'); await p.waitForSelector('text=保存しました');
 await cell('9:00', 1).locator('input').click();
 const names = (await bar.getByRole('button').allTextContents()).filter((n) => !['新患', '再来', '新自'].includes(n));
-ok('13 のメニューが並ぶ（12回目・自費・ワクスキ・プロテイン・ODAIJINI を含む）', names.join(',') === '矯正,2回目,3回目,6回目,12回目,パイオ,テープ,追加メニュー,ワンコイン,自費,ワクスキ,プロテイン,ODAIJINI', names.join(','));
+ok('メニューの段（追加メニューなし）', names.slice(0, 8).join(',') === '矯正,2回目,3回目,6回目,12回目,ワンコイン,自費,ワクスキ', names.join(','));
+const goods = await p.getByRole('group', { name: '物販' }).getByRole('button').allTextContents();
+ok('物販の段', goods.join(',') === 'パイオ,テープ,プロテイン,ODAIJINI,サポーター', goods.join(','));
 const y0 = (await cell('9:00', 1).boundingBox()).y;
 await bar.getByRole('button', { name: 'テープ' }).click();
 await bar.getByRole('button', { name: '矯正' }).click();
@@ -64,7 +66,7 @@ await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]
 const [hs] = await hp.evaluate(async () => { const r = await fetch('/api/admin/hq/karte/options', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: 'menu', labels: ['矯正', '2回目', '3回目', '6回目', 'パイオ', 'テープ', '追加メニュー', 'ワンコイン', 'お試し'] }) }); return [r.status]; });
 ok('本部がメニューを追加', hs === 200);
 await hp.goto(`${B}/admin/hq/karte`); await hp.getByRole('button', { name: '選択肢・エリアの設定' }).click();
-ok('本部の設定画面にメニュー欄', !!(await hp.waitForSelector('text=予約表のメニュー（全店共通）', { timeout: 10000 }).catch(() => null)));
+ok('本部の設定画面にメニュー欄', !!(await hp.waitForSelector('text=予約表のメニュー・物販（全店共通）', { timeout: 10000 }).catch(() => null)));
 await p.goto(`${B}/admin/day/${D2}`); await p.waitForSelector('#grid');
 await row('10:00').locator('td.grid-cell input').first().click();
 ok('店舗の帯に追加したメニュー', await bar.getByRole('button', { name: 'お試し' }).isVisible());

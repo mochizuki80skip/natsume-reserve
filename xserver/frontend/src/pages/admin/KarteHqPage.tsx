@@ -266,10 +266,11 @@ function SettingsTab() {
     <div className="space-y-4">
       {msg && <p className="rounded bg-brand-light px-3 py-1 text-sm">{msg}</p>}
       <div className="rounded-lg border bg-white p-3">
-        <h2 className="text-sm font-bold">予約表のメニュー（全店共通）</h2>
+        <h2 className="text-sm font-bold">予約表のメニュー・物販（全店共通）</h2>
         <p className="mb-2 text-xs text-slate-500">予約表で予約ごとに付けるメニューです。1行に1つずつ書き、上からの順番でボタンが並びます。セルの中には先頭の1文字（「2回目」なら「2」）が出ます。名前を変えたり消したりしても、すでに付けた予約のメニューはそのまま残ります。</p>
-        <div className="max-w-xs">
+        <div className="grid max-w-xl grid-cols-2 gap-3">
           <OptBox key={'menu' + (data.options.menu ?? []).join()} label="メニュー" help="例：矯正／2回目／ワンコイン" initial={(data.options.menu ?? []).join('\n')} onSave={(t) => saveOpt('menu', t)} />
+          <OptBox key={'goods' + (data.options.goods ?? []).join()} label="物販" help="例：パイオ／テープ／サポーター（予約表では別の段に出ます）" initial={(data.options.goods ?? []).join('\n')} onSave={(t) => saveOpt('goods', t)} />
         </div>
       </div>
       <AreasEditor key={JSON.stringify(data.areas)} areas={data.areas} stores={data.stores} onSaved={() => { setMsg('エリアを保存しました'); reload(); }} />

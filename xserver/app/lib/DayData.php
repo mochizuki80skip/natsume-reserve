@@ -54,7 +54,9 @@ final class DayData
                 'staff' => (string)($c['staff'] ?? ''), 'staffCheck' => isset($staffCheck[(int)$c['time'] . ':' . (int)$c['bed']]),
                 'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo']] : null,
             ], $cells),
-            'menuOptions' => Karte::options()['menu'] ?? [],
+            // メニューと物販はセルには同じように付く（色・印・人数はまとめて扱う）。予約表の帯では物販を別の段に出す
+            'menuOptions' => array_values(array_unique(array_merge(Karte::options()['menu'] ?? [], Karte::options()['goods'] ?? []))),
+            'goodsOptions' => Karte::options()['goods'] ?? [],
             'blocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'beds' => PublicApi::blockBeds((string)$b['beds'], Settings::allBeds($store)), 'label' => $b['label']], $blocks),
             'cancels' => array_map(fn($c) => [
                 'id' => $c['id'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'name' => $c['name'], 'contText' => $c['contText'], 'kind' => $c['kind'],
