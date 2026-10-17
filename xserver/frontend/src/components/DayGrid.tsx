@@ -22,6 +22,9 @@ interface Props { data: DayData; storeName: string; published: boolean; today: s
 const key = (time: number, bed: number) => `${time}:${bed}`;
 const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 
+type CellChange = { k: string; before: string; after: string };
+type MoveStep = { move: { fromTime: number; fromBed: number; toTime: number; toBed: number; twoSlots: boolean; name: string; logId: string | null } };
+
 export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const navigate = useNavigate();
   const [cells, setCells] = useState<Map<string, string>>(() => new Map(data.cells.map((c) => [key(c.time, c.bed), c.text])));
@@ -49,7 +52,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef(new Map<string, HTMLInputElement>());
   // 元に戻す：変更のまとまり（セルごとの「前」と「後」）を新しい順に積む。画面を開いている間だけ
-  const history = useRef<{ k: string; before: string; after: string }[][]>([]);
+  // セルをマウスで動かしたもの（move）も積む。戻すときはサーバーで元の場所へ動かし直す
+  const history = useRef<(CellChange[] | MoveStep)[]>([]);
   const [historyLen, setHistoryLen] = useState(0);
   const focusSnap = useRef<{ k: string; val: string } | null>(null);
   // 複数セルの選択（Shift＋クリック／Shift＋矢印）。家族・親子などをまとめてコピー・貼り付け
@@ -181,10 +185,16 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     const hit = changes.find((c) => key(c.time, c.bed) === snap.k);
     if (hit) focusSnap.current = { k: snap.k, val: hit.text };
   }
+  function pushMove(m: MoveStep['move']) {
+    history.current.push({ move: m });
+    if (history.current.length > 50) history.current.shift();
+    setHistoryLen(history.current.length);
+  }
   function undo() {
     const b = history.current.pop();
     setHistoryLen(history.current.length);
     if (!b) return;
+    if ('move' in b) { void revertMove(b.move); return; }
     for (const x of [...b].reverse()) { const [time, bed] = x.k.split(':').map(Number); setCell(time, bed, x.before); }
     syncSnap(b.map((x) => { const [time, bed] = x.k.split(':').map(Number); return { time, bed, text: x.before }; }));
     const first = b[0].k.split(':').map(Number);
@@ -338,7 +348,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   }
   // キャンセル・予約変更（1 つのダイアログ）
   const [changeDlg, setChangeDlg] = useState<ChangeFrom | null>(null);
-  const [moveMsg, setMoveMsg] = useState<{ text: string; date: string } | null>(null);
+  const [moveMsg, setMoveMsg] = useState<{ text: string; date: string; error?: boolean; undo?: boolean } | null>(null);
   async function openChange(time: number, bed: number) {
     setMenu(null);
     await flush();
@@ -355,7 +365,13 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   }
   function moved(to: { date: string; time: number; bed: number; slots: number }) {
     if (!changeDlg) return;
-    const { time, bed, twoSlots } = changeDlg;
+    applyMoveLocal(changeDlg, to);
+    setMoveMsg({ text: `${changeDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に変更しました`, date: to.date });
+    setChangeDlg(null);
+    onRefresh();
+  }
+  /** 動かした予約を画面にも反映する（氏名・2 枠目・メニュー・担当。同じ日の中なら来院チェックも） */
+  function applyMoveLocal({ time, bed, twoSlots }: { time: number; bed: number; twoSlots: boolean }, to: { date: string; time: number; bed: number }) {
     for (const k of [key(time, bed), key(time + data.slotMinutes, bed), key(to.time, to.bed), key(to.time + data.slotMinutes, to.bed)]) touchedAt.current.set(k, Date.now());
     setCells((m) => {
       const n = new Map(m);
@@ -367,7 +383,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       if (to.date === data.date) { n.set(key(to.time, to.bed), name); if (twoSlots) n.set(key(to.time + data.slotMinutes, to.bed), cont); }
       return n;
     });
-    setVisited((v) => { const n = new Set(v); n.delete(key(time, bed)); return n; });
+    setVisited((v) => { const n = new Set(v); const was = n.delete(key(time, bed)); if (was && to.date === data.date) n.add(key(to.time, to.bed)); return n; });
     setMenus((m) => {
       const n = new Map(m);
       const list = n.get(key(time, bed));
@@ -382,10 +398,89 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       if (st && to.date === data.date) n.set(key(to.time, to.bed), st);
       return n;
     });
-    setMoveMsg({ text: `${changeDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に変更しました`, date: to.date });
-    setChangeDlg(null);
+  }
+
+  // ---------- セルをマウスで動かす（同じ日の中の時間・ベッドの変更。確認なしですぐ動かす） ----------
+  // 予約の入ったセルを押したまま、別のセルの上まで動かして離すと移動。予約変更として名簿に残り、「元に戻す」で戻せる
+  const drag = useRef<{ t: number; b: number; x: number; y: number; active: boolean } | null>(null);
+  const [dragFrom, setDragFrom] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  // 動かしている予約の 2 枠目（上記初診対応など）のセルか（その上に置くのは OK）
+  const isOwnTwo = (from: string, k: string) => { const [ft, fb] = from.split(':').map(Number); return k === key(ft + data.slotMinutes, fb); };
+  const moveErr = (msg: string) => setMoveMsg({ text: msg, date: data.date, error: true });
+  async function dragMove(ft: number, fb: number, tt: number, tb: number) {
+    const step = data.slotMinutes;
+    const name = cells.get(key(ft, fb)) ?? '';
+    const twoSlots = isContinuationText(cells.get(key(ft + step, fb)));
+    const own = new Set([key(ft, fb), twoSlots ? key(ft + step, fb) : '']);
+    const targets = twoSlots ? [key(tt, tb), key(tt + step, tb)] : [key(tt, tb)];
+    if (twoSlots && !rows.includes(tt + step)) { moveErr('2 枠の予約のため、その時間には動かせません（2 枠目が営業時間外）'); return; }
+    if (targets.some((k) => !own.has(k) && (cells.get(k) ?? '').trim())) { moveErr('置いた場所に別の予約が入っているため動かせません'); return; }
+    await flush();
+    const r = await fetch('/api/admin/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time: ft, bed: fb, toDate: data.date, toTime: tt, toBed: tb }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      moveErr(r.status === 409 && String(j.error ?? '').includes('枠を超えて')
+        ? 'この時間は予約サイトの枠（施術者の人数）がいっぱいのため動かせません。入れる場合は、セルの「⋯」→「キャンセル・予約変更」で「枠を超えて入れる」にチェックしてください。'
+        : j.error ?? '動かせませんでした');
+      onRefresh();
+      return;
+    }
+    applyMoveLocal({ time: ft, bed: fb, twoSlots }, j.moved);
+    pushMove({ fromTime: ft, fromBed: fb, toTime: j.moved.time, toBed: j.moved.bed, twoSlots, name, logId: j.moved.logId ?? null });
+    setMoveMsg({ text: `${name} を ${minToHm(ft)}（ベッド${fb}）→ ${minToHm(j.moved.time)}（ベッド${j.moved.bed}）に動かしました`, date: data.date, undo: true });
     onRefresh();
   }
+  async function revertMove(m: MoveStep['move']) {
+    const r = await fetch('/api/admin/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time: m.toTime, bed: m.toBed, toDate: data.date, toTime: m.fromTime, toBed: m.fromBed, allowOver: true, revertLogId: m.logId ?? '' }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { moveErr(`元に戻せませんでした：${j.error ?? ''}`); onRefresh(); return; }
+    applyMoveLocal({ time: m.toTime, bed: m.toBed, twoSlots: m.twoSlots }, j.moved);
+    setMoveMsg({ text: `${m.name} を元の ${minToHm(m.fromTime)}（ベッド${m.fromBed}）に戻しました`, date: data.date });
+    onRefresh();
+  }
+  const dragMoveRef = useRef(dragMove);
+  dragMoveRef.current = dragMove;
+  useEffect(() => {
+    const cellAt = (x: number, y: number) => (document.elementFromPoint(x, y)?.closest('td[data-cell]') as HTMLElement | null)?.dataset.cell ?? null;
+    const end = () => { drag.current = null; setDragFrom(null); setDragOver(null); document.body.style.cursor = ''; };
+    function onMove(e: MouseEvent) {
+      const d = drag.current;
+      if (!d) return;
+      if (!(e.buttons & 1)) { end(); return; }
+      const over = cellAt(e.clientX, e.clientY);
+      if (!d.active) {
+        if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) < 6 || over === key(d.t, d.b)) return;
+        d.active = true;
+        setDragFrom(key(d.t, d.b));
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        document.body.style.cursor = 'grabbing';
+      }
+      e.preventDefault();
+      window.getSelection()?.removeAllRanges();
+      setDragOver(over);
+    }
+    function onUp(e: MouseEvent) {
+      const d = drag.current;
+      if (!d) return;
+      const active = d.active;
+      end();
+      if (!active) return;
+      const over = cellAt(e.clientX, e.clientY);
+      if (!over || over === key(d.t, d.b)) return;
+      const [t, b] = over.split(':').map(Number);
+      void dragMoveRef.current(d.t, d.b, t, b);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+  }, []);
+  // 動かした・戻したお知らせは少しで消す（エラーは閉じるまで出したまま）
+  useEffect(() => {
+    if (!moveMsg || moveMsg.error || moveMsg.date !== data.date) return;
+    const id = setTimeout(() => setMoveMsg(null), 8000);
+    return () => clearTimeout(id);
+  }, [moveMsg, data.date]);
   // メニューの付け外し（先に氏名を保存してから送る）
   async function toggleMenuAt(time: number, bed: number, label: string) {
     const k = key(time, bed);
@@ -746,7 +841,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                       const isSel = !!sel && sel.time === t && sel.bed === b && hasName;
                       const ranged = inRange(r, c);
                       return (
-                        <td key={b} className={`grid-cell border p-0 ${ranged ? 'bg-indigo-100' : bg} ${color?.dark && !ranged ? 'dark-cell' : ''} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''} ${st === 'visited' ? 'shadow-[inset_4px_0_0_#15803d]' : ''}`}
+                        <td key={b} data-cell={k} className={`grid-cell border p-0 ${dragFrom === k ? 'opacity-40' : ''} ${dragOver === k && dragFrom && dragOver !== dragFrom ? (text.trim() && !(dragFrom && isOwnTwo(dragFrom, k)) ? 'outline-dashed outline-2 -outline-offset-2 outline-red-500' : 'outline-dashed outline-2 -outline-offset-2 outline-sky-600 !bg-sky-100') : ''} ${ranged ? 'bg-indigo-100' : bg} ${color?.dark && !ranged ? 'dark-cell' : ''} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''} ${st === 'visited' ? 'shadow-[inset_4px_0_0_#15803d]' : ''}`}
                           style={color && !ranged ? { background: color.bg } : undefined}
                           title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
                           <div className={`relative flex items-center ${hasName ? 'pr-4' : ''}`}>
@@ -768,12 +863,18 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                               onPaste={(e) => onPaste(e, r, c)}
                               onCopy={(e) => onCopyCut(e, false)}
                               onCut={(e) => onCopyCut(e, true)}
+                              // ブラウザの「選んだ文字のドラッグ＆ドロップ」は使わない（文字だけが動いて予約変更にならないため）
+                              onDragStart={(e) => e.preventDefault()}
+                              onDrop={(e) => e.preventDefault()}
                               onMouseDown={(e) => {
                                 // Shift＋クリック：最初に押したセルからここまでをまとめて選ぶ
                                 if (e.shiftKey && anchor.current) {
                                   e.preventDefault();
                                   const a = anchor.current;
                                   setRange({ r0: Math.min(a.r, r), c0: Math.min(a.c, c), r1: Math.max(a.r, r), c1: Math.max(a.c, c) });
+                                } else if (e.button === 0 && hasName) {
+                                  // 押したまま別のセルへ動かすと、予約の移動になる
+                                  drag.current = { t, b, x: e.clientX, y: e.clientY, active: false };
                                 }
                               }}
                               onBlur={(e) => {
@@ -861,8 +962,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
       {changeDlg && <ChangeDialog from={changeDlg} onClose={() => setChangeDlg(null)} onMoved={moved} onCancelled={cancelled} />}
       {moveMsg && (
-        <div className="no-print fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
+        <div role={moveMsg.error ? 'alert' : 'status'} className={`no-print fixed bottom-4 left-1/2 z-40 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-2 text-sm text-white shadow-lg ${moveMsg.error ? 'bg-red-700' : 'bg-slate-900'}`}>
           {moveMsg.text}
+          {moveMsg.undo && historyLen > 0 && <button type="button" onClick={() => { setMoveMsg(null); undo(); }} className="whitespace-nowrap rounded bg-white/20 px-2 py-0.5">↶ 元に戻す</button>}
           {moveMsg.date !== data.date && <button type="button" onClick={() => { setMoveMsg(null); navigate(`/admin/day/${moveMsg.date}`); }} className="rounded bg-white/20 px-2 py-0.5 underline">変更先の日を開く</button>}
           <button type="button" onClick={() => setMoveMsg(null)} aria-label="閉じる" className="text-white/70">✕</button>
         </div>

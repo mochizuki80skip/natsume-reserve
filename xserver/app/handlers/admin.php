@@ -301,6 +301,8 @@ function adm_cancel_post(): never
 
 /**
  * 予約を別の日・時間に移動（{ date, time, bed, toDate, toTime }）。ベッドは空いているところを自動で選ぶ。
+ * 予約表でセルをマウスで動かしたときは toBed（置いたベッド）が付く。そのベッドが空いていなければ動かさない。
+ * 「元に戻す」のときは revertLogId（動かしたときの予約変更の記録）が付き、記録を消して元の場所へ戻す。
  * 氏名・2 枠目（上記初診対応など）・WEB 予約の情報（電話番号など）・予約ログの日時をまとめて移す
  */
 function adm_move_post(): never
@@ -314,11 +316,13 @@ function adm_move_post(): never
         $time = Http::int($b, 'time', 0, 1440);
         $bed = Http::int($b, 'bed', 1, 20);
         $toTime = Http::int($b, 'toTime', 0, 1440);
+        $wantBed = isset($b['toBed']) ? Http::int($b, 'toBed', 1, 20) : null;
     } catch (HttpError) {
         Http::error('入力内容を確認してください', 400);
     }
     $allowOver = !empty($b['allowOver']); // 予約サイトの枠がいっぱいでも、空いているベッド（管理側だけのベッド）に入れる
     $memo = mb_substr(trim((string)($b['memo'] ?? '')), 0, 200);
+    $revertLogId = (string)($b['revertLogId'] ?? '');
     $store = $ctx['store'];
     $sid = $store['id'];
     $setting = Settings::global();
@@ -343,7 +347,7 @@ function adm_move_post(): never
         if (!$g || (int)$g['ok'] !== 1) Http::error('混み合っています。もう一度お試しください', 503);
     }
     try {
-        $moved = Db::transaction(function () use ($sid, $store, $setting, $date, $toDate, $toTime, $need, $step, $cell, $cont, $allowOver, $memo, $ctx) {
+        $moved = Db::transaction(function () use ($sid, $store, $setting, $date, $toDate, $toTime, $need, $step, $cell, $cont, $allowOver, $memo, $ctx, $wantBed, $revertLogId) {
             // 予約サイトに出している枠（施術者の人数）がいっぱいなら、確認なしでは入れない
             if (!$allowOver) {
                 $left = adm_slot_left($store, $setting, $toDate, $toTime, $need, [$cell['id'], $cont['id'] ?? '']);
@@ -365,20 +369,34 @@ function adm_move_post(): never
                 }
             }
             $free = array_values(array_filter(Settings::allBeds($store), fn($x) => !isset($busy[$x])));
-            if (!$free) throw new HttpError(409, '移動先の時間は空いていません。別の時間を選んでください。');
-            $toBed = $free[0];
+            if ($wantBed !== null) {
+                if (!in_array($wantBed, Settings::allBeds($store), true)) throw new HttpError(409, 'そのベッドは予約表にありません');
+                if (!in_array($wantBed, $free, true)) throw new HttpError(409, $need === 2 ? '置いた場所（2 枠ぶん）に別の予約・ブロックがあるため動かせません' : '置いた場所に別の予約・ブロックがあるため動かせません');
+                $toBed = $wantBed;
+            } else {
+                if (!$free) throw new HttpError(409, '移動先の時間は空いていません。別の時間を選んでください。');
+                $toBed = $free[0];
+            }
+            // 同じ日の中で動かしたときは来院チェックもそのまま移す
+            $visited = $toDate === $date ? (int)($cell['visited'] ?? 0) : 0;
             Db::exec('DELETE FROM cell WHERE id = ?', [$cell['id']]);
             if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
             // 移動先に空文字のセルが残っていれば消してから入れる
             Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($targetTimes) . ')', array_merge([$sid, $toDate, $toBed], $targetTimes));
-            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus, staff) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? ''), (string)($cell['staff'] ?? '')]);
+            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus, staff, visited) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? ''), (string)($cell['staff'] ?? ''), $visited]);
             if ($cont) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime + $step, $toBed, $cont['text'], $cont['reservationId']]);
             if ($cell['reservationId']) Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]);
+            // 元に戻す：動かしたときの「予約変更」の記録を消すだけ（新しい記録は作らない）
+            if ($revertLogId !== '') {
+                Db::exec("DELETE FROM cancel_log WHERE id = ? AND storeId = ? AND kind = 'CHANGE'", [$revertLogId, $sid]);
+                return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need, 'logId' => null];
+            }
             // キャンセル・変更名簿に「予約変更」として残す（元の日の名簿に出る。予約表には戻せない）
+            $logId = Db::newId();
             Db::exec('INSERT INTO cancel_log (id, storeId, date, time, bed, name, contText, kind, source, reservationId, byCode, memo, nextDate, nextTime, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-                Db::newId(), $sid, $date, (int)$cell['time'], (int)$cell['bed'], $cell['text'], $cont['text'] ?? null, 'CHANGE', $cell['reservationId'] ? 'WEB' : 'MANUAL', $cell['reservationId'], $ctx['session']['code'], $memo !== '' ? $memo : null, $toDate, $toTime, Time::nowJstDateTime(),
+                $logId, $sid, $date, (int)$cell['time'], (int)$cell['bed'], $cell['text'], $cont['text'] ?? null, 'CHANGE', $cell['reservationId'] ? 'WEB' : 'MANUAL', $cell['reservationId'], $ctx['session']['code'], $memo !== '' ? $memo : null, $toDate, $toTime, Time::nowJstDateTime(),
             ]);
-            return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need];
+            return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need, 'logId' => $logId];
         });
     } finally {
         foreach ($locks as $l) Db::one('SELECT RELEASE_LOCK(?) AS r', [$l]);
