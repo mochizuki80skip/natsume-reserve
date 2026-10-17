@@ -31,6 +31,49 @@ function hq_stores_page_put(): never
     Http::json(['ok' => true]);
 }
 
+/** 紹介元（業者）の一覧：専用 QR の code・名前・止めているか・この QR から入った WEB 予約の数と初回カルテの数 */
+function hq_referrals_get(): never
+{
+    Auth::requireHq();
+    $rows = Db::all('SELECT f.id, f.code, f.name, f.active, f.createdAt, (SELECT COUNT(*) FROM reservation r WHERE r.refCode = f.code) AS reservations, (SELECT COUNT(*) FROM karte k WHERE k.trig = ? AND k.trigDetail = f.name) AS kartes FROM referral f ORDER BY f.createdAt ASC, f.name ASC', ['業者紹介']);
+    Http::json(['rows' => array_map(fn($r) => ['id' => $r['id'], 'code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'createdAt' => $r['createdAt'], 'reservations' => (int)$r['reservations'], 'kartes' => (int)$r['kartes']], $rows)]);
+}
+
+/** 紹介元の追加（{ name }）・名前の変更・止める／再開（{ id, name?, active? }） */
+function hq_referrals_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    $name = isset($b['name']) ? mb_substr(trim((string)$b['name']), 0, 40) : null;
+    if ($name !== null && $name === '') Http::error('紹介元の名前を入れてください', 400);
+    $id = (string)($b['id'] ?? '');
+    if ($id === '') {
+        if ($name === null) Http::error('紹介元の名前を入れてください', 400);
+        if (Db::one('SELECT id FROM referral WHERE name = ?', [$name])) Http::error('同じ名前の紹介元があります', 409);
+        // QR の URL に使う短い文字（読み間違えやすい 0・o・1・l・i は使わない）
+        $chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+        do {
+            $code = '';
+            for ($i = 0; $i < 6; $i++) $code .= $chars[random_int(0, strlen($chars) - 1)];
+        } while (Db::one('SELECT id FROM referral WHERE code = ?', [$code]));
+        Db::exec('INSERT INTO referral (id, code, name, active, createdAt) VALUES (?, ?, ?, 1, ?)', [Db::newId(), $code, $name, Time::nowJstDateTime()]);
+        Http::json(['ok' => true]);
+    }
+    $row = Db::one('SELECT * FROM referral WHERE id = ?', [$id]);
+    if (!$row) Http::error('not found', 404);
+    if ($name !== null && $name !== $row['name']) {
+        if (Db::one('SELECT id FROM referral WHERE name = ? AND id <> ?', [$name, $id])) Http::error('同じ名前の紹介元があります', 409);
+        // 名前を変えたら、初回カルテの内訳もそろえる
+        Db::transaction(function () use ($id, $name, $row) {
+            Db::exec('UPDATE referral SET name = ? WHERE id = ?', [$name, $id]);
+            Db::exec('UPDATE karte SET trigDetail = ? WHERE trig = ? AND trigDetail = ?', [$name, '業者紹介', $row['name']]);
+        });
+    }
+    if (array_key_exists('active', $b)) Db::exec('UPDATE referral SET active = ? WHERE id = ?', [Http::bool($b, 'active') ? 1 : 0, $id]);
+    Http::json(['ok' => true]);
+}
+
 function hq_settings_put(): never
 {
     Auth::requireHq();

@@ -52,6 +52,7 @@ function DetailCell({ row, detailFor, options, onSave, err }: { row: KarteRow; d
   const [other, setOther] = useState(false);
   if (kind === undefined) return <td className="border bg-slate-50 text-center text-slate-300">—</td>;
   if (kind === 'otherBiz') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.otherBiz} onChange={onSave} label="内訳" /></td>;
+  if (kind === 'partner') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.partner ?? []} onChange={onSave} label="内訳（紹介元）" /></td>;
   if (kind === 'campaign') {
     const isOther = other || (row.trigDetail !== '' && !options.campaign.includes(row.trigDetail));
     return (

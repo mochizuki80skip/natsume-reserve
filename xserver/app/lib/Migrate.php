@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 15;
+    private const VERSION = 16;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -132,12 +132,35 @@ final class Migrate
                 // 初回カルテの氏名を「この氏名で正しい」と確認したか（名字だけ・ひらがなだけ・カタカナだけの確認の表示を消す）
                 if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'nameOk')) $pdo->exec('ALTER TABLE `karte` ADD COLUMN `nameOk` TINYINT(1) NOT NULL DEFAULT 0 AFTER `name`');
             }
+            if ($ver < 16) {
+                // 紹介元（業者）ごとの専用 QR。予約に紹介元を残し、きっかけの選択肢に「業者紹介」を足す
+                $pdo->exec(self::REFERRAL_DDL);
+                if (self::hasTable($pdo, 'reservation') && !self::hasColumn($pdo, 'reservation', 'refCode')) $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `refCode` VARCHAR(16) NULL');
+                if (self::hasTable($pdo, 'karte_option')) {
+                    $has = $pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'trigger'")->fetch();
+                    $dup = $pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'trigger' AND label = '業者紹介'")->fetch();
+                    if ((int)$has['n'] > 0 && (int)$dup['n'] === 0) {
+                        $at = (int)$pdo->query("SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM karte_option WHERE category = 'trigger'")->fetch()['n'];
+                        $pdo->exec("INSERT INTO karte_option (category, label, sortOrder) VALUES ('trigger', '業者紹介', $at)");
+                    }
+                }
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const REFERRAL_DDL = 'CREATE TABLE IF NOT EXISTS `referral` (
+  `id` VARCHAR(32) NOT NULL,
+  `code` VARCHAR(16) NOT NULL,
+  `name` VARCHAR(40) NOT NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `referral_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const PATIENT_CARD_DDL = 'CREATE TABLE IF NOT EXISTS `patient_card` (
   `storeId` VARCHAR(32) NOT NULL,

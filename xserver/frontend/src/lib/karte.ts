@@ -5,9 +5,9 @@ export interface KarteRow {
   id: string; date: string; auto: boolean; karteNo: string; kind: KarteKind; trig: string; trigDetail: string; name: string; nameOk?: boolean;
   age: number | null; sex: string; symptomCat: string; symptom: string; staff: string; treatment: string; visits: KarteVisit[];
 }
-export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[] }
+export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[]; partner?: string[] }
 /** 内訳が必要なきっかけ → 内訳の選択肢の種類（null は記入のみ） */
-export type DetailFor = Record<string, 'otherBiz' | 'campaign' | null>;
+export type DetailFor = Record<string, 'otherBiz' | 'campaign' | 'partner' | null>;
 
 export const KIND_LABEL: Record<KarteKind, string> = { NEW: '新患', ACCIDENT: '初自', REVISIT: '再' };
 export const KIND_COLOR: Record<KarteKind, string> = { NEW: '#e34948', ACCIDENT: '#eda100', REVISIT: '#2a78d6' };

@@ -21,7 +21,7 @@ const rows = k[1].rows;
 ok('来院チェックした初診・初自・再だけ自動で入る', rows.length === 3, rows.map((r) => r.name).join(','));
 ok('区分と氏名（印を外す）', rows[0].kind === 'NEW' && rows[0].name === '山田 太郎' && rows[1].kind === 'ACCIDENT' && rows[2].kind === 'REVISIT');
 ok('初自は症状カテゴリーに自賠', rows[1].symptomCat === '自賠');
-ok('選択肢がそろっている', k[1].options.trigger.length === 20 && k[1].options.otherBiz.length === 33 && k[1].options.symptom.length === 17 && k[1].options.revisitAction.join() === 'LINE,DM');
+ok('選択肢がそろっている', k[1].options.trigger.length === 21 && k[1].options.trigger.includes('業者紹介') && k[1].options.otherBiz.length === 33 && k[1].options.symptom.length === 17 && k[1].options.revisitAction.join() === 'LINE,DM');
 const visits = [{ d: '2026-11-18', s: '山本', t: '矯正' }, ...Array(4).fill({ d: '', s: '', t: '' })];
 const p = await req('PATCH', '/api/admin/karte', { id: rows[0].id, patch: { name: '山田 太郎（漢字）', age: '45', sex: '♂', trig: '紹介他事業', trigDetail: 'East-one三島', visits } });
 ok('入力を保存', p[0] === 200 && p[1].row.age === 45 && p[1].row.visits[0].d === '2026-11-18');

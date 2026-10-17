@@ -10,7 +10,7 @@ final class Karte
 
     /** 選択肢の種類と初期値（本部の画面で変更できる） */
     public const OPTION_DEFAULTS = [
-        'trigger' => ['紹介家族', '紹介友人', '紹介職場', '紹介その他', '自院HP', '交通事故HP', 'ママニケアHP', 'Google', 'Yahoo!', 'エキテン', '口コミ', 'のぼり旗', '店前', 'SNS', 'チラシ', 'イベント', 'その他', 'ギフトカード', '紹介他事業', 'キャンペーン'],
+        'trigger' => ['紹介家族', '紹介友人', '紹介職場', '紹介その他', '自院HP', '交通事故HP', 'ママニケアHP', 'Google', 'Yahoo!', 'エキテン', '口コミ', 'のぼり旗', '店前', 'SNS', 'チラシ', 'イベント', 'その他', 'ギフトカード', '紹介他事業', 'キャンペーン', '業者紹介'],
         'otherBiz' => ['やまがた', 'みさき三島', 'みさき沼津', 'あおい', 'かなめ', 'あかり', "ONE'SBODY フレスポ", 'East-one裾野', 'East-one三島', 'East-one長泉', 'リカバリー三島', 'リカバリー裾野', 'なつめ富士原田', 'なつめ淀川町', 'みらい', 'みつき', 'なつめ沼田町', 'なつめ瀬名', 'なつめ竜南', 'あやめ', 'なつめ長田', 'ミツカル', 'アローズ', 'ゆかり', 'なつめ篠ケ瀬', 'なつめ浜松葵西', 'なつめ浜北美薗', 'なつめ大岡', 'なつめ岡宮', 'なつめ富士錦町', 'なつめ東原', 'なつめ島田', "ONE'SBODY 静岡安倍川"],
         'campaign' => ['ワンコイン', 'チャリティー'],
         'symptom' => ['腰', '肩', '首', '上肢', '前腕', '手', '背中', '股関節', '臀部', '大腿', '膝', '下腿', '足首', '足底', '頭', '自賠', '事故第三者'],
@@ -20,7 +20,7 @@ final class Karte
         'goods' => ['パイオ', 'テープ', 'プロテイン', 'ODAIJINI', 'サポーター'],
     ];
     /** 内訳が必要なきっかけ（値＝内訳の選択肢の種類。null は記入のみ） */
-    public const DETAIL_FOR = ['紹介他事業' => 'otherBiz', 'キャンペーン' => 'campaign', 'イベント' => null];
+    public const DETAIL_FOR = ['紹介他事業' => 'otherBiz', 'キャンペーン' => 'campaign', 'イベント' => null, '業者紹介' => 'partner'];
 
     public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'nameOk', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits'];
 
@@ -35,6 +35,8 @@ final class Karte
                 $out[$cat] = $def;
             }
         }
+        // 業者紹介の内訳＝本部が登録した紹介元（業者）の名前（本部の「紹介元の QR」で増やす）
+        $out['partner'] = array_column(Db::all('SELECT name FROM referral ORDER BY createdAt ASC, name ASC'), 'name');
         return $out;
     }
 
@@ -75,7 +77,7 @@ final class Karte
         $dates = Time::datesOfMonth($ym);
         $first = $dates[0];
         $last = $dates[count($dates) - 1];
-        $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
+        $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard, rf.name AS refName FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId LEFT JOIN referral rf ON rf.code = r.refCode WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
         $want = [];
         $exists = [];
         foreach ($cells as $c) {
@@ -83,7 +85,7 @@ final class Karte
             $exists[$k] = true;
             if (!(int)$c['visited']) continue;
             $kind = self::kindOfText((string)$c['text']);
-            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1];
+            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1, 'ref' => (string)($c['refName'] ?? '')];
         }
         $rows = Db::all('SELECT id, date, srcTime, srcBed, edited FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? AND auto = 1', [$store['id'], $first, $last]);
         $have = [];
@@ -96,9 +98,10 @@ final class Karte
         }
         foreach ($want as $k => $w) {
             if (isset($have[$k])) continue;
-            Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)', [
+            // きっかけ：紹介元（業者）の QR から → 業者紹介（内訳＝業者名）、紹介カードの QR から → ギフトカード
+            Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)', [
                 Db::newId(), $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr($w['name'], 0, 40),
-                $w['card'] ? 'ギフトカード' : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
+                $w['ref'] !== '' ? '業者紹介' : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
         }
     }

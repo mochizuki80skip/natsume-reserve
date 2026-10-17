@@ -61,6 +61,8 @@ function pub_reserve(array $p): never
     if (strlen($phoneRaw) < 10) Http::error('電話番号を入力してください', 400);
     $cardNo = is_string($b['cardNo'] ?? null) ? mb_substr(trim($b['cardNo']), 0, 20) : '';
     $viaCard = ($b['via'] ?? '') === 'card'; // 紹介カード（店舗えらびページ）から来た予約
+    // 紹介元（業者）の専用 QR から来た予約（登録済みで止めていない紹介元だけ）
+    $refCode = is_string($b['ref'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $b['ref']) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$b['ref']]) ? $b['ref'] : null;
     if ($kind === 'RETURN' && $cardNo === '') Http::error('診察券番号を入力してください', 400); // 再来は無くても可
     $phone = Text::normalizeJpPhone($phoneRaw);
     if (!$phone) Http::error('電話番号の形式が正しくありません', 400);
@@ -73,7 +75,7 @@ function pub_reserve(array $p): never
     $got = Db::one('SELECT GET_LOCK(?, 10) AS ok', [$lockName]);
     if (!$got || (int)$got['ok'] !== 1) Http::error('混み合っています。しばらくしてからお試しください', 503);
     try {
-        $result = Db::transaction(function () use ($store, $setting, $date, $time, $kind, $name, $phone, $cardNo, $day, $viaCard) {
+        $result = Db::transaction(function () use ($store, $setting, $date, $time, $kind, $name, $phone, $cardNo, $day, $viaCard, $refCode) {
             // 同じ電話番号＋同じ氏名の予約がその日にすでにあれば二重予約として断る（氏名が違えば親子などとして受け付ける）
             $same = Db::all('SELECT name, time FROM reservation WHERE storeId = ? AND date = ? AND phone = ? AND status = ?', [$store['id'], $date, $phone, 'BOOKED']);
             foreach ($same as $r) {
@@ -94,8 +96,8 @@ function pub_reserve(array $p): never
             $bed = $free[0];
             $rid = Db::newId();
             $token = bin2hex(random_bytes(16)); // 確認ページの URL に使う（推測できない）
-            Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, viewToken, viaCard, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', $token, $viaCard ? 1 : 0, Time::nowJstDateTime()]);
+            Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, viewToken, viaCard, refCode, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', $token, $viaCard ? 1 : 0, $refCode, Time::nowJstDateTime()]);
             for ($k = 0; $k < $in['neededSlots']; $k++) {
                 $text = $k === 0 ? PublicApi::cellName($kind, $name) : PublicApi::contText($kind);
                 Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)',

@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `smsStatus` VARCHAR(10) NULL,
   `viewToken` VARCHAR(40) NULL,
   `viaCard` TINYINT(1) NOT NULL DEFAULT 0,  -- 紹介カード（店舗えらびページ）から来た予約
+  `refCode` VARCHAR(16) NULL,  -- 紹介元（業者）の専用 QR から来た予約（referral.code）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `res_view_token` (`viewToken`),
@@ -219,6 +220,17 @@ CREATE TABLE IF NOT EXISTS `patient_card` (
   `kana` VARCHAR(60) NOT NULL DEFAULT '',
   PRIMARY KEY (`storeId`, `cardNo`),
   CONSTRAINT `fk_patient_card_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 紹介元（業者）。専用の QR（/stores?ref=code）から来た初診は、初回カルテのきっかけが「業者紹介」、内訳がこの名前になる
+CREATE TABLE IF NOT EXISTS `referral` (
+  `id` VARCHAR(32) NOT NULL,
+  `code` VARCHAR(16) NOT NULL,
+  `name` VARCHAR(40) NOT NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `referral_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `rate_limit` (

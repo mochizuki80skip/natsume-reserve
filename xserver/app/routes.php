@@ -82,6 +82,8 @@ function route_table(): array
         ['POST', '#^/api/admin/hq/stores$#', 'hq_stores_post'],
         ['PUT', '#^/api/admin/hq/stores$#', 'hq_stores_put'],
         ['PUT', '#^/api/admin/hq/stores-page$#', 'hq_stores_page_put'],
+        ['GET', '#^/api/admin/hq/referrals$#', 'hq_referrals_get'],
+        ['PUT', '#^/api/admin/hq/referrals$#', 'hq_referrals_put'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
         // 自賠責請求の速報集計
         ['GET', '#^/api/admin/jibai$#', 'jibai_get'],
