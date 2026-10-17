@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 12;
+    private const VERSION = 13;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -100,6 +100,22 @@ final class Migrate
                 if (!self::hasColumn($pdo, 'store', 'listed')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `listed` TINYINT(1) NOT NULL DEFAULT 1');
                 if (!self::hasColumn($pdo, 'global_setting', 'storesPageOpen')) $pdo->exec('ALTER TABLE `global_setting` ADD COLUMN `storesPageOpen` TINYINT(1) NOT NULL DEFAULT 0');
                 if (!self::hasColumn($pdo, 'reservation', 'viaCard')) $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `viaCard` TINYINT(1) NOT NULL DEFAULT 0');
+            }
+            if ($ver < 13) {
+                // メニューに「自費・ワクスキ・プロテイン・ODAIJINI」を足す（後ろに。すでにあるものは足さない）
+                if (self::hasTable($pdo, 'karte_option')) {
+                    $has = $pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'menu'")->fetch();
+                    if ((int)$has['n'] > 0) {
+                        foreach (['自費', 'ワクスキ', 'プロテイン', 'ODAIJINI'] as $label) {
+                            $dup = $pdo->prepare("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'menu' AND label = ?");
+                            $dup->execute([$label]);
+                            if ((int)$dup->fetch()['n'] > 0) continue;
+                            $at = (int)$pdo->query("SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM karte_option WHERE category = 'menu'")->fetch()['n'];
+                            $ins = $pdo->prepare("INSERT INTO karte_option (category, label, sortOrder) VALUES ('menu', ?, ?)");
+                            $ins->execute([$label, $at]);
+                        }
+                    }
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

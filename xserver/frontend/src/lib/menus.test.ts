@@ -7,6 +7,13 @@ describe('予約表のメニュー', () => {
     expect(menuShort('2回目')).toBe('2');
     expect(menuShort('12回目')).toBe('12');
     expect(menuShort('ワンコイン')).toBe('ワ');
+    const opts = ['矯正', '2回目', 'ワンコイン', '自費', 'ワクスキ', 'プロテイン', 'ODAIJINI'];
+    expect(menuShort('ワンコイン', opts)).toBe('ワン');
+    expect(menuShort('ワクスキ', opts)).toBe('ワク');
+    expect(menuShort('自費', opts)).toBe('自');
+    expect(menuShort('プロテイン', opts)).toBe('プ');
+    expect(menuShort('ODAIJINI', opts)).toBe('O');
+    expect(menuShort('矯正', opts)).toBe('矯');
   });
   it('付け外しと並び順', () => {
     const opts = ['矯正', '2回目', 'テープ'];

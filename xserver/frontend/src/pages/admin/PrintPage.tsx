@@ -54,7 +54,7 @@ export default function PrintPage() {
   };
   const menuOptions = d.menuOptions ?? [];
   const usedMenus = [...new Set(d.cells.flatMap((c) => c.menus ?? []))].sort((a, b) => (menuOptions.indexOf(a) + 1 || 99) - (menuOptions.indexOf(b) + 1 || 99));
-  const Chip = ({ m }: { m: string }) => <span className="ml-px inline-block min-w-[9px] rounded-[2px] px-[1px] text-center text-[7px] font-bold leading-[9px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</span>;
+  const Chip = ({ m }: { m: string }) => <span className="ml-px inline-block min-w-[9px] rounded-[2px] px-[1px] text-center text-[7px] font-bold leading-[9px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m, menuOptions)}</span>;
   // 行の高さ：A4 縦いっぱい（余白 8mm を除いた高さ 281mm）から、見出し・表の見出し・名簿・メモの高さを引いた残りを行数で割る
   const cancelMm = 4 + (d.cancels.length ? 4.5 + d.cancels.length * 4.3 : 5);
   const memoMm = d.day.memo ? 5 + d.day.memo.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 30)), 0) * 3.6 : 0;

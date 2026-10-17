@@ -661,7 +661,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           <div className="max-w-full overflow-x-auto">
             <table className="text-sm" aria-label="メニュー別の人数">
               <thead><tr className="text-[11px] text-slate-500"><th></th>{menuCounts.map(([m]) => (
-                <th key={m} className="whitespace-nowrap px-1.5 text-right font-normal" title={m}><i className="mr-0.5 inline-block min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</i>{m.length > 4 ? `${m.slice(0, 4)}…` : m}</th>
+                <th key={m} className="whitespace-nowrap px-1.5 text-right font-normal" title={m}><i className="mr-0.5 inline-block min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m, menuOptions)}</i>{m.length > 4 ? `${m.slice(0, 4)}…` : m}</th>
               ))}</tr></thead>
               <tbody>
                 {(['am', 'pm', 'all'] as const).map((w) => (
@@ -852,7 +852,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                             {web && hasName && <span className="ml-0.5 flex-none rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700" title="WEB予約">WEB</span>}
                             {cellMenus.length > 0 && (
                               <span className="ml-0.5 flex flex-none gap-px" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
-                                {cellMenus.map((m) => <i key={m} className="min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m)}</i>)}
+                                {cellMenus.map((m) => <i key={m} className="min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m, menuOptions)}</i>)}
                               </span>
                             )}
                             <input

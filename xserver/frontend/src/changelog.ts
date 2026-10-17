@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 25, date: '2026-10-17', title: 'メニューに 4 つ追加', audience: ['店舗', '本部'],
+    items: ['予約表のメニューに「自費・ワクスキ・プロテイン・ODAIJINI」を足しました。セルの印は「自・ワク・プ・O」です（ワンコインの印は「ワン」になりました）。'],
+  },
+  {
     id: 24, date: '2026-10-17', title: '予約をマウスで動かせます', audience: ['店舗', '本部'],
     items: [
       '同じ日の中で時間・ベッドを変えるときは、予約の入ったセルを押したまま、空いているセルまで動かして離すだけで移動します（確認は出ません）。WEB予約も同じように動かせます（予約の確認ページの時間も変わります）。',

@@ -19,7 +19,7 @@ ok('メニューの帯（未選択の案内）', (await bar.textContent()).inclu
 await cell('9:00', 1).locator('input').click(); await p.keyboard.type('山田 初診'); await p.keyboard.press('Enter'); await p.waitForSelector('text=保存しました');
 await cell('9:00', 1).locator('input').click();
 const names = (await bar.getByRole('button').allTextContents()).filter((n) => !['新患', '再来', '新自'].includes(n));
-ok('9つのメニューが並ぶ（12回目を含む）', names.join(',') === '矯正,2回目,3回目,6回目,12回目,パイオ,テープ,追加メニュー,ワンコイン', names.join(','));
+ok('13 のメニューが並ぶ（12回目・自費・ワクスキ・プロテイン・ODAIJINI を含む）', names.join(',') === '矯正,2回目,3回目,6回目,12回目,パイオ,テープ,追加メニュー,ワンコイン,自費,ワクスキ,プロテイン,ODAIJINI', names.join(','));
 const y0 = (await cell('9:00', 1).boundingBox()).y;
 await bar.getByRole('button', { name: 'テープ' }).click();
 await bar.getByRole('button', { name: '矯正' }).click();
