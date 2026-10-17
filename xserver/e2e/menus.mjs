@@ -31,6 +31,8 @@ ok('セルに短い印（矯・テ の順）', (await cell('9:00', 1).getByLabel
 ok('セルの位置が動かない（帯は最初からある）', Math.abs((await cell('9:00', 1).boundingBox()).y - y0) < 1);
 const h = (await cell('9:00', 1).boundingBox()).height, h2 = (await cell('9:30', 1).boundingBox()).height;
 ok('セルの高さが増えない', Math.abs(h - h2) < 1, `${h} / ${h2}`);
+ok('メニュー別の人数は最初は出さない', (await p.getByRole('table', { name: 'メニュー別の人数' }).count()) === 0);
+await p.getByRole('button', { name: /メニュー別の人数/ }).click();
 ok('メニュー別の人数', (await p.getByRole('table', { name: 'メニュー別の人数' }).locator('tr', { hasText: '合計' }).locator('td').nth(1).textContent()) === '1');
 await p.screenshot({ path: new URL('./out-menus.png', import.meta.url).pathname, clip: { x: 0, y: 0, width: 1300, height: 640 } });
 // 2 枠目・空のセルを選ぶと案内に戻る

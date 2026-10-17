@@ -625,6 +625,19 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     }
     return noRed(cellState(visited.has(k), t, nowMin));
   }
+  // 予約表の上は最小限に：メニュー別の人数・枠数とブロック・色の見かたは、ボタンで開いたときだけ出す（開いた状態はこのパソコンに覚える）
+  const [panels, setPanels] = useState<{ menu: boolean; cap: boolean; legend: boolean }>(() => {
+    try { return { menu: false, cap: false, legend: false, ...JSON.parse(localStorage.getItem('natsume.dayPanels') ?? '{}') }; } catch { return { menu: false, cap: false, legend: false }; }
+  });
+  const togglePanel = (k: 'menu' | 'cap' | 'legend') => setPanels((v) => {
+    const n = { ...v, [k]: !v[k] };
+    try { localStorage.setItem('natsume.dayPanels', JSON.stringify(n)); } catch { /* 覚えられなくても動く */ }
+    return n;
+  });
+  const panelBtn = (k: 'menu' | 'cap' | 'legend', label: string) => (
+    <button type="button" aria-expanded={panels[k]} onClick={() => togglePanel(k)}
+      className={`whitespace-nowrap rounded border px-2 py-0.5 text-xs ${panels[k] ? 'border-brand bg-brand-light font-bold text-brand-dark' : 'bg-white text-slate-600 hover:border-slate-400'}`}>{panels[k] ? '▾' : '▸'} {label}</button>
+  );
   const shiftLabel: Record<string, string> = { WORK: '〇', OFF: '休', AM_OFF: '前休', PM_OFF: '後休', PAID: '有給', AM_PAID: '前有', PM_PAID: '後有', HELP: 'ヘルプ', AM_HELP: '前ヘルプ', PM_HELP: '後ヘルプ' };
 
   return (
@@ -633,7 +646,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, -1)}`)}>‹ 前日</button>
         <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1" aria-label="日付を選ぶ" />
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, 1)}`)}>翌日 ›</button>
-        <b className="whitespace-nowrap text-base text-slate-800">{formatDateJa(data.date)}</b>
+        <h1 className="whitespace-nowrap text-base font-bold text-slate-800">{formatDateJa(data.date)}</h1>
         <button type="button" className={`rounded px-4 py-1 font-bold ${data.date === today ? 'border border-brand bg-brand-light text-brand-dark' : 'bg-brand text-white'}`} onClick={() => navigate(`/admin/day/${today}`)} aria-current={data.date === today ? 'date' : undefined}>本日</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={undo} disabled={historyLen === 0} className="rounded border bg-white px-3 py-1 disabled:opacity-40" title="この画面で入力・削除・貼り付けしたものを 1 つずつ戻します（Ctrl+Z）">↶ 元に戻す{historyLen ? `（${historyLen}）` : ''}</button>
         <span className="ml-auto text-xs text-slate-500">
@@ -643,8 +656,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white">印刷／PDF</a>
       </div>
 
-      <div className="mb-3 flex flex-wrap items-end gap-x-6 gap-y-2">
-        <h1 className="text-2xl font-bold">{formatDateJa(data.date)}</h1>
+      <div className="mb-2 flex flex-wrap items-end gap-x-6 gap-y-2">
         <table className="text-sm">
           <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
           <tbody>
@@ -660,7 +672,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             <tr><td className="pr-2 text-slate-500">自賠</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jPm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm + counts.jPm}</td></tr>
           </tbody>
         </table>
-        {menuOptions.length > 0 && (
+        {menuOptions.length > 0 && panels.menu && (
           // メニュー別の人数：行は午前・午後・合計で固定（メニューが増えても高さは変わらない）
           <div className="max-w-full overflow-x-auto">
             <table className="text-sm" aria-label="メニュー別の人数">
@@ -685,9 +697,14 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           <label className="flex items-center gap-1"><input type="checkbox" checked={day.published === false} onChange={(e) => updateDay({ published: e.target.checked ? false : null })} />非公開にする</label>
           <label className="flex items-center gap-1"><input type="checkbox" checked={day.closed} onChange={(e) => updateDay({ closed: e.target.checked })} />臨時休診</label>
         </div>
+        <div className="no-print flex flex-wrap items-center gap-1.5">
+          {menuOptions.length > 0 && panelBtn('menu', 'メニュー別の人数')}
+          {panelBtn('cap', `枠数・ブロック（午前 ${cap.am}・午後 ${cap.pm}${(data.blocks ?? []).length ? `・ブロック ${(data.blocks ?? []).length}件` : ''}）`)}
+          {panelBtn('legend', '色の見かた')}
+        </div>
       </div>
 
-      <div className="no-print mb-3 rounded border bg-white p-3 text-sm">
+      {panels.cap && <div className="no-print mb-3 rounded border bg-white p-3 text-sm">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="font-bold">顧客に見える枠数</span>
           <label className="flex items-center gap-1">午前
@@ -716,9 +733,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           <span className="ml-2">空欄＝シフトからの自動計算。数字を入れるとその日だけ上書きします。</span>
         </div>
         <BlockPanel key={data.date} date={data.date} times={rows} slotMinutes={data.slotMinutes} beds={cols} blocks={data.blocks ?? []} onRefresh={onRefresh} />
-      </div>
+      </div>}
 
-      <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+      {panels.legend && <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
         {(Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[]).map((kk) => <span key={kk}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: KIND_COLORS[kk] }} />{KIND_COLOR_NAMES[kk]}</span>)}
         {[...staffColors.entries()].map(([n, c]) => <span key={'s' + n}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{n}（2・3・6・12回目）</span>)}
         {Object.entries(MENU_CELL_COLORS).map(([m, c]) => <span key={m}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{m}</span>)}
@@ -728,7 +745,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <span><span className="mr-1 rounded-full border border-brand px-1.5 text-[10px] font-bold text-brand-dark">名前</span>担当</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
-      </div>
+      </div>}
 
       {conflictMsg && (
         <p role="alert" className="no-print mb-2 flex items-start gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
