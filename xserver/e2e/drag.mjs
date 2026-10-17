@@ -84,8 +84,8 @@ if (freeBed) {
 }
 
 // 7) ふつうのクリック・入力は今までどおり（動かない）
-await input(540, 1).click(); await p.keyboard.type('ドラッグ 一郎（再来）様'); await p.keyboard.press('Tab'); await p.waitForTimeout(800);
+await input(540, 1).click(); await p.keyboard.type('入力 三郎'); await p.keyboard.press('Tab'); await p.waitForTimeout(800);
 d = await day();
-ok('クリックして入力はそのまま使える', textAt(d, 540, 1) === 'ドラッグ 一郎（再来）様');
+ok('クリックして入力はそのまま使える', textAt(d, 540, 1) === '入力 三郎');
 ok('画面のエラーなし', errs.length === 0, JSON.stringify(errs));
 await br.close();

@@ -54,7 +54,7 @@ function pub_reserve(array $p): never
     $date = $b['date'] ?? '';
     if (!is_string($date) || !Time::isValidDate($date)) Http::error('日付が不正です', 400);
     $time = Http::int($b, 'time', 0, 24 * 60);
-    $name = is_string($b['name'] ?? null) ? trim($b['name']) : '';
+    $name = is_string($b['name'] ?? null) ? trim(Text::dropHonorific(trim($b['name']))) : '';
     if ($name === '') Http::error('お名前を入力してください', 400);
     if (mb_strlen($name) > 40) Http::error('お名前が長すぎます', 400);
     $phoneRaw = is_string($b['phone'] ?? null) ? trim($b['phone']) : '';

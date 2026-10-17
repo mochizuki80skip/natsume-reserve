@@ -15,6 +15,7 @@ import CellLogPanel from './CellLogPanel';
 import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
 import { applyKindTag, kindTagOf, type KindTag, KIND_TAGS } from '@/lib/kindTag';
 import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
+import { dropHonorific } from '@/lib/nameText';
 import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, staffColorMap } from '@/lib/cellColor';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
@@ -306,7 +307,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     const changes: { time: number; bed: number; text: string }[] = [];
     for (const cell of plan.cells) {
       const cc = c + cell.col;
-      if (cell.row < rows.length && cc < cols.length) changes.push({ time: rows[cell.row], bed: cols[cc], text: cell.text });
+      if (cell.row < rows.length && cc < cols.length) changes.push({ time: rows[cell.row], bed: cols[cc], text: dropHonorific(cell.text) });
     }
     setCellsTracked(changes);
     const n = changes.length;
@@ -897,8 +898,12 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                                 }
                               }}
                               onBlur={(e) => {
+                                // 予測変換で付いた「様」は外す（山田太郎様 → 山田太郎）
+                                let val = e.currentTarget.value;
+                                const plain = dropHonorific(val);
+                                if (plain !== val) { setCell(t, b, plain); val = plain; }
                                 const snap = focusSnap.current;
-                                if (snap && snap.k === k && snap.val !== e.currentTarget.value) pushHistory([{ k, before: snap.val, after: e.currentTarget.value }]);
+                                if (snap && snap.k === k && snap.val !== val) pushHistory([{ k, before: snap.val, after: val }]);
                                 focusSnap.current = null;
                                 void flush();
                               }}

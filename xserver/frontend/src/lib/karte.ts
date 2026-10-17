@@ -2,7 +2,7 @@
 export type KarteKind = 'NEW' | 'ACCIDENT' | 'REVISIT';
 export interface KarteVisit { d: string; s: string; t: string }
 export interface KarteRow {
-  id: string; date: string; auto: boolean; karteNo: string; kind: KarteKind; trig: string; trigDetail: string; name: string;
+  id: string; date: string; auto: boolean; karteNo: string; kind: KarteKind; trig: string; trigDetail: string; name: string; nameOk?: boolean;
   age: number | null; sex: string; symptomCat: string; symptom: string; staff: string; treatment: string; visits: KarteVisit[];
 }
 export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[] }

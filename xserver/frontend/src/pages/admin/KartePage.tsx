@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, parseMd, type DetailFor, type KarteKind, type KarteOptions, type KarteRow, type KarteVisit } from '@/lib/karte';
 import KarteRetention from '@/components/KarteRetention';
+import { nameCheck } from '@/lib/nameText';
 import { useAdmin } from './Layout';
 
 interface Resp { month: string; today: string; storeName: string; rows: KarteRow[]; options: KarteOptions; detailFor: DetailFor; staff: string[] }
@@ -89,7 +90,12 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
           onChange={(v) => p({ trig: v, ...(v in data.detailFor || !row.trigDetail ? {} : { trigDetail: '' }) })} />
       </td>
       <DetailCell row={row} detailFor={data.detailFor} options={data.options} onSave={(v) => p({ trigDetail: v })} err={miss.has('trigDetail')} />
-      <td className={`border ${autoCls} ${e('name')}`}><Txt value={row.name} onSave={(v) => p({ name: v })} label="氏名" maxLength={40} align="left" /></td>
+      <td className={`border ${autoCls} ${e('name')}`}>
+        <div className="flex items-center">
+          <Txt value={row.name} onSave={(v) => p({ name: v })} label="氏名" maxLength={40} align="left" />
+          <NameFlag row={row} onOk={() => p({ nameOk: true })} />
+        </div>
+      </td>
       <td className={`border ${KIND_CLASS[row.kind]}`}>
         <select value={row.kind} onChange={(ev) => p({ kind: ev.target.value as KarteKind })} aria-label="新・再" className={`${cellBase} appearance-none font-bold`}>
           {(['NEW', 'ACCIDENT', 'REVISIT'] as KarteKind[]).map((k) => <option key={k} value={k} className="bg-white text-slate-900">{KIND_LABEL[k]}</option>)}
@@ -112,6 +118,28 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
         {!row.auto && <button type="button" onClick={() => onDelete(row.id)} title="この行を削除" className="text-[11px] text-slate-400 hover:text-red-700">✕</button>}
       </td>
     </tr>
+  );
+}
+
+/** 名字だけ・ひらがなだけ・カタカナだけ（外国の方？）の氏名に出す確認の印。「正しい」を押すと消える */
+function NameFlag({ row, onOk }: { row: KarteRow; onOk: () => void }) {
+  const [open, setOpen] = useState(false);
+  const chk = row.nameOk ? null : nameCheck(row.name);
+  if (!chk) return null;
+  const cls = chk.kind === 'foreign' ? 'border-violet-500 bg-violet-100 text-violet-800' : 'border-amber-500 bg-amber-100 text-amber-900';
+  return (
+    <span className="relative flex-none pr-0.5">
+      <button type="button" onClick={() => setOpen(!open)} title={chk.help} className={`whitespace-nowrap rounded border px-1 text-[10px] font-bold leading-4 ${cls}`}>{chk.label}</button>
+      {open && (
+        <span className="absolute right-0 top-full z-20 mt-0.5 block w-64 rounded border bg-white p-2 text-left text-[11px] leading-snug text-slate-700 shadow-lg">
+          {chk.help}
+          <span className="mt-1.5 flex gap-1.5">
+            <button type="button" onClick={() => { setOpen(false); onOk(); }} className="rounded bg-brand px-2 py-0.5 font-bold text-white">この氏名で正しい</button>
+            <button type="button" onClick={() => setOpen(false)} className="rounded border px-2 py-0.5">閉じる</button>
+          </span>
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -163,6 +191,7 @@ export default function KartePage() {
 
   const count = (k: KarteKind) => rows.filter((r) => r.kind === k).length;
   const missingRows = rows.filter((r) => missingFields(r, data.detailFor).size > 0).length;
+  const nameRows = rows.filter((r) => !r.nameOk && nameCheck(r.name)).length;
   const go = (n: number) => setSp({ month: shiftMonth(ym, n) });
 
   return (
@@ -177,6 +206,7 @@ export default function KartePage() {
         <span className="rounded bg-blue-100 px-2 py-0.5 text-sm font-bold text-blue-800">再 {count('REVISIT')}</span>
         <span className="rounded bg-slate-100 px-2 py-0.5 text-sm font-bold">合計 {rows.length}</span>
         {missingRows > 0 && <span className="rounded bg-yellow-200 px-2 py-0.5 text-sm font-bold text-yellow-900">⚠ 未入力 {missingRows}件</span>}
+        {nameRows > 0 && <span className="rounded bg-amber-100 px-2 py-0.5 text-sm font-bold text-amber-900" title="名字だけ・ひらがなだけ・カタカナだけの氏名です。氏名の横の印を押して確認してください">氏名の確認 {nameRows}件</span>}
         <span className="ml-auto text-xs text-slate-500">{state === 'saving' ? '保存中…' : state === 'saved' ? '保存しました' : state === 'error' ? '保存に失敗しました' : '入力すると自動で保存されます'}</span>
         <a href={`/api/admin/karte/export?month=${ym}`} className="rounded border bg-white px-2 py-0.5 text-sm">Excelで保存</a>
         <button type="button" onClick={() => window.print()} className="rounded border bg-white px-2 py-0.5 text-sm">印刷</button>

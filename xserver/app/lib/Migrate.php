@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 14;
+    private const VERSION = 15;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -127,6 +127,10 @@ final class Migrate
                         foreach (['パイオ', 'テープ', 'プロテイン', 'ODAIJINI', 'サポーター'] as $i => $label) $ins->execute([$label, $i]);
                     }
                 }
+            }
+            if ($ver < 15) {
+                // 初回カルテの氏名を「この氏名で正しい」と確認したか（名字だけ・ひらがなだけ・カタカナだけの確認の表示を消す）
+                if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'nameOk')) $pdo->exec('ALTER TABLE `karte` ADD COLUMN `nameOk` TINYINT(1) NOT NULL DEFAULT 0 AFTER `name`');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

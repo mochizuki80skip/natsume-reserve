@@ -67,4 +67,10 @@ final class Text
         $y = self::normalizeName($b);
         return $x !== '' && $x === $y;
     }
+
+    /** 氏名の後ろの「様」を外す（予測変換で付いてしまうため）。後ろに（初診）などの印があっても外す */
+    public static function dropHonorific(string $text): string
+    {
+        return preg_replace('/[\s\x{3000}]*様(?=[\s\x{3000}]*(?:[（(][^）)]*[）)][\s\x{3000}]*)*$)/u', '', $text) ?? $text;
+    }
 }

@@ -22,7 +22,7 @@ final class Karte
     /** 内訳が必要なきっかけ（値＝内訳の選択肢の種類。null は記入のみ） */
     public const DETAIL_FOR = ['紹介他事業' => 'otherBiz', 'キャンペーン' => 'campaign', 'イベント' => null];
 
-    public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits'];
+    public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'nameOk', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits'];
 
     /** @return array<string, string[]> */
     public static function options(): array
@@ -60,7 +60,8 @@ final class Karte
     /** 「山田 太郎（初診）」「山田 太郎 初診」→「山田 太郎」 */
     public static function nameOfText(string $text): string
     {
-        $t = preg_replace('/\s*[（(](初診|初自|初|再|再来|新自)[）)]\s*/u', ' ', $text) ?? $text;
+        $t = Text::dropHonorific($text);
+        $t = preg_replace('/\s*[（(](初診|初自|初|再|再来|新自)[）)]\s*/u', ' ', $t) ?? $t;
         $t = preg_replace('/\s*(初診|初自|新自|再来|再診)\s*/u', ' ', $t) ?? $t;
         return trim(preg_replace('/\s+/u', ' ', $t) ?? $t);
     }
@@ -186,7 +187,7 @@ final class Karte
         for ($i = 0; $i < self::VISITS; $i++) $visits[] = ['d' => (string)($v[$i]['d'] ?? ''), 's' => (string)($v[$i]['s'] ?? ''), 't' => (string)($v[$i]['t'] ?? '')];
         return [
             'id' => $r['id'], 'date' => $r['date'], 'auto' => (bool)$r['auto'], 'karteNo' => $r['karteNo'], 'kind' => $r['kind'],
-            'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'name' => $r['name'], 'age' => $r['age'] === null ? null : (int)$r['age'], 'sex' => $r['sex'],
+            'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'name' => $r['name'], 'nameOk' => (bool)($r['nameOk'] ?? 0), 'age' => $r['age'] === null ? null : (int)$r['age'], 'sex' => $r['sex'],
             'symptomCat' => $r['symptomCat'], 'symptom' => $r['symptom'], 'staff' => $r['staff'], 'treatment' => $r['treatment'], 'visits' => $visits,
         ];
     }
@@ -204,6 +205,8 @@ final class Karte
                 case 'kind':
                     if (!in_array($v, self::KINDS, true)) throw new HttpError(400, 'bad request');
                     $set[$k] = $v; break;
+                case 'nameOk':
+                    $set[$k] = $v ? 1 : 0; break;
                 case 'age':
                     if ($v === null || $v === '') { $set[$k] = null; break; }
                     if (!preg_match('/^\d{1,3}$/', (string)$v) || (int)$v > 120) throw new HttpError(400, '年齢が正しくありません');
@@ -230,6 +233,8 @@ final class Karte
                     $set[$k] = mb_substr(trim((string)$v), 0, $max);
             }
         }
+        // 氏名を直したら、確認済みの印は外す（直した氏名をもう一度見る）
+        if (isset($set['name']) && !array_key_exists('nameOk', $set)) $set['nameOk'] = 0;
         return $set;
     }
 }
