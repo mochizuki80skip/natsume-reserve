@@ -49,8 +49,6 @@ await bar.getByRole('button', { name: '2回目', exact: true }).click(); await p
 ok('2回目を付けると初回の担当が自動で入る', (await cell('9:00', 1).textContent()).includes('望月'));
 ok('2回目は初回担当（望月）の色', (await cell('9:00', 1).getAttribute('style') ?? '').includes('187, 247, 208'), await cell('9:00', 1).getAttribute('style'));
 ok('回数は数字の印', (await cell('9:00', 1).getByLabel(/^メニュー：/).textContent()) === '2');
-ok('色の見かたは最初は閉じている', !(await p.textContent('body')).includes('望月（2・3・6・12回目）'));
-await p.getByRole('button', { name: /色の見かた/ }).click();
 ok('凡例に担当の色', (await p.textContent('body')).includes('望月（2・3・6・12回目）'));
 await cell('9:00', 1).getByLabel('来院チェック').click(); await p.waitForTimeout(800);
 const k2 = (await api('GET', `/api/admin/karte?month=${D1.slice(0, 7)}`))[1].rows.find((r) => r.name === '担当 太郎');

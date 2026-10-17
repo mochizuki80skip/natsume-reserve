@@ -625,16 +625,16 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     }
     return noRed(cellState(visited.has(k), t, nowMin));
   }
-  // 予約表の上は最小限に：メニュー別の人数・枠数とブロック・色の見かたは、ボタンで開いたときだけ出す（開いた状態はこのパソコンに覚える）
-  const [panels, setPanels] = useState<{ menu: boolean; cap: boolean; legend: boolean }>(() => {
-    try { return { menu: false, cap: false, legend: false, ...JSON.parse(localStorage.getItem('natsume.dayPanels') ?? '{}') }; } catch { return { menu: false, cap: false, legend: false }; }
+  // 予約表の上は最小限に：メニュー別の人数は、ボタンで開いたときだけ出す（開いた状態はこのパソコンに覚える）。枠数・色の見かたはいつも出す
+  const [panels, setPanels] = useState<{ menu: boolean }>(() => {
+    try { return { menu: !!JSON.parse(localStorage.getItem('natsume.dayPanels') ?? '{}').menu }; } catch { return { menu: false }; }
   });
-  const togglePanel = (k: 'menu' | 'cap' | 'legend') => setPanels((v) => {
+  const togglePanel = (k: 'menu') => setPanels((v) => {
     const n = { ...v, [k]: !v[k] };
     try { localStorage.setItem('natsume.dayPanels', JSON.stringify(n)); } catch { /* 覚えられなくても動く */ }
     return n;
   });
-  const panelBtn = (k: 'menu' | 'cap' | 'legend', label: string) => (
+  const panelBtn = (k: 'menu', label: string) => (
     <button type="button" aria-expanded={panels[k]} onClick={() => togglePanel(k)}
       className={`whitespace-nowrap rounded border px-2 py-0.5 text-xs ${panels[k] ? 'border-brand bg-brand-light font-bold text-brand-dark' : 'bg-white text-slate-600 hover:border-slate-400'}`}>{panels[k] ? '▾' : '▸'} {label}</button>
   );
@@ -699,12 +699,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         </div>
         <div className="no-print flex flex-wrap items-center gap-1.5">
           {menuOptions.length > 0 && panelBtn('menu', 'メニュー別の人数')}
-          {panelBtn('cap', `枠数・ブロック（午前 ${cap.am}・午後 ${cap.pm}${(data.blocks ?? []).length ? `・ブロック ${(data.blocks ?? []).length}件` : ''}）`)}
-          {panelBtn('legend', '色の見かた')}
         </div>
       </div>
 
-      {panels.cap && <div className="no-print mb-3 rounded border bg-white p-3 text-sm">
+      <div className="no-print mb-3 rounded border bg-white p-3 text-sm">
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           <span className="font-bold">顧客に見える枠数</span>
           <label className="flex items-center gap-1">午前
@@ -733,9 +731,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           <span className="ml-2">空欄＝シフトからの自動計算。数字を入れるとその日だけ上書きします。</span>
         </div>
         <BlockPanel key={data.date} date={data.date} times={rows} slotMinutes={data.slotMinutes} beds={cols} blocks={data.blocks ?? []} onRefresh={onRefresh} />
-      </div>}
+      </div>
 
-      {panels.legend && <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+      <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
         {(Object.keys(KIND_COLORS) as (keyof typeof KIND_COLORS)[]).map((kk) => <span key={kk}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: KIND_COLORS[kk] }} />{KIND_COLOR_NAMES[kk]}</span>)}
         {[...staffColors.entries()].map(([n, c]) => <span key={'s' + n}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{n}（2・3・6・12回目）</span>)}
         {Object.entries(MENU_CELL_COLORS).map(([m, c]) => <span key={m}><i className="mr-1 inline-block h-3 w-3 border align-[-2px]" style={{ background: c }} />{m}</span>)}
@@ -745,7 +743,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <span><span className="mr-1 rounded-full border border-brand px-1.5 text-[10px] font-bold text-brand-dark">名前</span>担当</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
-      </div>}
+      </div>
 
       {conflictMsg && (
         <p role="alert" className="no-print mb-2 flex items-start gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">

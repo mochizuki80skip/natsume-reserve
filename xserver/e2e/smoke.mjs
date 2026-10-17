@@ -150,7 +150,6 @@ await ap.selectOption(`select[aria-label="山本 ${date}"]`, 'AM_OFF');
 await ap.waitForTimeout(600);
 await ap.goto(`${BASE}/admin/day/${date}`);
 await ap.waitForSelector('table');
-await ap.getByRole('button', { name: /枠数・ブロック/ }).click();
 const capText = await ap.locator('text=顧客に見える枠数').first().locator('..').textContent();
 ok('シフト(前休)が枠数に反映（午前2/午後3）', /シフトから 2/.test(capText) && /シフトから 3/.test(capText), capText);
 const amReserved = async () => Number((await ap.locator('table').first().locator('tr', { hasText: '予約' }).first().locator('td').nth(1).textContent()).trim());
