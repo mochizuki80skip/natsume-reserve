@@ -57,5 +57,7 @@ header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: no-cache');
 // 設置の種類（full＝予約＋SNS、sns＝SNS 投稿管理だけ）を画面に渡す
 $page = file_get_contents($html);
+// SNS 投稿管理だけの設置では、ブラウザのタブの名前も「SNS投稿管理」にする
+if (Config::isSnsOnly()) $page = preg_replace('#<title>.*?</title>#su', '<title>SNS投稿管理</title>', $page, 1);
 $inject = '<script>window.APP_MODE=' . json_encode(Config::mode()) . ';</script>';
 echo str_contains($page, '</head>') ? str_replace('</head>', $inject . '</head>', $page) : $inject . $page;

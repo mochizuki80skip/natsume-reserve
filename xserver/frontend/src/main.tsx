@@ -32,7 +32,10 @@ import SnsSchedulePage from './pages/admin/sns/SnsSchedulePage';
 import SnsStoresPage from './pages/admin/sns/SnsStoresPage';
 import SnsDraftsPage from './pages/admin/sns/SnsDraftsPage';
 import SnsVarsPage from './pages/admin/sns/SnsVarsPage';
-import { SNS_ONLY } from './lib/mode';
+import { SNS_ONLY, APP_TITLE } from './lib/mode';
+
+// ブラウザのタブの名前（SNS 投稿管理だけの設置では「SNS投稿管理」）
+if (SNS_ONLY) document.title = APP_TITLE;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

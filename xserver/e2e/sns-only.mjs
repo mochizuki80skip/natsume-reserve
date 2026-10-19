@@ -9,6 +9,7 @@ const ok = (name, cond, extra = '') => { console.log(cond ? 'PASS' : 'FAIL', nam
 
 const html = await (await fetch(`${BASE}/admin/login`)).text();
 ok('画面に APP_MODE=sns が渡される', html.includes('window.APP_MODE="sns"'));
+ok('タブの名前が SNS投稿管理', html.includes('<title>SNS投稿管理</title>'));
 ok('予約の API は出ない', (await fetch(`${BASE}/api/public/S001/week?kind=NEW`)).status === 404);
 ok('店舗名の取得（店舗別ログイン用）は残る', (await fetch(`${BASE}/api/public/S001/store`)).status === 200);
 
@@ -63,6 +64,8 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   const mk = await fetch(`${BASE}/api/admin/sns/posts?store=S002`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-01-05 10:00', title: 'テスト', body: '{エリア}で腰痛にお困りの方へ。{店舗名}です。' }) });
   ok('エリア未入力の下書きを作成', mk.ok);
   await page.goto(`${BASE}/admin/sns/drafts?store=S002&unfilled=1`); await page.waitForSelector('h1:has-text("下書き")');
+  await page.waitForSelector('section');
+  if (await page.locator('button:has-text("件を表示")').count()) await page.locator('button:has-text("件を表示")').first().click();
   ok('下書きページに {エリア} が赤く出る', await page.waitForSelector('section mark:has-text("{エリア}")', { timeout: 10000 }).then(() => true, () => false));
   await page.locator('label:has-text("エリア {エリア}") input').first().fill('三島市');
   await page.getByRole('button', { name: '保存して下書きを完成' }).first().click();
