@@ -166,6 +166,36 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   for (const id of ids) await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { method: 'PUT', headers: H, body: JSON.stringify({ id, action: 'delete' }) });
   for (const p of made) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
 }
+// claude.ai で作った定型投稿の取り込み：依頼文 → 貼り付け → 確認 → 取り込み
+{
+  const cookie = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
+  const H = { cookie, 'Content-Type': 'application/json' };
+  const pr = await (await fetch(`${BASE}/api/admin/sns/topics/prompt`, { method: 'POST', headers: H, body: JSON.stringify({ theme: '冬のぎっくり腰', count: 3, channel: 'gbp', weekdays: '1,3,5', perStore: true }) })).json();
+  ok('依頼文にルール・出力の形・店舗の一覧が入る', pr.prompt.includes('{メインキーワード}') && pr.prompt.includes('名前：') && pr.prompt.includes('本文：') && pr.prompt.includes('S001｜') && pr.prompt.includes('電話番号・住所・営業時間・URL'));
+  const tag = `T${Date.now() % 100000}`;
+  const reply = `承知しました。\n\n\`\`\`\n---\n名前：月_${tag}_お悩み\n媒体：Google\n曜日：月曜日\nエリア：\n店舗：\n本文：\n{エリア}の{店舗名}です。\n腰の張りはご相談ください。\n---\n名前：水_${tag}_電話あり\n媒体：Google\n曜日：水\n本文：\nお電話 055-123-4567 まで。\n---\n名前：金_${tag}_店舗用\n媒体：両方\n曜日：金\n店舗：S002\n本文：\n{エリア}の{メインキーワード}、{店舗名}です。\n---\n\`\`\`\n以上です。`;
+  const dry = await (await fetch(`${BASE}/api/admin/sns/topics/import`, { method: 'POST', headers: H, body: JSON.stringify({ text: reply, dryRun: true }) })).json();
+  ok('貼り付けを 3 件に読み分ける', dry.items.length === 3, JSON.stringify(dry.items.map((i) => [i.title, i.weekdays, i.status])));
+  ok('曜日・店舗を読み取る', dry.items[0].weekdays === '1' && dry.items[2].weekdays === '5' && dry.items[2].store !== '');
+  ok('Google に電話番号が入ったものはエラー', dry.items[1].status === 'error');
+  ok('締めのあいさつ（以上です）を本文に入れない', !dry.items[2].body.includes('以上です'));
+  // 画面から取り込む
+  await page.goto(`${BASE}/admin/sns/topics`); await page.waitForSelector('text=定型投稿を追加');
+  await page.locator('summary:has-text("Claude で定型投稿を作って取り込む")').click();
+  await page.getByRole('button', { name: '依頼文をコピー' }).click();
+  ok('依頼文を作れる（画面）', await page.waitForSelector('summary:has-text("依頼文を見る")', { timeout: 5000 }).then(() => true, () => false));
+  await page.locator('textarea[placeholder^="claude.ai の返答"]').fill(reply);
+  await page.getByRole('button', { name: '確認する' }).click();
+  await page.waitForSelector('button:has-text("件を定型投稿に取り込む")');
+  await page.getByRole('button', { name: /2 件を定型投稿に取り込む/ }).click();
+  ok('2 件を取り込める（画面）', await page.waitForSelector('text=2 件を定型投稿に登録しました', { timeout: 5000 }).then(() => true, () => false));
+  const again = await (await fetch(`${BASE}/api/admin/sns/topics/import`, { method: 'POST', headers: H, body: JSON.stringify({ text: reply, dryRun: false }) })).json();
+  ok('同じものは二重に登録しない', again.created === 0 && again.skipped === 2);
+  const tl = await (await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { headers: { cookie } })).json();
+  const mine = tl.topics.filter((t) => t.title.includes(tag));
+  ok('取り込んだ定型投稿に曜日が入る（店舗用は S002 に）', mine.length === 2 && mine.some((t) => t.weekdays === '1' && t.shared) && mine.some((t) => t.weekdays === '5' && !t.shared));
+  for (const t of mine) await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { method: 'PUT', headers: H, body: JSON.stringify({ id: t.id, action: 'delete' }) });
+}
 const ck = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
 ok('Instagram の API 連携は使える', (await fetch(`${BASE}/api/admin/sns/ig/connect?store=S001`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);
 ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api/admin/sns/google/connect`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);

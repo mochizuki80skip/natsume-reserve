@@ -1261,3 +1261,67 @@ function sns_recompose_post(): never
     foreach (sns_visible_stores($s) as $st) $n += Sns::recomposeAutoDrafts($st['id']);
     Http::json(['ok' => true, 'recomposed' => $n]);
 }
+
+// ---------- claude.ai で作った定型投稿の取り込み（本部） ----------
+/** POST /api/admin/sns/topics/prompt {theme, count, channel, weekdays, perStore}：claude.ai に貼る依頼文 */
+function sns_topics_prompt(): never
+{
+    Sns::ensureTables();
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    $ch = in_array($b['channel'] ?? '', ['ig', 'gbp', 'both'], true) ? $b['channel'] : 'gbp';
+    $stores = array_map([Settings::class, 'storeRow'], Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC'));
+    $prompt = SnsTopicImport::prompt([
+        'theme' => Http::str($b, 'theme', 500, false), 'count' => (int)($b['count'] ?? 3), 'channel' => $ch,
+        'weekdays' => sns_weekdays($b['weekdays'] ?? ''), 'perStore' => ($b['perStore'] ?? false) === true, 'stores' => $stores,
+    ]);
+    Http::json(['prompt' => $prompt]);
+}
+
+/** POST /api/admin/sns/topics/import {text, dryRun}：貼り付けた文章を確かめて（dryRun）、定型投稿として登録する */
+function sns_topics_import(): never
+{
+    Sns::ensureTables();
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    $text = (string)($b['text'] ?? '');
+    if (mb_strlen($text) > 300000) Http::error('貼り付けた文章が長すぎます。分けて取り込んでください', 400);
+    $dry = ($b['dryRun'] ?? true) !== false;
+    $byCode = []; $byName = [];
+    foreach (Db::all('SELECT * FROM store') as $st) { $byCode[mb_strtolower($st['code'])] = $st; $byName[$st['name']] = $st; }
+    $items = [];
+    $created = 0; $skipped = 0;
+    foreach (SnsTopicImport::parse($text) as $it) {
+        $errors = []; $warnings = [];
+        $ch = $it['channel'] !== '' ? $it['channel'] : (in_array($b['channel'] ?? '', ['ig', 'gbp', 'both'], true) ? $b['channel'] : 'both');
+        $title = mb_substr($it['title'] !== '' ? $it['title'] : mb_substr(preg_replace('/\s+/u', ' ', $it['body']), 0, 20), 0, 100);
+        $store = null;
+        if ($it['store'] !== '') {
+            $store = $byCode[mb_strtolower($it['store'])] ?? $byName[$it['store']] ?? null;
+            if (!$store) $errors[] = '店舗「' . $it['store'] . '」が見つかりません';
+        }
+        if ($it['body'] === '') $errors[] = '本文がありません';
+        if (mb_strlen($it['body']) > 1500) $errors[] = '本文が 1500 文字を超えています';
+        try { sns_assert_topic_gbp($ch, $it['body']); } catch (HttpError $e) { $errors[] = $e->getMessage(); }
+        $hits = Sns::complianceHits($it['body']);
+        if ($hits) $warnings[] = '広告規制で使わない語：' . implode('、', $hits) . ($ch !== 'ig' ? '（Google は承認できません）' : '');
+        $unknown = Sns::unknownPlaceholders($it['body']);
+        if ($unknown) $warnings[] = '未定義の差し込み語：' . implode(' ', $unknown);
+        $months = sns_months($it['months']); $weekdays = $it['weekdays']; $areas = sns_areas($it['areas']);
+        $status = $errors ? 'error' : 'ok';
+        if (!$errors && !$dry) {
+            $dup = Db::one('SELECT id FROM sns_topic WHERE ' . ($store ? 'storeId = ?' : 'storeId IS NULL') . ' AND title = ? AND body = ?', $store ? [$store['id'], $title, $it['body']] : [$title, $it['body']]);
+            if ($dup) { $status = 'duplicate'; $skipped++; }
+            else {
+                $max = Db::one('SELECT COALESCE(MAX(sortOrder), 0) AS m FROM sns_topic WHERE ' . ($store ? 'storeId = ?' : 'storeId IS NULL'), $store ? [$store['id']] : []);
+                Db::exec('INSERT INTO sns_topic (id, storeId, channel, title, body, standalone, months, weekdays, areas, sortOrder) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)',
+                    [Db::newId(), $store['id'] ?? null, $ch, $title, $it['body'], $months, $weekdays, $areas, (int)$max['m'] + 1]);
+                $status = 'created'; $created++;
+            }
+        }
+        $items[] = ['title' => $title, 'channel' => $ch, 'weekdays' => $weekdays, 'areas' => $areas, 'months' => $months, 'store' => $store ? $store['name'] : '', 'body' => $it['body'], 'errors' => $errors, 'warnings' => $warnings, 'status' => $status];
+    }
+    Http::json(['ok' => true, 'items' => $items, 'created' => $created, 'skipped' => $skipped]);
+}

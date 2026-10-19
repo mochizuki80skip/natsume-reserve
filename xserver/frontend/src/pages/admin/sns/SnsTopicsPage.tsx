@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
-import { CHANNEL_JA, fileToJpegDataUrl, sendJson, type Channel, type Topic } from '@/lib/sns';
+import { CHANNEL_JA, copyText, fileToJpegDataUrl, sendJson, type Channel, type Topic } from '@/lib/sns';
 import { addDays } from '@/lib/time';
 import SnsNav from '@/components/SnsNav';
 import SnsMediaPicker from '@/components/SnsMediaPicker';
@@ -79,6 +79,8 @@ export default function SnsTopicsPage() {
         </div>
       )}
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
+
+      {data.isHq && <ClaudeImport onImported={reload} />}
 
       <form onSubmit={add} className="space-y-2 rounded border bg-white p-3 text-sm">
         <div className="flex flex-wrap items-center gap-3">
@@ -210,5 +212,100 @@ function WeekdayPicker({ value, onChange, small = false }: { value: string; onCh
       ))}
       {!small && <span className="ml-1 self-center text-xs text-slate-400">{set.size ? '' : '（毎日）'}</span>}
     </span>
+  );
+}
+
+interface ImportItem { title: string; channel: Channel | 'both'; weekdays: string; areas: string; months: string; store: string; body: string; errors: string[]; warnings: string[]; status: 'ok' | 'error' | 'created' | 'duplicate' }
+
+/**
+ * claude.ai（MAX プランなど）で定型投稿を作って取り込む：①依頼文をコピー → ②claude.ai に貼る → ③返ってきた文章を貼って確認 → 取り込む。
+ * システムから AI は呼ばないので、API の費用はかからない
+ */
+function ClaudeImport({ onImported }: { onImported: () => void }) {
+  const [o, setO] = useState({ theme: '', count: 3, channel: 'gbp' as Channel | 'both', weekdays: '', perStore: false });
+  const [prompt, setPrompt] = useState('');
+  const [text, setText] = useState('');
+  const [items, setItems] = useState<ImportItem[] | null>(null);
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const CH: Record<string, string> = { gbp: 'Google', ig: 'Instagram', both: '両方' };
+
+  async function makePrompt() {
+    setBusy(true); setMsg('');
+    try {
+      const r = await sendJson<{ prompt: string }>('/api/admin/sns/topics/prompt', 'POST', o);
+      setPrompt(r.prompt);
+      const copied = await copyText(r.prompt);
+      setMsg(copied ? '依頼文をコピーしました。claude.ai を開いて貼り付け、送信してください' : '');
+    } catch (e) { setMsg((e as Error).message); }
+    setBusy(false);
+  }
+  async function check(dryRun: boolean) {
+    setBusy(true); setMsg('');
+    try {
+      const r = await sendJson<{ items: ImportItem[]; created: number; skipped: number }>('/api/admin/sns/topics/import', 'POST', { text, dryRun, channel: o.channel });
+      setItems(r.items);
+      if (r.items.length === 0) setMsg('定型投稿を読み取れませんでした。「---」で区切られた「名前：」「本文：」の形か確認してください');
+      else if (!dryRun) { setMsg(`${r.created} 件を定型投稿に登録しました${r.skipped ? `（同じものが登録済みで飛ばした ${r.skipped} 件）` : ''}`); setText(''); onImported(); }
+    } catch (e) { setMsg((e as Error).message); }
+    setBusy(false);
+  }
+  const okCount = items?.filter((i) => i.status === 'ok').length ?? 0;
+  const WDJ = ['日', '月', '火', '水', '木', '金', '土'];
+
+  return (
+    <details className="rounded border border-violet-200 bg-violet-50/40 p-3 text-sm">
+      <summary className="cursor-pointer font-bold text-violet-900">Claude で定型投稿を作って取り込む（claude.ai を使うので、システム側の費用はかかりません）</summary>
+      <div className="mt-3 space-y-4">
+        <section className="space-y-2">
+          <div className="font-bold">① 依頼文を作ってコピー</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input value={o.theme} onChange={(e) => setO({ ...o, theme: e.target.value })} placeholder="テーマ（例：冬のぎっくり腰の予防、交通事故のあとの通院）" className="min-w-80 flex-1 rounded border px-2 py-1" />
+            <label className="flex items-center gap-1">本数<input type="number" min={1} max={30} value={o.count} onChange={(e) => setO({ ...o, count: Number(e.target.value) || 1 })} className="w-16 rounded border px-1 py-1" /></label>
+            <select value={o.channel} onChange={(e) => setO({ ...o, channel: e.target.value as Channel | 'both' })} className="rounded border px-2 py-1">{(['gbp', 'ig', 'both'] as const).map((c) => <option key={c} value={c}>{CH[c]}</option>)}</select>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-slate-600">投稿する曜日</span><WeekdayPicker value={o.weekdays} onChange={(v) => setO({ ...o, weekdays: v })} />
+            <label className="flex items-center gap-1" title="店舗の一覧を依頼文に入れ、店舗ごとに違う文章を作ってもらいます（本数 × 店舗数の量になります）"><input type="checkbox" checked={o.perStore} onChange={(e) => setO({ ...o, perStore: e.target.checked })} />店舗ごとに書き分ける</label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={busy} onClick={makePrompt} className="rounded bg-violet-700 px-3 py-1.5 text-white disabled:opacity-50">依頼文をコピー</button>
+            <a href="https://claude.ai/new" target="_blank" rel="noreferrer" className="rounded border bg-white px-3 py-1.5">claude.ai を開く↗</a>
+            {o.perStore && <span className="text-xs text-amber-800">店舗ごとの書き分けは量が多くなるので、本数は 1〜2 本、返答が途中で止まったら「続けて」と送ってください。</span>}
+          </div>
+          {prompt && <details className="text-xs"><summary className="cursor-pointer text-slate-600">依頼文を見る（コピーできないときはここから選んでコピー）</summary><textarea readOnly value={prompt} rows={10} className="mt-1 w-full rounded border bg-white px-2 py-1 font-mono text-xs" /></details>}
+        </section>
+        <section className="space-y-2">
+          <div className="font-bold">② claude.ai の返答を貼り付けて確認 → 取り込む</div>
+          <textarea value={text} onChange={(e) => { setText(e.target.value); setItems(null); }} rows={8} placeholder={'claude.ai の返答をそのまま貼り付け（「---」で区切られた「名前：」「媒体：」「曜日：」「本文：」の形）'} className="w-full rounded border bg-white px-2 py-1 font-mono text-xs" />
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={busy || !text.trim()} onClick={() => check(true)} className="rounded border bg-white px-3 py-1.5 disabled:opacity-40">確認する</button>
+            {items && okCount > 0 && <button type="button" disabled={busy} onClick={() => check(false)} className="rounded bg-brand px-3 py-1.5 font-bold text-white disabled:opacity-50">{okCount} 件を定型投稿に取り込む</button>}
+            {msg && <span className="text-xs text-brand-dark">{msg}</span>}
+          </div>
+          {items && items.length > 0 && (
+            <table className="w-full rounded border bg-white text-xs">
+              <thead><tr className="bg-slate-100 text-left text-slate-600"><th className="px-2 py-1">名前</th><th className="px-2 py-1">媒体</th><th className="px-2 py-1">曜日</th><th className="px-2 py-1">店舗</th><th className="px-2 py-1">本文</th><th className="px-2 py-1">確認</th></tr></thead>
+              <tbody>
+                {items.map((it, i) => (
+                  <tr key={i} className={`border-t align-top ${it.errors.length ? 'bg-red-50' : ''}`}>
+                    <td className="px-2 py-1 font-bold">{it.title}</td>
+                    <td className="whitespace-nowrap px-2 py-1">{CH[it.channel]}</td>
+                    <td className="whitespace-nowrap px-2 py-1">{it.weekdays ? it.weekdays.split(',').map((d) => WDJ[Number(d)]).join('・') : '毎日'}</td>
+                    <td className="whitespace-nowrap px-2 py-1">{it.store || '全店共通'}</td>
+                    <td className="px-2 py-1"><div className="line-clamp-4 whitespace-pre-wrap">{it.body}</div></td>
+                    <td className="px-2 py-1">
+                      {it.status === 'created' ? <span className="text-green-700">登録しました</span> : it.status === 'duplicate' ? <span className="text-slate-500">登録済み</span> : it.errors.length ? <span className="text-red-700">{it.errors.join(' / ')}</span> : <span className="text-green-700">OK</span>}
+                      {it.warnings.length > 0 && <div className="text-amber-700">{it.warnings.join(' / ')}</div>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="text-xs text-slate-500">取り込んだ定型投稿は「全店共通」（「店舗：」がある場合はその店舗用）になります。赤い行（Google に電話番号・URL などが入っているなど）は取り込みません。黄色の注意は取り込めますが、下書きの承認前に直してください。</p>
+        </section>
+      </div>
+    </details>
   );
 }

@@ -74,6 +74,8 @@ function route_table(): array
         ['POST', '#^/api/admin/sns/posts/([0-9a-f]{24})/image$#', 'sns_post_image'],
         ['POST', '#^/api/admin/sns/generate$#', 'sns_generate'],
         ['GET', '#^/api/admin/sns/topics$#', 'sns_topics_get'],
+        ['POST', '#^/api/admin/sns/topics/prompt$#', 'sns_topics_prompt'],
+        ['POST', '#^/api/admin/sns/topics/import$#', 'sns_topics_import'],
         ['POST', '#^/api/admin/sns/topics$#', 'sns_topics_post'],
         ['PUT', '#^/api/admin/sns/topics$#', 'sns_topics_put'],
         ['POST', '#^/api/admin/sns/topics/([0-9a-f]{24})/image$#', 'sns_topic_image'],
