@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS `sns_topic` (
   `standalone` TINYINT(1) NOT NULL DEFAULT 1, -- 1: 本文をそのまま投稿文にする（差し込みのみ） / 0: 書き出し・締めの型で囲む
   `imagePath` VARCHAR(200) NULL,             -- アップロードした画像（public/media/sns/）。下書きを作るときにコピーされる
   `months` VARCHAR(40) NOT NULL DEFAULT '',  -- 使う月（例 "12,1,2"）。空なら通年
+  `weekdays` VARCHAR(20) NOT NULL DEFAULT '', -- 使う曜日（0=日〜6=土。例 "1,3,5"）。空なら毎日
+  `areas` VARCHAR(500) NOT NULL DEFAULT '',   -- 対象エリア（読点区切り。店舗の地域・店舗名・コードに含まれる店舗だけ）。空なら全店
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `useCount` INT NOT NULL DEFAULT 0,
   `lastUsedAt` DATETIME NULL,

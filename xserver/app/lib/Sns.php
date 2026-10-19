@@ -40,6 +40,8 @@ final class Sns
             ['sns_store_setting', 'vars', 'ALTER TABLE `sns_store_setting` ADD COLUMN `vars` LONGTEXT NULL'],
             ['sns_topic', 'standalone', 'ALTER TABLE `sns_topic` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 1 AFTER `body`'],
             ['sns_topic', 'imagePath', 'ALTER TABLE `sns_topic` ADD COLUMN `imagePath` VARCHAR(200) NULL AFTER `standalone`'],
+            ['sns_topic', 'weekdays', 'ALTER TABLE `sns_topic` ADD COLUMN `weekdays` VARCHAR(20) NOT NULL DEFAULT \'\' AFTER `months`'],
+            ['sns_topic', 'areas', 'ALTER TABLE `sns_topic` ADD COLUMN `areas` VARCHAR(500) NOT NULL DEFAULT \'\' AFTER `weekdays`'],
             ['sns_post', 'standalone', 'ALTER TABLE `sns_post` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 0 AFTER `patternIdx`'],
             ['sns_post', 'checkedAt', 'ALTER TABLE `sns_post` ADD COLUMN `checkedAt` DATETIME NULL AFTER `publishMode`'],
             ['sns_post', 'checkedBy', 'ALTER TABLE `sns_post` ADD COLUMN `checkedBy` VARCHAR(20) NULL AFTER `checkedAt`'],
@@ -678,29 +680,49 @@ final class Sns
 
     // ---------- ネタ ----------
     /** 次に使うネタ（使用回数が少ない → 最後に使ってから長い もの）。月の指定があればその月のものだけ */
-    public static function pickTopic(string $storeId, string $channel, string $scheduledAt, array $excludeIds = []): ?array
+    /** $strictExclude：true なら $excludeIds を候補から外す（「別の定型投稿に替える」用）。false なら後回しにするだけ */
+    public static function pickTopic(string $storeId, string $channel, string $scheduledAt, array $excludeIds = [], bool $strictExclude = false): ?array
     {
         $month = (int)substr($scheduledAt, 5, 2);
+        $weekday = (int)date('w', strtotime(substr($scheduledAt, 0, 10)));
+        $store = Settings::findStoreById($storeId);
+        $ss = $store ? self::storeSetting($store) : null;
         $rows = Db::all('SELECT * FROM sns_topic WHERE active = 1 AND (storeId = ? OR storeId IS NULL) AND channel IN (?, ?) ORDER BY useCount ASC, lastUsedAt ASC, sortOrder ASC, createdAt ASC', [$storeId, $channel, 'both']);
-        $seasonal = []; $any = [];
-        foreach ($rows as $r) {
-            if (in_array($r['id'], $excludeIds, true)) continue;
+        // 候補を、曜日・エリア・季節が「その日・その店舗に合うものほど先」に並べる
+        $ranked = [];
+        foreach ($rows as $i => $r) {
+            $recent = in_array($r['id'], $excludeIds, true);           // 最近使ったもの（同じ曜日・エリアの中で後回しにする）
+            if ($recent && $strictExclude) continue;
+            if (!self::topicFitsStore($r, $store, $ss)) continue;      // 対象エリアの外の店舗には使わない
+            $days = self::splitList((string)($r['weekdays'] ?? ''));
+            if ($days && !in_array((string)$weekday, $days, true)) continue; // 曜日の決まった定型投稿は、その曜日だけ
             $months = self::splitList($r['months']);
-            if ($months) {
-                if (in_array((string)$month, $months, true)) $seasonal[] = $r;
-            } else {
-                $any[] = $r;
-            }
+            if ($months && !in_array((string)$month, $months, true)) continue; // 季節の定型投稿は、その月だけ
+            // 優先順：曜日が決まっている → 最近使っていない → エリアが決まっている → 季節もの → 使用回数の少ない順
+            $score = [$days ? 0 : 1, $recent ? 1 : 0, trim((string)($r['areas'] ?? '')) !== '' ? 0 : 1, $months ? 0 : 1, $i];
+            $ranked[] = [$score, $r];
         }
-        // 季節のネタは、その月に未使用のものを優先する
-        return $seasonal[0] ?? $any[0] ?? null;
+        if (!$ranked) return null;
+        usort($ranked, fn($a, $b) => $a[0] <=> $b[0]);
+        return $ranked[0][1];
+    }
+
+    /** 定型投稿の「対象エリア」に、この店舗が入るか（地域・店舗名・店舗コードのどれかに語が含まれる。空なら全店） */
+    public static function topicFitsStore(array $topic, ?array $store, ?array $ss): bool
+    {
+        $areas = self::splitList((string)($topic['areas'] ?? ''));
+        if (!$areas) return true;
+        if (!$store) return false;
+        $hay = ($ss['area'] ?? '') . ' ' . $store['name'] . ' ' . $store['code'];
+        foreach ($areas as $a) if ($a !== '' && mb_stripos($hay, $a) !== false) return true;
+        return false;
     }
 
     public static function topicRow(array $r): array
     {
         return ['id' => $r['id'], 'storeId' => $r['storeId'], 'shared' => $r['storeId'] === null, 'channel' => $r['channel'], 'title' => $r['title'], 'body' => $r['body'],
             'standalone' => (bool)($r['standalone'] ?? 1), 'imageUrl' => !empty($r['imagePath']) ? self::mediaUrl($r['imagePath']) : null,
-            'months' => $r['months'], 'active' => (bool)$r['active'], 'useCount' => (int)$r['useCount'], 'lastUsedAt' => $r['lastUsedAt'], 'sortOrder' => (int)$r['sortOrder'],
+            'months' => $r['months'], 'weekdays' => (string)($r['weekdays'] ?? ''), 'areas' => (string)($r['areas'] ?? ''), 'active' => (bool)$r['active'], 'useCount' => (int)$r['useCount'], 'lastUsedAt' => $r['lastUsedAt'], 'sortOrder' => (int)$r['sortOrder'],
             'unknownPlaceholders' => self::unknownPlaceholders($r['body'])];
     }
 

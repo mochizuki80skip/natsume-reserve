@@ -267,7 +267,7 @@ function sns_post_action(array $mm): never
             $topicId = isset($b['topicId']) && is_string($b['topicId']) ? $b['topicId'] : null;
             $topic = $topicId
                 ? Db::one('SELECT * FROM sns_topic WHERE id = ? AND (storeId IS NULL OR storeId = ?)', [$topicId, $p['storeId']])
-                : Sns::pickTopic($p['storeId'], $p['channel'], $p['scheduledAt'], $p['topicId'] ? [$p['topicId']] : []);
+                : Sns::pickTopic($p['storeId'], $p['channel'], $p['scheduledAt'], $p['topicId'] ? [$p['topicId']] : [], true);
             if (!$topic) Http::error('使えるネタがありません。「ネタ」から追加してください', 404);
             $n = sns_recompose($p, $store, ['title' => $topic['title'], 'body' => $topic['body'], 'standalone' => (bool)($topic['standalone'] ?? 1)]);
             Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, standalone = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$topic['id'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['standalone'] ? 1 : 0, $p['id']]);
@@ -386,12 +386,32 @@ function sns_topics_post(): never
     $title = Http::str($b, 'title', 100, false);
     $body = Http::str($b, 'body', 1500);
     $months = sns_months($b['months'] ?? '');
+    $weekdays = sns_weekdays($b['weekdays'] ?? '');
+    $areas = sns_areas($b['areas'] ?? '');
     $standalone = array_key_exists('standalone', $b) ? Http::bool($b, 'standalone') : true;
     sns_assert_topic_gbp($ch, $body);
     $id = Db::newId();
     $max = Db::one('SELECT COALESCE(MAX(sortOrder), 0) AS m FROM sns_topic WHERE ' . ($shared ? 'storeId IS NULL' : 'storeId = ?'), $shared ? [] : [$ctx['store']['id']]);
-    Db::exec('INSERT INTO sns_topic (id, storeId, channel, title, body, standalone, months, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [$id, $shared ? null : $ctx['store']['id'], $ch, $title, $body, $standalone ? 1 : 0, $months, (int)$max['m'] + 1]);
+    Db::exec('INSERT INTO sns_topic (id, storeId, channel, title, body, standalone, months, weekdays, areas, sortOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [$id, $shared ? null : $ctx['store']['id'], $ch, $title, $body, $standalone ? 1 : 0, $months, $weekdays, $areas, (int)$max['m'] + 1]);
     Http::json(['ok' => true, 'id' => $id, 'unknownPlaceholders' => Sns::unknownPlaceholders($body)]);
+}
+
+/** 曜日（0=日〜6=土）の一覧 "1,3,5"。空なら毎日 */
+function sns_weekdays(mixed $v): string
+{
+    $list = is_array($v) ? $v : Sns::splitList((string)$v);
+    $out = [];
+    foreach ($list as $d) { if (is_numeric($d) && (int)$d >= 0 && (int)$d <= 6) $out[] = (int)$d; }
+    $out = array_values(array_unique($out)); sort($out);
+    return implode(',', $out);
+}
+
+/** 対象エリア（読点区切りの語。店舗の地域・店舗名・店舗コードに含まれていれば対象）。空なら全店 */
+function sns_areas(mixed $v): string
+{
+    $list = is_array($v) ? array_map('strval', $v) : Sns::splitList((string)$v);
+    $list = array_values(array_unique(array_filter(array_map(fn($x) => mb_substr(trim($x), 0, 30), $list), fn($x) => $x !== '')));
+    return mb_substr(implode('、', $list), 0, 500);
 }
 
 function sns_months(mixed $v): string
@@ -424,10 +444,12 @@ function sns_topics_put(): never
     $title = array_key_exists('title', $b) ? Http::str($b, 'title', 100, false) : $t['title'];
     $body = array_key_exists('body', $b) ? Http::str($b, 'body', 1500) : $t['body'];
     $months = array_key_exists('months', $b) ? sns_months($b['months']) : $t['months'];
+    $weekdays = array_key_exists('weekdays', $b) ? sns_weekdays($b['weekdays']) : (string)($t['weekdays'] ?? '');
+    $areas = array_key_exists('areas', $b) ? sns_areas($b['areas']) : (string)($t['areas'] ?? '');
     $active = array_key_exists('active', $b) ? Http::bool($b, 'active') : (bool)$t['active'];
     $standalone = array_key_exists('standalone', $b) ? Http::bool($b, 'standalone') : (bool)($t['standalone'] ?? 1);
     sns_assert_topic_gbp($ch, $body);
-    Db::exec('UPDATE sns_topic SET channel = ?, title = ?, body = ?, months = ?, active = ?, standalone = ? WHERE id = ?', [$ch, $title, $body, $months, $active ? 1 : 0, $standalone ? 1 : 0, $t['id']]);
+    Db::exec('UPDATE sns_topic SET channel = ?, title = ?, body = ?, months = ?, weekdays = ?, areas = ?, active = ?, standalone = ? WHERE id = ?', [$ch, $title, $body, $months, $weekdays, $areas, $active ? 1 : 0, $standalone ? 1 : 0, $t['id']]);
     Http::json(['ok' => true, 'unknownPlaceholders' => Sns::unknownPlaceholders($body)]);
 }
 
@@ -523,6 +545,7 @@ function hq_sns_topic_broadcast(array $mm): never
         $st = Settings::storeRow($st);
         $ss = Sns::storeSetting($st);
         if (!($ch === 'ig' ? $ss['igEnabled'] : $ss['gbpEnabled'])) { $skipped[] = $st['name'] . '（' . Sns::CHANNEL_JA[$ch] . ' を使わない設定）'; continue; }
+        if (!Sns::topicFitsStore($t, $st, $ss)) { $skipped[] = $st['name'] . '（対象エリアの外）'; continue; }
         if (Db::one('SELECT id FROM sns_post WHERE storeId = ? AND channel = ? AND topicId = ? AND scheduledAt = ?', [$st['id'], $ch, $t['id'], $at])) { $skipped[] = $st['name'] . '（同じ日時に作成済み）'; continue; }
         $id = Sns::createPost($st, $ss, $ch, $at, $t, random_int(0, 9), 'manual');
         $row = Db::one('SELECT postText, imagePath FROM sns_post WHERE id = ?', [$id]);

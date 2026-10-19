@@ -23,7 +23,7 @@ export interface Post {
 }
 export interface Media { id: string; shared: boolean; url: string; label: string; channel: Channel | 'both'; width: number; height: number; active: boolean; useCount: number; lastUsedAt: string | null; createdAt: string }
 export const IMAGE_KIND_JA: Record<Post['imageKind'], string> = { none: 'なし', template: '定型画像', upload: '写真', topic: '定型投稿の画像', library: 'ライブラリの画像' };
-export interface Topic { id: string; storeId: string | null; shared: boolean; channel: Channel | 'both'; title: string; body: string; standalone: boolean; imageUrl: string | null; months: string; active: boolean; useCount: number; lastUsedAt: string | null; sortOrder: number; unknownPlaceholders: string[] }
+export interface Topic { id: string; storeId: string | null; shared: boolean; channel: Channel | 'both'; title: string; body: string; standalone: boolean; imageUrl: string | null; months: string; weekdays: string; areas: string; active: boolean; useCount: number; lastUsedAt: string | null; sortOrder: number; unknownPlaceholders: string[] }
 export interface VarDef { key: string; label: string; default: string }
 export interface AccountRow { channel: Channel; externalId: string; username: string; locationName: string; connected: boolean; tokenExpiresAt: string | null; tokenRefreshedAt: string | null; lastError: string | null; updatedAt: string }
 export interface StoreSetting {

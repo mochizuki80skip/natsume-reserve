@@ -19,7 +19,7 @@ export default function SnsTopicsPage() {
   const storeQ = me.session.role === 'hq' && sp.get('store') ? `store=${encodeURIComponent(sp.get('store')!)}` : '';
   const { data, error, reload } = useFetch<Resp>(`/api/admin/sns/topics?${storeQ}`);
   const [msg, setMsg] = useState('');
-  const [nf, setNf] = useState({ shared: me.session.role === 'hq', channel: 'both' as Channel | 'both', title: '', body: '', months: '', standalone: true });
+  const [nf, setNf] = useState({ shared: me.session.role === 'hq', channel: 'both' as Channel | 'both', title: '', body: '', months: '', weekdays: '', areas: '', standalone: true });
   const [edit, setEdit] = useState<Topic | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -31,8 +31,8 @@ export default function SnsTopicsPage() {
     setMsg('');
     try { await fn(); if (ok) setMsg(ok); reload(); } catch (e) { setMsg((e as Error).message); }
   }
-  const add = (e: React.FormEvent) => { e.preventDefault(); run(async () => { const r = await sendJson<{ unknownPlaceholders: string[] }>(`/api/admin/sns/topics?${storeQ}`, 'POST', nf); setNf({ ...nf, title: '', body: '', months: '' }); setPreview(null); if (r.unknownPlaceholders.length) throw new Error(`追加しました。ただし未定義の差し込み語があります：${r.unknownPlaceholders.join(' ')}（本部の SNS 管理で定義するか、本文を直してください）`); }, '定型投稿を追加しました'); };
-  const saveEdit = () => edit && run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: edit.id, title: edit.title, body: edit.body, channel: edit.channel, months: edit.months, standalone: edit.standalone }), '保存しました').then(() => setEdit(null));
+  const add = (e: React.FormEvent) => { e.preventDefault(); run(async () => { const r = await sendJson<{ unknownPlaceholders: string[] }>(`/api/admin/sns/topics?${storeQ}`, 'POST', nf); setNf({ ...nf, title: '', body: '', months: '', weekdays: '', areas: '' }); setPreview(null); if (r.unknownPlaceholders.length) throw new Error(`追加しました。ただし未定義の差し込み語があります：${r.unknownPlaceholders.join(' ')}（本部の SNS 管理で定義するか、本文を直してください）`); }, '定型投稿を追加しました'); };
+  const saveEdit = () => edit && run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: edit.id, title: edit.title, body: edit.body, channel: edit.channel, months: edit.months, weekdays: edit.weekdays, areas: edit.areas, standalone: edit.standalone }), '保存しました').then(() => setEdit(null));
   const toggle = (t: Topic) => run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: t.id, active: !t.active }), t.active ? '使わないようにしました' : '使うようにしました');
   const del = (t: Topic) => confirm('この定型投稿を削除しますか？（作成済みの下書きは残ります）') && run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: t.id, action: 'delete' }), '削除しました');
   const bulkDel = () => sel.size > 0 && confirm(`${sel.size} 件を削除しますか？`) && run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: [...sel][0], action: 'bulk_delete', ids: [...sel] }), '削除しました').then(() => setSel(new Set()));
@@ -88,6 +88,11 @@ export default function SnsTopicsPage() {
           <input value={nf.months} onChange={(e) => setNf({ ...nf, months: e.target.value })} placeholder="使う月（例 12,1,2。空なら通年）" className="w-56 rounded border px-2 py-1" />
           <label className="flex items-center gap-1" title="オフにすると、見出し＋本文として扱い、書き出し・締め・ハッシュタグ・営業時間の型で囲みます"><input type="checkbox" checked={nf.standalone} onChange={(e) => setNf({ ...nf, standalone: e.target.checked })} />本文をそのまま投稿文にする</label>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-slate-600">投稿する曜日</span><WeekdayPicker value={nf.weekdays} onChange={(v) => setNf({ ...nf, weekdays: v })} />
+          <input value={nf.areas} onChange={(e) => setNf({ ...nf, areas: e.target.value })} placeholder="対象エリア（例：沼津、三島。空なら全店）" className="w-72 rounded border px-2 py-1" />
+        </div>
+        <p className="text-xs text-slate-500">曜日を選ぶと、その曜日の予定にだけこの定型投稿が使われます（例：月曜は「月_お悩み共感」）。対象エリアを入れると、地域・店舗名にその語を含む店舗だけに使われます。店舗の投稿の曜日は「設定」（または「接続状況」の既定の頻度）で、定型投稿の曜日と同じにしておきます。</p>
         <input value={nf.title} onChange={(e) => setNf({ ...nf, title: e.target.value })} placeholder={nf.standalone ? '名前（一覧用。投稿文には入りません。例：駅チカ案内）' : '見出し（投稿文の先頭に入ります）'} className="w-full rounded border px-2 py-1" />
         <textarea value={nf.body} onChange={(e) => setNf({ ...nf, body: e.target.value })} required rows={6} placeholder={nf.standalone ? '投稿文（差し込み語入り）。例：{エリア}で{メインキーワード}をお探しなら{店舗名}へ。\n\nご予約はこちら {予約URL}\n\n{ハッシュタグ}' : '本文（店名・締め・ハッシュタグは型から自動で付きます）'} className="w-full rounded border px-2 py-1" />
         <div className="flex flex-wrap items-center gap-2">
@@ -113,14 +118,18 @@ export default function SnsTopicsPage() {
             {list.some(canEdit) && <button type="button" disabled={![...sel].some((id) => list.some((t) => t.id === id))} onClick={bulkDel} className="ml-auto rounded border px-2 py-0.5 text-xs text-red-700 disabled:opacity-40">選択を削除</button>}
           </h2>
           <table className="w-full text-sm">
-            <thead><tr className="bg-slate-100 text-left text-xs text-slate-600"><th className="w-8 px-2 py-1"></th><th className="px-2 py-1">画像</th><th className="px-2 py-1">媒体</th><th className="px-2 py-1">月</th><th className="px-2 py-1">名前／投稿文</th><th className="px-2 py-1">使用</th><th className="px-2 py-1"></th></tr></thead>
+            <thead><tr className="bg-slate-100 text-left text-xs text-slate-600"><th className="w-8 px-2 py-1"></th><th className="px-2 py-1">画像</th><th className="px-2 py-1">媒体</th><th className="px-2 py-1">月・曜日・エリア</th><th className="px-2 py-1">名前／投稿文</th><th className="px-2 py-1">使用</th><th className="px-2 py-1"></th></tr></thead>
             <tbody>
               {list.map((t) => edit?.id === t.id ? (
                 <tr key={t.id} className="border-t bg-yellow-50">
                   <td></td>
                   <td className="px-2 py-1">{t.imageUrl && <img src={t.imageUrl} alt="" className="h-16 w-16 rounded object-cover" />}</td>
                   <td className="px-2 py-1"><select value={edit.channel} onChange={(e) => setEdit({ ...edit, channel: e.target.value as Channel | 'both' })} className="rounded border px-1">{(['both', 'ig', 'gbp'] as const).map((c) => <option key={c} value={c}>{CH_LABEL[c]}</option>)}</select></td>
-                  <td className="px-2 py-1"><input value={edit.months} onChange={(e) => setEdit({ ...edit, months: e.target.value })} className="w-20 rounded border px-1" /></td>
+                  <td className="space-y-1 px-2 py-1 text-xs">
+                    <label className="block">月<input value={edit.months} onChange={(e) => setEdit({ ...edit, months: e.target.value })} placeholder="空なら通年" className="ml-1 w-20 rounded border px-1" /></label>
+                    <WeekdayPicker value={edit.weekdays} onChange={(v) => setEdit({ ...edit, weekdays: v })} small />
+                    <input value={edit.areas} onChange={(e) => setEdit({ ...edit, areas: e.target.value })} placeholder="対象エリア（空なら全店）" className="w-36 rounded border px-1" />
+                  </td>
                   <td className="px-2 py-1">
                     <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} className="mb-1 w-full rounded border px-1" />
                     <textarea value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} rows={6} className="w-full rounded border px-1" />
@@ -137,7 +146,11 @@ export default function SnsTopicsPage() {
                     {canEdit(t) && <div className="mt-1 flex flex-wrap gap-1 text-xs"><button type="button" onClick={() => setPickFor(t)} className="text-brand underline">ライブラリから</button><label className="cursor-pointer text-brand underline">アップロード<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(t, e.target.files[0])} /></label>{t.imageUrl && <button type="button" onClick={() => removeImage(t)} className="text-red-700 underline">外す</button>}</div>}
                   </td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs">{CH_LABEL[t.channel]}</td>
-                  <td className="whitespace-nowrap px-2 py-1 text-xs">{t.months ? t.months.split(',').map((m) => `${m}月`).join(' ') : '通年'}</td>
+                  <td className="whitespace-nowrap px-2 py-1 text-xs">
+                    <div>{t.months ? t.months.split(',').map((m) => `${m}月`).join(' ') : '通年'}</div>
+                    <div className={t.weekdays ? 'font-bold text-brand-dark' : 'text-slate-400'}>{t.weekdays ? t.weekdays.split(',').map((d) => WD[Number(d)]).join('・') + '曜' : '毎日'}</div>
+                    <div className={t.areas ? 'font-bold text-brand-dark' : 'text-slate-400'}>{t.areas || '全店'}</div>
+                  </td>
                   <td className="px-2 py-1">
                     <div className="font-bold">{t.title || '（名前なし）'}{!t.standalone && <span className="ml-2 rounded bg-slate-100 px-1 text-xs font-normal text-slate-600">型で囲む</span>}</div>
                     <div className="whitespace-pre-wrap text-xs text-slate-600">{t.body}</div>
@@ -181,5 +194,21 @@ function BroadcastDialog({ bc, setBc, topic, storeCount, onRun }: { bc: { id: st
         <div className="flex justify-end gap-2"><button type="button" onClick={() => setBc(null)} className="rounded border px-3 py-1">やめる</button><button type="button" onClick={onRun} className="rounded bg-brand px-3 py-1 text-white">下書きを作る</button></div>
       </div>
     </div>
+  );
+}
+
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** 曜日の選択（"1,3,5" の形で持つ。何も選ばなければ毎日） */
+function WeekdayPicker({ value, onChange, small = false }: { value: string; onChange: (v: string) => void; small?: boolean }) {
+  const set = new Set(value.split(',').filter((x) => x !== '').map(Number));
+  const toggle = (d: number) => { const n = new Set(set); if (n.has(d)) n.delete(d); else n.add(d); onChange([...n].sort((a, b) => a - b).join(',')); };
+  return (
+    <span className="inline-flex gap-0.5">
+      {WD.map((w, d) => (
+        <button key={d} type="button" onClick={() => toggle(d)} className={`rounded border ${small ? 'px-1 text-xs' : 'px-1.5 py-0.5 text-xs'} ${set.has(d) ? 'border-brand bg-brand text-white' : 'bg-white text-slate-600'}`}>{w}</button>
+      ))}
+      {!small && <span className="ml-1 self-center text-xs text-slate-400">{set.size ? '' : '（毎日）'}</span>}
+    </span>
   );
 }

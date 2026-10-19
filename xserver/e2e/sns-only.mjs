@@ -141,6 +141,31 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   ok('差し込み語の一覧に {電話} が無い', Array.isArray(tv.vars) && !tv.vars.some((v) => v.key === '電話'));
   for (const c of [code, code2]) await fetch(`${BASE}/api/admin/hq/stores`, { method: 'PUT', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ code: c, action: 'delete' }) });
 }
+// 定型投稿の曜日・対象エリア：月・水・金の定型投稿がそれぞれの曜日に使われ、対象エリア外の店舗には使われない
+{
+  const cookie = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
+  const H = { cookie, 'Content-Type': 'application/json' };
+  const mk = async (title, weekdays, areas = '') => (await (await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { method: 'POST', headers: H, body: JSON.stringify({ shared: true, channel: 'gbp', title, body: `${title}：{エリア}の{店舗名}です。`, months: '', weekdays, areas, standalone: true }) })).json()).id;
+  const ids = [await mk('月_曜日テスト', '1'), await mk('水_曜日テスト', '3'), await mk('金_曜日テスト', '5'), await mk('月_浜松だけ', '1', '浜松')];
+  ok('曜日・エリア付きの定型投稿を登録', ids.every(Boolean));
+  const tl = await (await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { headers: { cookie } })).json();
+  const t1 = tl.topics.find((t) => t.id === ids[0]);
+  ok('定型投稿に曜日・エリアが保存される', t1?.weekdays === '1' && tl.topics.find((t) => t.id === ids[3])?.areas === '浜松');
+  await fetch(`${BASE}/api/admin/sns/settings?store=S002`, { method: 'PUT', headers: H, body: JSON.stringify({ gbpEnabled: true, gbpSchedule: { type: 'weekly', weekdays: [1, 3, 5], hour: 10, minute: 0 }, area: '沼津市' }) });
+  // S002 の先の Google の下書きを消してから作り直す
+  const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+  const plus = (n) => new Date(new Date(today).getTime() + n * 86400e3).toISOString().slice(0, 10);
+  const old = await (await fetch(`${BASE}/api/admin/sns/posts?store=S002&channel=gbp&from=${plus(1)}&to=${plus(30)}`, { headers: { cookie } })).json();
+  for (const p of old.posts) if (p.status !== 'posted') await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
+  await fetch(`${BASE}/api/admin/sns/generate?store=S002&days=21`, { method: 'POST', headers: H, body: '{}' });
+  const made = (await (await fetch(`${BASE}/api/admin/sns/posts?store=S002&channel=gbp&from=${plus(1)}&to=${plus(21)}`, { headers: { cookie } })).json()).posts;
+  const WD = ['日', '月', '火', '水', '木', '金', '土'];
+  const wrong = made.filter((p) => !p.title.startsWith(WD[new Date(p.scheduledAt.slice(0, 10) + 'T00:00:00Z').getUTCDay()] + '_'));
+  ok('月・水・金の下書きにそれぞれの曜日の定型投稿が使われる', made.length >= 6 && wrong.length === 0, `${made.length} 件、合わない ${wrong.map((p) => p.scheduledAt.slice(0, 10) + p.title).join(' ')}`);
+  ok('対象エリア外（浜松）の定型投稿は使われない', made.every((p) => !p.title.includes('浜松')));
+  for (const id of ids) await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { method: 'PUT', headers: H, body: JSON.stringify({ id, action: 'delete' }) });
+  for (const p of made) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
+}
 const ck = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
 ok('Instagram の API 連携は使える', (await fetch(`${BASE}/api/admin/sns/ig/connect?store=S001`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);
 ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api/admin/sns/google/connect`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);
