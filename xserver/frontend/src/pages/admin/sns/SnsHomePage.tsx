@@ -70,12 +70,18 @@ export default function SnsHomePage() {
       reload();
     } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   }
+  type ApproveResult = { approved: number; problems: { storeName: string; scheduledAt: string; title: string; reason: string }[] };
+  const approveMsg = (r: ApproveResult) => `${r.approved} 件を承認しました${r.problems.length ? `。承認できなかったもの ${r.problems.length} 件：${r.problems.slice(0, 3).map((x) => `${x.storeName} ${x.scheduledAt.slice(5, 10)} ${x.reason}`).join(' ／ ')}` : ''}`;
   async function bulkApprove() {
     if (sel.size === 0 || !confirm(`${sel.size} 件を承認しますか？内容は確認済みですか？`)) return;
     setBusy(true);
-    const errs: string[] = []; let n = 0;
-    for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'approve' }); n++; } catch (e) { errs.push((e as Error).message); } }
-    setMsg(`${n} 件を承認しました${errs.length ? `。承認できなかったもの：${errs.slice(0, 3).join(' / ')}` : ''}`);
+    try { setMsg(approveMsg(await sendJson<ApproveResult>('/api/admin/sns/posts/approve', 'POST', { ids: [...sel] }))); } catch (e) { setMsg((e as Error).message); }
+    setSel(new Set()); setBusy(false); reload();
+  }
+  async function approveFromTopics(n: number) {
+    if (!confirm(`確認済みの定型投稿から作った下書き ${n} 件を、まとめて承認しますか？\n（店舗ごとの差し込み語に問題があるものは承認されず、承認待ちに残ります）`)) return;
+    setBusy(true);
+    try { setMsg(approveMsg(await sendJson<ApproveResult>('/api/admin/sns/posts/approve', 'POST', { fromTopics: true }))); } catch (e) { setMsg((e as Error).message); }
     setSel(new Set()); setBusy(false); reload();
   }
   async function del(p: Post) {
@@ -119,7 +125,11 @@ export default function SnsHomePage() {
           <h2 className="text-lg font-bold">承認待ち <span className="text-sm font-normal text-slate-500">{data.pending.length}件</span></h2>
           {data.pending.length > 0 && <span className="ml-auto flex items-center gap-2 text-xs"><label className="flex items-center gap-1"><input type="checkbox" checked={sel.size > 0 && sel.size === data.pending.length} onChange={(e) => setSel(e.target.checked ? new Set(data.pending.map((p) => p.id)) : new Set())} />すべて選択</label><button type="button" disabled={busy || sel.size === 0} onClick={bulkApprove} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択を承認</button></span>}
         </div>
-        <p className="px-4 pt-2 text-xs text-slate-500">承認されていない下書きは、予定時刻になっても投稿されません。開いて内容を確認し「承認する」を押してください。下書きは毎朝自動で {data.daysAhead} 日先まで作られます。</p>
+        {(st.pendingFromTopics ?? 0) > 0 && <div className="mx-4 mt-3 flex flex-wrap items-center gap-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm">
+          <span>確認済みの定型投稿から作った下書きが <b>{st.pendingFromTopics}</b> 件あります（文章は確認済みで、エリア・キーワードなどが店舗ごとに変わるだけのもの）。</span>
+          <button type="button" disabled={busy} onClick={() => approveFromTopics(st.pendingFromTopics ?? 0)} className="rounded bg-emerald-600 px-3 py-1 font-bold text-white disabled:opacity-50">まとめて承認</button>
+        </div>}
+        <p className="px-4 pt-2 text-xs text-slate-500">「定型投稿・ネタ」で文章を「確認済み」にしておくと、そこから作る下書きは自動で承認されます。承認されていない下書きは、予定時刻になっても投稿されません。開いて内容を確認し「承認する」を押してください。下書きは毎朝自動で {data.daysAhead} 日先まで作られます。</p>
         <PostTable posts={data.pending} empty="承認待ちはありません" showStore={isHq} sel={sel} onSel={onSel} onDelete={del} />
       </section>
       {data.failed.length > 0 && (

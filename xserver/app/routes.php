@@ -68,6 +68,7 @@ function route_table(): array
         ['GET', '#^/api/admin/sns/manual$#', 'sns_manual_get'],
         ['GET', '#^/api/admin/sns/posts$#', 'sns_posts_get'],
         ['POST', '#^/api/admin/sns/posts$#', 'sns_posts_post'],
+        ['POST', '#^/api/admin/sns/posts/approve$#', 'sns_posts_approve'],
         ['GET', '#^/api/admin/sns/posts/([0-9a-f]{24})$#', 'sns_post_get'],
         ['PUT', '#^/api/admin/sns/posts/([0-9a-f]{24})$#', 'sns_post_put'],
         ['POST', '#^/api/admin/sns/posts/([0-9a-f]{24})/action$#', 'sns_post_action'],

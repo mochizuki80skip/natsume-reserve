@@ -4,7 +4,7 @@ import { useAdmin } from '@/pages/admin/Layout';
 import { SNS_ONLY } from '@/lib/mode';
 import { useFetch } from '@/lib/api';
 
-export interface HomeStatus { pending: number; approved: number; failed: number; ig: { enabled: number; connected: number }; google: 'manual' | 'ok' | 'nolocation' | 'none'; googleMapped: number; line: 'ok' | 'mail' | 'none' }
+export interface HomeStatus { pending: number; pendingFromTopics?: number; approved: number; failed: number; ig: { enabled: number; connected: number }; google: 'manual' | 'ok' | 'nolocation' | 'none'; googleMapped: number; line: 'ok' | 'mail' | 'none' }
 interface HomeResp { status: HomeStatus; manual: { id: string }[]; byStore: { code: string; name: string; ig: Record<string, number>; gbp: Record<string, number> }[] }
 
 export default function SnsShell() {

@@ -55,9 +55,10 @@ export default function SnsDraftsPage() {
     if (ids.length === 0) return;
     if (ids.length > 1 && !confirm(`${ids.length} 件を承認しますか？内容は確認済みですか？`)) return;
     setBusy(true); setMsg('');
-    const errs: string[] = []; let n = 0;
-    for (const id of ids) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'approve' }); n++; } catch (e) { errs.push((e as Error).message); } }
-    setMsg(`${n} 件を承認しました${errs.length ? `。承認できなかったもの：${errs.slice(0, 3).join(' / ')}` : ''}`);
+    try {
+      const r = await sendJson<{ approved: number; problems: { storeName: string; scheduledAt: string; reason: string }[] }>('/api/admin/sns/posts/approve', 'POST', { ids });
+      setMsg(`${r.approved} 件を承認しました${r.problems.length ? `。承認できなかったもの：${r.problems.slice(0, 3).map((x) => `${x.storeName} ${x.scheduledAt.slice(5, 10)} ${x.reason}`).join(' / ')}` : ''}`);
+    } catch (e) { setMsg((e as Error).message); }
     setSel(new Set()); setBusy(false); reload();
   }
   async function remove(p: Post) {

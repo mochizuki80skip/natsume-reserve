@@ -49,6 +49,8 @@ final class Sns
             ['sns_setting', 'gbpManual', 'ALTER TABLE `sns_setting` ADD COLUMN `gbpManual` TINYINT(1) NOT NULL DEFAULT 0'],
             ['sns_store_setting', 'gbpPostUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `gbpPostUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
             ['sns_store_setting', 'igProfileUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `igProfileUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
+            ['sns_topic', 'approvedAt', 'ALTER TABLE `sns_topic` ADD COLUMN `approvedAt` DATETIME NULL'],
+            ['sns_topic', 'approvedBy', 'ALTER TABLE `sns_topic` ADD COLUMN `approvedBy` VARCHAR(20) NULL'],
             ['sns_store_setting', 'areaGroup', 'ALTER TABLE `sns_store_setting` ADD COLUMN `areaGroup` VARCHAR(50) NOT NULL DEFAULT \'\' AFTER `area`'],
         ];
         // 投稿ページの URL は長いことがある（Google の管理画面の URL など）ので 2000 文字まで入るようにする
@@ -795,6 +797,7 @@ final class Sns
         return ['id' => $r['id'], 'storeId' => $r['storeId'], 'shared' => $r['storeId'] === null, 'channel' => $r['channel'], 'title' => $r['title'], 'body' => $r['body'],
             'standalone' => (bool)($r['standalone'] ?? 1), 'imageUrl' => !empty($r['imagePath']) ? self::mediaUrl($r['imagePath']) : null,
             'months' => $r['months'], 'weekdays' => (string)($r['weekdays'] ?? ''), 'areas' => (string)($r['areas'] ?? ''), 'active' => (bool)$r['active'], 'useCount' => (int)$r['useCount'], 'lastUsedAt' => $r['lastUsedAt'], 'sortOrder' => (int)$r['sortOrder'],
+            'approved' => !empty($r['approvedAt']), 'approvedAt' => $r['approvedAt'] ?? null, 'approvedBy' => $r['approvedBy'] ?? null,
             'unknownPlaceholders' => self::unknownPlaceholders($r['body'])];
     }
 
@@ -845,7 +848,39 @@ final class Sns
         if ($imagePath === null) [$imagePath, $imageKind, $mediaId] = self::assignLibraryImage($store['id'], $channel, $id, null, $scheduledAt, $ss);
         Db::exec('INSERT INTO sns_post (id, storeId, channel, scheduledAt, status, topicId, title, body, closing, hashtags, postText, patternIdx, standalone, imagePath, imageKind, mediaId, source, publishMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
             $id, $store['id'], $channel, $scheduledAt, 'draft', $topic['id'] ?? null, $title, $body, $c['closing'], $c['hashtags'], $c['fullText'], $idx, $standalone ? 1 : 0, $imagePath, $imageKind, $mediaId, $source, self::publishModeFor($store, $channel)]);
+        self::autoApprove($id, $store, $topic);
         return $id;
+    }
+
+    /** 承認できない理由（問題が無ければ null）。店舗ごとの差し込み語・禁止語・Google に載せない情報・Instagram の画像を確かめる */
+    public static function readyProblem(array $p, array $store): ?string
+    {
+        if (mb_strlen(trim($p['postText'])) === 0) return '本文が空です';
+        $hits = self::complianceHits($p['postText']);
+        if ($p['channel'] === 'gbp' && $hits) return 'Google の投稿に広告規制の語が含まれています: ' . implode('、', $hits);
+        $unfilled = self::unfilledIn($p['postText']);
+        if ($unfilled) return '埋まっていない差し込み語があります: ' . implode(' ', $unfilled) . '（この店舗の SNS 設定で値を入れるか、本文を直してください）';
+        if ($p['channel'] === 'gbp') {
+            $g = self::gbpInfoHits($p['postText'], $store, self::storeSetting($store));
+            if ($g) return 'Google の投稿文には GBP に載っている情報を入れません: ' . implode('、', $g) . '。本文から外してください（予約は「予約」ボタンが自動で付きます）';
+        }
+        if ($p['channel'] === 'ig' && !$p['imagePath'] && self::publishModeFor($store, 'ig') === 'api') return 'Instagram の投稿には画像が必要です。画像ライブラリから選ぶか、写真をアップロードしてください';
+        return null;
+    }
+
+    /**
+     * 確認済みの定型投稿から作った下書きを承認する（文章を手で変えていないもの）。
+     * 店舗ごとの差し込み語を入れた結果に問題があれば下書きのまま残す。@return bool 承認したか
+     */
+    public static function autoApprove(string $postId, array $store, ?array $topic): bool
+    {
+        if (!$topic || empty($topic['approvedAt'])) return false;
+        $p = Db::one('SELECT * FROM sns_post WHERE id = ?', [$postId]);
+        if (!$p || $p['status'] !== 'draft' || $p['topicId'] !== $topic['id'] || $p['title'] !== $topic['title'] || $p['body'] !== $topic['body']) return false;
+        if (self::readyProblem($p, $store) !== null) return false;
+        Db::exec('UPDATE sns_post SET status = ?, approvedAt = ?, approvedBy = ?, error = NULL, manualNotifiedAt = NULL, publishMode = ? WHERE id = ?',
+            ['approved', Time::nowJstDateTime(), (string)($topic['approvedBy'] ?? 'hq'), self::publishModeFor($store, $p['channel']), $p['id']]);
+        return true;
     }
 
     /**

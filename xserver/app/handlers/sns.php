@@ -62,16 +62,68 @@ const SNS_RESET_CHECKS = "status = 'draft', checkedAt = NULL, checkedBy = NULL, 
 /** 承認の前に、投稿できる内容かを確かめる（問題があれば例外） */
 function sns_assert_ready(array $p, array $store): void
 {
-    if (mb_strlen(trim($p['postText'])) === 0) throw new HttpError(400, '本文が空です');
-    $hits = Sns::complianceHits($p['postText']);
-    if ($p['channel'] === 'gbp' && $hits) throw new HttpError(400, 'Google の投稿に広告規制の語が含まれています: ' . implode('、', $hits));
-    $unfilled = Sns::unfilledIn($p['postText']);
-    if ($unfilled) throw new HttpError(400, '埋まっていない差し込み語があります: ' . implode(' ', $unfilled) . '（この店舗の SNS 設定で値を入れるか、本文を直してください）');
-    if ($p['channel'] === 'gbp') {
-        $g = Sns::gbpInfoHits($p['postText'], $store, Sns::storeSetting($store));
-        if ($g) throw new HttpError(400, 'Google の投稿文には GBP に載っている情報を入れません: ' . implode('、', $g) . '。本文から外してください（予約は「予約」ボタンが自動で付きます）');
+    $problem = Sns::readyProblem($p, $store);
+    if ($problem !== null) throw new HttpError(400, $problem);
+}
+
+/**
+ * 下書きをまとめて承認する。問題があるものは下書きのまま残し、理由を返す。
+ * @return array{approved:int, problems:list<array{id:string, storeName:string, scheduledAt:string, title:string, reason:string}>}
+ */
+function sns_approve_rows(array $rows, string $by): array
+{
+    $stores = []; $n = 0; $problems = [];
+    $now = Time::nowJstDateTime();
+    foreach ($rows as $p) {
+        if (!in_array($p['status'], ['draft', 'failed'], true)) continue;
+        $store = $stores[$p['storeId']] ??= Settings::findStoreById($p['storeId']);
+        if (!$store) continue;
+        $problem = Sns::readyProblem($p, $store);
+        if ($problem !== null) {
+            $problems[] = ['id' => $p['id'], 'storeName' => $store['name'], 'scheduledAt' => substr($p['scheduledAt'], 0, 16), 'title' => $p['title'], 'reason' => $problem];
+            continue;
+        }
+        Db::exec('UPDATE sns_post SET status = ?, approvedAt = ?, approvedBy = ?, error = NULL, manualNotifiedAt = NULL, publishMode = ? WHERE id = ? AND status IN (?, ?)',
+            ['approved', $now, $by, Sns::publishModeFor($store, $p['channel']), $p['id'], 'draft', 'failed']);
+        $n++;
     }
-    if ($p['channel'] === 'ig' && !$p['imagePath'] && Sns::publishModeFor($store, 'ig') === 'api') throw new HttpError(400, 'Instagram の投稿には画像が必要です。画像ライブラリから選ぶか、写真をアップロードしてください');
+    return ['approved' => $n, 'problems' => $problems];
+}
+
+/** 確認済みの定型投稿から作った下書き（文章を手で変えていないもの）。$topicIds を渡すとその定型投稿だけ */
+function sns_drafts_from_approved_topics(?string $storeId, ?array $topicIds = null, bool $countOnly = false): array|int
+{
+    $sql = "FROM sns_post p JOIN sns_topic t ON t.id = p.topicId WHERE p.status = 'draft' AND t.approvedAt IS NOT NULL AND p.title = t.title AND p.body = t.body";
+    $args = [];
+    if ($storeId !== null) { $sql .= ' AND p.storeId = ?'; $args[] = $storeId; }
+    if ($topicIds !== null) {
+        if (!$topicIds) return $countOnly ? 0 : [];
+        $sql .= ' AND t.id IN (' . Db::inList($topicIds) . ')';
+        $args = array_merge($args, $topicIds);
+    }
+    if ($countOnly) return (int)Db::one("SELECT COUNT(*) AS n $sql", $args)['n'];
+    return Db::all("SELECT p.* $sql ORDER BY p.scheduledAt ASC", $args);
+}
+
+/**
+ * まとめて承認（POST /api/admin/sns/posts/approve）
+ * body: {ids: [...]} 選んだ下書き ／ {fromTopics: true} 確認済みの定型投稿から作った下書きすべて。本部は全店、店舗は自店舗
+ */
+function sns_posts_approve(): never
+{
+    Sns::ensureTables();
+    $s = Auth::requireSession();
+    Http::requireJson();
+    $b = Http::body();
+    $storeId = $s['role'] === 'hq' ? null : (Auth::resolveStore($s)['id'] ?? Http::error('店舗が登録されていません', 404));
+    if (($b['fromTopics'] ?? false) === true) {
+        $rows = sns_drafts_from_approved_topics($storeId);
+    } else {
+        $ids = array_values(array_filter(is_array($b['ids'] ?? null) ? $b['ids'] : [], 'is_string'));
+        if (!$ids) Http::error('承認する投稿を選んでください', 400);
+        $rows = Db::all('SELECT * FROM sns_post WHERE id IN (' . Db::inList($ids) . ')' . ($storeId !== null ? ' AND storeId = ?' : ''), $storeId !== null ? array_merge($ids, [$storeId]) : $ids);
+    }
+    Http::json(['ok' => true] + sns_approve_rows($rows, $s['code']));
 }
 
 // ---------- ホーム ----------
@@ -101,9 +153,10 @@ function sns_home(): never
     $approvedCount = (int)Db::one("SELECT COUNT(*) AS n FROM sns_post p WHERE p.status = 'approved' $where")['n'];
     $failedCount = (int)Db::one("SELECT COUNT(*) AS n FROM sns_post p WHERE p.status = 'failed' $where")['n'];
     $pendingCount = (int)Db::one("SELECT COUNT(*) AS n FROM sns_post p WHERE p.status = 'draft' $where")['n'];
+    $fromTopicsCount = sns_drafts_from_approved_topics($s['role'] === 'hq' ? null : $s['storeId'], null, true);
     Http::json([
         'status' => [
-            'pending' => $pendingCount, 'approved' => $approvedCount, 'failed' => $failedCount,
+            'pending' => $pendingCount, 'pendingFromTopics' => $fromTopicsCount, 'approved' => $approvedCount, 'failed' => $failedCount,
             'ig' => ['enabled' => $igEnabledStores, 'connected' => $igConnected],
             // SNS 投稿管理だけの設置：投稿は手動。分析用に連携していれば ok／拠点未割当、していなければ manual
             'google' => Config::isSnsOnly()
@@ -278,6 +331,7 @@ function sns_post_action(array $mm): never
                 if ($img) { if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath'])); Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, mediaId = NULL WHERE id = ?', [$img, $kind, $p['id']]); }
             }
             Db::exec('UPDATE sns_topic SET useCount = useCount + 1, lastUsedAt = ? WHERE id = ?', [$now, $topic['id']]);
+            Sns::autoApprove($p['id'], $store, $topic);
             break;
         case 'publish_now':
             if ($p['status'] !== 'approved') Http::error('承認してから投稿してください', 409);
@@ -442,6 +496,26 @@ function sns_topics_put(): never
         if ($ids) Db::exec('DELETE FROM sns_topic WHERE id IN (' . Db::inList($ids) . ') AND ' . ($ctx['session']['role'] === 'hq' ? '(storeId IS NULL OR storeId = ?)' : 'storeId = ?'), array_merge($ids, [$ctx['store']['id']]));
         Http::json(['ok' => true]);
     }
+    if ($action === 'approve' || $action === 'unapprove') { // 文章を確認済みにする（まとめて）／確認を外す
+        $ids = array_values(array_filter($b['ids'] ?? [$t['id']], 'is_string'));
+        $own = $ctx['session']['role'] === 'hq' ? '(storeId IS NULL OR storeId = ?)' : 'storeId = ?';
+        if (!$ids) Http::json(['ok' => true, 'topics' => 0, 'approved' => 0, 'problems' => []]);
+        if ($action === 'unapprove') {
+            Db::exec("UPDATE sns_topic SET approvedAt = NULL, approvedBy = NULL WHERE id IN (" . Db::inList($ids) . ") AND $own", array_merge($ids, [$ctx['store']['id']]));
+            Http::json(['ok' => true]);
+        }
+        $rows = Db::all("SELECT * FROM sns_topic WHERE id IN (" . Db::inList($ids) . ") AND $own", array_merge($ids, [$ctx['store']['id']]));
+        $ok = [];
+        foreach ($rows as $r) {
+            if ($r['channel'] !== 'ig' && (Sns::gbpForbiddenVarsIn($r['body']) || Sns::gbpInfoHits($r['body']))) continue; // Google に載せない情報があるものは確認済みにしない
+            if ($r['channel'] !== 'ig' && Sns::complianceHits($r['body'])) continue;
+            $ok[] = $r['id'];
+        }
+        if ($ok) Db::exec('UPDATE sns_topic SET approvedAt = COALESCE(approvedAt, ?), approvedBy = COALESCE(approvedBy, ?) WHERE id IN (' . Db::inList($ok) . ')', array_merge([Time::nowJstDateTime(), $ctx['session']['code']], $ok));
+        // すでに作ってある下書き（文章を変えていないもの）もまとめて承認する
+        $r = sns_approve_rows(sns_drafts_from_approved_topics($ctx['session']['role'] === 'hq' ? null : $ctx['store']['id'], $ok), $ctx['session']['code']);
+        Http::json(['ok' => true, 'topics' => count($ok), 'skippedTopics' => count($rows) - count($ok)] + $r);
+    }
     $ch = in_array($b['channel'] ?? $t['channel'], ['ig', 'gbp', 'both'], true) ? ($b['channel'] ?? $t['channel']) : $t['channel'];
     $title = array_key_exists('title', $b) ? Http::str($b, 'title', 100, false) : $t['title'];
     $body = array_key_exists('body', $b) ? Http::str($b, 'body', 1500) : $t['body'];
@@ -451,8 +525,10 @@ function sns_topics_put(): never
     $active = array_key_exists('active', $b) ? Http::bool($b, 'active') : (bool)$t['active'];
     $standalone = array_key_exists('standalone', $b) ? Http::bool($b, 'standalone') : (bool)($t['standalone'] ?? 1);
     sns_assert_topic_gbp($ch, $body);
-    Db::exec('UPDATE sns_topic SET channel = ?, title = ?, body = ?, months = ?, weekdays = ?, areas = ?, active = ?, standalone = ? WHERE id = ?', [$ch, $title, $body, $months, $weekdays, $areas, $active ? 1 : 0, $standalone ? 1 : 0, $t['id']]);
-    Http::json(['ok' => true, 'unknownPlaceholders' => Sns::unknownPlaceholders($body)]);
+    // 文章や媒体を変えたら、確認済みを外す（もう一度読んで確認してもらう）
+    $changed = $ch !== $t['channel'] || $title !== $t['title'] || $body !== $t['body'] || $standalone !== (bool)($t['standalone'] ?? 1);
+    Db::exec('UPDATE sns_topic SET channel = ?, title = ?, body = ?, months = ?, weekdays = ?, areas = ?, active = ?, standalone = ?' . ($changed ? ', approvedAt = NULL, approvedBy = NULL' : '') . ' WHERE id = ?', [$ch, $title, $body, $months, $weekdays, $areas, $active ? 1 : 0, $standalone ? 1 : 0, $t['id']]);
+    Http::json(['ok' => true, 'unknownPlaceholders' => Sns::unknownPlaceholders($body), 'unapproved' => $changed && !empty($t['approvedAt'])]);
 }
 
 /** Google 用（または両方）の定型投稿に、GBP に載っている情報（電話・住所・営業時間・URL）が無いか */

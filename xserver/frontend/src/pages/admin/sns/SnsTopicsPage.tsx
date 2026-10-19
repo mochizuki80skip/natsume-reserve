@@ -34,10 +34,23 @@ export default function SnsTopicsPage() {
     try { await fn(); if (ok) setMsg(ok); reload(); } catch (e) { setMsg((e as Error).message); }
   }
   const add = (e: React.FormEvent) => { e.preventDefault(); run(async () => { const r = await sendJson<{ unknownPlaceholders: string[] }>(`/api/admin/sns/topics?${storeQ}`, 'POST', nf); setNf({ ...nf, title: '', body: '', months: '', weekdays: '', areas: '' }); setPreview(null); if (r.unknownPlaceholders.length) throw new Error(`追加しました。ただし未定義の差し込み語があります：${r.unknownPlaceholders.join(' ')}（本部の SNS 管理で定義するか、本文を直してください）`); }, '定型投稿を追加しました'); };
-  const saveEdit = () => edit && run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: edit.id, title: edit.title, body: edit.body, channel: edit.channel, months: edit.months, weekdays: edit.weekdays, areas: edit.areas, standalone: edit.standalone }), '保存しました').then(() => setEdit(null));
+  const saveEdit = () => edit && run(async () => { const r = await sendJson<{ unapproved?: boolean }>(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: edit.id, title: edit.title, body: edit.body, channel: edit.channel, months: edit.months, weekdays: edit.weekdays, areas: edit.areas, standalone: edit.standalone }); setMsg(r.unapproved ? '保存しました。文章を変えたので「確認済み」を外しました。読み直して問題なければ、もう一度「確認済みにする」を押してください' : '保存しました'); }, '').then(() => setEdit(null));
   const toggle = (t: Topic) => run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: t.id, active: !t.active }), t.active ? '使わないようにしました' : '使うようにしました');
   const del = (t: Topic) => confirm('この定型投稿を削除しますか？（作成済みの下書きは残ります）') && run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: t.id, action: 'delete' }), '削除しました');
   const bulkDel = () => sel.size > 0 && confirm(`${sel.size} 件を削除しますか？`) && run(() => sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: [...sel][0], action: 'bulk_delete', ids: [...sel] }), '削除しました').then(() => setSel(new Set()));
+  async function approveTopics(ids: string[], on: boolean) {
+    if (ids.length === 0) return;
+    if (on && !confirm(`${ids.length} 件の定型投稿を「確認済み」にします。\n確認済みの定型投稿から作る下書きは、店舗ごとの差し込み語を入れて問題が無ければ自動で承認されます。今ある下書き（文章を変えていないもの）もまとめて承認します。よろしいですか？`)) return;
+    await run(async () => {
+      if (!on) { await sendJson(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: ids[0], action: 'unapprove', ids }); setMsg(`${ids.length} 件の確認を外しました（承認済みの下書きはそのままです）`); return; }
+      const r = await sendJson<{ topics: number; skippedTopics: number; approved: number; problems: { storeName: string; scheduledAt: string; reason: string }[] }>(`/api/admin/sns/topics?${storeQ}`, 'PUT', { id: ids[0], action: 'approve', ids });
+      let m = `${r.topics} 件を確認済みにし、今ある下書き ${r.approved} 件を承認しました。`;
+      if (r.skippedTopics) m += `　禁止語や Google に載せない情報があるため確認済みにしなかった定型投稿：${r.skippedTopics} 件（編集で直してください）。`;
+      if (r.problems.length) m += `　承認できなかった下書き ${r.problems.length} 件（ホームの承認待ちに残ります）：${r.problems.slice(0, 3).map((x) => `${x.storeName} ${x.scheduledAt.slice(5, 10)} ${x.reason}`).join(' ／ ')}`;
+      setMsg(m);
+    }, '');
+    setSel(new Set());
+  }
   const uploadImage = (t: Topic, file: File) => run(async () => { const dataUrl = await fileToJpegDataUrl(file); await sendJson(`/api/admin/sns/topics/${t.id}/image?${storeQ}`, 'POST', { dataUrl }); }, '画像を保存しました');
   const removeImage = (t: Topic) => confirm('画像を外しますか？') && run(() => sendJson(`/api/admin/sns/topics/${t.id}/image?${storeQ}`, 'POST', { remove: true }), '画像を外しました');
   async function doPreview(body: string, standalone: boolean, channel: Channel | 'both') {
@@ -120,10 +133,16 @@ export default function SnsTopicsPage() {
       {groups.map(([label, list]) => (
         <section key={label} className="rounded border bg-white">
           <h2 className="flex items-center gap-2 border-b px-3 py-2 font-bold">{label}<span className="text-sm font-normal text-slate-500">{list.length} 件</span>
-            {list.some(canEdit) && <button type="button" disabled={![...sel].some((id) => list.some((t) => t.id === id))} onClick={bulkDel} className="ml-auto rounded border px-2 py-0.5 text-xs text-red-700 disabled:opacity-40">選択を削除</button>}
+            <span className="text-xs font-normal text-slate-500">確認済み {list.filter((t) => t.approved).length} 件</span>
+            {list.some(canEdit) && <span className="ml-auto flex flex-wrap items-center gap-2 text-xs font-normal">
+              <button type="button" disabled={!list.some((t) => sel.has(t.id))} onClick={() => approveTopics(list.filter((t) => sel.has(t.id) && canEdit(t)).map((t) => t.id), true)} className="rounded border border-emerald-600 bg-emerald-50 px-2 py-0.5 text-emerald-800 disabled:opacity-40">選択を確認済みにする（まとめて承認）</button>
+              <button type="button" disabled={!list.some((t) => sel.has(t.id) && t.approved)} onClick={() => approveTopics(list.filter((t) => sel.has(t.id) && canEdit(t)).map((t) => t.id), false)} className="rounded border bg-white px-2 py-0.5 disabled:opacity-40">選択の確認を外す</button>
+              <button type="button" disabled={!list.some((t) => sel.has(t.id))} onClick={bulkDel} className="rounded border px-2 py-0.5 text-red-700 disabled:opacity-40">選択を削除</button>
+            </span>}
           </h2>
+          {list.some(canEdit) && <p className="border-b bg-emerald-50/50 px-3 py-1.5 text-xs text-slate-600">文章を読んで問題なければ「確認済み」にしてください。確認済みの定型投稿から作る下書きは、店舗ごとの差し込み語（エリア・キーワードなど）を入れて問題が無ければ<b>自動で承認</b>されます。1 件ずつ承認する必要はありません。文章を編集すると確認済みは外れます。</p>}
           <table className="w-full text-sm">
-            <thead><tr className="bg-slate-100 text-left text-xs text-slate-600"><th className="w-8 px-2 py-1"></th><th className="px-2 py-1">画像</th><th className="px-2 py-1">媒体</th><th className="px-2 py-1">月・曜日・エリア</th><th className="px-2 py-1">名前／投稿文</th><th className="px-2 py-1">使用</th><th className="px-2 py-1"></th></tr></thead>
+            <thead><tr className="bg-slate-100 text-left text-xs text-slate-600"><th className="w-8 px-2 py-1">{list.some(canEdit) && <input type="checkbox" aria-label={`${label} をすべて選択`} checked={list.filter(canEdit).length > 0 && list.filter(canEdit).every((t) => sel.has(t.id))} onChange={(e) => { const n = new Set(sel); for (const t of list.filter(canEdit)) { if (e.target.checked) n.add(t.id); else n.delete(t.id); } setSel(n); }} />}</th><th className="px-2 py-1">画像</th><th className="px-2 py-1">媒体</th><th className="px-2 py-1">月・曜日・エリア</th><th className="px-2 py-1">名前／投稿文</th><th className="px-2 py-1">使用</th><th className="px-2 py-1"></th></tr></thead>
             <tbody>
               {list.map((t) => edit?.id === t.id ? (
                 <tr key={t.id} className="border-t bg-yellow-50">
@@ -157,14 +176,14 @@ export default function SnsTopicsPage() {
                     <div className={t.areas ? 'font-bold text-brand-dark' : 'text-slate-400'}>{t.areas || '全店'}</div>
                   </td>
                   <td className="px-2 py-1">
-                    <div className="font-bold">{t.title || '（名前なし）'}{!t.standalone && <span className="ml-2 rounded bg-slate-100 px-1 text-xs font-normal text-slate-600">型で囲む</span>}</div>
+                    <div className="font-bold">{t.title || '（名前なし）'}{!t.standalone && <span className="ml-2 rounded bg-slate-100 px-1 text-xs font-normal text-slate-600">型で囲む</span>}{t.approved ? <span className="ml-2 rounded bg-emerald-100 px-1 text-xs font-normal text-emerald-800" title={`${t.approvedAt?.slice(0, 16) ?? ''} ${t.approvedBy ?? ''}`}>確認済み</span> : <span className="ml-2 rounded bg-amber-50 px-1 text-xs font-normal text-amber-700">未確認</span>}</div>
                     <div className="whitespace-pre-wrap text-xs text-slate-600">{t.body}</div>
                     {t.unknownPlaceholders.length > 0 && <div className="mt-1 text-xs text-red-700">未定義の差し込み語：{t.unknownPlaceholders.join(' ')}</div>}
                     {t.channel !== 'gbp' && !t.imageUrl && <div className="mt-1 text-xs text-slate-500">画像なし：下書きを作るときに画像ライブラリから自動で付きます</div>}
                   </td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs tabular-nums">{t.useCount} 回{t.lastUsedAt && <div className="text-slate-400">{t.lastUsedAt.slice(0, 10)}</div>}</td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs">
-                    {canEdit(t) && <><button type="button" onClick={() => setEdit(t)} className="text-brand underline">編集</button> <button type="button" onClick={() => toggle(t)} className="text-slate-600 underline">{t.active ? '使わない' : '使う'}</button> <button type="button" onClick={() => del(t)} className="text-red-700 underline">削除</button></>}
+                    {canEdit(t) && <><button type="button" onClick={() => approveTopics([t.id], !t.approved)} className={t.approved ? 'text-slate-600 underline' : 'font-bold text-emerald-700 underline'}>{t.approved ? '確認を外す' : '確認済みにする'}</button> <button type="button" onClick={() => setEdit(t)} className="text-brand underline">編集</button> <button type="button" onClick={() => toggle(t)} className="text-slate-600 underline">{t.active ? '使わない' : '使う'}</button> <button type="button" onClick={() => del(t)} className="text-red-700 underline">削除</button></>}
                     {data.isHq && t.shared && <div className="mt-1"><button type="button" onClick={() => setBc({ id: t.id, channel: t.channel === 'gbp' ? 'gbp' : 'ig', scheduledAt: `${addDays(me.today, 1)}T18:00` })} className="rounded border bg-white px-2 py-0.5">全店舗に一斉配信</button></div>}
                   </td>
                 </tr>

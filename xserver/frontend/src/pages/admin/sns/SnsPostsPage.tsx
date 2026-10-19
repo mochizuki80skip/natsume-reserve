@@ -35,9 +35,11 @@ export default function SnsPostsPage({ defaultView = 'list' }: { defaultView?: '
   }
   async function bulkApprove() {
     if (sel.size === 0 || !confirm(`${sel.size} 件を承認しますか？内容は確認済みですか？`)) return;
-    const errs: string[] = []; let n = 0;
-    for (const id of sel) { try { await sendJson(`/api/admin/sns/posts/${id}/action`, 'POST', { action: 'approve' }); n++; } catch (e) { errs.push((e as Error).message); } }
-    setMsg(`${n} 件を承認しました${errs.length ? `。承認できなかったもの：${errs.slice(0, 3).join(' / ')}` : ''}`); reload();
+    try {
+      const r = await sendJson<{ approved: number; problems: { storeName: string; scheduledAt: string; reason: string }[] }>('/api/admin/sns/posts/approve', 'POST', { ids: [...sel] });
+      setMsg(`${r.approved} 件を承認しました${r.problems.length ? `。承認できなかったもの：${r.problems.slice(0, 3).map((x) => `${x.scheduledAt.slice(5, 10)} ${x.reason}`).join(' / ')}` : ''}`);
+    } catch (e) { setMsg((e as Error).message); }
+    reload();
   }
 
   if (error) return <div><SnsNav /><p className="text-sm text-red-700">{error.message}</p></div>;

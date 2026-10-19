@@ -296,6 +296,43 @@ ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api
   for (const p of await cal()) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
 }
 {
+  // 定型投稿を「確認済み」にすると、そこから作る下書きは自動で承認される（エリア・キーワードだけ店舗ごとに変わる）
+  const H = { cookie: ck, 'content-type': 'application/json' };
+  const cal = async (d) => (await (await fetch(`${BASE}/api/admin/sns/calendar?from=${d}&to=${d}`, { headers: { cookie: ck } })).json()).posts;
+  const nt = await (await fetch(`${BASE}/api/admin/sns/topics`, { method: 'POST', headers: H, body: JSON.stringify({ shared: true, channel: 'gbp', title: 'E2E確認済み', body: '{エリア}で{メインキーワード}をお探しの方へ。足首のケガのご相談を承っています。', months: '', weekdays: '', areas: '', standalone: true }) })).json();
+  const tid = nt.id ?? nt.topic?.id;
+  const bc = (at) => fetch(`${BASE}/api/admin/hq/sns/topics/${tid}/broadcast`, { method: 'POST', headers: H, body: JSON.stringify({ channel: 'gbp', scheduledAt: at, stores: 'all' }) }).then((r) => r.json());
+  await bc('2099-06-10T10:00');
+  const before = await cal('2099-06-10');
+  ok('未確認の定型投稿から作った下書きは承認待ち', before.length >= 2 && before.every((p) => p.status === 'draft'), String(before.length));
+  const ar = await (await fetch(`${BASE}/api/admin/sns/topics`, { method: 'PUT', headers: H, body: JSON.stringify({ id: tid, action: 'approve', ids: [tid] }) })).json();
+  const after = await cal('2099-06-10');
+  ok('定型投稿を確認済みにすると、今ある下書きもまとめて承認される', ar.topics === 1 && ar.approved >= 1 && after.filter((p) => p.status === 'approved').length === ar.approved, JSON.stringify({ a: ar.approved, p: ar.problems?.length }));
+  await bc('2099-06-11T10:00');
+  const auto = await cal('2099-06-11');
+  ok('確認済みの定型投稿から新しく作った下書きは自動で承認される', auto.length >= 2 && auto.filter((p) => p.status === 'approved').length === ar.approved, `${auto.filter((p) => p.status === 'approved').length}/${auto.length}`);
+  const one = auto.find((p) => p.status === 'approved');
+  await fetch(`${BASE}/api/admin/sns/posts/${one.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'unapprove' }) });
+  const home = await (await fetch(`${BASE}/api/admin/sns/home`, { headers: { cookie: ck } })).json();
+  ok('ホームに「確認済みの定型投稿から作った下書き」の件数が出る', home.status.pendingFromTopics >= 1, String(home.status.pendingFromTopics));
+  await page.goto(`${BASE}/admin/sns`);
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'まとめて承認' }).click();
+  ok('ホームの「まとめて承認」で承認できる', await page.waitForSelector('text=/[0-9]+ 件を承認しました/', { timeout: 8000 }).then(() => true, () => false) && (await cal('2099-06-11')).find((p) => p.id === one.id)?.status === 'approved');
+  await fetch(`${BASE}/api/admin/sns/posts/${one.id}`, { method: 'PUT', headers: H, body: JSON.stringify({ body: '手で書き換えた文章です。足首のご相談を承っています。' }) });
+  const h2 = await (await fetch(`${BASE}/api/admin/sns/home`, { headers: { cookie: ck } })).json();
+  ok('手で文章を変えた下書きは、まとめて承認の対象にならない', (await cal('2099-06-11')).find((p) => p.id === one.id)?.status === 'draft' && h2.status.pendingFromTopics === 0, String(h2.status.pendingFromTopics));
+  const br = await (await fetch(`${BASE}/api/admin/sns/posts/approve`, { method: 'POST', headers: H, body: JSON.stringify({ ids: [one.id] }) })).json();
+  ok('選んだ下書きを 1 回の操作でまとめて承認できる', br.approved === 1, JSON.stringify(br));
+  await page.goto(`${BASE}/admin/sns/topics`);
+  ok('定型投稿の一覧に「確認済み」が出る', await page.waitForSelector('tr:has-text("E2E確認済み") >> text=確認済み', { timeout: 8000 }).then(() => true, () => false));
+  const ed = await (await fetch(`${BASE}/api/admin/sns/topics`, { method: 'PUT', headers: H, body: JSON.stringify({ id: tid, body: '{エリア}で{メインキーワード}をお探しの方へ。手首のケガのご相談を承っています。' }) })).json();
+  const tl = (await (await fetch(`${BASE}/api/admin/sns/topics`, { headers: { cookie: ck } })).json()).topics.find((t) => t.id === tid);
+  ok('定型投稿の文章を変えると確認済みが外れる', ed.unapproved === true && tl?.approved === false);
+  for (const d of ['2099-06-10', '2099-06-11']) for (const p of await cal(d)) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
+  await fetch(`${BASE}/api/admin/sns/topics`, { method: 'PUT', headers: H, body: JSON.stringify({ id: tid, action: 'delete' }) });
+}
+{
   // 分析：エリア別の合計・メインキーワードの検索・週ごとの投稿と Google の数字
   const ins = await (await fetch(`${BASE}/api/admin/sns/insights?detail=S001`, { headers: { cookie: ck } })).json();
   ok('分析にエリア別の合計がある', Array.isArray(ins.areas) && ins.areas.length >= 1 && ins.areas.reduce((a, x) => a + x.stores, 0) === ins.rows.length);
