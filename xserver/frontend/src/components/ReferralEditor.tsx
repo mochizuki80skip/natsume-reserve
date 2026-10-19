@@ -34,7 +34,7 @@ function Row({ r, onSaved, onMsg }: { r: Ref; onSaved: () => void; onMsg: (m: st
       <td className="py-1.5 pr-2">
         <div className="flex gap-1">
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} aria-label="紹介元の名前" className="w-36 rounded border px-2 py-1" />
-          {name.trim() !== r.name && <button type="button" onClick={() => put({ name }, '名前を変えました（初回カルテの内訳もそろえました）')} className="rounded bg-brand px-2 text-xs text-white">保存</button>}
+          {name.trim() !== r.name && <button type="button" onClick={() => put({ name }, '名前を変えました（新患継続率の内訳もそろえました）')} className="rounded bg-brand px-2 text-xs text-white">保存</button>}
         </div>
         {!r.active && <span className="text-xs">（止めています）</span>}
       </td>
@@ -67,7 +67,7 @@ export default function ReferralEditor({ pageOpen }: { pageOpen: boolean }) {
     <section className="mt-6 rounded border bg-white p-4 text-sm">
       <h2 className="font-bold">紹介元（業者）の専用 QR</h2>
       <p className="mt-1 text-xs text-slate-600">
-        業者ごとに専用の QR を作ります。QR を読むと店舗えらびページが開き、そこから WEB 予約した初診の方は、初回カルテのきっかけが<b>「業者紹介」</b>、内訳が<b>業者の名前</b>で自動で入ります。
+        業者ごとに専用の QR を作ります。QR を読むと店舗えらびページが開き、そこから WEB 予約した初診の方は、新患継続率のきっかけが<b>「業者紹介」</b>、内訳が<b>業者の名前</b>で自動で入ります。
         業者ごとの人数は、新患・再来集計のきっかけ「業者紹介」の内訳で見られます。
       </p>
       {!pageOpen && <p className="mt-2 rounded bg-amber-50 px-3 py-1 text-xs text-amber-900">店舗えらびページがまだ「非公開」です。公開するまでは、QR を読んでも「準備中」と出ます（上の「店舗えらびページ」で公開してください）。</p>}
@@ -78,7 +78,7 @@ export default function ReferralEditor({ pageOpen }: { pageOpen: boolean }) {
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}
       <div className="mt-2 overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">紹介元</th><th className="pr-2">専用 URL</th><th className="pr-2">QR</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right">初回カルテ</th><th /></tr></thead>
+          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">紹介元</th><th className="pr-2">専用 URL</th><th className="pr-2">QR</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right">新患継続率</th><th /></tr></thead>
           <tbody>
             {(data?.rows ?? []).map((r) => <Row key={`${r.id}:${r.name}:${r.active}`} r={r} onSaved={reload} onMsg={setMsg} />)}
             {data && data.rows.length === 0 && <tr><td colSpan={6} className="py-2 text-xs text-slate-400">まだ登録はありません</td></tr>}

@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 32, date: '2026-10-19', title: '「初回カルテ集計」を「新患継続率」に', audience: ['店舗', '本部'],
+    items: ['上のメニューと画面の名前を「初回カルテ集計」から「新患継続率」に変えました。中身・使い方は同じです。Excel に書き出したファイルの名前も「新患継続率」になります。'],
+  },
+  {
     id: 31, date: '2026-10-19', title: '新規・再来の同時対応数をシフトから', audience: ['店舗', '本部'],
     items: [
       '店舗設定のスタッフの「初回（初診・新自）を担当する」「再来を担当する」にチェックがあると、WEB 予約で同じ時間に受ける新規・再来は、その日のシフトに入っているチェックのある人数までになります（例：新規〇の人が 2 人なら新規は同時に 2 人まで）。',

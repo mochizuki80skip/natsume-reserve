@@ -51,9 +51,9 @@ export default function StaffCountsPage() {
       </div>
       <p className="mb-2 text-xs text-slate-600">
         来院チェック済みの予約を、担当ごとに数えます（担当は予約表のメニューの帯で付けます）。
-        {view === 'daily' ? '日ごとの人数を足したものが「月の合計」です。' : '「2回目到達率」＝その月に初回（初診・再来・新自）を担当した患者様のうち、2回目に来た割合（初回カルテ集計から）。'}
+        {view === 'daily' ? '日ごとの人数を足したものが「月の合計」です。' : '「2回目到達率」＝その月に初回（初診・再来・新自）を担当した患者様のうち、2回目に来た割合（新患継続率から）。'}
       </p>
-      {data?.partial && <p className="mb-2 rounded bg-amber-50 px-3 py-1 text-xs text-amber-900">この月は予約表の保存期間を過ぎた日を含むため、残っている日だけの数字です（2回目到達率は初回カルテ集計から出ます）。</p>}
+      {data?.partial && <p className="mb-2 rounded bg-amber-50 px-3 py-1 text-xs text-amber-900">この月は予約表の保存期間を過ぎた日を含むため、残っている日だけの数字です（2回目到達率は新患継続率から出ます）。</p>}
       {error && <p className="text-sm text-red-700">{error.message}</p>}
       {!data ? <p className="text-sm text-slate-500">読み込み中…</p> : rows.length === 0 ? (
         <p className="rounded border bg-white px-3 py-3 text-sm text-slate-500">この月の来院チェック済みの予約はありません</p>

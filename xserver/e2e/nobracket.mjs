@@ -38,7 +38,7 @@ await cell('9:00', 1).getByLabel('来院チェック').click();
 await cell('9:00', 2).getByLabel('来院チェック').click();
 await p.waitForTimeout(800);
 await p.goto(`${B}/admin/karte?month=${D.slice(0, 7)}`);
-await p.waitForSelector('text=初回カルテ集計');
+await p.waitForSelector('text=新患継続率');
 await p.waitForTimeout(800);
 ok('カルテ集計に山田（名前だけ）', (await p.locator('input[value="山田"]').count()) === 1, '');
 ok('カルテ集計に佐藤（名前だけ）', (await p.locator('input[value="佐藤"]').count()) === 1, '');

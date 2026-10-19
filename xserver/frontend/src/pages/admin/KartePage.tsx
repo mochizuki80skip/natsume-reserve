@@ -1,4 +1,4 @@
-// 初回カルテ集計 /admin/karte?month=YYYY-MM
+// 新患継続率（旧：初回カルテ集計） /admin/karte?month=YYYY-MM
 // 予約表で来院チェックした「（初診）（初）（初自）（再）」の人が自動で入り（日付・氏名・新・再）、残りを店舗で入力する
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -198,7 +198,7 @@ export default function KartePage() {
   return (
     <div>
       <div className="no-print mb-2 flex flex-wrap items-center gap-2">
-        <h1 className="mr-1 text-lg font-bold">初回カルテ集計</h1>
+        <h1 className="mr-1 text-lg font-bold">新患継続率</h1>
         <button type="button" onClick={() => go(-1)} className="rounded border bg-white px-2 py-0.5 text-sm">‹ 前月</button>
         <b className="text-sm">{monthLabel}</b>
         <button type="button" onClick={() => go(1)} className="rounded border bg-white px-2 py-0.5 text-sm">翌月 ›</button>

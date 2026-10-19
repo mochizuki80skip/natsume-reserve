@@ -33,7 +33,7 @@ function DropMenu({ label, plain, children }: { label: string; plain?: boolean; 
 
 export default function AdminLayout() {
   const location = useLocation();
-  // 表の幅が広い画面（初回カルテ集計・本部の集計）は横幅いっぱいに使う
+  // 表の幅が広い画面（新患継続率・本部の集計）は横幅いっぱいに使う
   const wide = location.pathname.startsWith('/admin/karte') || location.pathname.startsWith('/admin/hq/karte');
   const { data: me, error, loading, reload } = useFetch<Me>('/api/admin/me');
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function AdminLayout() {
             <Link to={`/admin/day/${today}`} className="hover:underline">予約表</Link>
             <Link to="/admin/shifts" className="hover:underline">シフト</Link>
             <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
-            <Link to="/admin/karte" className="hover:underline">初回カルテ集計</Link>
+            <Link to="/admin/karte" className="hover:underline">新患継続率</Link>
             {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
             <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
             <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>

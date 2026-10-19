@@ -152,7 +152,7 @@ function karte_export(): never
         foreach ($o['visits'] as $v) array_push($line, $md($v['d']), $v['s'], $v['t']);
         $out[] = $line;
     }
-    $label = '初回カルテ集計';
+    $label = '新患継続率';
     $bytes = Xlsx::build($label, "{$store['name']}　{$label}　{$ym}　（出力 " . Time::nowJst()['date'] . '）', $header, $out);
     $jaName = rawurlencode("{$store['name']}_{$label}_{$ym}");
     header('Cache-Control: no-store');
