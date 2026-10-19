@@ -83,7 +83,16 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   const v2 = (await (await fetch(`${BASE}/api/admin/sns/vars`, { headers: { cookie } })).json()).stores.find((x) => x.code === 'S002');
   ok('一括設定で URL・タグ・メモ・投稿の有無を保存', r2.ok && v2.gbpPostUrl === 'https://business.google.com/n/123/posts' && v2.hashtags === '#テスト' && v2.gbpEnabled === true && v2.memo === '料金は書かない');
   const bad = await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: [{ code: 'S002', gbpPostUrl: 'business.google.com' }] }) });
-  ok('https で始まらない URL は保存しない', bad.status === 400);
+  const badMsg = (await bad.json()).error ?? '';
+  ok('https で始まらない URL は保存しない（どの店舗の欄か分かる）', bad.status === 400 && badMsg.includes('Google の投稿ページ URL'), badMsg);
+  // 長い URL：Google 検索は店名だけの短い形に、その他の長い URL はそのまま保存
+  const longSearch = 'https://www.google.com/search?q=' + encodeURIComponent('あかり接骨院 三島市谷田') + '&sca_esv=' + 'a'.repeat(300) + '&ei=xyz&ved=' + 'b'.repeat(200);
+  const longOther = 'https://business.google.com/n/1234567890/profile?fid=' + 'c'.repeat(600);
+  await put([{ code: 'S002', gbpPostUrl: longSearch, igProfileUrl: longOther }]);
+  const v4 = (await (await fetch(`${BASE}/api/admin/sns/vars`, { headers: { cookie } })).json()).stores.find((x) => x.code === 'S002');
+  ok('長い Google 検索の URL は短く整えて保存', v4.gbpPostUrl === 'https://www.google.com/search?q=' + encodeURIComponent('あかり接骨院 三島市谷田'), v4.gbpPostUrl);
+  ok('300 文字を超える URL も保存できる', v4.igProfileUrl === longOther);
+  await put([{ code: 'S002', gbpPostUrl: '', igProfileUrl: '' }]);
   // キーワードは本文に合うものが入る（腰の話 → 腰痛。ムチウチにはならない）
   await put([{ code: 'S002', area: '三島市谷田', keywordsFixed: '接骨院', keywordsRotation: '交通事故、ムチウチ、腰痛、子どものケガ' }]);
   const kp = await (await fetch(`${BASE}/api/admin/sns/posts?store=S002`, { method: 'POST', headers: { cookie, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-02-01 10:00', title: '朝起きたときの腰の張り', body: '朝、起き上がるときに腰が重いと感じる方は、寝ている間に体が冷えて筋肉がこわばっていることが多いです。' }) })).json();

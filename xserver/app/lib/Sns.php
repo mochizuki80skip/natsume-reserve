@@ -44,9 +44,14 @@ final class Sns
             ['sns_post', 'checkedAt', 'ALTER TABLE `sns_post` ADD COLUMN `checkedAt` DATETIME NULL AFTER `publishMode`'],
             ['sns_post', 'checkedBy', 'ALTER TABLE `sns_post` ADD COLUMN `checkedBy` VARCHAR(20) NULL AFTER `checkedAt`'],
             ['sns_setting', 'gbpManual', 'ALTER TABLE `sns_setting` ADD COLUMN `gbpManual` TINYINT(1) NOT NULL DEFAULT 0'],
-            ['sns_store_setting', 'gbpPostUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `gbpPostUrl` VARCHAR(300) NOT NULL DEFAULT \'\''],
-            ['sns_store_setting', 'igProfileUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `igProfileUrl` VARCHAR(300) NOT NULL DEFAULT \'\''],
+            ['sns_store_setting', 'gbpPostUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `gbpPostUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
+            ['sns_store_setting', 'igProfileUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `igProfileUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
         ];
+        // 投稿ページの URL は長いことがある（Google の管理画面の URL など）ので 2000 文字まで入るようにする
+        foreach (['gbpPostUrl', 'igProfileUrl'] as $col) {
+            $len = Db::one('SELECT CHARACTER_MAXIMUM_LENGTH AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', ['sns_store_setting', $col]);
+            if ($len && (int)$len['n'] < 2000) Db::pdo()->exec("ALTER TABLE `sns_store_setting` MODIFY `{$col}` VARCHAR(2000) NOT NULL DEFAULT ''");
+        }
         if (!Db::one("SELECT 1 AS x FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'sns_media'")) {
             Db::pdo()->exec("CREATE TABLE IF NOT EXISTS `sns_media` (`id` VARCHAR(32) NOT NULL, `storeId` VARCHAR(32) NULL, `path` VARCHAR(200) NOT NULL, `label` VARCHAR(100) NOT NULL DEFAULT '', `channel` VARCHAR(5) NOT NULL DEFAULT 'both', `width` INT NOT NULL DEFAULT 0, `height` INT NOT NULL DEFAULT 0, `active` TINYINT(1) NOT NULL DEFAULT 1, `useCount` INT NOT NULL DEFAULT 0, `lastUsedAt` DATETIME NULL, `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), KEY `sm_store` (`storeId`), CONSTRAINT `fk_sm_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         }
@@ -243,6 +248,27 @@ final class Sns
             'gbpPostUrl' => (string)($r['gbpPostUrl'] ?? ''),   // Google の投稿作成ページ（手動投稿で開く。空なら店名検索）
             'igProfileUrl' => (string)($r['igProfileUrl'] ?? ''), // Instagram のプロフィール URL（手動投稿で開く）
         ];
+    }
+
+    /**
+     * 投稿ページなどの URL を整える。前後の空白を除き、https:// で始まるかを確かめる。
+     * Google 検索の URL（検索のたびに付く長い記号つき）は、検索語（q）だけの短い形にする。
+     * 問題があれば理由を返す（$err）。
+     */
+    public static function cleanUrl(string $url, ?string &$err = null): string
+    {
+        $err = null;
+        $url = trim(preg_replace('/[\r\n\t]+/', '', $url));
+        if ($url === '') return '';
+        if (!preg_match('#^https://\S+$#u', $url)) { $err = 'https:// から始まる URL を入れてください（空白は入れない）'; return ''; }
+        $u = parse_url($url);
+        if (!$u || empty($u['host'])) { $err = 'URL の形が正しくありません'; return ''; }
+        if (preg_match('/(^|\.)google\.[a-z.]+$/i', $u['host']) && ($u['path'] ?? '') === '/search' && !empty($u['query'])) {
+            parse_str($u['query'], $q);
+            if (isset($q['q']) && is_string($q['q']) && trim($q['q']) !== '') $url = 'https://www.google.com/search?q=' . rawurlencode(trim($q['q']));
+        }
+        if (mb_strlen($url) > 2000) { $err = 'URL が長すぎます（2000 文字まで）'; return ''; }
+        return $url;
     }
 
     /** 手動投稿で開く URL。Google は登録 URL → 無ければ店名＋地域の検索（オーナーでログインしていれば管理パネルが出る） */

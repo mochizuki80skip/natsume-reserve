@@ -20,6 +20,8 @@ export default function SnsVarsPage() {
   const [rows, setRows] = useState<StoreVars[]>([]);
   const [dirty, setDirty] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState('');
+  const [isErr, setIsErr] = useState(false);
+  const fail = (m: string) => { setMsg(m); setIsErr(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const [paste, setPaste] = useState('');
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<Tab>('meo');
@@ -81,10 +83,13 @@ export default function SnsVarsPage() {
       next = next.map((x, xi) => xi === i ? r : x); d.add(cells[0]); n++;
     }
     setRows(next); setDirty(d); setPaste('');
-    setMsg(`${n} 店舗に反映しました（まだ保存していません。右下の「保存」を押してください）${miss.length ? `。見つからない店舗コード：${miss.join('、')}` : ''}`);
+    setMsg(`${n} 店舗に反映しました（まだ保存していません。右下の「保存」を押してください）${miss.length ? `。見つからない店舗コード：${miss.join('、')}` : ''}`); setIsErr(false);
   }
 
   async function saveAll() {
+    // URL のかんたんな確認（https:// で始まるか）。詳しい確認と整形（Google 検索の URL を短くする）はサーバーで行う
+    const badUrl = rows.filter((x) => dirty.has(x.code)).flatMap((x) => (['gbpPostUrl', 'igProfileUrl'] as const).filter((k) => (x[k] ?? '').trim() !== '' && !/^https:\/\/\S+$/.test((x[k] ?? '').trim())).map((k) => `${x.name}の${k === 'gbpPostUrl' ? 'Google の投稿ページ URL' : 'Instagram のプロフィール URL'}`));
+    if (badUrl.length) { fail(`https:// から始まる URL を入れてください：${badUrl.join('、')}`); return; }
     setBusy(true); setMsg('');
     try {
       const payload = rows.filter((x) => dirty.has(x.code)).map((s) => ({
@@ -92,15 +97,15 @@ export default function SnsVarsPage() {
         hashtags: s.hashtags ?? '', gbpPostUrl: s.gbpPostUrl ?? '', igProfileUrl: s.igProfileUrl ?? '', address: s.address ?? '', hoursText: s.hoursText ?? '', memo: s.memo ?? '', igEnabled: s.igEnabled, gbpEnabled: s.gbpEnabled,
       }));
       const r = await sendJson<{ saved: number; refilled: number }>('/api/admin/sns/vars', 'PUT', { rows: payload });
-      setMsg(`${r.saved} 店舗を保存しました。作成済みの下書き ${r.refilled} 件を今の設定で更新しました`);
+      setMsg(`${r.saved} 店舗を保存しました。作成済みの下書き ${r.refilled} 件を今の設定で更新しました`); setIsErr(false);
       reload();
-    } catch (e) { setMsg((e as Error).message); }
+    } catch (e) { fail(`保存できませんでした。${(e as Error).message}`); }
     setBusy(false);
   }
   async function recomposeAll() {
     if (!confirm('自動で作った確認待ちの下書きを、今の設定で作り直します（手で直した下書きはそのまま）。よろしいですか？')) return;
     setBusy(true);
-    try { const r = await sendJson<{ recomposed: number }>('/api/admin/sns/recompose', 'POST', {}); setMsg(`${r.recomposed} 件の下書きを作り直しました`); reload(); } catch (e) { setMsg((e as Error).message); }
+    try { const r = await sendJson<{ recomposed: number }>('/api/admin/sns/recompose', 'POST', {}); setMsg(`${r.recomposed} 件の下書きを作り直しました`); setIsErr(false); reload(); } catch (e) { fail((e as Error).message); }
     setBusy(false);
   }
   const unfilledTotal = rows.reduce((a, r) => a + (r.unfilled ?? 0), 0);
@@ -109,7 +114,7 @@ export default function SnsVarsPage() {
     <div className="space-y-4 pb-20">
       <SnsNav title="店舗の一括設定" />
       <p className="-mt-2 text-sm text-slate-600">各店舗の「SNS設定」の項目を、全店舗まとめて入力します。黄色の欄は未入力です。保存すると、作成済みの下書きにも反映されます（手で直した下書きはそのまま）。</p>
-      {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
+      {msg && <p className={`rounded px-3 py-2 text-sm ${isErr ? 'border border-red-300 bg-red-50 font-bold text-red-800' : 'bg-brand-light'}`}>{msg}</p>}
       {unfilledTotal > 0 && <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">差し込み語が埋まっていない下書きが {unfilledTotal} 件あります。<Link to="/admin/sns/drafts?unfilled=1" className="underline">下書きで確認</Link></p>}
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -119,7 +124,7 @@ export default function SnsVarsPage() {
         <button type="button" disabled={busy} onClick={recomposeAll} className="rounded border bg-white px-3 py-1 disabled:opacity-50">下書きを今の設定で作り直す</button>
       </div>
       {tab === 'meo' && <p className="text-xs text-slate-500">Google の投稿には毎回「<b>エリア＋メインキーワード</b>」（例：三島市谷田で接骨院をお探しの方は…）が入ります。MEO で一番狙う語（例：接骨院）を先頭に 1 つ入れてください。「症状・施術のキーワード」は、本文の内容に合うものがあるときだけ 1 つ添えます（例：腰の話 →「腰痛のご相談も承っています」）。</p>}
-      {tab === 'link' && <p className="text-xs text-slate-500">Google の投稿ページ URL の取り方：オーナーの Google アカウントでログイン → business.google.com/locations で店舗を開く（または Google 検索で店名を検索）→「最新情報を追加」→ アドレスバーの URL をコピー。</p>}
+      {tab === 'link' && <p className="text-xs text-slate-500">Google 検索の URL は、保存するときに店名の部分だけの短い形に自動で整えます。Google の投稿ページ URL の取り方：オーナーの Google アカウントでログイン → business.google.com/locations で店舗を開く（または Google 検索で店名を検索）→「最新情報を追加」→ アドレスバーの URL をコピー。</p>}
 
       <section className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full text-sm">

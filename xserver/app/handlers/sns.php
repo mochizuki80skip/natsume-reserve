@@ -598,6 +598,14 @@ function sns_media_put(): never
 }
 
 /** https:// で始まる URL だけ受け付ける（空は可） */
+/** URL を整える（Sns::cleanUrl）。問題があれば、どの欄かが分かるメッセージでエラーにする */
+function sns_clean_url_or_error(string $u, string $label): string
+{
+    $url = Sns::cleanUrl($u, $err);
+    if ($err !== null) throw new HttpError(400, $label . '：' . $err);
+    return $url;
+}
+
 function sns_url_or_empty(string $u): string
 {
     if ($u === '') return '';
@@ -686,8 +694,8 @@ function sns_settings_put(): never
         'keywordsRotation' => array_key_exists('keywordsRotation', $b) ? Http::str($b, 'keywordsRotation', 500, false) : $cur['keywordsRotation'],
         'memo' => array_key_exists('memo', $b) ? Http::str($b, 'memo', 2000, false) : $cur['memo'],
         'vars' => array_key_exists('vars', $b) ? Sns::parseVars($b['vars']) : $cur['vars'],
-        'gbpPostUrl' => array_key_exists('gbpPostUrl', $b) ? sns_url_or_empty(Http::str($b, 'gbpPostUrl', 300, false)) : $cur['gbpPostUrl'],
-        'igProfileUrl' => array_key_exists('igProfileUrl', $b) ? sns_url_or_empty(Http::str($b, 'igProfileUrl', 300, false)) : $cur['igProfileUrl'],
+        'gbpPostUrl' => array_key_exists('gbpPostUrl', $b) ? sns_clean_url_or_error((string)($b['gbpPostUrl'] ?? ''), 'Google の投稿作成ページの URL') : $cur['gbpPostUrl'],
+        'igProfileUrl' => array_key_exists('igProfileUrl', $b) ? sns_clean_url_or_error((string)($b['igProfileUrl'] ?? ''), 'Instagram のプロフィール URL') : $cur['igProfileUrl'],
     ];
     Sns::saveStoreSetting($ctx['store']['id'], $v);
     Http::json(['ok' => true, 'refilled' => Sns::refillDrafts($ctx['store']['id']) + Sns::recomposeAutoDrafts($ctx['store']['id'])]);
@@ -1207,11 +1215,9 @@ function sns_vars_put(): never
             foreach (['hashtags' => 500, 'address' => 100, 'hoursText' => 200, 'memo' => 2000] as $k => $max) {
                 if (array_key_exists($k, $row)) $v[$k] = Http::str($row, $k, $max, false);
             }
-            foreach (['gbpPostUrl', 'igProfileUrl'] as $k) {
+            foreach (['gbpPostUrl' => 'Google の投稿ページ URL', 'igProfileUrl' => 'Instagram のプロフィール URL'] as $k => $label) {
                 if (!array_key_exists($k, $row)) continue;
-                $url = Http::str($row, $k, 300, false);
-                if ($url !== '' && !preg_match('#^https://\S+$#u', $url)) throw new HttpError(400, $st['name'] . '：URL は https:// から始まるものを入れてください（空白は入れない）');
-                $v[$k] = sns_url_or_empty($url);
+                $v[$k] = sns_clean_url_or_error(is_string($row[$k]) ? $row[$k] : '', $st['name'] . 'の' . $label);
             }
             foreach (['igEnabled', 'gbpEnabled'] as $k) if (array_key_exists($k, $row)) $v[$k] = Http::bool($row, $k);
             Sns::saveStoreSetting($st['id'], $v);
