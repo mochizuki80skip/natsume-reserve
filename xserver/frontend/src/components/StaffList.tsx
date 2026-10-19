@@ -44,8 +44,8 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
       <button type="button" onClick={() => confirm(`${m.name} を削除しますか？シフトも消えます。`) && call('DELETE', { id: m.id })} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">削除</button>
       {m.role === 'THERAPIST' && (
         <span className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-1 text-xs text-slate-700">
-          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canFirst} onChange={(e) => call('PUT', { id: m.id, canFirst: e.target.checked })} />初回（初診・新自）を担当する</label>
-          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canRevisit} onChange={(e) => call('PUT', { id: m.id, canRevisit: e.target.checked })} />再来を担当する</label>
+          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canFirst} onChange={(e) => call('PUT', { id: m.id, canFirst: e.target.checked })} />初回（初診・新自）を担当する<span className="text-slate-400">（WEB の新規の人数に数える）</span></label>
+          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canRevisit} onChange={(e) => call('PUT', { id: m.id, canRevisit: e.target.checked })} />再来を担当する<span className="text-slate-400">（WEB の再来の人数に数える）</span></label>
           {(m.canFirst || m.canRevisit) && (
             <label className="flex items-center gap-1">予約表の色
               <i className="inline-block h-4 w-6 rounded border" style={{ background: m.color || autoColor(m) }} aria-hidden="true" />

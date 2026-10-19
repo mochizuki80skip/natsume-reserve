@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS `store` (
   `lng` DECIMAL(9,6) NULL,
   `listed` TINYINT(1) NOT NULL DEFAULT 1,       -- 店舗えらびページに載せる
   `maxNewConcurrent` INT NULL DEFAULT NULL, -- 新規（初診・初自）を同じ時間に WEB で受ける上限。NULL＝制限なし、0＝WEB では受けない（電話のみ）
+  `maxRevisitConcurrent` INT NULL DEFAULT NULL, -- 再来（1ヶ月以上ご来院の無い方）を同じ時間に WEB で受ける上限。NULL＝制限なし
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

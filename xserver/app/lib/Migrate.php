@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 17;
+    private const VERSION = 18;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -160,6 +160,10 @@ final class Migrate
                         }
                     }
                 }
+            }
+            if ($ver < 18) {
+                // 再来（1ヶ月以上ご来院の無い方）を同じ時間に WEB で受ける上限（NULL＝制限なし）
+                if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'maxRevisitConcurrent')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `maxRevisitConcurrent` INT NULL DEFAULT NULL AFTER `maxNewConcurrent`');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

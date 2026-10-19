@@ -61,6 +61,7 @@ final class PublicApi
         $occupied = [];
         $blocked = [];
         $newCount = [];
+        $revisitCount = [];
         foreach ($cells as $c) {
             if ((int)$c['bed'] > 0 && Availability::isOccupiedText($c['text'])) {
                 $k = Availability::key((int)$c['time'], (int)$c['bed']);
@@ -68,7 +69,10 @@ final class PublicApi
                 if (Availability::isBlockMark($c['text'])) $blocked[$k] = true;
                 // 新規（初診・初・初自）の人と、その 2 枠目（上記初診対応）を時間ごとに数える
                 $t = trim((string)$c['text']);
-                if (Text::categorize($t)['isNew'] || $t === '上記初診対応') $newCount[(int)$c['time']] = ($newCount[(int)$c['time']] ?? 0) + 1;
+                $cat = Text::categorize($t);
+                if ($cat['isNew'] || $t === '上記初診対応') $newCount[(int)$c['time']] = ($newCount[(int)$c['time']] ?? 0) + 1;
+                // 再来（（再）・再来・再診）の人と、その 2 枠目（上記再来対応）
+                elseif ($cat['isRevisit'] || $t === '上記再来対応') $revisitCount[(int)$c['time']] = ($revisitCount[(int)$c['time']] ?? 0) + 1;
             }
         }
         $capacity ??= Settings::capacityFor($store, $date);
@@ -104,6 +108,12 @@ final class PublicApi
             'newLimit' => ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'],
             'newCount' => $newCount,
             'countsAsNew' => $kind === 'NEW' || $kind === 'ACCIDENT',
+            // シフトの「初回を担当する」「再来を担当する」にチェックのある人数（午前・午後）。null＝上限なし
+            'newCap' => ['am' => $capacity['firstAm'] ?? null, 'pm' => $capacity['firstPm'] ?? null],
+            'revisitLimit' => ($store['maxRevisitConcurrent'] ?? null) === null ? null : (int)$store['maxRevisitConcurrent'],
+            'revisitCap' => ['am' => $capacity['revisitAm'] ?? null, 'pm' => $capacity['revisitPm'] ?? null],
+            'revisitCount' => $revisitCount,
+            'countsAsRevisit' => $kind === 'REVISIT',
         ];
     }
 

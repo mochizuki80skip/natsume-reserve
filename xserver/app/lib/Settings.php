@@ -12,6 +12,7 @@ final class Settings
         foreach (['beds', 'defaultActiveBeds', 'maxTherapists', 'maxReception', 'publishDaysAhead'] as $k) $r[$k] = (int)$r[$k];
         // 新規の同時対応数：null＝制限なし、0＝WEB では受けない
         $r['maxNewConcurrent'] = ($r['maxNewConcurrent'] ?? null) === null ? null : (int)$r['maxNewConcurrent'];
+        $r['maxRevisitConcurrent'] = ($r['maxRevisitConcurrent'] ?? null) === null ? null : (int)$r['maxRevisitConcurrent'];
         $r['active'] = (bool)$r['active'];
         $r['hoursOverride'] = is_string($r['hoursOverride'] ?? null) ? json_decode($r['hoursOverride'], true) : null;
         return $r;
@@ -110,6 +111,11 @@ final class Settings
     public static function capacityFromShifts(array $store, array $members, array $statusByStaff, ?array $override = null, ?string $date = null, ?array $helpIn = null): array
     {
         $registered = count($members); // 登録が 1 人もいなければ既定の枠数を使う（期間外で 0 人の日は 0 枠）
+        // 店舗設定の「初回を担当する」「再来を担当する」に 1 人でもチェックがあれば、その日のシフトに入っているチェックのある人数を
+        // WEB の新規・再来の同時上限にする（チェックが 1 人も無い店舗は今までどおり上限なし）
+        $useFirst = (bool)array_filter($members, fn($m) => (int)($m['canFirst'] ?? 0) === 1);
+        $useRevisit = (bool)array_filter($members, fn($m) => (int)($m['canRevisit'] ?? 0) === 1);
+        $firstAm = $firstPm = $revisitAm = $revisitPm = 0;
         if ($date !== null) $members = array_values(array_filter($members, fn($m) => self::inPeriod($m, $date)));
         $beds = (int)$store['beds'];
         $namesAm = [];
@@ -119,20 +125,26 @@ final class Settings
         } else {
             foreach ($members as $m) {
                 $st = $statusByStaff[$m['id']] ?? null;
-                if (self::worksAm($st)) $namesAm[] = $m['name'];
-                if (self::worksPm($st)) $namesPm[] = $m['name'];
+                if (self::worksAm($st)) { $namesAm[] = $m['name']; $firstAm += (int)($m['canFirst'] ?? 0); $revisitAm += (int)($m['canRevisit'] ?? 0); }
+                if (self::worksPm($st)) { $namesPm[] = $m['name']; $firstPm += (int)($m['canFirst'] ?? 0); $revisitPm += (int)($m['canRevisit'] ?? 0); }
             }
             $autoAm = min(count($namesAm), $beds);
             $autoPm = min(count($namesPm), $beds);
         }
         if ($helpIn) {
             $label = 'ヘルプ' . ($helpIn['name'] !== '' ? '（' . $helpIn['name'] . '）' : '（他店から）');
-            if ($helpIn['status'] !== 'PM_HELP_IN') { $namesAm[] = $label; $autoAm = min($autoAm + 1, $beds); }
-            if ($helpIn['status'] !== 'AM_HELP_IN') { $namesPm[] = $label; $autoPm = min($autoPm + 1, $beds); }
+            // ヘルプの人は新規・再来どちらも担当できるものとして数える
+            if ($helpIn['status'] !== 'PM_HELP_IN') { $namesAm[] = $label; $autoAm = min($autoAm + 1, $beds); $firstAm++; $revisitAm++; }
+            if ($helpIn['status'] !== 'AM_HELP_IN') { $namesPm[] = $label; $autoPm = min($autoPm + 1, $beds); $firstPm++; $revisitPm++; }
         }
         $am = $override['capacityAm'] ?? $autoAm;
         $pm = $override['capacityPm'] ?? $autoPm;
-        return ['am' => min((int)$am, $beds), 'pm' => min((int)$pm, $beds), 'autoAm' => $autoAm, 'autoPm' => $autoPm, 'namesAm' => $namesAm, 'namesPm' => $namesPm];
+        return [
+            'am' => min((int)$am, $beds), 'pm' => min((int)$pm, $beds), 'autoAm' => $autoAm, 'autoPm' => $autoPm, 'namesAm' => $namesAm, 'namesPm' => $namesPm,
+            // シフトから決まる WEB の新規・再来の同時上限（null＝チェックを使っていないので上限なし）
+            'firstAm' => $useFirst ? $firstAm : null, 'firstPm' => $useFirst ? $firstPm : null,
+            'revisitAm' => $useRevisit ? $revisitAm : null, 'revisitPm' => $useRevisit ? $revisitPm : null,
+        ];
     }
 
     /**
@@ -142,7 +154,7 @@ final class Settings
      */
     public static function capacitiesFor(array $store, array $dates, array $overrides): array
     {
-        $members = Db::all('SELECT id, name, startDate, endDate FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 ORDER BY sortOrder ASC', [$store['id'], 'THERAPIST']);
+        $members = Db::all('SELECT id, name, startDate, endDate, canFirst, canRevisit FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 ORDER BY sortOrder ASC', [$store['id'], 'THERAPIST']);
         $byDate = [];
         $help = [];
         if ($dates) {

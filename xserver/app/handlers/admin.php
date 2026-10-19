@@ -850,7 +850,7 @@ function adm_settings_get(): never
         'store' => [
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
             'maxTherapists' => $store['maxTherapists'], 'maxReception' => $store['maxReception'], 'publishDaysAhead' => $store['publishDaysAhead'],
-            'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'], 'hoursOverride' => ($ho = is_string($store['hoursOverride'] ?? null) ? json_decode($store['hoursOverride'], true) : ($store['hoursOverride'] ?? null)) ? json_encode($ho, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
+            'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'], 'maxRevisitConcurrent' => ($store['maxRevisitConcurrent'] ?? null) === null ? null : (int)$store['maxRevisitConcurrent'], 'hoursOverride' => ($ho = is_string($store['hoursOverride'] ?? null) ? json_decode($store['hoursOverride'], true) : ($store['hoursOverride'] ?? null)) ? json_encode($ho, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
         ],
         'globalHours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         'slotMinutes' => $setting['slotMinutes'],
@@ -878,6 +878,8 @@ function adm_store_put(): never
         // 空欄（null）＝制限なし、0＝WEB では受けない
         $maxNew = !array_key_exists('maxNewConcurrent', $b) ? ($ctx['store']['maxNewConcurrent'] ?? null)
             : (($b['maxNewConcurrent'] === null || $b['maxNewConcurrent'] === '') ? null : Http::int($b, 'maxNewConcurrent', 0, 20));
+        $maxRe = !array_key_exists('maxRevisitConcurrent', $b) ? ($ctx['store']['maxRevisitConcurrent'] ?? null)
+            : (($b['maxRevisitConcurrent'] === null || $b['maxRevisitConcurrent'] === '') ? null : Http::int($b, 'maxRevisitConcurrent', 0, 20));
     } catch (HttpError) {
         Http::error('入力内容を確認してください', 400);
     }
@@ -887,8 +889,8 @@ function adm_store_put(): never
         if (!$cfg) Http::error('営業時間の個別設定の形式が正しくありません（docs/SPEC.md 参照）', 400);
         $hoursOverride = json_encode($cfg, JSON_UNESCAPED_UNICODE);
     }
-    Db::exec('UPDATE store SET name = ?, phone = ?, beds = ?, defaultActiveBeds = ?, maxTherapists = ?, maxReception = ?, publishDaysAhead = ?, notifyPhone = ?, maxNewConcurrent = ?, hoursOverride = ? WHERE id = ?',
-        [$name, $phone, $beds, min($dab, $beds), $maxT, $maxR, $pub, $notify !== '' ? $notify : null, $maxNew, $hoursOverride, $ctx['store']['id']]);
+    Db::exec('UPDATE store SET name = ?, phone = ?, beds = ?, defaultActiveBeds = ?, maxTherapists = ?, maxReception = ?, publishDaysAhead = ?, notifyPhone = ?, maxNewConcurrent = ?, maxRevisitConcurrent = ?, hoursOverride = ? WHERE id = ?',
+        [$name, $phone, $beds, min($dab, $beds), $maxT, $maxR, $pub, $notify !== '' ? $notify : null, $maxNew, $maxRe, $hoursOverride, $ctx['store']['id']]);
     Http::json(['ok' => true]);
 }
 

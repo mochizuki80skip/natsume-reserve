@@ -7,7 +7,7 @@ import PatientImport from '@/components/PatientImport';
 import { useAdmin } from './Layout';
 
 interface Resp {
-  store: { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; notifyPhone: string; hoursOverride: string };
+  store: { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; notifyPhone: string; hoursOverride: string };
   globalHours: string; slotMinutes?: number; canChangePassword: boolean; smsEnabled: boolean;
   members: { id: string; name: string; role: string; active: boolean; startDate: string | null; endDate: string | null; joinType: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string }[];
 }

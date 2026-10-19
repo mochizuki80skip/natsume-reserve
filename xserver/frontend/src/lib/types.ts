@@ -5,7 +5,7 @@ export interface ResolvedSession { start: number; lastStart: number; lastAdmin: 
 export interface GridCell { time: number; bed: number; text: string; visited: boolean; menus?: string[]; staff?: string; staffCheck?: boolean; web?: { id: string; kind: string; phone: string; cardNo: string | null } | null }
 export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAt: string }
 export interface SlotBlock { id: string; start: number; end: number; beds: number[]; label: string }
-export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[] }
+export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[]; firstAm?: number | null; firstPm?: number | null; revisitAm?: number | null; revisitPm?: number | null }
 
 export interface DayData {
   date: string;

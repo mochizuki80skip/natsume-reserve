@@ -15,6 +15,11 @@
 //   'newLimit' => null|int,             新規（初診・初自）を同じ時間に WEB で受ける上限（null＝制限なし、0＝WEB では受けない）
 //   'newCount' => ['time' => int],      その時間に入っている新規の人数
 //   'countsAsNew' => bool,              今回の予約が新規か（新規のときだけ newLimit を見る）
+//   'newCap' => ['am' => ?int, 'pm' => ?int],      シフトで「初回を担当する」にチェックのある人数（新規の同時上限。null＝上限なし）
+//   'revisitLimit' => null|int,         再来（1ヶ月以上ご来院の無い方）を同じ時間に WEB で受ける上限（店舗設定。null＝制限なし）
+//   'revisitCap' => ['am' => ?int, 'pm' => ?int],  シフトで「再来を担当する」にチェックのある人数
+//   'revisitCount' => ['time' => int],  その時間に入っている再来の人数
+//   'countsAsRevisit' => bool,          今回の予約が再来か
 // ]
 declare(strict_types=1);
 
@@ -71,12 +76,17 @@ final class Availability
         $free = count(self::freeBedsAt($in, $time));
         if ($free === 0) return 0;
         $byCapacity = PHP_INT_MAX;
+        $half = Hours::isAm($in['sessions'], $time) ? 'am' : 'pm';
         for ($k = 0; $k < $in['neededSlots']; $k++) {
             $t = $time + $k * $in['slotMinutes'];
             $byCapacity = min($byCapacity, self::capacityAt($in, $time) - self::occupiedCountAt($in, $t));
             // 新規の同時対応数：新規の予約は、その時間にすでに入っている新規の人数が上限に達していたら受けない
             // （上限に達するまでは通常どおり。残り 1 人でも「残りわずか」の電話マークにはしない）
-            if (!empty($in['countsAsNew']) && ($in['newLimit'] ?? null) !== null && (int)($in['newCount'][$t] ?? 0) >= (int)$in['newLimit']) {
+            if (!empty($in['countsAsNew']) && ($lim = self::kindLimit($in['newLimit'] ?? null, $in['newCap'] ?? null, $half)) !== null && (int)($in['newCount'][$t] ?? 0) >= $lim) {
+                return 0;
+            }
+            // 再来の同時対応数：店舗設定とシフトの「再来を担当する」人数の小さいほう
+            if (!empty($in['countsAsRevisit']) && ($lim = self::kindLimit($in['revisitLimit'] ?? null, $in['revisitCap'] ?? null, $half)) !== null && (int)($in['revisitCount'][$t] ?? 0) >= $lim) {
                 return 0;
             }
         }
@@ -116,6 +126,14 @@ final class Availability
             }
         }
         return $out;
+    }
+
+    /** 店舗設定の上限とシフトから決まる上限の小さいほう（どちらも無ければ null＝上限なし） */
+    private static function kindLimit(?int $storeLimit, ?array $cap, string $half): ?int
+    {
+        $byShift = $cap[$half] ?? null;
+        if ($storeLimit === null) return $byShift === null ? null : (int)$byShift;
+        return $byShift === null ? $storeLimit : min($storeLimit, (int)$byShift);
     }
 
     /** 新規の予約で、店舗が新規を WEB では受けない設定（0）か */

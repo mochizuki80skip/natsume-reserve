@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import HoursEditor from './HoursEditor';
 
-interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; notifyPhone: string; hoursOverride: string }
+interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; notifyPhone: string; hoursOverride: string }
 interface Props { store: StoreForm; globalHours: string; slotMinutes: number; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void }
 
 function UrlRow({ label, path }: { label: string; path: string }) {
@@ -78,9 +78,15 @@ export default function StoreSettingsForm({ store, globalHours, slotMinutes, can
                 onChange={(e) => setF({ ...f, maxNewConcurrent: e.target.value === '' ? null : Number(e.target.value) })} className="w-20 rounded border px-2 py-1 text-right" /></td>
               <td className="py-1.5 text-xs text-slate-500">同じ時間に WEB で受ける新規（初診・初自）の人数。<b>空欄＝制限なし</b>、<b>0＝新規は WEB で受けない</b>（電話マークにして電話へ案内）、1 以上＝その人数に達した時間を×にします</td>
             </tr>
+            <tr className="border-t">
+              <td className="w-40 whitespace-nowrap py-1.5 pr-3 font-medium">再来の同時対応数</td>
+              <td className="w-24 py-1.5 pr-3"><input type="number" min={0} max={20} value={f.maxRevisitConcurrent ?? ''} placeholder="制限なし" aria-label="再来の同時対応数"
+                onChange={(e) => setF({ ...f, maxRevisitConcurrent: e.target.value === '' ? null : Number(e.target.value) })} className="w-20 rounded border px-2 py-1 text-right" /></td>
+              <td className="py-1.5 text-xs text-slate-500">同じ時間に WEB で受ける再来（1ヶ月以上ご来院の無い方）の人数。<b>空欄＝制限なし</b>、<b>0＝再来は WEB で受けない</b>、1 以上＝その人数に達した時間を×にします</td>
+            </tr>
           </tbody>
         </table>
-        <p className="text-xs text-slate-500">顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
+        <p className="text-xs text-slate-500">スタッフの「初回（初診・新自）を担当する」「再来を担当する」に 1 人でもチェックがあると、WEB で同じ時間に受ける新規・再来は、その日のシフトに入っているチェックのある人数までになります（上の同時対応数が少なければそちら）。顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
         {smsEnabled && <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>}
         <div className="rounded border p-3">
           <h3 className="mb-2 font-bold">この店舗の営業時間</h3>
