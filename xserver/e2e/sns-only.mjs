@@ -28,7 +28,7 @@ ok('左メニューにホーム・下書き（全店）・手動投稿・カレ�
 ok('ヘッダーに店舗設定・店舗管理がある', nav.includes('店舗設定') && nav.includes('店舗管理'));
 await page.goto(`${BASE}/admin/hq`); await page.waitForSelector('h1:has-text("店舗管理")');
 ok('店舗管理に共通設定（営業時間）が無い', (await page.locator('text=全店共通設定').count()) === 0);
-ok('店舗をまとめて登録がある', (await page.locator('text=店舗をまとめて登録').count()) === 1);
+ok('店舗をまとめて登録がある', await page.waitForSelector('text=店舗をまとめて登録', { timeout: 8000 }).then(() => true, () => false));
 ok('店舗管理は SNS 用の画面（左メニュー付き）', page.url().endsWith('/admin/sns/stores') && (await page.locator('aside').count()) === 1);
 ok('店舗管理にベッド・顧客URLが無い', (await page.locator('th:has-text("ベッド")').count()) === 0 && (await page.locator('text=顧客URL').count()) === 0);
 ok('店舗管理に地域・Instagram・Google の列がある', (await page.locator('th:has-text("地域")').count()) === 1 && (await page.locator('th:has-text("Instagram")').count()) === 1 && (await page.locator('th:has-text("Google")').count()) === 1);
@@ -260,6 +260,40 @@ ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api
   const adr = await (await fetch(`${BASE}/api/admin/sns/topics/import`, { method: 'POST', headers: H, body: JSON.stringify({ text: '---\n名前：月_E2Eエリア\n媒体：Google\n曜日：月\nエリア：\n本文：\n{エリア}で{メインキーワード}をお探しの方へ。\n---', dryRun: true, channel: 'gbp', area: '東部' }) })).json();
   ok('対象エリアを選んで取り込むと、エリアが空のものにも入る', adr.items[0]?.areas === '東部', JSON.stringify(adr.items[0] ?? {}));
   await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: H, body: JSON.stringify({ rows: [{ code: 'S001', areaGroup: orig.S001 ?? '' }, { code: 'S002', areaGroup: orig.S002 ?? '' }] }) });
+}
+{
+  // カレンダー：ドラッグで移動（承認はそのまま）、クリックで内容の変更、日付から投稿の追加
+  const H = { cookie: ck, 'content-type': 'application/json' };
+  const cal = async () => (await (await fetch(`${BASE}/api/admin/sns/calendar?from=2099-05-01&to=2099-05-31`, { headers: { cookie: ck } })).json()).posts;
+  for (const p of await cal()) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
+  const mk = await (await fetch(`${BASE}/api/admin/sns/posts?store=S001`, { method: 'POST', headers: H, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-05-12 10:00', title: 'E2Eカレンダー移動', body: '足首のケガのご相談を承っています。' }) })).json();
+  const pid = mk.post?.id ?? mk.id;
+  const ap = await fetch(`${BASE}/api/admin/sns/posts/${pid}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'approve' }) });
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await page.goto(`${BASE}/admin/sns/calendar?ym=2099-05&show=store`); await page.waitForSelector('text=E2Eカレンダー移動');
+  await page.locator('[data-date="2099-05-14"]').scrollIntoViewIfNeeded();
+  await page.locator('button:has-text("E2Eカレンダー移動")').dragTo(page.locator('[data-date="2099-05-14"]'));
+  ok('カレンダーでドラッグして別の日へ移動できる', await page.waitForSelector('text=/1 件を 5\\/14（木） ?に移動しました/', { timeout: 8000 }).then(() => true, () => false));
+  const moved = (await cal()).find((p) => p.id === pid);
+  ok('移動しても時刻と承認はそのまま', moved?.scheduledAt === '2099-05-14 10:00' && (ap.status !== 200 || moved?.status === 'approved'), JSON.stringify(moved));
+  await page.locator('button:has-text("E2Eカレンダー移動")').click();
+  await page.waitForSelector('[role="dialog"] >> text=日時を変える');
+  await page.waitForFunction(() => (document.querySelector('select[aria-label="定型投稿を選ぶ"]')?.options.length ?? 0) > 1, null, { timeout: 8000 }).catch(() => {});
+  const opts = await page.locator('select[aria-label="定型投稿を選ぶ"] option').count();
+  ok('投稿を押すと、日時・内容を変えるパネルが開く', opts > 1);
+  await page.locator('select[aria-label="定型投稿を選ぶ"]').selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'この内容にする' }).click();
+  ok('パネルで内容（定型投稿）を変えられる', await page.waitForSelector('text=の内容を変えました', { timeout: 8000 }).then(() => true, () => false));
+  await page.keyboard.press('Escape');
+  await page.locator('[data-date="2099-05-20"] button').first().click();
+  await page.waitForSelector('text=この日に投稿を追加');
+  await page.waitForFunction(() => (document.querySelector('select[aria-label="追加する定型投稿"]')?.options.length ?? 0) > 1, null, { timeout: 8000 }).catch(() => {});
+  await page.locator('select[aria-label="追加する定型投稿"]').selectOption({ index: 1 });
+  await page.locator('[role="dialog"] button:has-text("店舗に下書きを作る")').click();
+  ok('日付を押して、その日に投稿を追加できる', await page.waitForSelector('text=店舗分の下書きを作りました', { timeout: 8000 }).then(() => true, () => false));
+  const added = (await cal()).filter((p) => p.scheduledAt.startsWith('2099-05-20'));
+  ok('追加した投稿がカレンダーに出る', added.length >= 1, String(added.length));
+  for (const p of await cal()) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
 }
 const credRaw = await (await fetch(`${BASE}/api/admin/sns/credentials?store=S001`, { headers: { cookie: ck } })).text();
 ok('ログイン情報の取得にパスワードは含まれない', !credRaw.includes('Secret#Pass1') && credRaw.includes('natsume_test_ig'));

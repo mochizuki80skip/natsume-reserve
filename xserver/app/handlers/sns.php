@@ -226,7 +226,9 @@ function sns_post_put(array $mm): never
     $store = Settings::findStoreById($p['storeId']);
     $n = sns_recompose($p, $store, $patch);
     if (mb_strlen($n['fullText']) > Sns::MAX_LEN[$p['channel']]) Http::error(Sns::CHANNEL_JA[$p['channel']] . ' の文字数の上限（' . Sns::MAX_LEN[$p['channel']] . ' 文字）を超えています。本文を短くしてください', 400);
-    Db::exec('UPDATE sns_post SET title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, scheduledAt = ?, ' . SNS_RESET_CHECKS . ', error = NULL WHERE id = ?',
+    // 日時だけの移動で投稿文が変わらないときは、承認をそのまま残す（カレンダーで動かしただけで確認待ちに戻さない）
+    $onlyMove = array_keys($patch) === ['scheduledAt'] && $n['fullText'] === (string)$p['postText'] && $p['status'] === 'approved';
+    Db::exec('UPDATE sns_post SET title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, scheduledAt = ?, ' . ($onlyMove ? "status = 'approved'" : SNS_RESET_CHECKS) . ', error = NULL WHERE id = ?',
         [$n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $n['scheduledAt'], $p['id']]);
     Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
 }
