@@ -66,6 +66,7 @@ final class SnsTopicImport
         $L[] = '名前：（一覧用の短い名前' . ($wd !== '' ? '。曜日から始める' : '') . '）';
         $L[] = '媒体：' . self::CH_JA[$ch];
         $L[] = '曜日：' . ($wd !== '' ? '（' . $wd . ' のどれか 1 つ）' : '');
+        $L[] = '月：（その月だけに使う季節の話題なら、1〜12 の数字。いつでも使えるなら空）';
         $L[] = 'エリア：';
         $L[] = '店舗：' . ($o['perStore'] ? '（店舗コード）' : '');
         $L[] = '本文：';
@@ -106,6 +107,11 @@ final class SnsTopicImport
                 }
             }
             if ($bodyStart === null) continue;                                  // 本文の無い区切り（前置きなど）は読まない
+            // 「月：」が無く、名前に「7月」のような月があれば、その月だけに使う（例：月_7月_01_夏休みの部活）
+            if ($item['months'] === '' && preg_match('/(?<![0-9０-９])([0-9０-９]{1,2})月/u', $item['title'], $mm)) {
+                $n = (int)mb_convert_kana($mm[1], 'n');
+                if ($n >= 1 && $n <= 12) $item['months'] = (string)$n;
+            }
             $body = trim($first . "\n" . implode("\n", array_slice($lines, $bodyStart + 1)));
             $item['body'] = trim(preg_replace("/\n{3,}/", "\n\n", $body));
             $out[] = $item;

@@ -250,6 +250,14 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
     } catch (e) { setMsg((e as Error).message); }
     setBusy(false);
   }
+  /** claude.ai からダウンロードしたファイル（.txt / .md。複数可）を読み込んで、貼り付け欄に入れる */
+  async function loadFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const list = [...files].sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
+    const texts = await Promise.all(list.map((f) => f.text()));
+    setText(texts.join('\n---\n')); setItems(null);
+    setMsg(`${list.length} 個のファイルを読み込みました。「確認する」を押してください`);
+  }
   const okCount = items?.filter((i) => i.status === 'ok').length ?? 0;
   const WDJ = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -277,6 +285,11 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
         </section>
         <section className="space-y-2">
           <div className="font-bold">② claude.ai の返答を貼り付けて確認 → 取り込む</div>
+          <label className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <span className="rounded border bg-white px-3 py-1.5 text-sm text-slate-800">ファイルから読み込む（複数まとめて選べます）</span>
+            <input type="file" accept=".txt,.md,text/plain,text/markdown" multiple onChange={(e) => { void loadFiles(e.target.files); e.target.value = ''; }} className="text-xs" aria-label="返答のファイル" />
+            <span>claude.ai でファイルとして受け取った返答（.txt など）を、そのまま読み込めます。</span>
+          </label>
           <textarea value={text} onChange={(e) => { setText(e.target.value); setItems(null); }} rows={8} placeholder={'claude.ai の返答をそのまま貼り付け（「---」で区切られた「名前：」「媒体：」「曜日：」「本文：」の形）'} className="w-full rounded border bg-white px-2 py-1 font-mono text-xs" />
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" disabled={busy || !text.trim()} onClick={() => check(true)} className="rounded border bg-white px-3 py-1.5 disabled:opacity-40">確認する</button>
@@ -285,14 +298,15 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
           </div>
           {items && items.length > 0 && (
             <table className="w-full rounded border bg-white text-xs">
-              <thead><tr className="bg-slate-100 text-left text-slate-600"><th className="px-2 py-1">名前</th><th className="px-2 py-1">媒体</th><th className="px-2 py-1">曜日</th><th className="px-2 py-1">店舗</th><th className="px-2 py-1">本文</th><th className="px-2 py-1">確認</th></tr></thead>
+              <thead><tr className="bg-slate-100 text-left text-slate-600"><th className="px-2 py-1">名前</th><th className="px-2 py-1">媒体</th><th className="px-2 py-1">曜日</th><th className="px-2 py-1">月</th><th className="px-2 py-1">店舗</th><th className="px-2 py-1">本文</th><th className="px-2 py-1">確認</th></tr></thead>
               <tbody>
                 {items.map((it, i) => (
                   <tr key={i} className={`border-t align-top ${it.errors.length ? 'bg-red-50' : ''}`}>
                     <td className="px-2 py-1 font-bold">{it.title}</td>
                     <td className="whitespace-nowrap px-2 py-1">{CH[it.channel]}</td>
                     <td className="whitespace-nowrap px-2 py-1">{it.weekdays ? it.weekdays.split(',').map((d) => WDJ[Number(d)]).join('・') : '毎日'}</td>
-                    <td className="whitespace-nowrap px-2 py-1">{it.store || '全店共通'}</td>
+                    <td className="whitespace-nowrap px-2 py-1">{it.months ? it.months.split(',').map((m) => `${m}月`).join('・') : '通年'}</td>
+                    <td className="whitespace-nowrap px-2 py-1">{it.store || '全店共通'}{it.areas && <div className="text-slate-500">{it.areas}</div>}</td>
                     <td className="px-2 py-1"><div className="line-clamp-4 whitespace-pre-wrap">{it.body}</div></td>
                     <td className="px-2 py-1">
                       {it.status === 'created' ? <span className="text-green-700">登録しました</span> : it.status === 'duplicate' ? <span className="text-slate-500">登録済み</span> : it.errors.length ? <span className="text-red-700">{it.errors.join(' / ')}</span> : <span className="text-green-700">OK</span>}
@@ -303,7 +317,7 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
               </tbody>
             </table>
           )}
-          <p className="text-xs text-slate-500">取り込んだ定型投稿は「全店共通」（「店舗：」がある場合はその店舗用）になります。赤い行（Google に電話番号・URL などが入っているなど）は取り込みません。黄色の注意は取り込めますが、下書きの承認前に直してください。</p>
+          <p className="text-xs text-slate-500">名前に「7月」のように月があるものは、その月の予定だけに使います（例：月_7月_01_夏休みの部活）。取り込んだ定型投稿は「全店共通」（「店舗：」がある場合はその店舗用）になります。赤い行（Google に電話番号・URL などが入っているなど）は取り込みません。黄色の注意は取り込めますが、下書きの承認前に直してください。</p>
         </section>
       </div>
     </details>

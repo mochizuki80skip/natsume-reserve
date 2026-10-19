@@ -189,6 +189,16 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   await page.waitForSelector('button:has-text("件を定型投稿に取り込む")');
   await page.getByRole('button', { name: /2 件を定型投稿に取り込む/ }).click();
   ok('2 件を取り込める（画面）', await page.waitForSelector('text=2 件を定型投稿に登録しました', { timeout: 5000 }).then(() => true, () => false));
+  // claude.ai から受け取ったファイル（複数）を読み込む。名前の「7月」から月を読む
+  await page.locator('input[aria-label="返答のファイル"]').setInputFiles([
+    { name: 'Google_7-9.txt', mimeType: 'text/plain', buffer: Buffer.from('```\n---\n名前：月_7月_01_夏休みの部活\n媒体：Google\n曜日：月\nエリア：\n店舗：\n本文：\n{エリア}で{メインキーワード}をお探しの方へ。夏の部活のケガのご相談を承っています。\n---\n```') },
+    { name: 'Google_10-12.txt', mimeType: 'text/plain', buffer: Buffer.from('```\n---\n名前：金_12月_01_大掃除\n媒体：Google\n曜日：金\nエリア：\n店舗：\n本文：\n{エリア}の{メインキーワード}・{店舗名}です。大掃除でのケガのご相談を承っています。\n---\n```') },
+  ]);
+  await page.waitForSelector('text=2 個のファイルを読み込みました');
+  await page.getByRole('button', { name: '確認する' }).click();
+  await page.waitForSelector('button:has-text("件を定型投稿に取り込む")');
+  const rowsText = (await page.locator('details:has(summary:has-text("Claude で定型投稿を作って取り込む")) table').first().textContent()) ?? '';
+  ok('ファイルを複数まとめて読み込み、名前の月を読む', rowsText.includes('7月') && rowsText.includes('12月') && (await page.getByRole('button', { name: /^2 件を定型投稿に取り込む/ }).count()) === 1, rowsText.slice(0, 120));
   const again = await (await fetch(`${BASE}/api/admin/sns/topics/import`, { method: 'POST', headers: H, body: JSON.stringify({ text: reply, dryRun: false }) })).json();
   ok('同じものは二重に登録しない', again.created === 0 && again.skipped === 2);
   const tl = await (await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { headers: { cookie } })).json();
