@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 36, date: '2026-10-19', title: '患者様が自分の予約を確認できるように', audience: ['店舗', '本部'],
+    items: ['WEB 予約の画面の右上に「📅 ご予約の確認」ボタンを足しました（そのスマホで WEB 予約したことがある方だけに出ます）。押すと、そのスマホで予約した日時・店舗の一覧が見られます。お電話・窓口で取った予約は出ません。変更・キャンセルは今までどおりお電話です。'],
+  },
+  {
     id: 35, date: '2026-10-19', title: '新患継続率に電話番号を入れない', audience: ['店舗', '本部'],
     items: ['予約表のセルに氏名と一緒に電話番号を書いていても、新患継続率の氏名には氏名だけが入るようにしました。すでに入っていた電話番号も消してあります。'],
   },

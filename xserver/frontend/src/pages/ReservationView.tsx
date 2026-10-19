@@ -64,6 +64,7 @@ export default function ReservationView() {
         <span className="block text-[11px] text-slate-600">{store.name}</span>
       </a>
       <Link to={`/s/${encodeURIComponent(store.code)}`} className="mt-3 block rounded-lg bg-brand px-4 py-3 text-center text-base font-bold text-white no-underline">次回のご予約をとる</Link>
+      <Link to={`/my?store=${encodeURIComponent(store.code)}`} className="mt-2 block text-center text-sm text-brand underline">この端末のご予約をすべて見る</Link>
       <p className="mt-2 text-xs text-slate-500">このページは予約日の翌日まで見られます。</p>
     </main>
   );

@@ -5,6 +5,7 @@ import { formatJpPhone } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
 import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
+import { addMyReservation, loadMyReservations } from '@/lib/myReservations';
 
 interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string }
 
@@ -35,6 +36,8 @@ export default function BookingApp({ store, smsEnabled, via, refCode }: Props) {
   }
 
   // 確認画面で「この内容で予約する」を押したときに初めて予約を送る
+  // この端末で WEB 予約した予約があれば、上に「ご予約の確認」を出す
+  const [hasMine, setHasMine] = useState(() => loadMyReservations().length > 0);
   async function submit() {
     if (!sel || !kind || loading) return;
     setLoading(true); setError('');
@@ -51,6 +54,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode }: Props) {
         return;
       }
       setDone(j); setStep(4); window.scrollTo(0, 0);
+      if (j.token) { addMyReservation({ token: j.token, date: sel.date }); setHasMine(true); } // 「ご予約の確認」の一覧に出すため、この端末に覚えておく
       if (remember) { const m = { name: form.name, phone: form.phone, cardNo: form.cardNo || (useMemory ? memory?.cardNo ?? '' : '') }; savePatient(m); setMemory(m); }
     } catch { setError('通信に失敗しました'); } finally { setLoading(false); }
   }
@@ -77,7 +81,10 @@ export default function BookingApp({ store, smsEnabled, via, refCode }: Props) {
   return (
     <main className="mx-auto max-w-lg px-3 pb-6 pt-4">
       <header className="mb-3">
-        <h1 className="text-lg font-bold">{store.name}　WEB予約</h1>
+        <div className="flex items-start justify-between gap-2">
+          <h1 className="text-lg font-bold">{store.name}　WEB予約</h1>
+          {hasMine && <Link to={`/my?store=${encodeURIComponent(store.code)}`} className="flex-none whitespace-nowrap rounded-lg border border-brand bg-white px-2.5 py-1 text-xs font-bold text-brand no-underline">📅 ご予約の確認</Link>}
+        </div>
         <ol className="mt-2 flex gap-1 text-xs text-slate-500">
           {['日時', '入力', '確認', '完了'].map((l, i) => {
             const n = (i + 1) as 1 | 2 | 3 | 4;
