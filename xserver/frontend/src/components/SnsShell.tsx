@@ -42,7 +42,7 @@ export default function SnsShell() {
             {item('/admin/sns/vars', '店舗の一括設定')}
             {item('/admin/sns/media', '画像')}
             {item('/admin/sns/insights', '分析')}
-            {isHq ? item('/admin/sns/schedule', '設定') : item('/admin/sns/settings', '設定')}
+            {isHq ? item('/admin/sns/schedule', '配信設定') : item('/admin/sns/settings', '設定')}
             {isHq && item('/admin/sns/stores', '店舗管理')}
             {isHq && item('/admin/hq/sns', '接続状況')}
           </nav>

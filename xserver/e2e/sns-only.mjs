@@ -230,9 +230,23 @@ ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api
   await page.getByRole('button', { name: /^E2E東部（1 店）/ }).click();
   ok('カレンダーのエリアのタブで絞り込める（画面）', await page.waitForSelector('text=E2E東部の投稿の曜日・時刻', { timeout: 5000 }).then(() => true, () => false) && page.url().includes('area='));
   await page.goto(`${BASE}/admin/sns/schedule?area=${encodeURIComponent('E2E西部')}`); await page.waitForSelector('text=まとめて設定');
-  ok('設定をエリアで絞ると、そのエリアの店舗だけ出る', (await page.locator('section:has-text("運用メモ")').count()) === 1);
+  ok('配信設定をエリアで絞ると、そのエリアの店舗だけ表に出る', (await page.locator('input[aria-label$="のエリア分け"]').count()) === 1);
   await page.locator('section:has-text("まとめて設定")').getByRole('button', { name: 'このエリアに入れる' }).nth(1).click();
   ok('エリアの店舗にまとめて曜日を入れられる', (await page.locator('text=1 店舗の Google の曜日・時刻を入れました').count()) === 1 && (await page.locator('button:has-text("保存（1 店舗）")').count()) === 1);
+  // 表で、店舗ごとに曜日とエリア分けを変えて保存する
+  const st0 = (await (await fetch(`${BASE}/api/admin/hq/sns/stores`, { headers: { cookie: ck } })).json()).stores.find((x) => x.code === 'S001');
+  await page.goto(`${BASE}/admin/sns/schedule?area=${encodeURIComponent('E2E東部')}`); await page.waitForSelector('text=曜日ごとの店舗数');
+  const chips = page.locator(`button[aria-label^="${st0.name} Google "]`);
+  let addDay = -1; const WDJ = ['日', '月', '火', '水', '木', '金', '土'];
+  for (const d of [1, 2, 3, 4, 5, 6, 0]) if ((await page.locator(`button[aria-label="${st0.name} Google ${WDJ[d]}"]`).getAttribute('aria-pressed')) === 'false') { addDay = d; break; }
+  ok('配信設定の表に曜日のボタンがある', (await chips.count()) === 7 && addDay >= 0);
+  await page.locator(`button[aria-label="${st0.name} Google ${WDJ[addDay]}"]`).click();
+  await page.locator(`input[aria-label="${st0.name} のエリア分け"]`).fill('E2E北部');
+  await page.getByRole('button', { name: '保存（1 店舗）' }).click();
+  await page.waitForSelector('text=1 店舗を保存しました');
+  const st1 = (await (await fetch(`${BASE}/api/admin/hq/sns/stores`, { headers: { cookie: ck } })).json()).stores.find((x) => x.code === 'S001');
+  ok('表で変えた曜日とエリア分けが保存される', st1.setting.areaGroup === 'E2E北部' && st1.setting.gbpSchedule?.type === 'weekly' && st1.setting.gbpSchedule.weekdays.includes(addDay), JSON.stringify(st1.setting.gbpSchedule));
+  await fetch(`${BASE}/api/admin/sns/settings?store=S001`, { method: 'PUT', headers: H, body: JSON.stringify({ gbpSchedule: st0.setting.gbpSchedule }) });
   await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: H, body: JSON.stringify({ rows: [{ code: 'S001', areaGroup: orig.S001 ?? '' }, { code: 'S002', areaGroup: orig.S002 ?? '' }] }) });
 }
 const credRaw = await (await fetch(`${BASE}/api/admin/sns/credentials?store=S001`, { headers: { cookie: ck } })).text();
