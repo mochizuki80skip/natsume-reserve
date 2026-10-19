@@ -1319,7 +1319,7 @@ function sns_topics_prompt(): never
     $stores = array_map([Settings::class, 'storeRow'], Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC'));
     $prompt = SnsTopicImport::prompt([
         'theme' => Http::str($b, 'theme', 500, false), 'count' => (int)($b['count'] ?? 3), 'channel' => $ch,
-        'weekdays' => sns_weekdays($b['weekdays'] ?? ''), 'perStore' => ($b['perStore'] ?? false) === true, 'stores' => $stores,
+        'weekdays' => sns_weekdays($b['weekdays'] ?? ''), 'perStore' => ($b['perStore'] ?? false) === true, 'area' => Http::str($b, 'area', 50, false), 'stores' => $stores,
     ]);
     Http::json(['prompt' => $prompt]);
 }
@@ -1334,6 +1334,7 @@ function sns_topics_import(): never
     $text = (string)($b['text'] ?? '');
     if (mb_strlen($text) > 300000) Http::error('貼り付けた文章が長すぎます。分けて取り込んでください', 400);
     $dry = ($b['dryRun'] ?? true) !== false;
+    $forArea = Http::str($b, 'area', 50, false);                     // 「エリア：」が空のものに入れる対象エリア（例：東部）
     $byCode = []; $byName = [];
     foreach (Db::all('SELECT * FROM store') as $st) { $byCode[mb_strtolower($st['code'])] = $st; $byName[$st['name']] = $st; }
     $items = [];
@@ -1354,7 +1355,7 @@ function sns_topics_import(): never
         if ($hits) $warnings[] = '広告規制で使わない語：' . implode('、', $hits) . ($ch !== 'ig' ? '（Google は承認できません）' : '');
         $unknown = Sns::unknownPlaceholders($it['body']);
         if ($unknown) $warnings[] = '未定義の差し込み語：' . implode(' ', $unknown);
-        $months = sns_months($it['months']); $weekdays = $it['weekdays']; $areas = sns_areas($it['areas']);
+        $months = sns_months($it['months']); $weekdays = $it['weekdays']; $areas = sns_areas($it['areas'] !== '' ? $it['areas'] : $forArea);
         $status = $errors ? 'error' : 'ok';
         if (!$errors && !$dry) {
             $dup = Db::one('SELECT id FROM sns_topic WHERE ' . ($store ? 'storeId = ?' : 'storeId IS NULL') . ' AND title = ? AND body = ?', $store ? [$store['id'], $title, $it['body']] : [$title, $it['body']]);

@@ -19,6 +19,8 @@ export default function SnsTopicsPage() {
   const storeQ = me.session.role === 'hq' && sp.get('store') ? `store=${encodeURIComponent(sp.get('store')!)}` : '';
   const { data, error, reload } = useFetch<Resp>(`/api/admin/sns/topics?${storeQ}`);
   const [msg, setMsg] = useState('');
+  const { data: areaData } = useFetch<{ stores: { areaGroup?: string }[] }>('/api/admin/sns/vars');
+  const areaGroups = [...new Set((areaData?.stores ?? []).map((s) => (s.areaGroup ?? '').trim()).filter(Boolean))];
   const [nf, setNf] = useState({ shared: me.session.role === 'hq', channel: 'both' as Channel | 'both', title: '', body: '', months: '', weekdays: '', areas: '', standalone: true });
   const [edit, setEdit] = useState<Topic | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -63,6 +65,7 @@ export default function SnsTopicsPage() {
   return (
     <div className="space-y-4">
       <SnsNav title="定型投稿（文章＋画像）" />
+      <datalist id="sns-topic-areas">{areaGroups.map((a) => <option key={a} value={a} />)}</datalist>
       <p className="text-sm text-slate-600">
         文章と画像を作って保管しておくと、予定枠に合わせて自動で下書きになります（使った回数が少ないもの → 最後に使ってから長いもの、の順）。
         文章の中の <code className="rounded bg-slate-100 px-1">{'{店舗名}'}</code> <code className="rounded bg-slate-100 px-1">{'{エリア}'}</code> などの差し込み語は、投稿するときに店舗ごとの設定の値に置き換わります。
@@ -92,9 +95,9 @@ export default function SnsTopicsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-slate-600">投稿する曜日</span><WeekdayPicker value={nf.weekdays} onChange={(v) => setNf({ ...nf, weekdays: v })} />
-          <input value={nf.areas} onChange={(e) => setNf({ ...nf, areas: e.target.value })} placeholder="対象エリア（例：浜松、沼津。空なら全店）" className="w-72 rounded border px-2 py-1" />
+          <input value={nf.areas} onChange={(e) => setNf({ ...nf, areas: e.target.value })} placeholder="対象エリア（例：東部。空なら全店）" list="sns-topic-areas" className="w-72 rounded border px-2 py-1" />
         </div>
-        <p className="text-xs text-slate-500">曜日を選ぶと、その曜日の予定にだけこの定型投稿が使われます（例：月曜は「月_お悩み共感」）。対象エリアを入れると、エリア分け・地域・店舗名にその語を含む店舗だけに使われます（例：「浜松」→ エリア分けが浜松の店舗）。店舗の投稿の曜日は「設定」（または「接続状況」の既定の頻度）で、定型投稿の曜日と同じにしておきます。</p>
+        <p className="text-xs text-slate-500">曜日を選ぶと、その曜日の予定にだけこの定型投稿が使われます（例：月曜は「月_お悩み共感」）。対象エリアにエリア分けの名前（例：東部）を入れると、エリア分けがそれと同じ店舗だけに使われます（「東部」で「中東部」の店舗には使いません）。地名（例：沼津）を入れると、地域・店舗名にその語を含む店舗に使われます。店舗の投稿の曜日は「配信設定」（または「接続状況」の既定の頻度）で、定型投稿の曜日と同じにしておきます。</p>
         <input value={nf.title} onChange={(e) => setNf({ ...nf, title: e.target.value })} placeholder={nf.standalone ? '名前（一覧用。投稿文には入りません。例：駅チカ案内）' : '見出し（投稿文の先頭に入ります）'} className="w-full rounded border px-2 py-1" />
         <textarea value={nf.body} onChange={(e) => setNf({ ...nf, body: e.target.value })} required rows={6} placeholder={nf.standalone ? '投稿文（差し込み語入り）。例：{エリア}で{メインキーワード}をお探しなら{店舗名}へ。\n\nご予約はこちら {予約URL}\n\n{ハッシュタグ}' : '本文（店名・締め・ハッシュタグは型から自動で付きます）'} className="w-full rounded border px-2 py-1" />
         <div className="flex flex-wrap items-center gap-2">
@@ -130,7 +133,7 @@ export default function SnsTopicsPage() {
                   <td className="space-y-1 px-2 py-1 text-xs">
                     <label className="block">月<input value={edit.months} onChange={(e) => setEdit({ ...edit, months: e.target.value })} placeholder="空なら通年" className="ml-1 w-20 rounded border px-1" /></label>
                     <WeekdayPicker value={edit.weekdays} onChange={(v) => setEdit({ ...edit, weekdays: v })} small />
-                    <input value={edit.areas} onChange={(e) => setEdit({ ...edit, areas: e.target.value })} placeholder="対象エリア（空なら全店）" className="w-36 rounded border px-1" />
+                    <input value={edit.areas} onChange={(e) => setEdit({ ...edit, areas: e.target.value })} placeholder="対象エリア（空なら全店）" list="sns-topic-areas" className="w-36 rounded border px-1" />
                   </td>
                   <td className="px-2 py-1">
                     <input value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} className="mb-1 w-full rounded border px-1" />
@@ -222,7 +225,10 @@ interface ImportItem { title: string; channel: Channel | 'both'; weekdays: strin
  * システムから AI は呼ばないので、API の費用はかからない
  */
 function ClaudeImport({ onImported }: { onImported: () => void }) {
-  const [o, setO] = useState({ theme: '', count: 3, channel: 'gbp' as Channel | 'both', weekdays: '', perStore: false });
+  const [o, setO] = useState({ theme: '', count: 3, channel: 'gbp' as Channel | 'both', weekdays: '', perStore: false, area: '' });
+  // 店舗のエリア分け（配信設定で入れたもの）。エリアを選ぶと、そのエリアの店舗だけに使う投稿として作って取り込む
+  const { data: varsData } = useFetch<{ stores: { areaGroup?: string }[] }>('/api/admin/sns/vars');
+  const areaNames = [...new Set((varsData?.stores ?? []).map((s) => (s.areaGroup ?? '').trim()).filter(Boolean))];
   const [prompt, setPrompt] = useState('');
   const [text, setText] = useState('');
   const [items, setItems] = useState<ImportItem[] | null>(null);
@@ -243,7 +249,7 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
   async function check(dryRun: boolean) {
     setBusy(true); setMsg('');
     try {
-      const r = await sendJson<{ items: ImportItem[]; created: number; skipped: number }>('/api/admin/sns/topics/import', 'POST', { text, dryRun, channel: o.channel });
+      const r = await sendJson<{ items: ImportItem[]; created: number; skipped: number }>('/api/admin/sns/topics/import', 'POST', { text, dryRun, channel: o.channel, area: o.area });
       setItems(r.items);
       if (r.items.length === 0) setMsg('定型投稿を読み取れませんでした。「---」で区切られた「名前：」「本文：」の形か確認してください');
       else if (!dryRun) { setMsg(`${r.created} 件を定型投稿に登録しました${r.skipped ? `（同じものが登録済みで飛ばした ${r.skipped} 件）` : ''}`); setText(''); onImported(); }
@@ -274,6 +280,12 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-xs text-slate-600">投稿する曜日</span><WeekdayPicker value={o.weekdays} onChange={(v) => setO({ ...o, weekdays: v })} />
+            <label className="flex items-center gap-1">対象エリア
+              <select value={o.area} onChange={(e) => { setO({ ...o, area: e.target.value }); setItems(null); }} className="rounded border px-2 py-1" aria-label="対象エリア">
+                <option value="">全店共通</option>
+                {areaNames.map((a) => <option key={a} value={a}>{a}だけ</option>)}
+              </select>
+            </label>
             <label className="flex items-center gap-1" title="店舗の一覧を依頼文に入れ、店舗ごとに違う文章を作ってもらいます（本数 × 店舗数の量になります）"><input type="checkbox" checked={o.perStore} onChange={(e) => setO({ ...o, perStore: e.target.checked })} />店舗ごとに書き分ける</label>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -317,7 +329,7 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
               </tbody>
             </table>
           )}
-          <p className="text-xs text-slate-500">名前に「7月」のように月があるものは、その月の予定だけに使います（例：月_7月_01_夏休みの部活）。取り込んだ定型投稿は「全店共通」（「店舗：」がある場合はその店舗用）になります。赤い行（Google に電話番号・URL などが入っているなど）は取り込みません。黄色の注意は取り込めますが、下書きの承認前に直してください。</p>
+          <p className="text-xs text-slate-500">{o.area && <><b>対象エリア「{o.area}」</b>を選んでいるので、「エリア：」が空のものも{o.area}の店舗だけに使います。</>}名前に「7月」のように月があるものは、その月の予定だけに使います（例：月_7月_01_夏休みの部活）。取り込んだ定型投稿は「全店共通」（「店舗：」がある場合はその店舗用）になります。赤い行（Google に電話番号・URL などが入っているなど）は取り込みません。黄色の注意は取り込めますが、下書きの承認前に直してください。</p>
         </section>
       </div>
     </details>

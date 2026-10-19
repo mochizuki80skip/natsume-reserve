@@ -321,6 +321,7 @@ final class Sns
     public static function saveStoreSetting(string $storeId, array $v): void
     {
         self::ensureTables();
+        self::$areaGroupNames = null;
         Db::exec('INSERT INTO sns_store_setting (storeId, igEnabled, igSchedule, gbpEnabled, gbpSchedule, area, areaGroup, address, hoursText, hashtags, keywordsFixed, keywordsRotation, memo, vars, gbpPostUrl, igProfileUrl)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE igEnabled = VALUES(igEnabled), igSchedule = VALUES(igSchedule), gbpEnabled = VALUES(gbpEnabled), gbpSchedule = VALUES(gbpSchedule), area = VALUES(area), areaGroup = VALUES(areaGroup), address = VALUES(address),
@@ -737,14 +738,31 @@ final class Sns
     }
     public const NO_AREA_GROUP = 'エリア未設定';
 
-    /** 定型投稿の「対象エリア」に、この店舗が入るか（エリア分け・地域・店舗名・店舗コードのどれかに語が含まれる。空なら全店） */
+    /** 店舗に付けたエリア分けの名前の一覧（例：中部・中東部・中西部・東部） */
+    private static ?array $areaGroupNames = null;
+    public static function areaGroupNames(): array
+    {
+        return self::$areaGroupNames ??= array_column(Db::all("SELECT DISTINCT areaGroup FROM sns_store_setting WHERE areaGroup <> ''"), 'areaGroup');
+    }
+
+    /**
+     * 定型投稿の「対象エリア」に、この店舗が入るか（空なら全店）。
+     * エリア分けの名前（例：東部）と同じ語は、エリア分けが完全に同じ店舗だけ（「東部」で「中東部」の店舗を拾わない）。
+     * それ以外の語は、地域・店舗名・店舗コードに含まれるかで決める（例：「沼津」）。
+     */
     public static function topicFitsStore(array $topic, ?array $store, ?array $ss): bool
     {
         $areas = self::splitList((string)($topic['areas'] ?? ''));
         if (!$areas) return true;
         if (!$store) return false;
-        $hay = ($ss['areaGroup'] ?? '') . ' ' . ($ss['area'] ?? '') . ' ' . $store['name'] . ' ' . $store['code'];
-        foreach ($areas as $a) if ($a !== '' && mb_stripos($hay, $a) !== false) return true;
+        $group = trim((string)($ss['areaGroup'] ?? ''));
+        $groups = self::areaGroupNames();
+        $hay = ($ss['area'] ?? '') . ' ' . $store['name'] . ' ' . $store['code'];
+        foreach ($areas as $a) {
+            if ($a === '') continue;
+            if (in_array($a, $groups, true)) { if ($a === $group) return true; continue; }
+            if (mb_stripos($hay . ' ' . $group, $a) !== false) return true;
+        }
         return false;
     }
 

@@ -247,6 +247,18 @@ ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api
   const st1 = (await (await fetch(`${BASE}/api/admin/hq/sns/stores`, { headers: { cookie: ck } })).json()).stores.find((x) => x.code === 'S001');
   ok('表で変えた曜日とエリア分けが保存される', st1.setting.areaGroup === 'E2E北部' && st1.setting.gbpSchedule?.type === 'weekly' && st1.setting.gbpSchedule.weekdays.includes(addDay), JSON.stringify(st1.setting.gbpSchedule));
   await fetch(`${BASE}/api/admin/sns/settings?store=S001`, { method: 'PUT', headers: H, body: JSON.stringify({ gbpSchedule: st0.setting.gbpSchedule }) });
+  // 4 エリア（中部・中東部・中西部・東部）：「東部」の定型投稿は「中東部」の店舗に使わない
+  await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: H, body: JSON.stringify({ rows: [{ code: 'S001', areaGroup: '中東部' }, { code: 'S002', areaGroup: '東部' }] }) });
+  const tid = (await (await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { method: 'POST', headers: H, body: JSON.stringify({ shared: true, channel: 'gbp', title: 'E2E東部だけ', body: '{エリア}の{店舗名}です。東部の話題です。', months: '', weekdays: '', areas: '東部', standalone: true }) })).json()).id;
+  const bcr = await (await fetch(`${BASE}/api/admin/hq/sns/topics/${tid}/broadcast`, { method: 'POST', headers: H, body: JSON.stringify({ channel: 'gbp', scheduledAt: '2099-03-02 10:00', stores: ['S001', 'S002'] }) })).json();
+  ok('「東部」の定型投稿は東部の店舗だけ（中東部の店舗には使わない）', bcr.created === 1 && bcr.skipped.some((x) => x.includes('対象エリアの外')), JSON.stringify(bcr));
+  const bposts = (await (await fetch(`${BASE}/api/admin/sns/drafts`, { headers: { cookie: ck } })).json()).posts.filter((p) => p.title === 'E2E東部だけ' || (p.body ?? '').includes('東部の話題'));
+  for (const p of bposts) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
+  await fetch(`${BASE}/api/admin/sns/topics?store=S002`, { method: 'PUT', headers: H, body: JSON.stringify({ id: tid, action: 'delete' }) });
+  const apr = await (await fetch(`${BASE}/api/admin/sns/topics/prompt`, { method: 'POST', headers: H, body: JSON.stringify({ theme: '', count: 4, channel: 'gbp', weekdays: '1', perStore: false, area: '東部' }) })).json();
+  ok('Claude への依頼文に対象エリアが入る', apr.prompt.includes('対象エリア：東部') && apr.prompt.includes('エリア：東部'));
+  const adr = await (await fetch(`${BASE}/api/admin/sns/topics/import`, { method: 'POST', headers: H, body: JSON.stringify({ text: '---\n名前：月_E2Eエリア\n媒体：Google\n曜日：月\nエリア：\n本文：\n{エリア}で{メインキーワード}をお探しの方へ。\n---', dryRun: true, channel: 'gbp', area: '東部' }) })).json();
+  ok('対象エリアを選んで取り込むと、エリアが空のものにも入る', adr.items[0]?.areas === '東部', JSON.stringify(adr.items[0] ?? {}));
   await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: H, body: JSON.stringify({ rows: [{ code: 'S001', areaGroup: orig.S001 ?? '' }, { code: 'S002', areaGroup: orig.S002 ?? '' }] }) });
 }
 const credRaw = await (await fetch(`${BASE}/api/admin/sns/credentials?store=S001`, { headers: { cookie: ck } })).text();

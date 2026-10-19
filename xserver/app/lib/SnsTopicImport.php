@@ -10,7 +10,7 @@ final class SnsTopicImport
 
     /**
      * claude.ai に貼る依頼文を作る。
-     * @param array{theme:string, count:int, channel:string, weekdays:string, perStore:bool, stores:array<int, array>} $o
+     * @param array{theme:string, count:int, channel:string, weekdays:string, perStore:bool, area?:string, stores:array<int, array>} $o
      */
     public static function prompt(array $o): string
     {
@@ -30,6 +30,14 @@ final class SnsTopicImport
         $L[] = '# 作るもの';
         $L[] = '- テーマ：' . ($o['theme'] !== '' ? $o['theme'] : '接骨院らしい、地域の方に役立つ話題（季節のケガの予防、来院の流れ、施術の案内など）');
         $L[] = '- 媒体：' . self::CH_JA[$ch] . ($ch === 'both' ? '（Google と Instagram の両方に使える文章）' : ' 用');
+        $area = trim((string)($o['area'] ?? ''));
+        if ($area !== '') {
+            // このエリアの店舗の地域（例：沼津市大岡、三島市谷田）を書き、季節・地域の話題に生かしてもらう
+            $local = [];
+            foreach ($o['stores'] as $st) { $ss = Sns::storeSetting($st); if (trim($ss['areaGroup']) === $area && $ss['area'] !== '') $local[$ss['area']] = true; }
+            $L[] = '- 対象エリア：' . $area . '（このエリアの店舗だけに使う投稿。全部の「エリア：」に「' . $area . '」と書く）';
+            if ($local) $L[] = '- ' . $area . 'の店舗の地域：' . implode('、', array_keys($local)) . '（地名は本文に直接書かず {エリア} を使う。季節の様子や暮らしぶりの参考にする）';
+        }
         $L[] = '- 本数：' . ($o['perStore'] ? "テーマごとに {$count} 本 × 下の店舗ごと（店舗ごとに書き分ける）" : "{$count} 本（内容がそれぞれ違うもの）");
         if ($wd !== '') $L[] = '- 投稿する曜日：' . $wd . '（曜日ごとに本数がなるべく同じになるように割り振り、名前の先頭に曜日を付ける。例：' . mb_substr($wd, 0, 1) . '_お悩み共感）';
         $L[] = '';
@@ -49,7 +57,7 @@ final class SnsTopicImport
         $L[] = '- 料金・割引・キャンペーン・ほかの院との比較は書かない。';
         $groups = [];
         foreach ($o['stores'] as $st) { $g = trim((string)(Sns::storeSetting($st)['areaGroup'] ?? '')); if ($g !== '') $groups[$g] = true; }
-        if ($groups) $L[] = '- 「エリア：」は、特定のエリアの店舗だけに使う内容のときだけ、次のどれかを書く（空なら全店で使う）：' . implode('、', array_keys($groups));
+        if ($groups && $area === '') $L[] = '- 「エリア：」は、特定のエリアの店舗だけに使う内容のときだけ、次のどれかを書く（空なら全店で使う）：' . implode('、', array_keys($groups));
         if ($o['perStore']) {
             $L[] = '';
             $L[] = '# 店舗（店舗ごとに書き出しや言い回しを変えて、同じ文章にならないようにする）';
@@ -67,7 +75,7 @@ final class SnsTopicImport
         $L[] = '媒体：' . self::CH_JA[$ch];
         $L[] = '曜日：' . ($wd !== '' ? '（' . $wd . ' のどれか 1 つ）' : '');
         $L[] = '月：（その月だけに使う季節の話題なら、1〜12 の数字。いつでも使えるなら空）';
-        $L[] = 'エリア：';
+        $L[] = 'エリア：' . $area;
         $L[] = '店舗：' . ($o['perStore'] ? '（店舗コード）' : '');
         $L[] = '本文：';
         $L[] = '（ここから本文。複数行で書いてよい）';
