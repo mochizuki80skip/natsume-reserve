@@ -62,7 +62,7 @@ final class Karte
     /** 「山田 太郎（初診）」「山田 太郎 初診」→「山田 太郎」 */
     public static function nameOfText(string $text): string
     {
-        $t = Text::dropHonorific($text);
+        $t = Text::dropHonorific(Text::dropPhone($text));
         $t = preg_replace('/\s*[（(](初診|初自|初|再|再来|新自)[）)]\s*/u', ' ', $t) ?? $t;
         $t = preg_replace('/\s*(初診|初自|新自|再来|再診)\s*/u', ' ', $t) ?? $t;
         return trim(preg_replace('/\s+/u', ' ', $t) ?? $t);

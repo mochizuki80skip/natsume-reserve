@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 19;
+    private const VERSION = 20;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -178,6 +178,14 @@ final class Migrate
                     }
                     if (!self::hasColumn($pdo, 'store', 'hqOnly')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `hqOnly` TINYINT(1) NOT NULL DEFAULT 0');
                     $pdo->exec(self::SPECIAL_DAY_DDL);
+                }
+            }
+            if ($ver < 20 && self::hasTable($pdo, 'karte')) {
+                // 新患継続率（初回カルテ）の氏名に入ってしまった電話番号を外す（予約表のセルに氏名と一緒に書かれていたもの）
+                $up = $pdo->prepare('UPDATE karte SET name = ? WHERE id = ?');
+                foreach ($pdo->query("SELECT id, name FROM karte WHERE name REGEXP '[0-9０-９]'")->fetchAll() as $r) {
+                    $clean = Text::dropPhone((string)$r['name']);
+                    if ($clean !== $r['name']) $up->execute([mb_substr($clean, 0, 40), $r['id']]);
                 }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");

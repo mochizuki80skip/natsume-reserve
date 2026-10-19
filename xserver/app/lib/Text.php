@@ -73,4 +73,16 @@ final class Text
     {
         return preg_replace('/[\s\x{3000}]*様(?=[\s\x{3000}]*(?:[（(][^）)]*[）)][\s\x{3000}]*)*$)/u', '', $text) ?? $text;
     }
+
+    /**
+     * 電話番号（090-1234-5678、0551234567、ＴＥＬ：０９０…など）を外す。予約表のセルに氏名と一緒に書かれた電話番号を、
+     * 新患継続率（初回カルテ）の氏名に入れないため。全角の数字・ハイフンも見る
+     */
+    public static function dropPhone(string $text): string
+    {
+        $t = mb_convert_kana($text, 'n', 'UTF-8'); // 全角の数字 → 半角
+        $t = preg_replace('/(?<=\d)[ー－‐−―]|[ー－‐−―](?=\d)/u', '-', $t) ?? $t;
+        $t = preg_replace('/(?:TEL|Tel|tel|ＴＥＬ|℡|☎|電話)?\s*[:：]?\s*\+?\d[\d\-\s()（）]{7,}\d/u', ' ', $t) ?? $t;
+        return trim(preg_replace('/\s+/u', ' ', $t) ?? $t);
+    }
 }

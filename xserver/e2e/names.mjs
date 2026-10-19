@@ -29,10 +29,12 @@ d = await day();
 ok('WEB予約の「様」も外す', wb[0] === 200 && d.cells.some((c) => c.text.startsWith('ウェブ 予約') && !c.text.includes('様')), JSON.stringify(d.cells.map((c) => c.text)));
 
 // 2) 初回カルテの氏名の確認
-const names = ['佐藤（初診）', 'やまだ はなこ（初診）', 'ジョン スミス（初診）', '鈴木 一郎（初診）'];
+const names = ['佐藤（初診）', 'やまだ はなこ（初診）', 'ジョン スミス（初診）', '鈴木 一郎（初診）', '電話 太郎 090-1234-5678（初診）'];
 await api('PUT', '/api/admin/cells', { date: D, cells: names.map((n, i) => ({ time: 900 + i * 15, bed: 2, text: n })) });
 for (let i = 0; i < names.length; i++) await api('PUT', '/api/admin/visit', { date: D, time: 900 + i * 15, bed: 2, visited: true });
 await p.goto(`${B}/admin/karte?month=2026-10`); await p.waitForSelector('text=氏名の確認');
+const kr = (await api('GET', '/api/admin/karte?month=2026-10'))[1].rows;
+ok('セルに書いた電話番号は氏名に入れない', kr.some((r) => r.name === '電話 太郎') && !kr.some((r) => /\d{3}/.test(r.name)), JSON.stringify(kr.map((r) => r.name)));
 ok('上に件数', (await p.getByText(/氏名の確認 \d+件/).textContent()).includes('3件'), await p.getByText(/氏名の確認 \d+件/).textContent());
 ok('名字だけ？', await p.getByRole('button', { name: '名字だけ？' }).isVisible());
 ok('ひらがなのみ', await p.getByRole('button', { name: 'ひらがなのみ' }).isVisible());
