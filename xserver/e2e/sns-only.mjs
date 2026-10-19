@@ -205,6 +205,26 @@ ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api
   const ins = await (await fetch(`${BASE}/api/admin/sns/insights?detail=S001`, { headers: { cookie: ck } })).json();
   ok('分析に検索キーワードの欄がある', ins.detail && 'keywords' in ins.detail && Array.isArray(ins.rows[0]?.kwTop));
 }
+{
+  // エリア分け：カレンダーのエリアのタブ・設定のまとめて入力
+  const H = { cookie: ck, 'content-type': 'application/json' };
+  const before = (await (await fetch(`${BASE}/api/admin/sns/vars`, { headers: { cookie: ck } })).json()).stores;
+  const orig = Object.fromEntries(before.map((r) => [r.code, r.areaGroup ?? '']));
+  const put = await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: H, body: JSON.stringify({ rows: [{ code: 'S001', areaGroup: 'E2E東部' }, { code: 'S002', areaGroup: 'E2E西部' }] }) });
+  ok('エリア分けを一括設定で保存できる', put.status === 200);
+  const all = await (await fetch(`${BASE}/api/admin/sns/calendar`, { headers: { cookie: ck } })).json();
+  ok('カレンダーにエリアの一覧が出る', all.areas.some((a) => a.name === 'E2E東部' && a.stores === 1) && all.areas.some((a) => a.name === 'E2E西部'));
+  const east = await (await fetch(`${BASE}/api/admin/sns/calendar?area=${encodeURIComponent('E2E東部')}`, { headers: { cookie: ck } })).json();
+  ok('エリアで絞ると、そのエリアの店舗の投稿だけ', east.stores.length === 1 && east.stores[0].code === 'S001' && east.posts.every((p) => p.storeCode === 'S001'));
+  await page.goto(`${BASE}/admin/sns/calendar`); await page.waitForSelector('h1:has-text("カレンダー")');
+  await page.getByRole('button', { name: /^E2E東部（1 店）/ }).click();
+  ok('カレンダーのエリアのタブで絞り込める（画面）', await page.waitForSelector('text=E2E東部の投稿の曜日・時刻', { timeout: 5000 }).then(() => true, () => false) && page.url().includes('area='));
+  await page.goto(`${BASE}/admin/sns/schedule?area=${encodeURIComponent('E2E西部')}`); await page.waitForSelector('text=まとめて設定');
+  ok('設定をエリアで絞ると、そのエリアの店舗だけ出る', (await page.locator('section:has-text("運用メモ")').count()) === 1);
+  await page.locator('section:has-text("まとめて設定")').getByRole('button', { name: 'このエリアに入れる' }).nth(1).click();
+  ok('エリアの店舗にまとめて曜日を入れられる', (await page.locator('text=1 店舗の Google の曜日・時刻を入れました').count()) === 1 && (await page.locator('button:has-text("保存（1 店舗）")').count()) === 1);
+  await fetch(`${BASE}/api/admin/sns/vars`, { method: 'PUT', headers: H, body: JSON.stringify({ rows: [{ code: 'S001', areaGroup: orig.S001 ?? '' }, { code: 'S002', areaGroup: orig.S002 ?? '' }] }) });
+}
 const credRaw = await (await fetch(`${BASE}/api/admin/sns/credentials?store=S001`, { headers: { cookie: ck } })).text();
 ok('ログイン情報の取得にパスワードは含まれない', !credRaw.includes('Secret#Pass1') && credRaw.includes('natsume_test_ig'));
 const sp = await (await browser.newContext()).newPage();
@@ -213,5 +233,7 @@ const sck = (await sp.context().cookies()).map((c) => `${c.name}=${c.value}`).jo
 ok('店舗アカウントはログイン情報を見られない', (await fetch(`${BASE}/api/admin/sns/credentials`, { headers: { cookie: sck } })).status === 403);
 await sp.goto(`${BASE}/admin/sns/settings`); await sp.waitForSelector('text=文章に差し込む情報');
 ok('店舗の SNS 設定にログイン情報の欄が無い', (await sp.locator('text=ログイン情報（本部だけ').count()) === 0);
+await sp.goto(`${BASE}/admin/sns/calendar`); await sp.waitForSelector('h1:has-text("カレンダー")');
+ok('店舗アカウントのカレンダーは自店舗だけ（エリアのタブ無し）', (await sp.locator('button:has-text("すべて（")').count()) === 0 && (await sp.getByRole('button', { name: '＋ 手で下書きを追加' }).count()) === 1);
 ok('コンソールエラーなし', errors.length === 0, errors.join(' | '));
 await browser.close();

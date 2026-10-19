@@ -84,6 +84,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/sns/media$#', 'sns_media_put'],
         ['POST', '#^/api/admin/hq/sns/topics/([0-9a-f]{24})/broadcast$#', 'hq_sns_topic_broadcast'],
         ['GET', '#^/api/admin/sns/drafts$#', 'sns_drafts_get'],
+        ['GET', '#^/api/admin/sns/calendar$#', 'sns_calendar_get'],
         ['GET', '#^/api/admin/sns/vars$#', 'sns_vars_get'],
         ['PUT', '#^/api/admin/sns/vars$#', 'sns_vars_put'],
         ['POST', '#^/api/admin/sns/recompose$#', 'sns_recompose_post'],

@@ -34,6 +34,7 @@ export default function SnsVarsPage() {
     return [
       { id: 'name', tab: 'meo', label: '店舗名', hint: '{店舗名}', ph: '例：あかり接骨院', get: str('name'), set: put('name'), width: 'min-w-44', required: true },
       { id: 'area', tab: 'meo', label: 'エリア', hint: '{エリア}', ph: '例：三島市谷田', get: str('area'), set: put('area'), width: 'min-w-36', required: true },
+      { id: 'areaGroup', tab: 'meo', label: 'エリア分け', hint: 'カレンダー・設定・定型投稿の絞り込み（本文には出ません）', ph: '例：浜松', get: str('areaGroup'), set: put('areaGroup'), width: 'min-w-28' },
       { id: 'kf', tab: 'meo', label: 'メインキーワード', hint: '{メインキーワード} 先頭の語を毎回', ph: '例：接骨院', get: str('keywordsFixed'), set: put('keywordsFixed'), width: 'min-w-44', required: true },
       { id: 'kr', tab: 'meo', label: '症状・施術のキーワード', hint: '{症状} 本文に合うもの 1 つ', ph: '例：交通事故、ムチウチ、腰痛', get: str('keywordsRotation'), set: put('keywordsRotation'), width: 'min-w-56' },
       ...(data?.customVars ?? []).map((cv): Col => ({ id: `var:${cv.key}`, tab: 'meo', label: cv.label, hint: `{${cv.key}}`, ph: cv.default ? `既定：${cv.default}` : '', get: (s) => s.vars[cv.key] ?? '', set: (s, v) => ({ ...s, vars: { ...s.vars, [cv.key]: v } }), width: 'min-w-36', required: !cv.default })),
@@ -93,7 +94,7 @@ export default function SnsVarsPage() {
     setBusy(true); setMsg('');
     try {
       const payload = rows.filter((x) => dirty.has(x.code)).map((s) => ({
-        code: s.code, name: s.name, area: s.area, keywordsFixed: s.keywordsFixed, keywordsRotation: s.keywordsRotation, vars: s.vars,
+        code: s.code, name: s.name, area: s.area, areaGroup: s.areaGroup ?? '', keywordsFixed: s.keywordsFixed, keywordsRotation: s.keywordsRotation, vars: s.vars,
         hashtags: s.hashtags ?? '', gbpPostUrl: s.gbpPostUrl ?? '', igProfileUrl: s.igProfileUrl ?? '', address: s.address ?? '', hoursText: s.hoursText ?? '', memo: s.memo ?? '', igEnabled: s.igEnabled, gbpEnabled: s.gbpEnabled,
       }));
       const r = await sendJson<{ saved: number; refilled: number }>('/api/admin/sns/vars', 'PUT', { rows: payload });
@@ -160,7 +161,7 @@ export default function SnsVarsPage() {
           <li>見出し行を含めて表全体を選んでコピーし、下に貼り付けて「表に反映」→ 右下の「保存」。</li>
           <li>見出し行なしで貼るときは、列の順を「店舗コード、{shown.map((c) => c.label).join('、')}」にします（今開いているタブの列）。空のセルは変更しません。「投稿の有無」は ○ で投稿する、空で投稿しない。</li>
         </ol>
-        <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder={`店舗コード\t店舗名\tエリア\tメインキーワード\t症状・施術のキーワード\nS001\tあかり接骨院\t三島市谷田\t接骨院\t交通事故、ムチウチ、腰痛`} className="mt-2 w-full rounded border px-2 py-1 font-mono text-xs" />
+        <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder={`店舗コード\t店舗名\tエリア\tエリア分け\tメインキーワード\t症状・施術のキーワード\nS001\tあかり接骨院\t三島市谷田\t沼津・三島\t接骨院\t交通事故、ムチウチ、腰痛`} className="mt-2 w-full rounded border px-2 py-1 font-mono text-xs" />
         <button type="button" onClick={applyPaste} disabled={!paste.trim()} className="mt-1 rounded border bg-white px-3 py-1 disabled:opacity-40">表に反映</button>
       </details>
 

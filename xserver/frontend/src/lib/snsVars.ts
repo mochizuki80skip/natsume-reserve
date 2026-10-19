@@ -2,7 +2,7 @@
 import type { VarDef } from './sns';
 
 export interface StoreVars {
-  code: string; name: string; area: string; keywordsFixed: string; keywordsRotation: string; vars: Record<string, string>; igEnabled: boolean; gbpEnabled: boolean; unfilled?: number;
+  code: string; name: string; area: string; areaGroup?: string; keywordsFixed: string; keywordsRotation: string; vars: Record<string, string>; igEnabled: boolean; gbpEnabled: boolean; unfilled?: number;
   hashtags?: string; gbpPostUrl?: string; igProfileUrl?: string; address?: string; hoursText?: string; memo?: string;
 }
 

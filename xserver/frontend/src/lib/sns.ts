@@ -28,7 +28,7 @@ export interface VarDef { key: string; label: string; default: string }
 export interface AccountRow { channel: Channel; externalId: string; username: string; locationName: string; connected: boolean; tokenExpiresAt: string | null; tokenRefreshedAt: string | null; lastError: string | null; updatedAt: string }
 export interface StoreSetting {
   igEnabled: boolean; igSchedule: Schedule | null; gbpEnabled: boolean; gbpSchedule: Schedule | null; effectiveIgSchedule: Schedule; effectiveGbpSchedule: Schedule;
-  area: string; address: string; hoursText: string; hashtags: string; keywordsFixed: string; keywordsRotation: string; memo: string; vars: Record<string, string>;
+  area: string; areaGroup: string; address: string; hoursText: string; hashtags: string; keywordsFixed: string; keywordsRotation: string; memo: string; vars: Record<string, string>;
   gbpPostUrl: string; igProfileUrl: string;
 }
 export interface ManualPost extends Post { openUrl: string; openUrlIsSearch: boolean; ready: boolean; issues: string[]; bucket: 'overdue' | 'today' | 'upcoming' }

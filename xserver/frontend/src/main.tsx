@@ -20,6 +20,7 @@ import JibaiHqPage from './pages/admin/JibaiHqPage';
 import StoryPage from './pages/admin/StoryPage';
 import SnsHomePage from './pages/admin/sns/SnsHomePage';
 import SnsPostsPage from './pages/admin/sns/SnsPostsPage';
+import SnsCalendarRoute from './pages/admin/sns/SnsAreaCalendarPage';
 import SnsPostPage from './pages/admin/sns/SnsPostPage';
 import SnsTopicsPage from './pages/admin/sns/SnsTopicsPage';
 import SnsSettingsPage from './pages/admin/sns/SnsSettingsPage';
@@ -58,7 +59,7 @@ createRoot(document.getElementById('root')!).render(
           <Route element={<SnsShell />}>
             <Route path="sns" element={<SnsHomePage />} />
             <Route path="sns/manual" element={<SnsManualPage />} />
-            <Route path="sns/calendar" element={<SnsPostsPage defaultView="calendar" />} />
+            <Route path="sns/calendar" element={<SnsCalendarRoute />} />
             <Route path="sns/posts" element={<SnsPostsPage />} />
             <Route path="sns/posts/:id" element={<SnsPostPage />} />
             <Route path="sns/topics" element={<SnsTopicsPage />} />

@@ -47,13 +47,16 @@ final class SnsTopicImport
         $L[] = '- 接骨院の広告のルール（柔道整復師法）に沿って、効果を言い切らない。次の語は使わない：' . $forbidden;
         $L[] = '- 骨折・脱臼・打撲・捻挫・挫傷などのケガ（外傷）を中心に書き、肩こり・腰痛などの慢性的な症状は「ご相談ください」程度にとどめる。';
         $L[] = '- 料金・割引・キャンペーン・ほかの院との比較は書かない。';
+        $groups = [];
+        foreach ($o['stores'] as $st) { $g = trim((string)(Sns::storeSetting($st)['areaGroup'] ?? '')); if ($g !== '') $groups[$g] = true; }
+        if ($groups) $L[] = '- 「エリア：」は、特定のエリアの店舗だけに使う内容のときだけ、次のどれかを書く（空なら全店で使う）：' . implode('、', array_keys($groups));
         if ($o['perStore']) {
             $L[] = '';
             $L[] = '# 店舗（店舗ごとに書き出しや言い回しを変えて、同じ文章にならないようにする）';
-            $L[] = '店舗コード｜店舗名｜エリア｜メインキーワード｜症状・施術のキーワード';
+            $L[] = '店舗コード｜店舗名｜エリア分け｜エリア｜メインキーワード｜症状・施術のキーワード';
             foreach ($o['stores'] as $st) {
                 $ss = Sns::storeSetting($st);
-                $L[] = $st['code'] . '｜' . $st['name'] . '｜' . ($ss['area'] ?: '-') . '｜' . (Sns::mainKeyword($ss) ?: '-') . '｜' . ($ss['keywordsRotation'] ?: '-');
+                $L[] = $st['code'] . '｜' . $st['name'] . '｜' . ($ss['areaGroup'] ?: '-') . '｜' . ($ss['area'] ?: '-') . '｜' . (Sns::mainKeyword($ss) ?: '-') . '｜' . ($ss['keywordsRotation'] ?: '-');
             }
         }
         $L[] = '';

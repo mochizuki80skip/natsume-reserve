@@ -48,6 +48,7 @@ final class Sns
             ['sns_setting', 'gbpManual', 'ALTER TABLE `sns_setting` ADD COLUMN `gbpManual` TINYINT(1) NOT NULL DEFAULT 0'],
             ['sns_store_setting', 'gbpPostUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `gbpPostUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
             ['sns_store_setting', 'igProfileUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `igProfileUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
+            ['sns_store_setting', 'areaGroup', 'ALTER TABLE `sns_store_setting` ADD COLUMN `areaGroup` VARCHAR(50) NOT NULL DEFAULT \'\' AFTER `area`'],
         ];
         // 投稿ページの URL は長いことがある（Google の管理画面の URL など）ので 2000 文字まで入るようにする
         foreach (['gbpPostUrl', 'igProfileUrl'] as $col) {
@@ -240,6 +241,7 @@ final class Sns
             'effectiveIgSchedule' => $ig ?? $g['defaultIgSchedule'],
             'effectiveGbpSchedule' => $gbp ?? $g['defaultGbpSchedule'],
             'area' => (string)($r['area'] ?? ''),
+            'areaGroup' => (string)($r['areaGroup'] ?? ''),   // エリア分け（カレンダー・設定の絞り込み、定型投稿の対象エリア。例：浜松）
             'address' => (string)($r['address'] ?? ''),
             'hoursText' => (string)($r['hoursText'] ?? ''),
             'hashtags' => (string)($r['hashtags'] ?? ''),
@@ -299,12 +301,12 @@ final class Sns
     public static function saveStoreSetting(string $storeId, array $v): void
     {
         self::ensureTables();
-        Db::exec('INSERT INTO sns_store_setting (storeId, igEnabled, igSchedule, gbpEnabled, gbpSchedule, area, address, hoursText, hashtags, keywordsFixed, keywordsRotation, memo, vars, gbpPostUrl, igProfileUrl)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE igEnabled = VALUES(igEnabled), igSchedule = VALUES(igSchedule), gbpEnabled = VALUES(gbpEnabled), gbpSchedule = VALUES(gbpSchedule), area = VALUES(area), address = VALUES(address),
+        Db::exec('INSERT INTO sns_store_setting (storeId, igEnabled, igSchedule, gbpEnabled, gbpSchedule, area, areaGroup, address, hoursText, hashtags, keywordsFixed, keywordsRotation, memo, vars, gbpPostUrl, igProfileUrl)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE igEnabled = VALUES(igEnabled), igSchedule = VALUES(igSchedule), gbpEnabled = VALUES(gbpEnabled), gbpSchedule = VALUES(gbpSchedule), area = VALUES(area), areaGroup = VALUES(areaGroup), address = VALUES(address),
             hoursText = VALUES(hoursText), hashtags = VALUES(hashtags), keywordsFixed = VALUES(keywordsFixed), keywordsRotation = VALUES(keywordsRotation), memo = VALUES(memo), vars = VALUES(vars), gbpPostUrl = VALUES(gbpPostUrl), igProfileUrl = VALUES(igProfileUrl)', [
             $storeId, $v['igEnabled'] ? 1 : 0, $v['igSchedule'] === null ? null : self::j($v['igSchedule']), $v['gbpEnabled'] ? 1 : 0, $v['gbpSchedule'] === null ? null : self::j($v['gbpSchedule']),
-            $v['area'], $v['address'], $v['hoursText'], $v['hashtags'], $v['keywordsFixed'], $v['keywordsRotation'], $v['memo'], self::j($v['vars'] ?? []), $v['gbpPostUrl'] ?? '', $v['igProfileUrl'] ?? '']);
+            $v['area'], $v['areaGroup'] ?? '', $v['address'], $v['hoursText'], $v['hashtags'], $v['keywordsFixed'], $v['keywordsRotation'], $v['memo'], self::j($v['vars'] ?? []), $v['gbpPostUrl'] ?? '', $v['igProfileUrl'] ?? '']);
     }
 
     // ---------- 頻度（スケジュール） ----------
@@ -707,13 +709,21 @@ final class Sns
         return $ranked[0][1];
     }
 
-    /** 定型投稿の「対象エリア」に、この店舗が入るか（地域・店舗名・店舗コードのどれかに語が含まれる。空なら全店） */
+    /** カレンダー・設定で店舗をまとめるエリアの名前（「エリア分け」。未入力なら「エリア未設定」） */
+    public static function areaGroupOf(array $ss): string
+    {
+        $g = trim((string)($ss['areaGroup'] ?? ''));
+        return $g !== '' ? $g : self::NO_AREA_GROUP;
+    }
+    public const NO_AREA_GROUP = 'エリア未設定';
+
+    /** 定型投稿の「対象エリア」に、この店舗が入るか（エリア分け・地域・店舗名・店舗コードのどれかに語が含まれる。空なら全店） */
     public static function topicFitsStore(array $topic, ?array $store, ?array $ss): bool
     {
         $areas = self::splitList((string)($topic['areas'] ?? ''));
         if (!$areas) return true;
         if (!$store) return false;
-        $hay = ($ss['area'] ?? '') . ' ' . $store['name'] . ' ' . $store['code'];
+        $hay = ($ss['areaGroup'] ?? '') . ' ' . ($ss['area'] ?? '') . ' ' . $store['name'] . ' ' . $store['code'];
         foreach ($areas as $a) if ($a !== '' && mb_stripos($hay, $a) !== false) return true;
         return false;
     }

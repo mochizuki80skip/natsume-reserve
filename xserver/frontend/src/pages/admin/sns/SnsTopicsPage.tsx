@@ -92,9 +92,9 @@ export default function SnsTopicsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-slate-600">投稿する曜日</span><WeekdayPicker value={nf.weekdays} onChange={(v) => setNf({ ...nf, weekdays: v })} />
-          <input value={nf.areas} onChange={(e) => setNf({ ...nf, areas: e.target.value })} placeholder="対象エリア（例：沼津、三島。空なら全店）" className="w-72 rounded border px-2 py-1" />
+          <input value={nf.areas} onChange={(e) => setNf({ ...nf, areas: e.target.value })} placeholder="対象エリア（例：浜松、沼津。空なら全店）" className="w-72 rounded border px-2 py-1" />
         </div>
-        <p className="text-xs text-slate-500">曜日を選ぶと、その曜日の予定にだけこの定型投稿が使われます（例：月曜は「月_お悩み共感」）。対象エリアを入れると、地域・店舗名にその語を含む店舗だけに使われます。店舗の投稿の曜日は「設定」（または「接続状況」の既定の頻度）で、定型投稿の曜日と同じにしておきます。</p>
+        <p className="text-xs text-slate-500">曜日を選ぶと、その曜日の予定にだけこの定型投稿が使われます（例：月曜は「月_お悩み共感」）。対象エリアを入れると、エリア分け・地域・店舗名にその語を含む店舗だけに使われます（例：「浜松」→ エリア分けが浜松の店舗）。店舗の投稿の曜日は「設定」（または「接続状況」の既定の頻度）で、定型投稿の曜日と同じにしておきます。</p>
         <input value={nf.title} onChange={(e) => setNf({ ...nf, title: e.target.value })} placeholder={nf.standalone ? '名前（一覧用。投稿文には入りません。例：駅チカ案内）' : '見出し（投稿文の先頭に入ります）'} className="w-full rounded border px-2 py-1" />
         <textarea value={nf.body} onChange={(e) => setNf({ ...nf, body: e.target.value })} required rows={6} placeholder={nf.standalone ? '投稿文（差し込み語入り）。例：{エリア}で{メインキーワード}をお探しなら{店舗名}へ。\n\nご予約はこちら {予約URL}\n\n{ハッシュタグ}' : '本文（店名・締め・ハッシュタグは型から自動で付きます）'} className="w-full rounded border px-2 py-1" />
         <div className="flex flex-wrap items-center gap-2">

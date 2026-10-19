@@ -710,6 +710,7 @@ function sns_settings_put(): never
         'igSchedule' => $sched('igSchedule'),
         'gbpSchedule' => $sched('gbpSchedule'),
         'area' => array_key_exists('area', $b) ? Http::str($b, 'area', 50, false) : $cur['area'],
+        'areaGroup' => array_key_exists('areaGroup', $b) ? Http::str($b, 'areaGroup', 50, false) : $cur['areaGroup'],
         'address' => array_key_exists('address', $b) ? Http::str($b, 'address', 100, false) : $cur['address'],
         'hoursText' => array_key_exists('hoursText', $b) ? Http::str($b, 'hoursText', 200, false) : $cur['hoursText'],
         'hashtags' => array_key_exists('hashtags', $b) ? Http::str($b, 'hashtags', 500, false) : $cur['hashtags'],
@@ -1162,7 +1163,7 @@ function sns_visible_stores(array $s): array
 /** 差し込み語の入力欄に出す店舗の値 */
 function sns_store_vars_row(array $st, array $ss): array
 {
-    return ['code' => $st['code'], 'name' => $st['name'], 'area' => $ss['area'], 'keywordsFixed' => $ss['keywordsFixed'], 'keywordsRotation' => $ss['keywordsRotation'], 'vars' => (object)$ss['vars'],
+    return ['code' => $st['code'], 'name' => $st['name'], 'area' => $ss['area'], 'areaGroup' => $ss['areaGroup'], 'keywordsFixed' => $ss['keywordsFixed'], 'keywordsRotation' => $ss['keywordsRotation'], 'vars' => (object)$ss['vars'],
         'igEnabled' => $ss['igEnabled'], 'gbpEnabled' => $ss['gbpEnabled'], 'hashtags' => $ss['hashtags'], 'gbpPostUrl' => $ss['gbpPostUrl'], 'igProfileUrl' => $ss['igProfileUrl'],
         'address' => $ss['address'], 'hoursText' => $ss['hoursText'], 'memo' => $ss['memo']];
 }
@@ -1191,6 +1192,49 @@ function sns_drafts_get(): never
         }
     }
     Http::json(['today' => Time::nowJst()['date'], 'isHq' => $s['role'] === 'hq', 'stores' => $storeRows, 'customVars' => Sns::setting()['customVars'], 'posts' => $posts]);
+}
+
+/**
+ * GET /api/admin/sns/calendar?from=&to=&channel=&area=：見られる店舗の投稿をまとめたカレンダー（本部は全店。エリア分けで絞り込める）。
+ * エリアの一覧（店舗数）と、店舗ごとの投稿の曜日・時刻も返す。
+ */
+function sns_calendar_get(): never
+{
+    Sns::ensureTables();
+    $s = Auth::requireSession();
+    $today = Time::nowJst()['date'];
+    $from = Http::query('from'); $to = Http::query('to');
+    if (!$from || !Time::isValidDate($from)) $from = substr($today, 0, 8) . '01';
+    if (!$to || !Time::isValidDate($to) || $to < $from) $to = Time::addDays($from, 41);
+    if (Time::addDays($from, 62) < $to) $to = Time::addDays($from, 62);
+    $ch = sns_channel(Http::query('channel'), true);
+    $area = trim((string)Http::query('area'));
+    $areas = []; $stores = []; $ids = [];
+    foreach (sns_visible_stores($s) as $st) {
+        $ss = Sns::storeSetting($st);
+        $g = Sns::areaGroupOf($ss);
+        $areas[$g] = ($areas[$g] ?? 0) + 1;
+        if ($area !== '' && $g !== $area) continue;
+        $ids[] = $st['id'];
+        $stores[] = ['code' => $st['code'], 'name' => $st['name'], 'areaGroup' => $g,
+            'igEnabled' => $ss['igEnabled'], 'gbpEnabled' => $ss['gbpEnabled'],
+            'igSchedule' => Sns::describeSchedule($ss['effectiveIgSchedule']), 'gbpSchedule' => Sns::describeSchedule($ss['effectiveGbpSchedule'])];
+    }
+    $posts = [];
+    if ($ids) {
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $params = array_merge($ids, [$from . ' 00:00:00', $to . ' 23:59:59']);
+        $sql = "SELECT p.id, p.channel, p.status, p.scheduledAt, p.title, p.body, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.storeId IN ($in) AND p.scheduledAt BETWEEN ? AND ?";
+        if ($ch) { $sql .= ' AND p.channel = ?'; $params[] = $ch; }
+        foreach (Db::all($sql . ' ORDER BY p.scheduledAt ASC, s.code ASC LIMIT 5000', $params) as $r) {
+            $posts[] = ['id' => $r['id'], 'channel' => $r['channel'], 'status' => $r['status'], 'scheduledAt' => substr((string)$r['scheduledAt'], 0, 16),
+                'title' => (string)$r['title'] !== '' ? (string)$r['title'] : mb_substr((string)$r['body'], 0, 30), 'storeCode' => $r['storeCode'], 'storeName' => $r['storeName']];
+        }
+    }
+    // エリアの並びは店舗コード順で最初に出てくる順。エリア未設定は最後
+    if (isset($areas[Sns::NO_AREA_GROUP])) { $n = $areas[Sns::NO_AREA_GROUP]; unset($areas[Sns::NO_AREA_GROUP]); $areas[Sns::NO_AREA_GROUP] = $n; }
+    Http::json(['today' => $today, 'from' => $from, 'to' => $to, 'isHq' => $s['role'] === 'hq',
+        'areas' => array_map(fn($k, $v) => ['name' => (string)$k, 'stores' => $v], array_keys($areas), $areas), 'stores' => $stores, 'posts' => $posts]);
 }
 
 /** GET /api/admin/sns/vars：差し込み語の一括入力用（店舗ごとの値） */
@@ -1232,6 +1276,7 @@ function sns_vars_put(): never
             $cur = Sns::storeSetting($st);
             $v = $cur;
             if (array_key_exists('area', $row)) $v['area'] = Http::str($row, 'area', 50, false);
+            if (array_key_exists('areaGroup', $row)) $v['areaGroup'] = Http::str($row, 'areaGroup', 50, false);
             if (array_key_exists('keywordsFixed', $row)) $v['keywordsFixed'] = Http::str($row, 'keywordsFixed', 300, false);
             if (array_key_exists('keywordsRotation', $row)) $v['keywordsRotation'] = Http::str($row, 'keywordsRotation', 500, false);
             if (array_key_exists('vars', $row)) $v['vars'] = array_merge($cur['vars'], Sns::parseVars($row['vars']));
