@@ -275,7 +275,7 @@ function sns_post_action(array $mm): never
             Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, standalone = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$topic['id'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['standalone'] ? 1 : 0, $p['id']]);
             if (!empty($topic['imagePath']) && ($p['imageKind'] === 'none' || $p['imageKind'] === 'topic')) {
                 [$img, $kind] = Sns::copyTopicImage($topic, $p['id']);
-                if ($img) { if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath'])); Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ? WHERE id = ?', [$img, $kind, $p['id']]); }
+                if ($img) { if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath'])); Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, mediaId = NULL WHERE id = ?', [$img, $kind, $p['id']]); }
             }
             Db::exec('UPDATE sns_topic SET useCount = useCount + 1, lastUsedAt = ? WHERE id = ?', [$now, $topic['id']]);
             break;
@@ -300,8 +300,8 @@ function sns_post_action(array $mm): never
             Db::transaction(function () use ($p, $o, $store) {
                 foreach ([[$p, $o], [$o, $p]] as [$dst, $src]) {
                     $n = sns_recompose($src, $store, ['scheduledAt' => $dst['scheduledAt']]);
-                    Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, standalone = ?, imagePath = ?, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?',
-                        [$src['topicId'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $n['standalone'] ? 1 : 0, $src['imagePath'], $src['imageKind'], $dst['id']]);
+                    Db::exec('UPDATE sns_post SET topicId = ?, title = ?, body = ?, closing = ?, hashtags = ?, postText = ?, patternIdx = ?, standalone = ?, imagePath = ?, imageKind = ?, mediaId = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?',
+                        [$src['topicId'], $n['title'], $n['body'], $n['closing'], $n['hashtags'], $n['fullText'], $n['patternIdx'], $n['standalone'] ? 1 : 0, $src['imagePath'], $src['imageKind'], $src['mediaId'] ?? null, $dst['id']]);
                 }
             });
             break;
@@ -322,14 +322,14 @@ function sns_post_image(array $mm): never
     $b = Http::body();
     if (($b['remove'] ?? false) === true) {
         if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath']));
-        Db::exec('UPDATE sns_post SET imagePath = NULL, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', ['none', $p['id']]);
+        Db::exec('UPDATE sns_post SET imagePath = NULL, imageKind = ?, mediaId = NULL, ' . SNS_RESET_CHECKS . ' WHERE id = ?', ['none', $p['id']]);
         Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
     }
     if (isset($b['mediaId']) && is_string($b['mediaId'])) { // 画像ライブラリから選ぶ
-        [$img, $kind] = Sns::assignLibraryImage($p['storeId'], $p['channel'], $p['id'], $b['mediaId']);
+        [$img, $kind, $mid] = Sns::assignLibraryImage($p['storeId'], $p['channel'], $p['id'], $b['mediaId']);
         if (!$img) Http::error('画像が見つかりません', 404);
         if ($p['imagePath']) @unlink(Sns::mediaDir() . '/' . basename($p['imagePath']));
-        Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$img, $kind, $p['id']]);
+        Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, mediaId = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$img, $kind, $mid, $p['id']]);
         Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
     }
     $bin = sns_decode_jpeg((string)($b['dataUrl'] ?? ''));
@@ -339,7 +339,7 @@ function sns_post_image(array $mm): never
     if (!is_dir($dir) || !is_writable($dir)) Http::error('画像の保存先（public/media/sns）に書き込めません。フォルダの権限を確認してください', 500);
     if (file_put_contents($dir . '/' . $name, $bin) === false) Http::error('画像を保存できませんでした', 500);
     if ($p['imagePath']) @unlink($dir . '/' . basename($p['imagePath']));
-    Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$name, $kind, $p['id']]);
+    Db::exec('UPDATE sns_post SET imagePath = ?, imageKind = ?, mediaId = NULL, ' . SNS_RESET_CHECKS . ' WHERE id = ?', [$name, $kind, $p['id']]);
     Http::json(['ok' => true, 'post' => sns_post_with_stat($p['id'])]);
 }
 

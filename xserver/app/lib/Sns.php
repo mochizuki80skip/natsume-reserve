@@ -45,6 +45,7 @@ final class Sns
             ['sns_post', 'standalone', 'ALTER TABLE `sns_post` ADD COLUMN `standalone` TINYINT(1) NOT NULL DEFAULT 0 AFTER `patternIdx`'],
             ['sns_post', 'checkedAt', 'ALTER TABLE `sns_post` ADD COLUMN `checkedAt` DATETIME NULL AFTER `publishMode`'],
             ['sns_post', 'checkedBy', 'ALTER TABLE `sns_post` ADD COLUMN `checkedBy` VARCHAR(20) NULL AFTER `checkedAt`'],
+            ['sns_post', 'mediaId', 'ALTER TABLE `sns_post` ADD COLUMN `mediaId` VARCHAR(32) NULL AFTER `imageKind`'],
             ['sns_setting', 'gbpManual', 'ALTER TABLE `sns_setting` ADD COLUMN `gbpManual` TINYINT(1) NOT NULL DEFAULT 0'],
             ['sns_store_setting', 'gbpPostUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `gbpPostUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
             ['sns_store_setting', 'igProfileUrl', 'ALTER TABLE `sns_store_setting` ADD COLUMN `igProfileUrl` VARCHAR(2000) NOT NULL DEFAULT \'\''],
@@ -711,6 +712,7 @@ final class Sns
         $store = Settings::findStoreById($storeId);
         $ss = $store ? self::storeSetting($store) : null;
         $rows = Db::all('SELECT * FROM sns_topic WHERE active = 1 AND (storeId = ? OR storeId IS NULL) AND channel IN (?, ?) ORDER BY useCount ASC, lastUsedAt ASC, sortOrder ASC, createdAt ASC', [$storeId, $channel, 'both']);
+        [$nearby, $sameDay] = self::neighborUse('topicId', $storeId, $ss, $channel, $scheduledAt);
         // 候補を、曜日・エリア・季節が「その日・その店舗に合うものほど先」に並べる
         $ranked = [];
         foreach ($rows as $i => $r) {
@@ -721,13 +723,35 @@ final class Sns
             if ($days && !in_array((string)$weekday, $days, true)) continue; // 曜日の決まった定型投稿は、その曜日だけ
             $months = self::splitList($r['months']);
             if ($months && !in_array((string)$month, $months, true)) continue; // 季節の定型投稿は、その月だけ
-            // 優先順：曜日が決まっている → 最近使っていない → エリアが決まっている → 季節もの → 使用回数の少ない順
-            $score = [$days ? 0 : 1, $recent ? 1 : 0, trim((string)($r['areas'] ?? '')) !== '' ? 0 : 1, $months ? 0 : 1, $i];
+            // 優先順：曜日が決まっている → この店舗で最近使っていない → 同じエリアの店舗が前後 7 日に使っていない
+            //   → エリアが決まっている → 季節もの → 同じ日にほかの店舗が使っている数が少ない → 使用回数の少ない順
+            // （Google は同じ内容の繰り返しをスパムとみなすことがあるため、近くの店舗・同じ日に同じ文章が並ばないようにする）
+            $score = [$days ? 0 : 1, $recent ? 1 : 0, isset($nearby[$r['id']]) ? 1 : 0, trim((string)($r['areas'] ?? '')) !== '' ? 0 : 1, $months ? 0 : 1, $sameDay[$r['id']] ?? 0, $i];
             $ranked[] = [$score, $r];
         }
         if (!$ranked) return null;
         usort($ranked, fn($a, $b) => $a[0] <=> $b[0]);
         return $ranked[0][1];
+    }
+
+    /**
+     * 近くの店舗（同じエリア分け）が前後 7 日に使った定型投稿／画像と、同じ日にほかの店舗が使った数。
+     * @param 'topicId'|'mediaId' $col
+     * @return array{0: array<string, true>, 1: array<string, int>}
+     */
+    public static function neighborUse(string $col, string $storeId, ?array $ss, string $channel, string $scheduledAt): array
+    {
+        $date = substr($scheduledAt, 0, 10);
+        $nearby = [];
+        $group = trim((string)($ss['areaGroup'] ?? ''));
+        if ($group !== '') {
+            foreach (Db::all("SELECT DISTINCT p.$col AS v FROM sns_post p JOIN sns_store_setting s ON s.storeId = p.storeId WHERE s.areaGroup = ? AND p.storeId <> ? AND p.channel = ? AND p.$col IS NOT NULL AND p.scheduledAt BETWEEN ? AND ?",
+                [$group, $storeId, $channel, Time::addDays($date, -7) . ' 00:00:00', Time::addDays($date, 7) . ' 23:59:59']) as $r) $nearby[$r['v']] = true;
+        }
+        $sameDay = [];
+        foreach (Db::all("SELECT $col AS v, COUNT(*) AS n FROM sns_post WHERE storeId <> ? AND channel = ? AND $col IS NOT NULL AND scheduledAt BETWEEN ? AND ? GROUP BY $col",
+            [$storeId, $channel, $date . ' 00:00:00', $date . ' 23:59:59']) as $r) $sameDay[$r['v']] = (int)$r['n'];
+        return [$nearby, $sameDay];
     }
 
     /** カレンダー・設定で店舗をまとめるエリアの名前（「エリア分け」。未入力なら「エリア未設定」） */
@@ -817,25 +841,39 @@ final class Sns
         $c = self::compose($channel, $store, $ss, $scheduledAt, $title, $body, $idx, null, null, $standalone);
         $id = Db::newId();
         [$imagePath, $imageKind] = self::copyTopicImage($topic, $id);
-        if ($imagePath === null) [$imagePath, $imageKind] = self::assignLibraryImage($store['id'], $channel, $id);
-        Db::exec('INSERT INTO sns_post (id, storeId, channel, scheduledAt, status, topicId, title, body, closing, hashtags, postText, patternIdx, standalone, imagePath, imageKind, source, publishMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-            $id, $store['id'], $channel, $scheduledAt, 'draft', $topic['id'] ?? null, $title, $body, $c['closing'], $c['hashtags'], $c['fullText'], $idx, $standalone ? 1 : 0, $imagePath, $imageKind, $source, self::publishModeFor($store, $channel)]);
+        $mediaId = null;
+        if ($imagePath === null) [$imagePath, $imageKind, $mediaId] = self::assignLibraryImage($store['id'], $channel, $id, null, $scheduledAt, $ss);
+        Db::exec('INSERT INTO sns_post (id, storeId, channel, scheduledAt, status, topicId, title, body, closing, hashtags, postText, patternIdx, standalone, imagePath, imageKind, mediaId, source, publishMode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+            $id, $store['id'], $channel, $scheduledAt, 'draft', $topic['id'] ?? null, $title, $body, $c['closing'], $c['hashtags'], $c['fullText'], $idx, $standalone ? 1 : 0, $imagePath, $imageKind, $mediaId, $source, self::publishModeFor($store, $channel)]);
         return $id;
     }
 
-    /** 画像ライブラリから使用回数の少ない画像を 1 枚選んで下書き用にコピーする。@return array{0:?string,1:string} */
-    public static function assignLibraryImage(string $storeId, string $channel, string $postId, ?string $mediaId = null): array
+    /**
+     * 画像ライブラリから 1 枚選んで下書き用にコピーする。
+     * 同じエリアの店舗が前後 7 日に使った画像・同じ日にほかの店舗が使った画像を避け、その中で使用回数の少ないもの。
+     * @return array{0:?string,1:string,2:?string} [ファイル名, 種類, 画像ライブラリの ID]
+     */
+    public static function assignLibraryImage(string $storeId, string $channel, string $postId, ?string $mediaId = null, ?string $scheduledAt = null, ?array $ss = null): array
     {
-        $m = $mediaId
-            ? Db::one('SELECT * FROM sns_media WHERE id = ? AND (storeId IS NULL OR storeId = ?)', [$mediaId, $storeId])
-            : Db::one('SELECT * FROM sns_media WHERE active = 1 AND (storeId = ? OR storeId IS NULL) AND channel IN (?, ?) ORDER BY useCount ASC, lastUsedAt ASC, createdAt ASC LIMIT 1', [$storeId, $channel, 'both']);
-        if (!$m) return [null, 'none'];
+        if ($mediaId) $m = Db::one('SELECT * FROM sns_media WHERE id = ? AND (storeId IS NULL OR storeId = ?)', [$mediaId, $storeId]);
+        else {
+            $list = Db::all('SELECT * FROM sns_media WHERE active = 1 AND (storeId = ? OR storeId IS NULL) AND channel IN (?, ?) ORDER BY useCount ASC, lastUsedAt ASC, createdAt ASC', [$storeId, $channel, 'both']);
+            $m = $list[0] ?? null;
+            if ($scheduledAt && count($list) > 1) {
+                [$nearby, $sameDay] = self::neighborUse('mediaId', $storeId, $ss, $channel, $scheduledAt);
+                $ranked = [];
+                foreach ($list as $i => $x) $ranked[] = [[isset($nearby[$x['id']]) ? 1 : 0, $sameDay[$x['id']] ?? 0, $i], $x];
+                usort($ranked, fn($a, $b) => $a[0] <=> $b[0]);
+                $m = $ranked[0][1];
+            }
+        }
+        if (!$m) return [null, 'none', null];
         $src = self::mediaDir() . '/' . basename($m['path']);
-        if (!is_file($src)) return [null, 'none'];
+        if (!is_file($src)) return [null, 'none', null];
         $name = $postId . '-' . substr(bin2hex(random_bytes(4)), 0, 8) . '.jpg';
-        if (!@copy($src, self::mediaDir() . '/' . $name)) return [null, 'none'];
+        if (!@copy($src, self::mediaDir() . '/' . $name)) return [null, 'none', null];
         Db::exec('UPDATE sns_media SET useCount = useCount + 1, lastUsedAt = ? WHERE id = ?', [Time::nowJstDateTime(), $m['id']]);
-        return [$name, 'library'];
+        return [$name, 'library', $m['id']];
     }
 
     public static function mediaRow(array $m): array
