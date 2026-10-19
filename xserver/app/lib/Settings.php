@@ -133,9 +133,9 @@ final class Settings
         }
         if ($helpIn) {
             $label = 'ヘルプ' . ($helpIn['name'] !== '' ? '（' . $helpIn['name'] . '）' : '（他店から）');
-            // ヘルプの人は新規・再来どちらも担当できるものとして数える
-            if ($helpIn['status'] !== 'PM_HELP_IN') { $namesAm[] = $label; $autoAm = min($autoAm + 1, $beds); $firstAm++; $revisitAm++; }
-            if ($helpIn['status'] !== 'AM_HELP_IN') { $namesPm[] = $label; $autoPm = min($autoPm + 1, $beds); $firstPm++; $revisitPm++; }
+            // ヘルプの人は合計の人数には入れるが、担当できるかは人によるので新規・再来の人数には数えない
+            if ($helpIn['status'] !== 'PM_HELP_IN') { $namesAm[] = $label; $autoAm = min($autoAm + 1, $beds); }
+            if ($helpIn['status'] !== 'AM_HELP_IN') { $namesPm[] = $label; $autoPm = min($autoPm + 1, $beds); }
         }
         $am = $override['capacityAm'] ?? $autoAm;
         $pm = $override['capacityPm'] ?? $autoPm;

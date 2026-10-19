@@ -57,6 +57,13 @@ await put([{ time: pm, bed: 1, text: '午後 六（初診）' }, { time: pm + 15
 ok('午後は新規 1 人で×', (await st('NEW', pm)) === 'closed');
 ok('午後の再来はまだ取れる', (await st('REVISIT', pm)) !== 'closed');
 
+// 他店からのヘルプは合計の人数には入るが、新規・再来の人数には数えない（担当できるかは人による）
+await api('PUT', '/api/admin/help-in', { date: D, status: 'HELP_IN', name: 'ヘルプ 花子' });
+const d3 = (await api('GET', `/api/admin/day?date=${D}`))[1].data;
+ok('ヘルプは合計には入る', d3.capacity.am === 4, JSON.stringify(d3.capacity.am));
+ok('ヘルプは新規・再来の人数に数えない', d3.capacity.firstAm === 2 && d3.capacity.revisitAm === 3 && d3.capacity.firstPm === 1, JSON.stringify(d3.capacity));
+await api('PUT', '/api/admin/help-in', { date: D, status: '' });
+
 // 予約表の「枠数・ブロック」に WEB の同時上限が出る
 await p.goto(`${B}/admin/day/${D}`); await p.waitForSelector('#grid');
 await p.getByRole('button', { name: /枠数・ブロック/ }).click();
