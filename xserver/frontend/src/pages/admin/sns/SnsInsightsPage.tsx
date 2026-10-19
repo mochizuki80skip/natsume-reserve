@@ -1,4 +1,5 @@
-// 分析：店舗 × 媒体 × 期間の数字（前の期間との比較）、店舗の詳しい内容（日別・投稿ごと・クチコミ・気づき）
+// 分析：エリア別の合計、店舗 × 媒体 × 期間の数字（前の期間との比較）、メインキーワードの検索回数、
+// 店舗の詳しい内容（週ごとの投稿と Google の数字・日別・投稿ごと・クチコミ・気づき）
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
@@ -9,11 +10,24 @@ import { StoreDot } from '@/lib/storeColor';
 import { useAdmin } from '../Layout';
 
 type Pair = { now: number; prev: number } | { now: number | null; prev: number | null };
-interface Row { code: string; name: string; ig: Record<string, Pair>; gbp: Record<string, Pair>; posts: { ig: number; gbp: number }; postStats: { n: number; reach: number; likes: number; saved: number; shares: number } | null; reviews: { n: number; avg: number; noReply: number; recent: number } | null; kwTop?: Kw[] }
+interface MainKw { word: string; month: string | null; now: number; prev: number | null }
+interface AreaRow { name: string; stores: number; posts: { ig: number; gbp: number }; gbp: Record<string, { now: number; prev: number }>; reviews: { n: number; avg: number; noReply: number } | null; mainKw: { now: number; prev: number | null; stores: number } }
+interface Weekly { rows: { week: string; postsGbp: number; postsIg: number; hasData: boolean; impressions: number; actions: number; calls: number; directions: number }[]; postedWeeks: number; quietWeeks: number; avgPosted: number | null; avgQuiet: number | null }
+interface Row { code: string; name: string; areaGroup?: string; mainKw?: MainKw; ig: Record<string, Pair>; gbp: Record<string, Pair>; posts: { ig: number; gbp: number }; postStats: { n: number; reach: number; likes: number; saved: number; shares: number } | null; reviews: { n: number; avg: number; noReply: number; recent: number } | null; kwTop?: Kw[] }
 interface Kw { keyword: string; value: number; threshold: boolean; prev?: number | null }
 interface Keywords { month: string | null; prevMonth: string | null; rows: Kw[]; tracked: { word: string; value: number; prev: number | null; count: number }[]; total: number }
 interface Review { id: string; reviewer: string; rating: number; comment: string | null; createTime: string | null; replyComment: string | null; replyTime: string | null }
-interface Resp { from: string; to: string; days: number; prevFrom: string; today: string; rows: Row[]; detail?: { store: { code: string; name: string }; daily: Record<string, Record<string, number>>; posts: Post[]; reviews: Review[]; keywords?: Keywords; findings: string[] } }
+interface Resp { from: string; to: string; days: number; prevFrom: string; today: string; rows: Row[]; areas?: AreaRow[]; detail?: { store: { code: string; name: string }; daily: Record<string, Record<string, number>>; posts: Post[]; reviews: Review[]; keywords?: Keywords; weekly?: Weekly; findings: string[] } }
+const ACTIONS = ['calls', 'directions', 'website_clicks', 'bookings', 'conversations'];
+const rate = (g: Record<string, { now: number | null; prev: number | null }>, k: 'now' | 'prev') => {
+  const imp = (g.impressions_maps?.[k] ?? 0) + (g.impressions_search?.[k] ?? 0);
+  return imp >= 100 ? ACTIONS.reduce((a, m) => a + (g[m]?.[k] ?? 0), 0) / imp * 100 : null;
+};
+function Rate({ g }: { g: Record<string, { now: number | null; prev: number | null }> }) {
+  const now = rate(g, 'now'); const prev = rate(g, 'prev');
+  if (now === null) return <span className="text-slate-400">-</span>;
+  return <span className="tabular-nums">{now.toFixed(1)}%{prev !== null && <span className={`ml-1 text-xs ${now > prev ? 'text-green-700' : now < prev ? 'text-red-700' : 'text-slate-400'}`}>（前 {prev.toFixed(1)}%）</span>}</span>;
+}
 const GBP_COLS: [string, string][] = [['impressions_maps', 'マップ表示'], ['impressions_search', '検索表示'], ['calls', '電話'], ['website_clicks', 'サイト'], ['directions', 'ルート'], ['bookings', '予約']];
 
 function Delta({ p }: { p: Pair }) {
@@ -28,6 +42,7 @@ export default function SnsInsightsPage() {
   const isHq = me.session.role === 'hq';
   const days = Number(sp.get('days') ?? 28);
   const detail = sp.get('detail') ?? (isHq ? '' : me.store?.code ?? '');
+  const areaF = sp.get('area') ?? '';
   const to = addDays(me.today, 1);
   const from = addDays(to, -days);
   const { data, error, reload } = useFetch<Resp>(`/api/admin/sns/insights?from=${from}&to=${to}${detail ? `&detail=${encodeURIComponent(detail)}` : ''}${isHq ? '' : '&store=me'}`);
@@ -57,24 +72,54 @@ export default function SnsInsightsPage() {
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
       <p className="text-xs text-slate-500">数字は毎朝 5 時以降の自動処理で取り込みます（Google の数字は数日遅れて確定し、検索キーワードは月単位で前月分まで）。％は前の同じ長さの期間との比較。連携していない媒体は 0 または「-」になります。</p>
 
+      {isHq && data.areas && data.areas.length > 0 && (
+        <section className="overflow-x-auto rounded border bg-white">
+          <h3 className="border-b px-3 py-2 font-bold">エリア別（Google）<span className="ml-2 text-xs font-normal text-slate-500">行を押すと、下の店舗の表をそのエリアに絞ります</span></h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="whitespace-nowrap bg-slate-100 text-left text-xs text-slate-600">
+                <th className="px-2 py-1">エリア</th><th className="px-2 py-1">店舗</th><th className="px-2 py-1">投稿 G</th>
+                {GBP_COLS.map(([k, l]) => <th key={k} className="px-2 py-1">{l}</th>)}<th className="px-2 py-1">行動の割合</th><th className="px-2 py-1">クチコミ</th><th className="px-2 py-1">メインKWを含む検索（月）</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.areas.map((a) => (
+                <tr key={a.name} onClick={() => set('area', areaF === a.name ? null : a.name)} className={`cursor-pointer border-t hover:bg-slate-50 ${areaF === a.name ? 'bg-brand-light' : ''}`}>
+                  <td className="whitespace-nowrap px-2 py-1 font-bold">{a.name}</td>
+                  <td className="px-2 py-1 tabular-nums">{a.stores}</td>
+                  <td className="px-2 py-1 tabular-nums">{a.posts.gbp}</td>
+                  {GBP_COLS.map(([k]) => <td key={k} className="px-2 py-1"><Delta p={a.gbp[k]} /></td>)}
+                  <td className="whitespace-nowrap px-2 py-1 text-xs"><Rate g={a.gbp} /></td>
+                  <td className="whitespace-nowrap px-2 py-1 text-xs">{a.reviews ? <>{a.reviews.n}件 ★{a.reviews.avg}{a.reviews.noReply > 0 && <span className="ml-1 rounded bg-amber-100 px-1 text-amber-800">未返信 {a.reviews.noReply}</span>}</> : '-'}</td>
+                  <td className="whitespace-nowrap px-2 py-1 text-xs">{a.mainKw.stores > 0 ? <Delta p={{ now: a.mainKw.now, prev: a.mainKw.prev }} /> : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="px-3 py-1 text-xs text-slate-500">行動の割合：表示されたうち、電話・ルート検索・サイト・予約・メッセージにつながった割合（表示 100 回以上のとき）。メインKW：各店舗の「メインキーワード」（例：接骨院）を含む検索で表示された回数の合計。</p>
+        </section>
+      )}
+
       <div className="overflow-x-auto rounded border bg-white">
+        {areaF && <div className="flex items-center gap-2 border-b px-3 py-1 text-xs"><span>エリア「{areaF}」の店舗だけ表示中</span><button type="button" onClick={() => set('area', null)} className="text-brand underline">すべて表示</button></div>}
         <table className="w-full text-sm">
           <thead>
-            <tr className="bg-slate-100 text-left text-xs text-slate-600">
+            <tr className="whitespace-nowrap bg-slate-100 text-left text-xs text-slate-600">
               <th className="px-2 py-1">店舗</th><th className="px-2 py-1">投稿 IG/G</th><th className="px-2 py-1">IGフォロワー</th><th className="px-2 py-1">IGリーチ</th><th className="px-2 py-1">IG投稿平均（リーチ/いいね/保存）</th>
-              {GBP_COLS.map(([k, l]) => <th key={k} className="px-2 py-1">G {l}</th>)}<th className="px-2 py-1">クチコミ</th><th className="px-2 py-1">G 検索キーワード上位（月）</th><th></th>
+              {GBP_COLS.map(([k, l]) => <th key={k} className="px-2 py-1">G {l}</th>)}<th className="px-2 py-1">クチコミ</th><th className="px-2 py-1">メインKWを含む検索（月）</th><th className="px-2 py-1">G 検索キーワード上位（月）</th><th></th>
             </tr>
           </thead>
           <tbody>
-            {data.rows.map((r) => (
+            {data.rows.filter((r) => !areaF || r.areaGroup === areaF).map((r) => (
               <tr key={r.code} className={`border-t ${d?.store.code === r.code ? 'bg-yellow-50' : ''}`}>
-                <td className="whitespace-nowrap px-2 py-1"><StoreDot code={r.code} className="mr-1" />{r.name}</td>
+                <td className="whitespace-nowrap px-2 py-1"><StoreDot code={r.code} className="mr-1" />{r.name}{isHq && r.areaGroup && <div className="text-[10px] text-slate-400">{r.areaGroup}</div>}</td>
                 <td className="px-2 py-1 tabular-nums">{r.posts.ig} / {r.posts.gbp}</td>
                 <td className="px-2 py-1"><Delta p={r.ig.followers} /></td>
                 <td className="px-2 py-1"><Delta p={r.ig.reach} /></td>
                 <td className="px-2 py-1 text-xs tabular-nums">{r.postStats ? `${num(r.postStats.reach)} / ${num(r.postStats.likes)} / ${num(r.postStats.saved)}（${r.postStats.n}件）` : '-'}</td>
                 {GBP_COLS.map(([k]) => <td key={k} className="px-2 py-1"><Delta p={r.gbp[k]} /></td>)}
                 <td className="whitespace-nowrap px-2 py-1 text-xs">{r.reviews ? <>{r.reviews.n}件 ★{r.reviews.avg}{r.reviews.noReply > 0 && <span className="ml-1 rounded bg-amber-100 px-1 text-amber-800">未返信 {r.reviews.noReply}</span>}</> : '-'}</td>
+                <td className="whitespace-nowrap px-2 py-1 text-xs">{r.mainKw?.month ? <><span className="text-slate-500">{r.mainKw.word}</span> <Delta p={{ now: r.mainKw.now, prev: r.mainKw.prev }} /></> : '-'}</td>
                 <td className="px-2 py-1 text-xs">{r.kwTop && r.kwTop.length > 0 ? r.kwTop.map((k) => <div key={k.keyword} className="whitespace-nowrap">{k.keyword} <span className="tabular-nums text-slate-500">{kwNum(k)}</span></div>) : '-'}</td>
                 <td className="px-2 py-1">{isHq && <button type="button" onClick={() => set('detail', r.code)} className="text-brand underline">詳しく</button>}</td>
               </tr>
@@ -90,6 +135,7 @@ export default function SnsInsightsPage() {
             <h3 className="mb-1 font-bold">気づき（数字から機械的に出しています。改善するかは相談して決めてください）</h3>
             {d.findings.length === 0 ? <p className="text-slate-500">まだ十分な数字がありません。</p> : <ul className="ml-5 list-disc space-y-0.5">{d.findings.map((x, i) => <li key={i}>{x}</li>)}</ul>}
           </section>
+          {d.weekly && <WeeklySection w={d.weekly} />}
           {d.keywords && <KeywordSection k={d.keywords} />}
           <section className="overflow-x-auto rounded border bg-white">
             <h3 className="border-b px-3 py-2 font-bold">投稿ごとの数字（この期間に投稿したもの）</h3>
@@ -141,6 +187,41 @@ export default function SnsInsightsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** 週ごとの Google への投稿と、表示回数・行動（電話・ルートなど）。投稿した週としなかった週の平均も比べる */
+function WeeklySection({ w }: { w: Weekly }) {
+  const any = w.rows.some((r) => r.hasData || r.postsGbp > 0);
+  return (
+    <section className="overflow-x-auto rounded border bg-white">
+      <h3 className="border-b px-3 py-2 font-bold">週ごとの投稿と Google の数字（直近 12 週・月曜はじまり）</h3>
+      {!any ? <p className="p-3 text-sm text-slate-500">まだ数字がありません。Google と連携して拠点を割り当てると、毎朝取り込みます。</p> : (
+        <>
+          {w.avgPosted !== null && w.avgQuiet !== null && (
+            <p className="border-b px-3 py-2 text-sm">投稿した週（{w.postedWeeks} 週）の表示回数の平均 <b className="tabular-nums">{num(w.avgPosted)}</b>　／　投稿しなかった週（{w.quietWeeks} 週）<b className="tabular-nums">{num(w.avgQuiet)}</b>
+              <span className="ml-2 text-xs text-slate-500">季節などの影響もあるため目安です</span></p>
+          )}
+          <table className="w-full text-sm">
+            <thead><tr className="bg-slate-100 text-left text-xs text-slate-600"><th className="px-2 py-1">週</th><th className="px-2 py-1">Google 投稿</th><th className="px-2 py-1">IG 投稿</th><th className="px-2 py-1">表示回数</th><th className="px-2 py-1">行動（電話・ルートなど）</th><th className="px-2 py-1">電話</th><th className="px-2 py-1">ルート</th></tr></thead>
+            <tbody>
+              {w.rows.map((r) => (
+                <tr key={r.week} className={`border-t ${r.postsGbp > 0 ? '' : 'text-slate-500'}`}>
+                  <td className="whitespace-nowrap px-2 py-0.5">{formatDateShort(r.week)}〜</td>
+                  <td className="px-2 py-0.5 tabular-nums">{r.postsGbp > 0 ? <b>{r.postsGbp}</b> : 0}</td>
+                  <td className="px-2 py-0.5 tabular-nums">{r.postsIg}</td>
+                  <td className="px-2 py-0.5 tabular-nums">{r.hasData ? num(r.impressions) : '-'}</td>
+                  <td className="px-2 py-0.5 tabular-nums">{r.hasData ? num(r.actions) : '-'}</td>
+                  <td className="px-2 py-0.5 tabular-nums">{r.hasData ? num(r.calls) : '-'}</td>
+                  <td className="px-2 py-0.5 tabular-nums">{r.hasData ? num(r.directions) : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="px-3 py-1 text-xs text-slate-500">Google の投稿は「投稿した」を押したものを数えます。Google の数字は数日遅れて確定するため、直近の週は少なめに出ます。</p>
+        </>
+      )}
+    </section>
   );
 }
 

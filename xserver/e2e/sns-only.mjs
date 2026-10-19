@@ -295,6 +295,15 @@ ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api
   ok('追加した投稿がカレンダーに出る', added.length >= 1, String(added.length));
   for (const p of await cal()) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
 }
+{
+  // 分析：エリア別の合計・メインキーワードの検索・週ごとの投稿と Google の数字
+  const ins = await (await fetch(`${BASE}/api/admin/sns/insights?detail=S001`, { headers: { cookie: ck } })).json();
+  ok('分析にエリア別の合計がある', Array.isArray(ins.areas) && ins.areas.length >= 1 && ins.areas.reduce((a, x) => a + x.stores, 0) === ins.rows.length);
+  ok('分析の店舗にメインキーワードの検索回数がある', ins.rows.every((r) => r.mainKw && 'now' in r.mainKw && typeof r.areaGroup === 'string'));
+  ok('店舗の詳しい分析に週ごとの数字（12 週）がある', ins.detail?.weekly?.rows?.length === 12);
+  await page.goto(`${BASE}/admin/sns/insights?detail=S001`);
+  ok('分析の画面にエリア別と週ごとの表が出る', await page.waitForSelector('text=エリア別（Google）', { timeout: 8000 }).then(() => true, () => false) && await page.waitForSelector('text=週ごとの投稿と Google の数字', { timeout: 8000 }).then(() => true, () => false));
+}
 const credRaw = await (await fetch(`${BASE}/api/admin/sns/credentials?store=S001`, { headers: { cookie: ck } })).text();
 ok('ログイン情報の取得にパスワードは含まれない', !credRaw.includes('Secret#Pass1') && credRaw.includes('natsume_test_ig'));
 const sp = await (await browser.newContext()).newPage();
