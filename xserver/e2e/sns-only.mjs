@@ -131,7 +131,13 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
 }
 const ck = (await page.context().cookies()).map((c) => `${c.name}=${c.value}`).join('; ');
 ok('Instagram の API 連携は使える', (await fetch(`${BASE}/api/admin/sns/ig/connect?store=S001`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);
-ok('Google の API 連携は止まっている', (await fetch(`${BASE}/api/admin/sns/google/connect`, { headers: { cookie: ck }, redirect: 'manual' })).status === 404);
+ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api/admin/sns/google/connect`, { headers: { cookie: ck }, redirect: 'manual' })).status === 302);
+{
+  const pm = await (await fetch(`${BASE}/api/admin/sns/posts?store=S001&channel=gbp`, { headers: { cookie: ck } })).json();
+  ok('Google と連携していても投稿は手動のまま', pm.publishMode?.gbp === 'manual');
+  const ins = await (await fetch(`${BASE}/api/admin/sns/insights?detail=S001`, { headers: { cookie: ck } })).json();
+  ok('分析に検索キーワードの欄がある', ins.detail && 'keywords' in ins.detail && Array.isArray(ins.rows[0]?.kwTop));
+}
 const credRaw = await (await fetch(`${BASE}/api/admin/sns/credentials?store=S001`, { headers: { cookie: ck } })).text();
 ok('ログイン情報の取得にパスワードは含まれない', !credRaw.includes('Secret#Pass1') && credRaw.includes('natsume_test_ig'));
 const sp = await (await browser.newContext()).newPage();

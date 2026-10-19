@@ -206,3 +206,15 @@ CREATE TABLE IF NOT EXISTS `sns_credential` (
   PRIMARY KEY (`storeId`, `channel`),
   CONSTRAINT `fk_scr_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Google の検索キーワード（月ごと。Google 検索・マップで店舗が表示されたときに使われた語と回数。分析用）
+CREATE TABLE IF NOT EXISTS `sns_search_keyword` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `ym` CHAR(7) NOT NULL,                    -- 2026-09
+  `keyword` VARCHAR(190) COLLATE utf8mb4_bin NOT NULL, -- 表記の違う語（全角／半角など）を別の語として持つ
+  `value` INT NOT NULL DEFAULT 0,
+  `threshold` TINYINT(1) NOT NULL DEFAULT 0, -- 1 なら value は「この回数未満」
+  `fetchedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`storeId`, `ym`, `keyword`),
+  CONSTRAINT `fk_ssk_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

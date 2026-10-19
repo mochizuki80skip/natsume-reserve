@@ -9,9 +9,11 @@ import { StoreDot } from '@/lib/storeColor';
 import { useAdmin } from '../Layout';
 
 type Pair = { now: number; prev: number } | { now: number | null; prev: number | null };
-interface Row { code: string; name: string; ig: Record<string, Pair>; gbp: Record<string, Pair>; posts: { ig: number; gbp: number }; postStats: { n: number; reach: number; likes: number; saved: number; shares: number } | null; reviews: { n: number; avg: number; noReply: number; recent: number } | null }
+interface Row { code: string; name: string; ig: Record<string, Pair>; gbp: Record<string, Pair>; posts: { ig: number; gbp: number }; postStats: { n: number; reach: number; likes: number; saved: number; shares: number } | null; reviews: { n: number; avg: number; noReply: number; recent: number } | null; kwTop?: Kw[] }
+interface Kw { keyword: string; value: number; threshold: boolean; prev?: number | null }
+interface Keywords { month: string | null; prevMonth: string | null; rows: Kw[]; tracked: { word: string; value: number; prev: number | null; count: number }[]; total: number }
 interface Review { id: string; reviewer: string; rating: number; comment: string | null; createTime: string | null; replyComment: string | null; replyTime: string | null }
-interface Resp { from: string; to: string; days: number; prevFrom: string; today: string; rows: Row[]; detail?: { store: { code: string; name: string }; daily: Record<string, Record<string, number>>; posts: Post[]; reviews: Review[]; findings: string[] } }
+interface Resp { from: string; to: string; days: number; prevFrom: string; today: string; rows: Row[]; detail?: { store: { code: string; name: string }; daily: Record<string, Record<string, number>>; posts: Post[]; reviews: Review[]; keywords?: Keywords; findings: string[] } }
 const GBP_COLS: [string, string][] = [['impressions_maps', 'マップ表示'], ['impressions_search', '検索表示'], ['calls', '電話'], ['website_clicks', 'サイト'], ['directions', 'ルート'], ['bookings', '予約']];
 
 function Delta({ p }: { p: Pair }) {
@@ -53,14 +55,14 @@ export default function SnsInsightsPage() {
         {isHq && <a href={`/api/admin/sns/insights/export?from=${from}&to=${to}`} className="ml-auto rounded border bg-white px-3 py-1">CSV で書き出し</a>}
       </div>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
-      <p className="text-xs text-slate-500">数字は毎朝 5 時以降の自動処理で取り込みます（Google の数字は数日遅れて確定します）。％は前の同じ長さの期間との比較。連携していない媒体は 0 または「-」になります。</p>
+      <p className="text-xs text-slate-500">数字は毎朝 5 時以降の自動処理で取り込みます（Google の数字は数日遅れて確定し、検索キーワードは月単位で前月分まで）。％は前の同じ長さの期間との比較。連携していない媒体は 0 または「-」になります。</p>
 
       <div className="overflow-x-auto rounded border bg-white">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-100 text-left text-xs text-slate-600">
               <th className="px-2 py-1">店舗</th><th className="px-2 py-1">投稿 IG/G</th><th className="px-2 py-1">IGフォロワー</th><th className="px-2 py-1">IGリーチ</th><th className="px-2 py-1">IG投稿平均（リーチ/いいね/保存）</th>
-              {GBP_COLS.map(([k, l]) => <th key={k} className="px-2 py-1">G {l}</th>)}<th className="px-2 py-1">クチコミ</th><th></th>
+              {GBP_COLS.map(([k, l]) => <th key={k} className="px-2 py-1">G {l}</th>)}<th className="px-2 py-1">クチコミ</th><th className="px-2 py-1">G 検索キーワード上位（月）</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -73,6 +75,7 @@ export default function SnsInsightsPage() {
                 <td className="px-2 py-1 text-xs tabular-nums">{r.postStats ? `${num(r.postStats.reach)} / ${num(r.postStats.likes)} / ${num(r.postStats.saved)}（${r.postStats.n}件）` : '-'}</td>
                 {GBP_COLS.map(([k]) => <td key={k} className="px-2 py-1"><Delta p={r.gbp[k]} /></td>)}
                 <td className="whitespace-nowrap px-2 py-1 text-xs">{r.reviews ? <>{r.reviews.n}件 ★{r.reviews.avg}{r.reviews.noReply > 0 && <span className="ml-1 rounded bg-amber-100 px-1 text-amber-800">未返信 {r.reviews.noReply}</span>}</> : '-'}</td>
+                <td className="px-2 py-1 text-xs">{r.kwTop && r.kwTop.length > 0 ? r.kwTop.map((k) => <div key={k.keyword} className="whitespace-nowrap">{k.keyword} <span className="tabular-nums text-slate-500">{kwNum(k)}</span></div>) : '-'}</td>
                 <td className="px-2 py-1">{isHq && <button type="button" onClick={() => set('detail', r.code)} className="text-brand underline">詳しく</button>}</td>
               </tr>
             ))}
@@ -87,6 +90,7 @@ export default function SnsInsightsPage() {
             <h3 className="mb-1 font-bold">気づき（数字から機械的に出しています。改善するかは相談して決めてください）</h3>
             {d.findings.length === 0 ? <p className="text-slate-500">まだ十分な数字がありません。</p> : <ul className="ml-5 list-disc space-y-0.5">{d.findings.map((x, i) => <li key={i}>{x}</li>)}</ul>}
           </section>
+          {d.keywords && <KeywordSection k={d.keywords} />}
           <section className="overflow-x-auto rounded border bg-white">
             <h3 className="border-b px-3 py-2 font-bold">投稿ごとの数字（この期間に投稿したもの）</h3>
             <table className="w-full text-sm">
@@ -137,5 +141,53 @@ export default function SnsInsightsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** 検索キーワードの回数（少ない語は「15 未満」のような上限で返る） */
+function kwNum(k: { value: number; threshold: boolean }): string {
+  return k.threshold ? `${k.value}未満` : k.value.toLocaleString();
+}
+
+/** Google の検索キーワード（月ごと）：設定した語を含む検索の合計と、上位 50 語 */
+function KeywordSection({ k }: { k: Keywords }) {
+  const ym = (x: string | null) => (x ? `${Number(x.slice(0, 4))}年${Number(x.slice(5, 7))}月` : '');
+  if (!k.month) return (
+    <section className="rounded border bg-white p-3 text-sm">
+      <h3 className="mb-1 font-bold">Google の検索キーワード</h3>
+      <p className="text-slate-500">まだ取り込まれていません。本部の「接続状況」で Google と連携し、この店舗に拠点を割り当てると、毎朝前月分までを取り込みます。</p>
+    </section>
+  );
+  const diff = (now: number, prev: number | null | undefined) => prev === null || prev === undefined ? <span className="text-slate-400">-</span> : now === prev ? <span className="text-slate-500">±0</span> : <span className={now > prev ? 'text-green-700' : 'text-red-700'}>{now > prev ? '+' : ''}{(now - prev).toLocaleString()}</span>;
+  return (
+    <section className="overflow-x-auto rounded border bg-white">
+      <h3 className="border-b px-3 py-2 font-bold">Google の検索キーワード（{ym(k.month)}。Google 検索・マップでこの店舗が表示されたときの語）</h3>
+      {k.tracked.length > 0 && (
+        <div className="border-b p-3">
+          <div className="mb-1 text-xs font-bold text-slate-600">設定した語（メインキーワード・エリア・症状）を含む検索の回数{k.prevMonth && `（前月 ${ym(k.prevMonth)} との差）`}</div>
+          <div className="flex flex-wrap gap-2">
+            {k.tracked.map((t) => (
+              <div key={t.word} className={`rounded border px-2 py-1 text-xs ${t.value === 0 ? 'border-amber-200 bg-amber-50' : 'bg-slate-50'}`}>
+                <span className="font-bold">{t.word}</span> <span className="tabular-nums">{t.value.toLocaleString()} 回</span>（{t.count} 語） {diff(t.value, t.prev)}
+              </div>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">回数が 0 の語は、その語でほとんど検索されていません。投稿のキーワードや、Google のサービス・説明文の見直しの目安にしてください。少ない語は「15 未満」のように Google が丸めた数で返るため、合計は目安です。</p>
+        </div>
+      )}
+      <table className="w-full text-sm">
+        <thead><tr className="bg-slate-100 text-left text-xs text-slate-600"><th className="px-2 py-1">順位</th><th className="px-2 py-1">検索キーワード</th><th className="px-2 py-1">回数</th><th className="px-2 py-1">前月との差</th></tr></thead>
+        <tbody>
+          {k.rows.map((r, i) => (
+            <tr key={r.keyword} className="border-t">
+              <td className="px-2 py-0.5 tabular-nums text-slate-500">{i + 1}</td>
+              <td className="px-2 py-0.5">{r.keyword}</td>
+              <td className="px-2 py-0.5 tabular-nums">{kwNum(r)}</td>
+              <td className="px-2 py-0.5 tabular-nums">{r.threshold ? <span className="text-slate-400">-</span> : diff(r.value, r.prev)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }

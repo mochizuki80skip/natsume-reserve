@@ -38,6 +38,7 @@ final class SnsInsights
             foreach (Db::all('SELECT channel, COUNT(*) AS n FROM sns_post WHERE storeId = ? AND status = ? AND postedAt >= ? AND postedAt < ? GROUP BY channel', [$s['id'], 'posted', $from . ' 00:00:00', $to . ' 00:00:00']) as $p) $row['posts'][$p['channel']] = (int)$p['n'];
             $st = Db::one('SELECT COUNT(*) AS n, AVG(st.reach) AS reach, AVG(st.likes) AS likes, AVG(st.saved) AS saved, AVG(st.shares) AS shares FROM sns_post p JOIN sns_post_stat st ON st.postId = p.id WHERE p.storeId = ? AND p.channel = ? AND p.postedAt >= ? AND p.postedAt < ?', [$s['id'], 'ig', $from . ' 00:00:00', $to . ' 00:00:00']);
             if ($st && (int)$st['n'] > 0) $row['postStats'] = ['n' => (int)$st['n'], 'reach' => round((float)$st['reach']), 'likes' => round((float)$st['likes']), 'saved' => round((float)$st['saved']), 'shares' => round((float)$st['shares'])];
+            $row['kwTop'] = self::keywordTop($s['id'], 3);
             $rv = Db::one('SELECT COUNT(*) AS n, AVG(rating) AS avg, SUM(CASE WHEN replyComment IS NULL THEN 1 ELSE 0 END) AS noReply, SUM(CASE WHEN createTime >= ? THEN 1 ELSE 0 END) AS recent FROM sns_review WHERE storeId = ?', [$from . ' 00:00:00', $s['id']]);
             $row['reviews'] = $rv && (int)$rv['n'] > 0 ? ['n' => (int)$rv['n'], 'avg' => round((float)$rv['avg'], 1), 'noReply' => (int)$rv['noReply'], 'recent' => (int)$rv['recent']] : null;
             $rows[] = $row;
@@ -54,7 +55,49 @@ final class SnsInsights
             Db::all('SELECT p.*, st.postId, st.reach, st.likes, st.comments, st.saved, st.shares, st.views, st.fetchedAt FROM sns_post p LEFT JOIN sns_post_stat st ON st.postId = p.id WHERE p.storeId = ? AND p.status = ? AND p.postedAt >= ? AND p.postedAt < ? ORDER BY p.postedAt DESC', [$store['id'], 'posted', $from . ' 00:00:00', $to . ' 00:00:00']));
         $reviews = array_map(fn($r) => ['id' => $r['id'], 'reviewer' => $r['reviewer'], 'rating' => (int)$r['rating'], 'comment' => $r['comment'], 'createTime' => $r['createTime'], 'replyComment' => $r['replyComment'], 'replyTime' => $r['replyTime']],
             Db::all('SELECT * FROM sns_review WHERE storeId = ? ORDER BY createTime DESC LIMIT 50', [$store['id']]));
-        return ['daily' => $daily, 'posts' => $posts, 'reviews' => $reviews, 'findings' => self::findings($store, $from, $to, $posts)];
+        return ['daily' => $daily, 'posts' => $posts, 'reviews' => $reviews, 'keywords' => self::keywords($store), 'findings' => self::findings($store, $from, $to, $posts)];
+    }
+
+    /** 検索キーワードの最新の月（無ければ null） */
+    public static function latestKeywordMonth(string $storeId): ?string
+    {
+        $r = Db::one('SELECT MAX(ym) AS ym FROM sns_search_keyword WHERE storeId = ?', [$storeId]);
+        return $r && $r['ym'] ? (string)$r['ym'] : null;
+    }
+
+    /** 最新の月の検索キーワード上位（一覧の列用） */
+    public static function keywordTop(string $storeId, int $n): array
+    {
+        $ym = self::latestKeywordMonth($storeId);
+        if (!$ym) return [];
+        return array_map(fn($r) => ['keyword' => $r['keyword'], 'value' => (int)$r['value'], 'threshold' => (bool)$r['threshold']],
+            Db::all('SELECT keyword, value, threshold FROM sns_search_keyword WHERE storeId = ? AND ym = ? ORDER BY value DESC, keyword ASC LIMIT ' . max(1, $n), [$storeId, $ym]));
+    }
+
+    /**
+     * 1 店舗の検索キーワード：最新の月の上位 50 語（前月の回数つき）と、
+     * 店舗で設定した語（メインキーワード・エリア・症状）を含む検索の合計（MEO で狙った語がどれだけ検索されているか）
+     */
+    public static function keywords(array $store): array
+    {
+        $ym = self::latestKeywordMonth($store['id']);
+        if (!$ym) return ['month' => null, 'prevMonth' => null, 'rows' => [], 'tracked' => [], 'total' => 0];
+        $prev = date('Y-m', strtotime($ym . '-01 -1 month'));
+        $prevMap = [];
+        foreach (Db::all('SELECT keyword, value FROM sns_search_keyword WHERE storeId = ? AND ym = ?', [$store['id'], $prev]) as $r) $prevMap[$r['keyword']] = (int)$r['value'];
+        $all = Db::all('SELECT keyword, value, threshold FROM sns_search_keyword WHERE storeId = ? AND ym = ? ORDER BY value DESC, keyword ASC', [$store['id'], $ym]);
+        $rows = array_map(fn($r) => ['keyword' => $r['keyword'], 'value' => (int)$r['value'], 'threshold' => (bool)$r['threshold'], 'prev' => $prevMap[$r['keyword']] ?? null], array_slice($all, 0, 50));
+        $ss = Sns::storeSetting($store);
+        $words = array_values(array_unique(array_filter(array_merge(Sns::splitList($ss['keywordsFixed']), $ss['area'] !== '' ? [$ss['area']] : [], Sns::splitList($ss['keywordsRotation'])))));
+        $norm = fn(string $x) => mb_strtolower(mb_convert_kana(preg_replace('/\s+/u', '', $x), 'cKV', 'UTF-8'));
+        $tracked = [];
+        foreach ($words as $w) {
+            $nw = $norm($w); $now = 0; $before = 0; $n = 0;
+            foreach ($all as $r) if (str_contains($norm($r['keyword']), $nw)) { $now += (int)$r['value']; $n++; }
+            foreach ($prevMap as $k => $v) if (str_contains($norm($k), $nw)) $before += $v;
+            $tracked[] = ['word' => $w, 'value' => $now, 'prev' => $prevMap ? $before : null, 'count' => $n];
+        }
+        return ['month' => $ym, 'prevMonth' => $prevMap ? $prev : null, 'rows' => $rows, 'tracked' => $tracked, 'total' => array_sum(array_map(fn($r) => (int)$r['value'], $all))];
     }
 
     /** ルールに基づく気づき（根拠の数字つき。件数が少ないときは断定しない） */

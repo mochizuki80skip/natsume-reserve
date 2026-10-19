@@ -105,7 +105,10 @@ function sns_home(): never
         'status' => [
             'pending' => $pendingCount, 'approved' => $approvedCount, 'failed' => $failedCount,
             'ig' => ['enabled' => $igEnabledStores, 'connected' => $igConnected],
-            'google' => $g['gbpManual'] ? 'manual' : (($googleHq && $googleHq['refreshToken']) ? ($gbpMapped > 0 ? 'ok' : 'nolocation') : 'none'),
+            // SNS 投稿管理だけの設置：投稿は手動。分析用に連携していれば ok／拠点未割当、していなければ manual
+            'google' => Config::isSnsOnly()
+                ? (($googleHq && $googleHq['refreshToken']) ? ($gbpMapped > 0 ? 'ok' : 'nolocation') : 'manual')
+                : ($g['gbpManual'] ? 'manual' : (($googleHq && $googleHq['refreshToken']) ? ($gbpMapped > 0 ? 'ok' : 'nolocation') : 'none')),
             'googleMapped' => $gbpMapped,
             'line' => Notify::lineEnabled() ? 'ok' : (Notify::mailEnabled() ? 'mail' : 'none'),
         ],

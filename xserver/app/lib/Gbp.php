@@ -133,6 +133,31 @@ final class Gbp
     }
 
     /** クチコミ一覧（新しい順、最大 50 件） */
+    /**
+     * 月ごとの検索キーワード：Google 検索・マップで、この店舗が表示されたときに使われた語と回数（1 か月分）。
+     * 回数が少ない語は正確な数ではなく「15 回未満」のような上限（threshold）で返る。
+     * @return array<int, array{keyword:string, value:int, threshold:bool}>
+     */
+    public static function searchKeywords(string $locationName, int $year, int $month): array
+    {
+        $out = []; $token = null; $pages = 0;
+        do {
+            $q = ['monthlyRange.startMonth.year' => $year, 'monthlyRange.startMonth.month' => $month, 'monthlyRange.endMonth.year' => $year, 'monthlyRange.endMonth.month' => $month, 'pageSize' => 100];
+            if ($token) $q['pageToken'] = $token;
+            $r = SnsHttp::requestOk('GET', self::base('https://businessprofileperformance.googleapis.com', '/gbp-perf') . "/v1/{$locationName}/searchkeywords/impressions/monthly", ['headers' => self::auth(), 'query' => $q]);
+            foreach ($r['searchKeywordsCounts'] ?? [] as $c) {
+                $kw = mb_substr(trim((string)($c['searchKeyword'] ?? '')), 0, 190);
+                if ($kw === '') continue;
+                $iv = $c['insightsValue'] ?? [];
+                if (isset($iv['value'])) $out[] = ['keyword' => $kw, 'value' => (int)$iv['value'], 'threshold' => false];
+                elseif (isset($iv['threshold'])) $out[] = ['keyword' => $kw, 'value' => (int)$iv['threshold'], 'threshold' => true];
+            }
+            $token = $r['nextPageToken'] ?? null;
+            $pages++;
+        } while ($token && $pages < 5);
+        return $out;
+    }
+
     public static function reviews(string $accountName, string $locationName): array
     {
         $r = SnsHttp::requestOk('GET', self::base('https://mybusiness.googleapis.com', '/gbp-v4') . "/v4/{$accountName}/{$locationName}/reviews", ['headers' => self::auth(), 'query' => ['pageSize' => 50, 'orderBy' => 'updateTime desc']]);

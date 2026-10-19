@@ -61,7 +61,7 @@ export default function SnsHqPage() {
           <div>{check(data.configured.appUrl)}APP_URL（画像の公開 URL・連携の戻り先）：{data.baseUrl || '未設定'}</div>
           <div>{check(data.configured.cronSecret)}CRON_SECRET（自動処理）</div>
           <div>{check(data.configured.ig)}Instagram アプリ（IG_APP_ID / IG_APP_SECRET）</div>
-          {!SNS_ONLY && !s.gbpManual && <div>{check(data.configured.google)}Google OAuth（GOOGLE_CLIENT_ID / SECRET）</div>}
+          {(SNS_ONLY || !s.gbpManual) && <div>{check(data.configured.google)}Google OAuth（GOOGLE_CLIENT_ID / SECRET）{SNS_ONLY && '：分析用'}</div>}
           <div>{check(data.configured.line)}LINE 通知（LINE_CHANNEL_ACCESS_TOKEN）　{check(data.configured.lineWebhook)}LINE Webhook（LINE_CHANNEL_SECRET）</div>
           <div>{check(data.configured.mail)}メール通知（NOTIFY_EMAIL。LINE が無いときの代わり）</div>
           <div>{check(data.mediaWritable)}画像の保存先（public/media/sns）に書き込める</div>
@@ -70,7 +70,7 @@ export default function SnsHqPage() {
           <summary className="cursor-pointer">各サービスに登録する URL</summary>
           <ul className="ml-4 mt-1 list-disc space-y-0.5">
             <li>Instagram アプリの「OAuth リダイレクト URI」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.ig}</code></li>
-            {!SNS_ONLY && <li>Google OAuth クライアントの「承認済みのリダイレクト URI」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.google}</code></li>}
+            {(SNS_ONLY || !s.gbpManual) && <li>Google OAuth クライアントの「承認済みのリダイレクト URI」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.google}</code></li>}
             <li>LINE Messaging API の「Webhook URL」：<code className="rounded bg-slate-100 px-1">{data.redirectUris.lineWebhook}</code></li>
             <li>Xserver の Cron（5〜10 分おき）：<code className="rounded bg-slate-100 px-1">/usr/bin/curl -s "{data.redirectUris.cron}" &gt; /dev/null</code></li>
           </ul>
@@ -84,13 +84,13 @@ export default function SnsHqPage() {
 
       {SNS_ONLY ? <section className="rounded border bg-white p-4 text-sm">
         <h2 className="mb-1 font-bold">投稿の方法</h2>
-        <p className="text-slate-600">Instagram は店舗ごとに連携すると、承認済みの投稿が予定時刻に自動で投稿されます（未連携の店舗は手動投稿）。Google は API を使わず手動で投稿します。予定時刻になると通知が届き、「手動投稿」の画面で本文をコピー → 各店舗の投稿ページを開いて貼り付け → 「投稿した」で記録します。連携・ログイン情報・投稿ページの URL は「店舗管理」→ 各店舗の「SNS設定」で設定します。</p>
+        <p className="text-slate-600">Instagram は店舗ごとに連携すると、承認済みの投稿が予定時刻に自動で投稿されます（未連携の店舗は手動投稿）。Google の投稿は手動です（API で投稿はしません）。下の「Google ビジネスプロフィール」で連携すると、表示回数・電話・ルート検索・クチコミ・検索キーワードを毎朝取り込み、「分析」で見られます。予定時刻になると通知が届き、「手動投稿」の画面で本文をコピー → 各店舗の投稿ページを開いて貼り付け → 「投稿した」で記録します。連携・ログイン情報・投稿ページの URL は「店舗管理」→ 各店舗の「SNS設定」で設定します。</p>
       </section> : <section className="rounded border bg-white p-4 text-sm">
         <h2 className="mb-2 font-bold">Google ビジネスプロフィールの投稿方法</h2>
         <label className="flex items-start gap-2"><input type="checkbox" checked={s.gbpManual} onChange={(e) => { const v = e.target.checked; setS({ ...s, gbpManual: v }); run(() => sendJson('/api/admin/hq/sns/settings', 'PUT', { gbpManual: v }), v ? 'Google は手動投稿の運用にしました' : 'Google は API 連携の運用にしました'); }} className="mt-1" /><span><span className="font-bold">Google は手動で投稿する（API 申請なし）</span><br /><span className="text-xs text-slate-500">オンにすると Google の投稿はすべて「手動投稿」になり、予定時刻の通知 → 手動投稿の画面でコピー → Google に貼り付け → 「投稿した」で記録します。API 連携の設定は表示しません。</span></span></label>
       </section>}
-      {!SNS_ONLY && !s.gbpManual && <section className="rounded border bg-white p-4 text-sm">
-        <h2 className="mb-2 font-bold">Google ビジネスプロフィール（本部の Google アカウントで 24 店舗分をまとめて連携）</h2>
+      {(SNS_ONLY || !s.gbpManual) && <section className="rounded border bg-white p-4 text-sm">
+        <h2 className="mb-2 font-bold">Google ビジネスプロフィール（本部の Google アカウントで 24 店舗分をまとめて連携{SNS_ONLY && '。分析用：投稿は手動のまま'}）</h2>
         {data.google?.connected ? <p>連携中{data.google.tokenRefreshedAt && <span className="text-xs text-slate-500">（最終更新 {data.google.tokenRefreshedAt.slice(0, 16)}）</span>}{data.google.lastError && <span className="ml-2 text-xs text-red-700">エラー：{data.google.lastError}</span>}</p> : <p className="text-slate-600">未連携。全店舗の拠点を管理している Google アカウントで連携してください。API の利用許可（申請）が下りる前でも連携はできますが、投稿・数字の取得は許可後に動きます。</p>}
         <div className="mt-2 flex flex-wrap gap-2">
           {data.configured.google && data.configured.appUrl ? <a href="/api/admin/sns/google/connect" className="rounded bg-blue-700 px-3 py-1 text-white">{data.google?.connected ? 'Google を再連携' : 'Google と連携する'}</a> : <span className="text-xs text-red-700">GOOGLE_CLIENT_ID / SECRET と APP_URL を config.php に設定してください</span>}
@@ -115,7 +115,7 @@ export default function SnsHqPage() {
                       <option value="">（割り当てなし）</option>
                       {locs.map((l) => <option key={l.location} value={`${l.account}|${l.location}`}>{l.title}　{l.address}</option>)}
                     </select>
-                  ) : !st.gbpEnabled ? <span className="text-slate-400">使わない</span> : s.gbpManual ? <span className="text-slate-600">手動投稿</span> : (st.gbp?.locationName ? <span className="text-green-700">{st.gbp.username}{st.gbp.lastError && <span className="ml-1 text-red-700" title={st.gbp.lastError}>!</span>}</span> : <span className="text-amber-700">拠点未割当（手動投稿）</span>)}
+                  ) : !st.gbpEnabled && !SNS_ONLY ? <span className="text-slate-400">使わない</span> : s.gbpManual && !SNS_ONLY ? <span className="text-slate-600">手動投稿</span> : (st.gbp?.locationName ? <span className="text-green-700">{st.gbp.username}{st.gbp.lastError && <span className="ml-1 text-red-700" title={st.gbp.lastError}>!</span>}</span> : <span className="text-amber-700">{SNS_ONLY ? '拠点未割当（分析なし）' : '拠点未割当（手動投稿）'}</span>)}
                 </td>
                 <td className="whitespace-nowrap px-2 py-1 text-xs">{st.igEnabled ? st.igSchedule : '-'} / {st.gbpEnabled ? st.gbpSchedule : '-'}</td>
                 <td className="px-2 py-1 text-xs">{st.area || <span className="text-amber-700">未設定</span>}</td>

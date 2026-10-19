@@ -50,7 +50,7 @@ export default function SnsShell() {
             <div className="mt-auto space-y-1 border-t px-2 pt-3">
               {dot(st.line === 'ok' ? true : st.line === 'mail' ? null : false, 'LINE', st.line === 'ok' ? 'OK' : st.line === 'mail' ? 'メール' : '未設定')}
               {dot(st.ig.enabled === 0 ? null : st.ig.connected >= st.ig.enabled ? true : st.ig.connected > 0 ? null : false, 'Instagram', st.ig.enabled ? `${st.ig.connected}/${st.ig.enabled}` : '未使用')}
-              {dot(st.google === 'manual' ? null : st.google === 'ok' ? true : false, 'Google', st.google === 'manual' ? '手動' : st.google === 'ok' ? 'OK' : st.google === 'nolocation' ? '拠点未割当' : '承認待ち')}
+              {dot(st.google === 'manual' ? null : st.google === 'ok' ? true : false, 'Google', st.google === 'manual' ? '手動' : st.google === 'ok' ? (SNS_ONLY ? '分析OK' : 'OK') : st.google === 'nolocation' ? '拠点未割当' : '承認待ち')}
             </div>
           )}
         </div>

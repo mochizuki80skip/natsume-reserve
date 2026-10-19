@@ -229,8 +229,8 @@ final class SnsCron
             }
         }
         $hq = Sns::account(null, 'gbp');
-        // SNS 投稿管理だけの設置では Google の API は使わない（数字の取り込みもしない）
-        if ($hq && $hq['refreshToken'] && !Config::isSnsOnly()) {
+        // Google は投稿には使わず（手動投稿）、数字・クチコミ・検索キーワードの取り込み（分析）にだけ使う
+        if ($hq && $hq['refreshToken']) {
             foreach (Db::all('SELECT a.*, s.name AS storeName FROM sns_account a JOIN store s ON s.id = a.storeId WHERE a.channel = ? AND a.locationName <> ? AND s.active = 1', ['gbp', '']) as $a) {
                 try {
                     // パフォーマンスの数字は数日遅れて確定するため、直近 10 日分を毎日取り直す
@@ -243,6 +243,7 @@ final class SnsCron
                             [substr(hash('sha256', $rv['name']), 0, 32), $a['storeId'], mb_substr($rv['name'], 0, 200), mb_substr($rv['reviewer'], 0, 100), $rv['rating'], $rv['comment'], $rv['createTime'], $rv['replyComment'], $rv['replyTime'], $now]);
                         $res['reviews']++;
                     }
+                    $res['keywords'] = ($res['keywords'] ?? 0) + self::fetchSearchKeywords($a['storeId'], $a['locationName'], $today);
                     $res['gbp']++;
                     if ($a['lastError']) Sns::saveAccount($a['storeId'], 'gbp', ['lastError' => null]);
                 } catch (Throwable $e) {
@@ -283,5 +284,26 @@ final class SnsCron
         $lines[] = '詳しくは管理画面「SNS投稿」→「分析」で。';
         Notify::send(implode("\n", $lines));
         return ['stores' => count($stores), 'posts' => $total];
+    }
+
+    /**
+     * 検索キーワードを月ごとに取り込む：先月は毎回（数字が確定するまで更新される）、その前の 2 か月は未取得のときだけ。
+     * @return 取り込んだ語の数
+     */
+    private static function fetchSearchKeywords(string $storeId, string $locationName, string $today): int
+    {
+        $n = 0;
+        for ($back = 1; $back <= 3; $back++) {
+            $ym = date('Y-m', strtotime(substr($today, 0, 7) . "-01 -{$back} month"));
+            if ($back > 1 && Db::one('SELECT 1 AS x FROM sns_search_keyword WHERE storeId = ? AND ym = ? LIMIT 1', [$storeId, $ym])) continue;
+            [$y, $m] = array_map('intval', explode('-', $ym));
+            $rows = Gbp::searchKeywords($locationName, $y, $m);
+            Db::transaction(function () use ($storeId, $ym, $rows) {
+                Db::exec('DELETE FROM sns_search_keyword WHERE storeId = ? AND ym = ?', [$storeId, $ym]);
+                foreach ($rows as $r) Db::exec('INSERT INTO sns_search_keyword (storeId, ym, keyword, value, threshold) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE value = VALUES(value), threshold = VALUES(threshold)', [$storeId, $ym, $r['keyword'], $r['value'], $r['threshold'] ? 1 : 0]);
+            });
+            $n += count($rows);
+        }
+        return $n;
     }
 }

@@ -80,6 +80,15 @@ const server = http.createServer(async (req, res) => {
       const days = 10;
       return json(res, 200, { multiDailyMetricTimeSeries: [{ dailyMetricTimeSeries: metrics.map((m) => ({ dailyMetric: m, timeSeries: { datedValues: Array.from({ length: days }, (_, i) => { const d = new Date(start); d.setUTCDate(d.getUTCDate() + i); return { date: ymd(d), value: String(m.includes('IMPRESSIONS') ? 50 + i : 2) }; }) } })) }] });
     }
+    if (p === '/gbp-perf/v1/locations/201/searchkeywords/impressions/monthly') {
+      const m = +u.searchParams.get('monthlyRange.startMonth.month');
+      if (!u.searchParams.get('pageToken')) return json(res, 200, { searchKeywordsCounts: [
+        { searchKeyword: '三島 接骨院', insightsValue: { value: String(100 + m) } },
+        { searchKeyword: '接骨院 近く', insightsValue: { value: '80' } },
+        { searchKeyword: 'むちうち 三島', insightsValue: { value: '30' } },
+      ], nextPageToken: 'P2' });
+      return json(res, 200, { searchKeywordsCounts: [{ searchKeyword: '交通事故 整骨院', insightsValue: { threshold: '15' } }] });
+    }
     if (p === '/gbp-v4/v4/accounts/100/locations/201/reviews') return json(res, 200, { reviews: [
       { name: 'accounts/100/locations/201/reviews/R1', reviewer: { displayName: '山田' }, starRating: 'FIVE', comment: '丁寧でした', createTime: '2026-09-20T03:00:00Z' },
       { name: 'accounts/100/locations/201/reviews/R2', reviewer: { displayName: '佐藤' }, starRating: 'THREE', comment: '待ち時間が長い', createTime: '2026-09-28T03:00:00Z', reviewReply: { comment: 'ありがとうございます', updateTime: '2026-09-29T01:00:00Z' } }] });

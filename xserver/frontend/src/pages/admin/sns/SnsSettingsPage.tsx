@@ -150,7 +150,8 @@ export default function SnsSettingsPage() {
           {data.gbpManual ? (
             <section className="rounded border bg-white p-4 text-sm">
               <h2 className="mb-2 font-bold">Google ビジネスプロフィール</h2>
-              <p className="text-slate-600">手動投稿の運用です（API 申請なし）。予定時刻になると通知が届き、<a href="/admin/sns/manual" className="text-brand underline">手動投稿の画面</a>でコピー → Google に貼り付け → 「投稿した」で記録します。左の「投稿作成ページの URL」を登録しておくと 1 クリックで開けます。</p>
+              {gbp?.locationName && <p className="mb-1 text-xs text-green-700">分析用に連携中：{gbp.username}（表示回数・クチコミ・検索キーワードを毎朝取り込み）</p>}
+              <p className="text-slate-600">投稿は手動です。予定時刻になると通知が届き、<a href="/admin/sns/manual" className="text-brand underline">手動投稿の画面</a>でコピー → Google に貼り付け → 「投稿した」で記録します。左の「投稿作成ページの URL」を登録しておくと 1 クリックで開けます。</p>
             </section>
           ) : (
           <section className="rounded border bg-white p-4 text-sm">
