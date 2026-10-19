@@ -67,7 +67,12 @@ final class Sns
         }
         foreach ($added as [$table, $col, $ddl]) {
             $r = Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $col]);
-            if (!$r) Db::pdo()->exec($ddl);
+            if ($r) continue;
+            try { Db::pdo()->exec($ddl); }
+            catch (PDOException $e) {
+                // 同時に開いた別の画面が先に列を足した場合（Duplicate column）はそのまま進む
+                if ((int)($e->errorInfo[1] ?? 0) !== 1060) throw $e;
+            }
         }
         // 以前の「2 人チェック」の途中状態（checked）は下書きに戻す
         Db::exec("UPDATE sns_post SET status = 'draft' WHERE status = 'checked'");
