@@ -75,11 +75,26 @@ final class Sns
             }
         }
         // 以前の「2 人チェック」の途中状態（checked）は下書きに戻す
-        Db::exec("UPDATE sns_post SET status = 'draft' WHERE status = 'checked'");
+        self::fixRows("FROM sns_post WHERE status = 'checked'", "UPDATE sns_post SET status = 'draft' WHERE status = 'checked'");
         // Instagram を連携済みの店舗で、手動のまま残っているまだ投稿していない分は自動投稿に戻す
-        Db::exec("UPDATE sns_post p JOIN sns_account a ON a.storeId = p.storeId AND a.channel = 'ig' AND a.accessToken IS NOT NULL SET p.publishMode = 'api' WHERE p.channel = 'ig' AND p.publishMode = 'manual' AND p.status IN ('draft', 'approved', 'failed')");
+        self::fixRows("FROM sns_post p JOIN sns_account a ON a.storeId = p.storeId AND a.channel = 'ig' AND a.accessToken IS NOT NULL WHERE p.channel = 'ig' AND p.publishMode = 'manual' AND p.status IN ('draft', 'approved', 'failed')",
+            "UPDATE sns_post p JOIN sns_account a ON a.storeId = p.storeId AND a.channel = 'ig' AND a.accessToken IS NOT NULL SET p.publishMode = 'api' WHERE p.channel = 'ig' AND p.publishMode = 'manual' AND p.status IN ('draft', 'approved', 'failed')");
         // SNS 投稿管理だけの設置では Google は手動投稿。以前 API の予定で作った Google の下書きも手動に切り替える
-        if (Config::isSnsOnly()) Db::exec("UPDATE sns_post SET publishMode = 'manual' WHERE channel = 'gbp' AND publishMode = 'api' AND status IN ('draft', 'approved', 'failed')");
+        if (Config::isSnsOnly()) self::fixRows("FROM sns_post WHERE channel = 'gbp' AND publishMode = 'api' AND status IN ('draft', 'approved', 'failed')",
+            "UPDATE sns_post SET publishMode = 'manual' WHERE channel = 'gbp' AND publishMode = 'api' AND status IN ('draft', 'approved', 'failed')");
+    }
+
+    /**
+     * 直すべき行があるときだけ UPDATE する（毎回の読み込みで UPDATE して、保存中の処理とぶつからないように）。
+     * ほかの処理と重なって待ちになったとき（Deadlock / Lock wait）は、次の読み込みでやり直すのでそのまま進む
+     */
+    private static function fixRows(string $from, string $update): void
+    {
+        if (!Db::one('SELECT 1 AS x ' . $from . ' LIMIT 1')) return;
+        try { Db::exec($update); }
+        catch (PDOException $e) {
+            if (!in_array((int)($e->errorInfo[1] ?? 0), [1205, 1213], true)) throw $e;
+        }
     }
 
     // ---------- 既定値 ----------
