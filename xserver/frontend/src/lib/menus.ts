@@ -12,7 +12,7 @@ export function menuShort(label: string, options: string[] = []): string {
 }
 
 /** メニューの色（選択肢の並び順で決める。色が足りなければ繰り返す） */
-const MENU_COLORS = ['#b4462e', '#2f6fb3', '#2a8a6a', '#7a4fb0', '#a2741a', '#c23e7a', '#0f7c8c', '#5b6b2e', '#8a3b5f', '#4b5563', '#1e3a8a', '#78350f', '#be123c', '#065f46'];
+const MENU_COLORS = ['#b4462e', '#2f6fb3', '#2a8a6a', '#7a4fb0', '#a2741a', '#c23e7a', '#0f7c8c', '#5b6b2e', '#8a3b5f', '#4b5563', '#1e3a8a', '#78350f', '#be123c', '#065f46', '#0284c7', '#6b21a8'];
 export function menuColor(label: string, options: string[]): string {
   const i = options.indexOf(label);
   return MENU_COLORS[(i < 0 ? options.length : i) % MENU_COLORS.length];

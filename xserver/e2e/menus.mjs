@@ -21,7 +21,7 @@ await cell('9:00', 1).locator('input').click();
 const names = (await bar.getByRole('button').allTextContents()).filter((n) => !['新患', '再来', '新自'].includes(n));
 ok('メニューの段（追加メニューなし）', names.slice(0, 8).join(',') === '矯正,2回目,3回目,6回目,12回目,ワンコイン,自費,ワクスキ', names.join(','));
 const goods = await p.getByRole('group', { name: '物販' }).getByRole('button').allTextContents();
-ok('物販の段', goods.join(',') === 'パイオ,テープ,プロテイン,ODAIJINI,サポーター', goods.join(','));
+ok('物販の段', goods.join(',') === 'パイオ,テープ,プロテイン,ODAIJINI,サポーター,湿布,回答書', goods.join(','));
 const y0 = (await cell('9:00', 1).boundingBox()).y;
 await bar.getByRole('button', { name: 'テープ' }).click();
 await bar.getByRole('button', { name: '矯正' }).click();

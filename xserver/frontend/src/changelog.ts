@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 30, date: '2026-10-19', title: '物販に湿布・回答書', audience: ['店舗', '本部'],
+    items: ['予約表の物販の段に「湿布」「回答書」を足しました。セルの印は「湿」「回」です。'],
+  },
+  {
     id: 29, date: '2026-10-17', title: '予約表の上をすっきり', audience: ['店舗', '本部'],
     items: [
       '予約表の上にあった「メニュー別の人数」（矯正・2・3・6回目などの数）と「顧客に見える枠数・ブロック」は、ふだんは閉じておき、ボタン（▸ メニュー別の人数／▸ 枠数・ブロック）を押したときだけ出すようにしました。開いた状態はそのパソコンで覚えます。',

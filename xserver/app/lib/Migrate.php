@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 16;
+    private const VERSION = 17;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -142,6 +142,22 @@ final class Migrate
                     if ((int)$has['n'] > 0 && (int)$dup['n'] === 0) {
                         $at = (int)$pdo->query("SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM karte_option WHERE category = 'trigger'")->fetch()['n'];
                         $pdo->exec("INSERT INTO karte_option (category, label, sortOrder) VALUES ('trigger', '業者紹介', $at)");
+                    }
+                }
+            }
+            if ($ver < 17) {
+                // 物販に「湿布・回答書」を足す（後ろに。すでにあるものは足さない）
+                if (self::hasTable($pdo, 'karte_option')) {
+                    $has = $pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'goods'")->fetch();
+                    if ((int)$has['n'] > 0) {
+                        foreach (['湿布', '回答書'] as $label) {
+                            $dup = $pdo->prepare("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'goods' AND label = ?");
+                            $dup->execute([$label]);
+                            if ((int)$dup->fetch()['n'] > 0) continue;
+                            $at = (int)$pdo->query("SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM karte_option WHERE category = 'goods'")->fetch()['n'];
+                            $ins = $pdo->prepare("INSERT INTO karte_option (category, label, sortOrder) VALUES ('goods', ?, ?)");
+                            $ins->execute([$label, $at]);
+                        }
                     }
                 }
             }
