@@ -7,10 +7,12 @@ function hq_get(): never
     Auth::requireHq();
     $setting = Settings::global();
     $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'phone' => $r['phone'], 'beds' => (int)$r['beds'], 'active' => (bool)$r['active'],
-        'address' => (string)$r['address'], 'lat' => $r['lat'] !== null ? (float)$r['lat'] : null, 'lng' => $r['lng'] !== null ? (float)$r['lng'] : null, 'listed' => (bool)$r['listed']],
-        Db::all('SELECT code, name, phone, beds, active, address, lat, lng, listed FROM store ORDER BY code ASC'));
+        'address' => (string)$r['address'], 'lat' => $r['lat'] !== null ? (float)$r['lat'] : null, 'lng' => $r['lng'] !== null ? (float)$r['lng'] : null, 'listed' => (bool)$r['listed'],
+        'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly']],
+        Settings::storesInOrder());
     Http::json([
         'stores' => $stores,
+        'areas' => array_column(Db::all('SELECT name FROM area ORDER BY sortOrder ASC, name ASC'), 'name'),
         'setting' => [
             'slotMinutes' => $setting['slotMinutes'], 'newVisitSlots' => $setting['newVisitSlots'], 'returnVisitSlots' => $setting['returnVisitSlots'],
             'webCutoffMinutes' => $setting['webCutoffMinutes'], 'phoneCutoffMinutes' => $setting['phoneCutoffMinutes'], 'phoneMarkRemaining' => $setting['phoneMarkRemaining'],
@@ -118,7 +120,8 @@ function hq_stores_post(): never
     if (Db::one('SELECT id FROM admin_account WHERE code = ?', [$code])) Http::error('この店舗コードは既に使われています', 409);
     Db::transaction(function () use ($code, $name, $phone, $password) {
         $id = Db::newId();
-        Db::exec('INSERT INTO store (id, code, name, phone) VALUES (?, ?, ?, ?)', [$id, $code, $name, $phone]);
+        $next = (int)(Db::one('SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM store')['n'] ?? 1);
+        Db::exec('INSERT INTO store (id, code, name, phone, sortOrder) VALUES (?, ?, ?, ?, ?)', [$id, $code, $name, $phone, $next]);
         Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId) VALUES (?, ?, ?, ?, ?)', [Db::newId(), $code, password_hash($password, PASSWORD_BCRYPT), 'store', $id]);
     });
     Http::json(['ok' => true]);
@@ -146,9 +149,44 @@ function hq_stores_put(): never
         if ($newCode !== null && $newCode !== $store['code']) {
             if (strtoupper($newCode) === 'HQ' || Db::one('SELECT id FROM admin_account WHERE code = ?', [$newCode])) Http::error('この店舗コードは既に使われています', 409);
         }
-        Db::transaction(function () use ($store, $newCode, $name, $phone) {
-            Db::exec('UPDATE store SET code = ?, name = ?, phone = ? WHERE id = ?', [$newCode ?? $store['code'], $name ?? $store['name'], $phone ?? $store['phone'], $store['id']]);
-            if ($newCode !== null && $newCode !== $store['code']) Db::exec('UPDATE admin_account SET code = ? WHERE storeId = ? AND role = ?', [$newCode, $store['id'], 'store']);
+        $hqOnly = array_key_exists('hqOnly', $b) ? (Http::bool($b, 'hqOnly') ? 1 : 0) : (int)($store['hqOnly'] ?? 0);
+        Db::transaction(function () use ($store, $newCode, $name, $phone, $hqOnly) {
+            Db::exec('UPDATE store SET code = ?, name = ?, phone = ?, hqOnly = ? WHERE id = ?', [$newCode ?? $store['code'], $name ?? $store['name'], $phone ?? $store['phone'], $hqOnly, $store['id']]);
+            if ($newCode !== null && $newCode !== $store['code']) {
+                Db::exec('UPDATE admin_account SET code = ? WHERE storeId = ? AND role = ?', [$newCode, $store['id'], 'store']);
+                // エリアの設定に入っている店舗コードもそろえる
+                foreach (Db::all('SELECT id, storeCodes FROM area') as $a) {
+                    $codes = array_filter(explode(',', (string)$a['storeCodes']));
+                    if (!in_array($store['code'], $codes, true)) continue;
+                    Db::exec('UPDATE area SET storeCodes = ? WHERE id = ?', [implode(',', array_map(fn($c) => $c === $store['code'] ? $newCode : $c, $codes)), $a['id']]);
+                }
+            }
+        });
+    } elseif ($action === 'move') {
+        // 同じまとまり（本部専用／同じエリア）の中で 1 つ上（dir=-1）か下（dir=1）と入れ替える
+        $dir = (int)($b['dir'] ?? 0) < 0 ? -1 : 1;
+        $all = Settings::storesInOrder();
+        foreach ($all as $i => $r) Db::exec('UPDATE store SET sortOrder = ? WHERE id = ?', [$i + 1, $r['id']]);
+        $group = fn($r) => (int)$r['hqOnly'] ? '#hq' : $r['area'];
+        $idx = array_search($store['id'], array_column($all, 'id'), true);
+        $j = $idx === false ? false : $idx + $dir;
+        if ($j !== false && isset($all[$j]) && $group($all[$j]) === $group($all[$idx])) {
+            Db::exec('UPDATE store SET sortOrder = ? WHERE id = ?', [$j + 1, $all[$idx]['id']]);
+            Db::exec('UPDATE store SET sortOrder = ? WHERE id = ?', [$idx + 1, $all[$j]['id']]);
+        }
+    } elseif ($action === 'area') {
+        // エリアを付け替える（エリアの設定の店舗一覧から外して、選んだエリアの最後に足す。'' はエリア未設定）
+        $areaName = trim((string)($b['area'] ?? ''));
+        $target = $areaName === '' ? null : Db::one('SELECT id, storeCodes FROM area WHERE name = ?', [$areaName]);
+        if ($areaName !== '' && !$target) Http::error('そのエリアはありません', 404);
+        Db::transaction(function () use ($store, $target) {
+            foreach (Db::all('SELECT id, storeCodes FROM area') as $a) {
+                $codes = array_values(array_filter(explode(',', (string)$a['storeCodes']), fn($c) => $c !== '' && $c !== $store['code']));
+                if ($target && $a['id'] === $target['id']) $codes[] = $store['code'];
+                Db::exec('UPDATE area SET storeCodes = ? WHERE id = ?', [implode(',', $codes), $a['id']]);
+            }
+            $next = (int)(Db::one('SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM store')['n'] ?? 1);
+            Db::exec('UPDATE store SET sortOrder = ? WHERE id = ?', [$next, $store['id']]);
         });
     } elseif ($action === 'listing') {
         // 店舗えらびページの情報（住所・地図の位置・載せるか）
@@ -175,7 +213,7 @@ function hq_overview(): never
     $date = Http::query('date');
     if (!$date || !Time::isValidDate($date)) $date = $today;
     $setting = Settings::global();
-    $stores = array_map([Settings::class, 'storeRow'], Db::all('SELECT * FROM store WHERE active = 1 ORDER BY code ASC'));
+    $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder('active = 1'));
     $rows = [];
     $sum = ['rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0, 'cancel' => 0, 'noshow' => 0];
     foreach ($stores as $store) {

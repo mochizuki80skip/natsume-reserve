@@ -69,7 +69,75 @@ final class Settings
 
     public static function storeSessions(array $store, array $setting, string $date, bool $closed = false): array
     {
+        // 特別な営業日（プレオープン・イベントなど）：その日だけ決めた時間で営業（定休日・祝日でも）。臨時休診にした日は休み
+        if (!$closed && isset($store['id']) && ($sp = self::specialDay((string)$store['id'], $date))) {
+            $extra = (int)$setting['adminExtraSlots'] * (int)$setting['slotMinutes'];
+            $out = [];
+            foreach ($sp['sessions'] as [$a, $b]) $out[] = ['start' => Time::hmToMin($a), 'lastStart' => Time::hmToMin($b), 'lastAdmin' => Time::hmToMin($b) + $extra];
+            usort($out, fn($x, $y) => $x['start'] <=> $y['start']);
+            return $out;
+        }
         return Hours::sessionsForDate(self::hoursForStore($store, $setting, $date), $date, $setting['closeOnHolidays'], $closed, $setting['adminExtraSlots'], $setting['slotMinutes']);
+    }
+
+    /** @var array<string, array<string, array>> 店舗 ID → 日付 → 特別な営業日 */
+    private static array $specialCache = [];
+
+    /** その店舗のその日が特別な営業日なら { date, sessions: [["10:00","12:30"], ...], memo }、違えば null */
+    public static function specialDay(string $storeId, string $date): ?array
+    {
+        if (!isset(self::$specialCache[$storeId])) {
+            $m = [];
+            foreach (Db::all('SELECT date, sessions, memo FROM special_day WHERE storeId = ?', [$storeId]) as $r) {
+                $ss = json_decode((string)$r['sessions'], true);
+                $m[$r['date']] = ['date' => $r['date'], 'sessions' => is_array($ss) ? $ss : [], 'memo' => (string)$r['memo']];
+            }
+            self::$specialCache[$storeId] = $m;
+        }
+        return self::$specialCache[$storeId][$date] ?? null;
+    }
+
+    public static function clearSpecialCache(): void
+    {
+        self::$specialCache = [];
+    }
+
+    /** 特別な営業日の時間（[["10:00","12:30"],["13:30","16:00"]]）を確かめて整える。おかしければ null */
+    public static function parseSpecialSessions(mixed $v): ?array
+    {
+        if (!is_array($v) || count($v) < 1 || count($v) > 3) return null;
+        $out = [];
+        foreach ($v as $s) {
+            if (!is_array($s) || count($s) !== 2) return null;
+            [$a, $b] = array_values($s);
+            if (!is_string($a) || !is_string($b) || !preg_match('/^\d{1,2}:\d{2}$/', $a) || !preg_match('/^\d{1,2}:\d{2}$/', $b)) return null;
+            $am = Time::hmToMin($a); $bm = Time::hmToMin($b);
+            if ($am > $bm || $bm >= 24 * 60) return null;
+            $out[] = [sprintf('%d:%02d', intdiv($am, 60), $am % 60), sprintf('%d:%02d', intdiv($bm, 60), $bm % 60)];
+        }
+        usort($out, fn($x, $y) => Time::hmToMin($x[0]) <=> Time::hmToMin($y[0]));
+        for ($i = 1; $i < count($out); $i++) if (Time::hmToMin($out[$i][0]) <= Time::hmToMin($out[$i - 1][1])) return null;
+        return $out;
+    }
+
+    /**
+     * 店舗を並び順で返す：本部専用 → エリア（エリアの設定の順。未設定は最後）→ エリアの中の並び順 → 店舗コード。
+     * 各行に area（エリア名。未設定は ''）を付ける
+     */
+    public static function storesInOrder(string $where = '1 = 1', array $params = []): array
+    {
+        $areaOf = [];
+        $areaIdx = [];
+        foreach (Db::all('SELECT name, storeCodes FROM area ORDER BY sortOrder ASC, name ASC') as $i => $a) {
+            $areaIdx[$a['name']] = $i;
+            foreach (array_filter(explode(',', (string)$a['storeCodes'])) as $c) $areaOf[$c] ??= $a['name'];
+        }
+        $rows = Db::all("SELECT * FROM store WHERE $where", $params);
+        foreach ($rows as &$r) $r['area'] = $areaOf[$r['code']] ?? '';
+        unset($r);
+        $key = fn($r) => [(int)($r['hqOnly'] ?? 0) ? 0 : 1, $r['area'] === '' ? PHP_INT_MAX : $areaIdx[$r['area']], (int)($r['sortOrder'] ?? 0), (string)$r['code']];
+        usort($rows, fn($a, $b) => $key($a) <=> $key($b));
+        return $rows;
     }
 
     public static function allBeds(array $store): array

@@ -174,7 +174,7 @@ function pub_stores(): never
         foreach (array_filter(explode(',', (string)$a['storeCodes'])) as $code) $areaOf[$code] ??= $a['name'];
     }
     $stores = [];
-    foreach (Db::all('SELECT * FROM store WHERE active = 1 AND listed = 1 ORDER BY code ASC') as $row) {
+    foreach (Settings::storesInOrder('active = 1 AND listed = 1') as $row) {
         $st = Settings::storeRow($row);
         $stores[] = [
             'code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'address' => (string)($row['address'] ?? ''),

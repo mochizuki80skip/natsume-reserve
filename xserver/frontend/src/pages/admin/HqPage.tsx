@@ -6,8 +6,9 @@ import ReferralEditor from '@/components/ReferralEditor';
 import { useAdmin } from './Layout';
 
 interface Resp {
-  stores: ({ code: string; name: string; phone: string; beds: number; active: boolean } & ListingStore)[];
+  stores: ({ code: string; name: string; phone: string; beds: number; active: boolean; area?: string; hqOnly?: boolean } & ListingStore)[];
   storesPageOpen?: boolean;
+  areas?: string[];
   setting: { slotMinutes: number; newVisitSlots: number; returnVisitSlots: number; webCutoffMinutes: number; phoneCutoffMinutes: number; phoneMarkRemaining: number; closeOnHolidays: boolean; adminExtraSlots: number; retentionDays: number; hours: string };
 }
 
@@ -19,7 +20,7 @@ export default function HqPage() {
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   return (
     <>
-      <HqClient key={data.stores.map((s) => `${s.code}:${s.name}:${s.active}`).join(',')} stores={data.stores} setting={data.setting} onRefresh={() => { reload(); refreshMe(); }} />
+      <HqClient key={data.stores.map((s) => `${s.code}:${s.name}:${s.active}`).join(',')} stores={data.stores} areas={data.areas ?? []} setting={data.setting} onRefresh={() => { reload(); refreshMe(); }} />
       <StoresPageEditor stores={data.stores} open={!!data.storesPageOpen} onRefresh={reload} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} />
     </>

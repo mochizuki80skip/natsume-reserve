@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 18;
+    private const VERSION = 19;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -165,12 +165,36 @@ final class Migrate
                 // 再来（1ヶ月以上ご来院の無い方）を同じ時間に WEB で受ける上限（NULL＝制限なし）
                 if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'maxRevisitConcurrent')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `maxRevisitConcurrent` INT NULL DEFAULT NULL AFTER `maxNewConcurrent`');
             }
+            if ($ver < 19) {
+                // 本部の店舗一覧：エリアの中の並び順と、本部専用（本部の人だけが見る）店舗。特別な営業日（プレオープン・イベント）
+                if (self::hasTable($pdo, 'store')) {
+                    if (!self::hasColumn($pdo, 'store', 'sortOrder')) {
+                        $pdo->exec('ALTER TABLE `store` ADD COLUMN `sortOrder` INT NOT NULL DEFAULT 0');
+                        $i = 0;
+                        foreach ($pdo->query('SELECT id FROM store ORDER BY code ASC')->fetchAll() as $r) {
+                            $u = $pdo->prepare('UPDATE store SET sortOrder = ? WHERE id = ?');
+                            $u->execute([++$i, $r['id']]);
+                        }
+                    }
+                    if (!self::hasColumn($pdo, 'store', 'hqOnly')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `hqOnly` TINYINT(1) NOT NULL DEFAULT 0');
+                    $pdo->exec(self::SPECIAL_DAY_DDL);
+                }
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const SPECIAL_DAY_DDL = 'CREATE TABLE IF NOT EXISTS `special_day` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `sessions` VARCHAR(200) NOT NULL,
+  `memo` VARCHAR(40) NOT NULL DEFAULT \'\',
+  PRIMARY KEY (`storeId`, `date`),
+  CONSTRAINT `fk_special_day_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const REFERRAL_DDL = 'CREATE TABLE IF NOT EXISTS `referral` (
   `id` VARCHAR(32) NOT NULL,

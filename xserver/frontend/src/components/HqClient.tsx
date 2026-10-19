@@ -1,16 +1,29 @@
 import { useState } from 'react';
 
-interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean }
+interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean; area?: string; hqOnly?: boolean }
 interface SettingForm {
   slotMinutes: number; newVisitSlots: number; returnVisitSlots: number; webCutoffMinutes: number; phoneCutoffMinutes: number;
   phoneMarkRemaining: number; closeOnHolidays: boolean; adminExtraSlots: number; retentionDays: number; hours: string;
 }
 
-export default function HqClient({ stores, setting, onRefresh }: { stores: StoreRow[]; setting: SettingForm; onRefresh: () => void }) {
+/** URL を文字で出して、ボタンでコピーできるようにする */
+function CopyUrl({ label, url }: { label: string; url: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className="w-16 flex-none font-bold text-slate-600">{label}</span>
+      <code className="break-all rounded bg-white px-2 py-0.5">{url}</code>
+      <button type="button" onClick={() => navigator.clipboard.writeText(url).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {})} className="rounded border bg-white px-2 py-0.5">{done ? 'コピーしました' : 'コピー'}</button>
+      <a href={url} target="_blank" rel="noreferrer" className="text-brand underline">開く↗</a>
+    </div>
+  );
+}
+
+export default function HqClient({ stores, areas = [], setting, onRefresh }: { stores: StoreRow[]; areas?: string[]; setting: SettingForm; onRefresh: () => void }) {
   const [s, setS] = useState(setting);
   const [ns, setNs] = useState({ code: '', name: '', phone: '', password: '' });
   const [msg, setMsg] = useState('');
-  const [edit, setEdit] = useState<{ code: string; newCode: string; name: string; phone: string } | null>(null);
+  const [edit, setEdit] = useState<{ code: string; newCode: string; name: string; phone: string; hqOnly: boolean } | null>(null);
 
   async function saveSetting(e: React.FormEvent) {
     e.preventDefault();
@@ -37,10 +50,22 @@ export default function HqClient({ stores, setting, onRefresh }: { stores: Store
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!edit) return;
-    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: edit.code, action: 'update', newCode: edit.newCode, name: edit.name, phone: edit.phone }) });
+    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: edit.code, action: 'update', newCode: edit.newCode, name: edit.name, phone: edit.phone, hqOnly: edit.hqOnly }) });
     setMsg(r.ok ? '店舗情報を更新しました' : (await r.json()).error ?? '更新に失敗しました');
     if (r.ok) { setEdit(null); onRefresh(); }
   }
+  // 並べ替え（同じまとまりの中で 1 つ上・下へ）とエリアの付け替え
+  async function storePut(body: Record<string, unknown>, done: string) {
+    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    setMsg(r.ok ? done : (await r.json().catch(() => ({}))).error ?? '更新に失敗しました');
+    onRefresh();
+  }
+  // 一覧のまとまり：本部専用 → エリア（エリアの設定の順）→ エリア未設定
+  const groups = [
+    { key: '#hq', label: '本部専用（本部の人だけが見る店舗）', list: stores.filter((x) => x.hqOnly) },
+    ...areas.map((a) => ({ key: a, label: a, list: stores.filter((x) => !x.hqOnly && x.area === a) })),
+    { key: '#none', label: 'エリア未設定', list: stores.filter((x) => !x.hqOnly && (!x.area || !areas.includes(x.area))) },
+  ].filter((g) => g.list.length > 0 || g.key === '#none');
   const num = (k: keyof SettingForm) => (e: React.ChangeEvent<HTMLInputElement>) => setS({ ...s, [k]: Number(e.target.value) });
 
   return (
@@ -52,37 +77,56 @@ export default function HqClient({ stores, setting, onRefresh }: { stores: Store
         <h2 className="mb-1 font-bold">店舗一覧（{stores.length} 店舗）</h2>
         <p className="mb-3 text-xs text-slate-500">各店舗には「管理URL」（/admin/login/店舗コード：パスワードだけでログイン）と「顧客URL」（/s/店舗コード）を配布してください。</p>
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-slate-500"><th>コード</th><th>店舗名</th><th>電話</th><th>ベッド</th><th>状態</th><th></th></tr></thead>
-          <tbody>
-            {stores.map((st) => edit && edit.code === st.code ? (
-              <tr key={st.code} className="border-t bg-yellow-50">
-                <td colSpan={6} className="py-2">
-                  <form onSubmit={saveEdit} className="flex flex-wrap items-center gap-2">
-                    <input value={edit.newCode} onChange={(e) => setEdit({ ...edit, newCode: e.target.value })} placeholder="店舗コード" required className="w-32 rounded border px-2 py-1 font-mono" />
-                    <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="店舗名" required className="w-48 rounded border px-2 py-1" />
-                    <input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="電話番号" required className="w-40 rounded border px-2 py-1" />
-                    <button type="submit" className="rounded bg-brand px-3 py-1 text-white">保存</button>
-                    <button type="button" onClick={() => setEdit(null)} className="rounded border px-3 py-1">やめる</button>
-                    <span className="text-xs text-slate-500">店舗コードを変えると顧客URLとログインIDも変わります</span>
-                  </form>
-                </td>
-              </tr>
-            ) : (
-              <tr key={st.code} className="border-t">
-                <td className="py-1 font-mono">{st.code}</td><td>{st.name}</td><td>{st.phone}</td><td>{st.beds}</td>
-                <td>{st.active ? '稼働' : '停止'}</td>
-                <td className="space-x-2 whitespace-nowrap text-right">
-                  <a href={`/s/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">顧客URL</a>
-                  <a href={`/admin/login/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">管理URL</a>
-                  <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name, phone: st.phone })} className="rounded border px-2">編集</button>
-                  <button type="button" onClick={() => storeAction(st.code, 'reset')} className="rounded border px-2">PW再設定</button>
-                  <button type="button" onClick={() => storeAction(st.code, 'toggle')} className="rounded border px-2">{st.active ? '停止' : '再開'}</button>
-                  <button type="button" onClick={() => storeAction(st.code, 'delete')} className="rounded border border-red-300 px-2 text-red-700">削除</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+          <thead><tr className="text-left text-slate-500"><th className="w-16">並び</th><th>コード</th><th>店舗名</th><th>エリア</th><th>電話</th><th>ベッド</th><th>状態</th><th></th></tr></thead>
+          {groups.map((g) => (
+            <tbody key={g.key}>
+              <tr className={g.key === '#hq' ? 'bg-violet-50' : 'bg-brand-light'}><td colSpan={8} className={`px-2 py-1 text-xs font-bold ${g.key === '#hq' ? 'text-violet-800' : 'text-brand-dark'}`}>{g.label}（{g.list.length} 店舗）</td></tr>
+              {g.list.map((st, i) => edit && edit.code === st.code ? (
+                <tr key={st.code} className="border-t bg-yellow-50">
+                  <td colSpan={8} className="space-y-2 px-1 py-2">
+                    <form onSubmit={saveEdit} className="flex flex-wrap items-center gap-2">
+                      <input value={edit.newCode} onChange={(e) => setEdit({ ...edit, newCode: e.target.value })} placeholder="店舗コード" required className="w-32 rounded border px-2 py-1 font-mono" />
+                      <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="店舗名" required className="w-48 rounded border px-2 py-1" />
+                      <input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="電話番号" required className="w-40 rounded border px-2 py-1" />
+                      <label className="flex items-center gap-1 rounded border border-violet-300 bg-white px-2 py-1 text-xs"><input type="checkbox" checked={edit.hqOnly} onChange={(e) => setEdit({ ...edit, hqOnly: e.target.checked })} />本部専用（店舗のアカウントではログインできない）</label>
+                      <button type="submit" className="rounded bg-brand px-3 py-1 text-white">保存</button>
+                      <button type="button" onClick={() => setEdit(null)} className="rounded border px-3 py-1">やめる</button>
+                      <span className="text-xs text-slate-500">店舗コードを変えると顧客URLとログインIDも変わります</span>
+                    </form>
+                    <CopyUrl label="顧客URL" url={`${location.origin}/s/${st.code}`} />
+                    <CopyUrl label="管理URL" url={`${location.origin}/admin/login/${st.code}`} />
+                  </td>
+                </tr>
+              ) : (
+                <tr key={st.code} className={`border-t ${st.active ? '' : 'text-slate-400'}`}>
+                  <td className="whitespace-nowrap py-1">
+                    <button type="button" aria-label={`${st.name} を上へ`} disabled={i === 0} onClick={() => storePut({ code: st.code, action: 'move', dir: -1 }, '並び順を変えました')} className="rounded border px-1.5 disabled:opacity-30">↑</button>
+                    <button type="button" aria-label={`${st.name} を下へ`} disabled={i === g.list.length - 1} onClick={() => storePut({ code: st.code, action: 'move', dir: 1 }, '並び順を変えました')} className="ml-1 rounded border px-1.5 disabled:opacity-30">↓</button>
+                  </td>
+                  <td className="font-mono">{st.code}</td><td>{st.name}</td>
+                  <td>
+                    <select value={st.area && areas.includes(st.area) ? st.area : ''} onChange={(e) => storePut({ code: st.code, action: 'area', area: e.target.value }, `${st.name} のエリアを変えました`)} aria-label={`${st.name} のエリア`} className="rounded border px-1 py-0.5 text-xs">
+                      <option value="">（未設定）</option>
+                      {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </td>
+                  <td>{st.phone}</td><td>{st.beds}</td>
+                  <td>{st.active ? '稼働' : '停止'}{st.hqOnly && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-bold text-violet-800">本部専用</span>}</td>
+                  <td className="space-x-2 whitespace-nowrap text-right">
+                    <a href={`/s/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">顧客URL</a>
+                    <a href={`/admin/login/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">管理URL</a>
+                    <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name, phone: st.phone, hqOnly: !!st.hqOnly })} className="rounded border px-2">編集・URL</button>
+                    <button type="button" onClick={() => storeAction(st.code, 'reset')} className="rounded border px-2">PW再設定</button>
+                    <button type="button" onClick={() => storeAction(st.code, 'toggle')} className="rounded border px-2">{st.active ? '停止' : '再開'}</button>
+                    <button type="button" onClick={() => storeAction(st.code, 'delete')} className="rounded border border-red-300 px-2 text-red-700">削除</button>
+                  </td>
+                </tr>
+              ))}
+              {g.list.length === 0 && <tr><td colSpan={8} className="py-1 text-xs text-slate-400">なし</td></tr>}
+            </tbody>
+          ))}
         </table>
+        <p className="mt-2 text-xs text-slate-500">エリアの名前・順番は「新患・再来集計（全店）」→「選択肢・エリアの設定」で変えられます。ここでの並び順は、上の店舗切り替え・全店状況・新患・再来集計・店舗えらびページにもそろいます。</p>
         <form onSubmit={addStore} className="mt-4 grid grid-cols-2 gap-2 border-t pt-3 text-sm md:grid-cols-5">
           <input placeholder="店舗コード (例: S003)" value={ns.code} onChange={(e) => setNs({ ...ns, code: e.target.value })} required className="rounded border px-2 py-1" />
           <input placeholder="店舗名" value={ns.name} onChange={(e) => setNs({ ...ns, name: e.target.value })} required className="rounded border px-2 py-1" />

@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS `store` (
   `lng` DECIMAL(9,6) NULL,
   `listed` TINYINT(1) NOT NULL DEFAULT 1,       -- 店舗えらびページに載せる
   `maxNewConcurrent` INT NULL DEFAULT NULL, -- 新規（初診・初自）を同じ時間に WEB で受ける上限。NULL＝制限なし、0＝WEB では受けない（電話のみ）
+  `sortOrder` INT NOT NULL DEFAULT 0,  -- 本部の店舗一覧・切り替えでのエリアの中の並び順
+  `hqOnly` TINYINT(1) NOT NULL DEFAULT 0,  -- 1＝本部専用（本部の人だけが見る。店舗のアカウントではログインできない）
   `maxRevisitConcurrent` INT NULL DEFAULT NULL, -- 再来（1ヶ月以上ご来院の無い方）を同じ時間に WEB で受ける上限。NULL＝制限なし
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -232,6 +234,16 @@ CREATE TABLE IF NOT EXISTS `referral` (
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `referral_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 特別な営業日（プレオープン・イベントなど）。その日だけこの時間で営業する（sessions は [["10:00","12:30"],...]。受付の最後の時刻まで）
+CREATE TABLE IF NOT EXISTS `special_day` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `sessions` VARCHAR(200) NOT NULL,
+  `memo` VARCHAR(40) NOT NULL DEFAULT '',
+  PRIMARY KEY (`storeId`, `date`),
+  CONSTRAINT `fk_special_day_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `rate_limit` (

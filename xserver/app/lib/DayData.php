@@ -36,6 +36,8 @@ final class DayData
 
         return [
             'date' => $date,
+            // 特別な営業日（プレオープン・イベントなど）なら { sessions, memo }
+            'special' => Settings::specialDay((string)$store['id'], $date),
             'day' => ['published' => $day['published'] ?? null, 'closed' => $closed, 'memo' => $day['memo'] ?? '', 'capacityAm' => $day['capacityAm'] ?? null, 'capacityPm' => $day['capacityPm'] ?? null],
             'sessions' => $sessions,
             'times' => Hours::slotTimes($sessions, $setting['slotMinutes'], true),

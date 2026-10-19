@@ -114,14 +114,16 @@ final class Auth
         if (self::$storeLoaded) return self::$store;
         self::$storeLoaded = true;
         if ($session['role'] === 'store') {
-            return self::$store = ($session['storeId'] ? Db::one('SELECT * FROM store WHERE id = ?', [$session['storeId']]) : null);
+            $st = $session['storeId'] ? Db::one('SELECT * FROM store WHERE id = ?', [$session['storeId']]) : null;
+            // 本部専用にした店舗は、店舗のアカウントでは開けない
+            return self::$store = ($st && (int)($st['hqOnly'] ?? 0)) ? null : $st;
         }
         $code = $_COOKIE[self::STORE_COOKIE] ?? '';
         if ($code !== '') {
             $s = Db::one('SELECT * FROM store WHERE code = ?', [$code]);
             if ($s) return self::$store = $s;
         }
-        return self::$store = Db::one('SELECT * FROM store WHERE active = 1 ORDER BY code ASC LIMIT 1');
+        return self::$store = (Settings::storesInOrder('active = 1')[0] ?? null);
     }
 
     /** API 用：セッション＋店舗。店舗が無ければ 404 */

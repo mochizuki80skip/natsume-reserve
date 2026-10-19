@@ -751,6 +751,11 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
       </div>
 
+      {data.special && (
+        <p className="mb-2 rounded border border-amber-300 bg-amber-50 px-3 py-1 text-sm text-amber-900">
+          <b>特別営業{data.special.memo ? `：${data.special.memo}` : ''}</b>　{data.special.sessions.map(([a, b]) => `${a}〜${b}`).join('／')}（受付の最後の時刻まで。店舗設定の「特別な営業日」で変えられます）
+        </p>
+      )}
       {conflictMsg && (
         <p role="alert" className="no-print mb-2 flex items-start gap-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
           <span className="flex-1">{conflictMsg}</span>

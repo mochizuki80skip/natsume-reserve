@@ -10,9 +10,11 @@ function adm_login(): never
     $b = Http::body();
     $code = trim((string)($b['code'] ?? ''));
     $password = (string)($b['password'] ?? '');
-    $acc = Db::one('SELECT a.*, s.active AS storeActive FROM admin_account a LEFT JOIN store s ON s.id = a.storeId WHERE a.code = ?', [$code]);
+    $acc = Db::one('SELECT a.*, s.active AS storeActive, s.hqOnly AS storeHqOnly FROM admin_account a LEFT JOIN store s ON s.id = a.storeId WHERE a.code = ?', [$code]);
     $ok = $acc && password_verify($password, $acc['passwordHash']);
     if (!$ok || ($acc['role'] === 'store' && !(int)$acc['storeActive']) || !(int)($acc['active'] ?? 1)) Http::error('店舗コード（ID）またはパスワードが違います', 401);
+    // 本部専用の店舗は、店舗のアカウントではログインできない（本部のアカウントで切り替えて使う）
+    if ($acc['role'] === 'store' && (int)($acc['storeHqOnly'] ?? 0)) Http::error('この店舗は本部専用です。本部のアカウントでログインしてください', 403);
     Db::exec('UPDATE admin_account SET lastLoginAt = ? WHERE id = ?', [Time::nowJstDateTime(), $acc['id']]);
     Auth::setSessionCookie(['accountId' => $acc['id'], 'role' => $acc['role'] === 'hq' ? 'hq' : 'store', 'storeId' => $acc['storeId'], 'code' => $acc['code']]);
     Http::json(['ok' => true]);
@@ -43,7 +45,7 @@ function adm_me(): never
 {
     $s = Auth::requireSession();
     $store = Auth::resolveStore($s);
-    $stores = $s['role'] === 'hq' ? array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active']], Db::all('SELECT code, name, active FROM store ORDER BY code ASC')) : [];
+    $stores = $s['role'] === 'hq' ? array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly']], Settings::storesInOrder()) : [];
     Http::json([
         'session' => ['code' => $s['code'], 'role' => $s['role'], 'name' => $s['role'] === 'hq' ? (Auth::account()['name'] ?? '') : '', 'canManage' => $s['role'] === 'hq' && (int)(Auth::account()['canManage'] ?? 0) === 1],
         'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active']] : null,
@@ -973,3 +975,38 @@ function adm_patients_lookup(): never
     Http::json(['no' => $no, 'name' => $r['name'] ?? null]);
 }
 
+// ---------- 特別な営業日（プレオープン・イベントなど） ----------
+/** この店舗の特別な営業日の一覧（日付順） */
+function adm_special_days_get(): never
+{
+    $ctx = Auth::context();
+    $rows = Db::all('SELECT date, sessions, memo FROM special_day WHERE storeId = ? ORDER BY date ASC', [$ctx['store']['id']]);
+    Http::json(['rows' => array_map(fn($r) => ['date' => $r['date'], 'sessions' => json_decode((string)$r['sessions'], true) ?: [], 'memo' => (string)$r['memo']], $rows)]);
+}
+
+/** 特別な営業日の追加・変更（{ date, sessions: [["10:00","12:30"], ...], memo }） */
+function adm_special_days_put(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    $sessions = Settings::parseSpecialSessions($b['sessions'] ?? null);
+    if ($sessions === null) Http::error('時間を確認してください（「始め〜受付の最後」を 1〜3 つ。時間が重ならないように）', 400);
+    $memo = mb_substr(trim((string)($b['memo'] ?? '')), 0, 40);
+    Db::exec('INSERT INTO special_day (storeId, date, sessions, memo) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE sessions = VALUES(sessions), memo = VALUES(memo)',
+        [$ctx['store']['id'], $date, json_encode($sessions), $memo]);
+    Settings::clearSpecialCache();
+    Http::json(['ok' => true]);
+}
+
+/** 特別な営業日を消す（{ date }）。その日は通常の営業時間に戻る */
+function adm_special_days_delete(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $date = Http::date(Http::body(), 'date');
+    Db::exec('DELETE FROM special_day WHERE storeId = ? AND date = ?', [$ctx['store']['id'], $date]);
+    Settings::clearSpecialCache();
+    Http::json(['ok' => true]);
+}

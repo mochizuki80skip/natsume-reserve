@@ -54,7 +54,12 @@ export default function AdminLayout() {
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
               <input type="hidden" name="back" value={location.pathname + location.search} />
               <select name="store" defaultValue={store?.code ?? ''} className="rounded border px-2 py-1">
-                {me.stores.map((s) => <option key={s.code} value={s.code}>{s.name}{s.active ? '' : '（停止）'}</option>)}
+                {/* 本部専用 → エリアごと（本部の店舗一覧の並び順） */}
+                {[...new Map(me.stores.map((s) => [s.hqOnly ? '本部専用' : s.area || 'エリア未設定', 0])).keys()].map((g) => (
+                  <optgroup key={g} label={g}>
+                    {me.stores.filter((s) => (s.hqOnly ? '本部専用' : s.area || 'エリア未設定') === g).map((s) => <option key={s.code} value={s.code}>{s.name}{s.active ? '' : '（停止）'}</option>)}
+                  </optgroup>
+                ))}
               </select>
               <button type="submit" className="rounded border px-2 py-1">切替</button>
             </form>

@@ -30,6 +30,8 @@ export interface DayData {
   menuOptions?: string[];
   /** 物販（menuOptions のうち、予約表の帯で別の段に出すもの） */
   goodsOptions?: string[];
+  /** 特別な営業日（プレオープン・イベントなど）ならその時間とメモ */
+  special?: { date: string; sessions: [string, string][]; memo: string } | null;
 }
 
 export interface DayResponse { data: DayData; storeName: string; storeCode: string; published: boolean; today: string }
@@ -37,7 +39,7 @@ export interface DayResponse { data: DayData; storeName: string; storeCode: stri
 export interface Me {
   session: { code: string; role: 'store' | 'hq'; name?: string; canManage?: boolean };
   store: { id: string; code: string; name: string; active: boolean } | null;
-  stores: { code: string; name: string; active: boolean }[];
+  stores: { code: string; name: string; active: boolean; area?: string; hqOnly?: boolean }[];
   today: string;
   smsEnabled: boolean;
 }
