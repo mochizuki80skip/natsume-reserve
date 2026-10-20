@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 37, date: '2026-10-20', title: '自賠請求：読み取りの進み具合', audience: ['店舗', '本部'],
+    items: ['自賠請求でスクショを読み取っている間、「〇 / 〇枚目　〇%」と進み具合の棒が出るようにしました。2 枚目からは「全体 〇%・あと約〇秒」の目安も出ます。'],
+  },
+  {
     id: 36, date: '2026-10-19', title: '患者様が自分の予約を確認できるように', audience: ['店舗', '本部'],
     items: ['WEB 予約の画面の右上に「📅 ご予約の確認」ボタンを足しました（そのスマホで WEB 予約したことがある方だけに出ます）。押すと、そのスマホで予約した日時・店舗の一覧が見られます。お電話・窓口で取った予約は出ません。変更・キャンセルは今までどおりお電話です。'],
   },

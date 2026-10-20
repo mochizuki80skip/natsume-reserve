@@ -8,7 +8,7 @@ import { createWorker, PSM, type Worker } from 'tesseract.js';
 import { INVOICE_ASPECT, MIN_INVOICE_HEIGHT_PX, requiredScreenFraction, screenPixelHeight, wari } from './jibai';
 import { chooseAmount, chooseDays, findAmount, findInvoiceRect, findSubtotalColumn, medianLineHeight, normalizePatientNo, parseAmountText, parseInvoice, type AmountCandidate, type OcrLine, type Rect } from './jibaiParse';
 
-export interface OcrProgress { stage: 'load' | 'read1' | 'read2' | 'done'; message: string }
+export interface OcrProgress { stage: 'load' | 'read1' | 'read2' | 'done'; message: string; /** この 1 枚の進み具合（0〜100） */ percent?: number }
 
 export interface InvoiceReadResult {
   patientNo: string;
@@ -40,6 +40,30 @@ let jpnWorker: Promise<Worker> | null = null;
 let engWorker: Promise<Worker> | null = null;
 let onProgressGlobal: ((p: OcrProgress) => void) | null = null;
 
+// 1 枚の読み取りの進み具合（％）。段階ごとに受け持つ範囲（from〜to）を決め、tesseract の読み取りの進み（0〜1）をその中に当てはめる。
+// 1 つの段階で何回も読むときは、1 回ごとに残りの 6 割ずつ進める（100％を超えず、戻らない）
+let pctCtx: { stage: OcrProgress['stage']; message: string; from: number; to: number; cb: (p: OcrProgress) => void; last: number } | null = null;
+function setPhase(stage: OcrProgress['stage'], message: string, from: number, to: number, cb?: (p: OcrProgress) => void): void {
+  if (!cb) { pctCtx = null; return; }
+  const last = Math.max(from, pctCtx?.last ?? 0);
+  pctCtx = { stage, message, from: last, to, cb, last };
+  cb({ stage, message, percent: Math.round(last) });
+}
+function phaseTick(progress: number): void {
+  const c = pctCtx;
+  if (!c) return;
+  const p = c.from + (c.to - c.from) * 0.6 * Math.min(1, Math.max(0, progress));
+  if (p - c.last < 1) return;
+  c.last = p;
+  c.cb({ stage: c.stage, message: c.message, percent: Math.round(p) });
+}
+function phaseStep(): void {
+  const c = pctCtx;
+  if (!c) return;
+  c.from = c.from + (c.to - c.from) * 0.6;
+  if (c.from > c.last) { c.last = c.from; c.cb({ stage: c.stage, message: c.message, percent: Math.round(c.from) }); }
+}
+
 async function makeWorker(lang: 'jpn' | 'eng'): Promise<Worker> {
   const base = assetBase();
   const worker = await createWorker(lang, 1, {
@@ -48,6 +72,7 @@ async function makeWorker(lang: 'jpn' | 'eng'): Promise<Worker> {
     langPath: `${base}/tessdata`,
     gzip: true,
     logger: (m) => {
+      if (typeof m.progress === 'number' && m.status === 'recognizing text') phaseTick(m.progress);
       if (onProgressGlobal && typeof m.progress === 'number' && /loading|initializing/.test(m.status)) {
         onProgressGlobal({ stage: 'load', message: `読み取りエンジンを準備中（${lang === 'jpn' ? '日本語' : '数字'}）… ${Math.round(m.progress * 100)}%` });
       }
@@ -247,6 +272,7 @@ function toLines(blocks: Tesseract.Block[] | null | undefined): OcrLine[] {
 async function recognizeLines(worker: Worker, canvas: HTMLCanvasElement, psm: PSM = PSM.AUTO): Promise<OcrLine[]> {
   await worker.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: '', preserve_interword_spaces: '1' });
   const { data } = await worker.recognize(canvas, {}, { blocks: true, text: true });
+  phaseStep();
   return toLines(data.blocks);
 }
 
@@ -254,6 +280,7 @@ async function readDigits(worker: Worker, canvas: HTMLCanvasElement, rect: Rect 
   await worker.setParameters({ tessedit_char_whitelist: whitelist, tessedit_pageseg_mode: psm });
   const opts = rect ? (() => { const c = clampRect(rect, canvas.width, canvas.height); return { rectangle: { left: c.x0, top: c.y0, width: c.x1 - c.x0, height: c.y1 - c.y0 } }; })() : {};
   const { data } = await worker.recognize(canvas, opts, { text: true });
+  phaseStep();
   return { text: data.text ?? '', confidence: data.confidence ?? 0 };
 }
 
@@ -267,6 +294,7 @@ function debugLines(tag: string, canvas: HTMLCanvasElement, lines: OcrLine[], ex
 
 export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress) => void): Promise<InvoiceReadResult> {
   const t0 = performance.now();
+  pctCtx = null; // 前の 1 枚の進み具合を持ち越さない
   onProgressGlobal = onProgress ?? null;
   const [jpn, eng] = await Promise.all([getWorker('jpn'), getWorker('eng')]);
   onProgressGlobal = null;
@@ -274,7 +302,7 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   const whole: Rect = { x0: 0, y0: 0, x1: img.naturalWidth, y1: img.naturalHeight };
 
   // 1 段階目：まず全体を読む（小さな画像は横 1600px 程度まで拡大）。小計の列が読めなければ大きくして読み直す
-  onProgress?.({ stage: 'read1', message: '画面全体を読み取り中…' });
+  setPhase('read1', '画面全体を読み取り中…', 2, 40, onProgress);
   let r = render(img, whole, Math.min(3, Math.max(1, 1600 / img.naturalWidth)));
   let page = await readPage(jpn, r, null);
   if (page.kei < 3 && r.scale < 3) {
@@ -296,7 +324,7 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   const areaRatio = ((invSrc.x1 - invSrc.x0) * (invSrc.y1 - invSrc.y0)) / (img.naturalWidth * img.naturalHeight);
   const scaleOff = lh !== null && (lh < TARGET_LH * 0.8 || lh > TARGET_LH * 1.35);
   if (inv && lh !== null && (scaleOff || areaRatio < 0.8 || page.score < 16)) {
-    onProgress?.({ stage: 'read1', message: '請求書の部分を読みやすい大きさにして読み直し中…' });
+    setPhase('read1', '請求書の部分を読みやすい大きさにして読み直し中…', 40, 65, onProgress);
     const srcLh = lh / r.scale; // 元画像での文字の高さ
     const rb = render(img, invSrc, TARGET_LH / srcLh);
     const pb = await readPage(jpn, rb, TARGET_LH);
@@ -312,7 +340,7 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   const warnings: string[] = [];
 
   // 2 段階目：合計・実日数。読み取りごとに、全体の読み＋切り抜きの読み直し（何通りか）を票にして多数決
-  onProgress?.({ stage: 'read2', message: '合計金額・実日数を読み直し中…' });
+  setPhase('read2', '合計金額・実日数を読み直し中…', 65, 98, onProgress);
   const cands: AmountCandidate[] = [];
   let maxSubtotal = 0;
   const subtotals = new Set<number>();
@@ -397,7 +425,8 @@ export async function readInvoiceImage(file: Blob, onProgress?: (p: OcrProgress)
   // 切り抜きは患者番号〜氏名と合計欄だけ。住所・生年月日・傷病名などの領域は画像にも文字にも残さない
   const headerImage = parsed.headerRect ? cropDataUrl(canvas, parsed.headerRect, 300) : null;
   const amountImage = parsed.amountRect ? cropDataUrl(canvas, parsed.amountRect, 200) : null;
-  onProgress?.({ stage: 'done', message: '完了' });
+  pctCtx = null;
+  onProgress?.({ stage: 'done', message: '完了', percent: 100 });
   return {
     patientNo: patientNo ?? '',
     patientName: parsed.patientName ?? '',

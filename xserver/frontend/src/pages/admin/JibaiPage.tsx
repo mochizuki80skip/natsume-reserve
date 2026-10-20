@@ -44,6 +44,10 @@ export default function JibaiPage() {
   const [msg, setMsg] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [queueLeft, setQueueLeft] = useState(0);
+  // 読み取りの進み具合：今の 1 枚の％と、まとめて入れた枚数のうち何枚目か（残り時間の目安は、読み終えた 1 枚あたりの時間から出す）
+  const [pct, setPct] = useState<number | null>(null);
+  const batch = useRef({ total: 0, done: 0, msSum: 0, start: 0 });
+  const [batchView, setBatchView] = useState({ total: 0, done: 0, msPer: 0, start: 0 });
   const [saving, setSaving] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -72,14 +76,21 @@ export default function JibaiPage() {
       while (queueRef.current.length > 0) {
         const item = queueRef.current.shift()!;
         setQueueLeft(queueRef.current.length);
-        const onProgress = (p: OcrProgress) => setProgress(`${item.name}：${p.message}`);
+        const onProgress = (p: OcrProgress) => { setProgress(`${item.name}：${p.message}`); if (p.percent !== undefined) setPct(p.percent); };
+        const b = batch.current;
+        b.start = performance.now();
+        setPct(0);
+        setBatchView({ total: b.total, done: b.done, msPer: b.done ? b.msSum / b.done : 0, start: b.start });
         let r: InvoiceReadResult;
         try {
           r = await readInvoiceImage(item.file, onProgress);
         } catch (e: unknown) {
           setMsg({ text: `${item.name} の読み取りに失敗しました：${e instanceof Error ? e.message : String(e)}`, kind: 'err' });
+          b.done++;
           continue;
         }
+        b.done++;
+        b.msSum += performance.now() - b.start;
         const warnings = [...r.warnings];
         setRows((prev) => [...prev, {
           key: newKey(), id: null, patientNo: r.patientNo, patientName: r.patientName, invoiceYm: r.ym ?? '', days: r.days === null ? '' : String(r.days), amount: r.amount === null ? '' : String(r.amount),
@@ -90,6 +101,8 @@ export default function JibaiPage() {
       runningRef.current = false;
       setProgress(null);
       setQueueLeft(0);
+      setPct(null);
+      batch.current = { total: 0, done: 0, msSum: 0, start: 0 };
     }
   }, [ym]);
 
@@ -97,6 +110,7 @@ export default function JibaiPage() {
     const imgs = files.filter((f) => f.file.type.startsWith('image/'));
     if (imgs.length === 0) { setMsg({ text: '画像ファイル（PNG・JPEG）を選んでください', kind: 'err' }); return; }
     queueRef.current.push(...imgs);
+    batch.current.total += imgs.length;
     setQueueLeft(queueRef.current.length);
     void processQueue();
   }, [processQueue]);
@@ -282,7 +296,7 @@ export default function JibaiPage() {
             <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、ここにドラッグ＆ドロップするか、Win + Shift + S で撮ったスクショを <b>Ctrl + V</b> で貼り付けてください。複数枚まとめて可。</span>
           </div>
           <JibaiSizeGuide />
-          {(progress || queueLeft > 0) && <p className="mt-2 text-brand-dark">⏳ {progress ?? '読み取り待ち…'}{queueLeft > 0 ? `（残り ${queueLeft} 枚）` : ''}</p>}
+          {(progress || queueLeft > 0) && <OcrProgressBar message={progress ?? '読み取り待ち…'} pct={pct} total={batchView.total} done={batchView.done} msPer={batchView.msPer} queueLeft={queueLeft} />}
           <p className="mt-2 text-xs text-slate-500">読み取りはこのパソコンの中だけで行い、画像はどこにも送信・保存されません。取り出すのは患者番号・氏名・実日数・合計金額だけで、住所・生年月日・傷病名は読み取り対象外です（確認用の切り抜きにも含めません）。読み取り後に金額と患者番号を目視で確認し、違っていれば直してから保存してください。</p>
         </div>
       )}
@@ -410,6 +424,27 @@ function VerifyCell({ row, onVerify }: { row: Row; onVerify: (verifiedAmount: nu
         {saved.verifiedAmount !== null && <button type="button" onClick={() => onVerify(null, note)} className="rounded border bg-white px-2 py-0.5">取消</button>}
       </div>
       <input value={note} onChange={(e) => setNote(e.target.value)} onBlur={() => note !== saved.note && onVerify(saved.verifiedAmount, note)} className="w-full rounded border px-1 py-0.5" placeholder="メモ（差額の理由など）" />
+    </div>
+  );
+}
+
+/** 読み取りの進み具合（今の 1 枚の％・全体の％・何枚目か・残り時間の目安） */
+function OcrProgressBar({ message, pct, total, done, msPer, queueLeft }: { message: string; pct: number | null; total: number; done: number; msPer: number; queueLeft: number }) {
+  const cur = pct ?? 0;
+  const all = total > 0 ? Math.min(100, Math.round(((done + cur / 100) / total) * 100)) : cur;
+  // 残り時間の目安：1 枚目は出さない（まだ 1 枚あたりの時間がわからないため）
+  const restSec = msPer > 0 ? Math.max(1, Math.round(((total - done - cur / 100) * msPer) / 1000)) : null;
+  return (
+    <div className="mt-2 space-y-1 text-brand-dark" role="status" aria-label="読み取りの進み具合">
+      <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
+        <b>⏳ {total > 1 ? `${Math.min(done + 1, total)} / ${total} 枚目　` : ''}{cur}%</b>
+        <span className="text-xs">{message}</span>
+        {queueLeft > 0 && <span className="text-xs text-slate-600">（このあと {queueLeft} 枚）</span>}
+        {restSec !== null && <span className="text-xs text-slate-600">全体 {all}%・あと約 {restSec >= 60 ? `${Math.floor(restSec / 60)}分${restSec % 60}秒` : `${restSec}秒`}</span>}
+      </div>
+      <div className="h-2.5 w-full max-w-xl overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+        <div className="h-full rounded-full bg-brand transition-[width] duration-300" style={{ width: `${total > 1 ? all : cur}%` }} />
+      </div>
     </div>
   );
 }
