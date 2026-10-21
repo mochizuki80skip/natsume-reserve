@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 21;
+    private const VERSION = 22;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -191,6 +191,10 @@ final class Migrate
             if ($ver < 21 && self::hasTable($pdo, 'cell') && !self::hasColumn($pdo, 'cell', 'phone')) {
                 // 電話で取った予約の電話番号（WEB 予約と同じように氏名の下に出す）
                 $pdo->exec('ALTER TABLE `cell` ADD COLUMN `phone` VARCHAR(20) NULL');
+            }
+            if ($ver < 22 && self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'jibaiOnly')) {
+                // 自賠請求だけに使う店舗（予約表・集計・店舗えらびページ・WEB 予約には出さない）
+                $pdo->exec('ALTER TABLE `store` ADD COLUMN `jibaiOnly` TINYINT(1) NOT NULL DEFAULT 0');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

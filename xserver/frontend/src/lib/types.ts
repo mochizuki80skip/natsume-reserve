@@ -38,8 +38,8 @@ export interface DayResponse { data: DayData; storeName: string; storeCode: stri
 
 export interface Me {
   session: { code: string; role: 'store' | 'hq'; name?: string; canManage?: boolean };
-  store: { id: string; code: string; name: string; active: boolean } | null;
-  stores: { code: string; name: string; active: boolean; area?: string; hqOnly?: boolean }[];
+  store: { id: string; code: string; name: string; active: boolean; jibaiOnly?: boolean } | null;
+  stores: { code: string; name: string; active: boolean; area?: string; hqOnly?: boolean; jibaiOnly?: boolean }[];
   today: string;
   smsEnabled: boolean;
 }

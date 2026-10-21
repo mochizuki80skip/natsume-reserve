@@ -2,18 +2,19 @@
 // 顧客向け API（/api/public/{店舗コード}/...）。個人情報は返さない
 declare(strict_types=1);
 
-function pub_load_store(string $code): array
+function pub_load_store(string $code, bool $allowJibaiOnly = false): array
 {
     $store = Settings::findStoreByCode($code);
-    if (!$store || !$store['active']) throw new HttpError(404, '店舗が見つかりません');
+    // 自賠請求だけに使う店舗は WEB 予約のページを出さない（店舗のログイン画面の名前だけは出す）
+    if (!$store || !$store['active'] || (!$allowJibaiOnly && (int)($store['jibaiOnly'] ?? 0))) throw new HttpError(404, '店舗が見つかりません');
     return ['store' => $store, 'setting' => Settings::global()];
 }
 
 /** 店舗の公開情報（名前・電話番号のみ） */
 function pub_store(array $p): never
 {
-    $ctx = pub_load_store($p[1]);
-    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled()]);
+    $ctx = pub_load_store($p[1], true);
+    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0)]);
 }
 
 function pub_week(array $p): never
@@ -174,7 +175,7 @@ function pub_stores(): never
         foreach (array_filter(explode(',', (string)$a['storeCodes'])) as $code) $areaOf[$code] ??= $a['name'];
     }
     $stores = [];
-    foreach (Settings::storesInOrder('active = 1 AND listed = 1') as $row) {
+    foreach (Settings::storesInOrder('active = 1 AND listed = 1', [], false) as $row) {
         $st = Settings::storeRow($row);
         $stores[] = [
             'code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'address' => (string)($row['address'] ?? ''),

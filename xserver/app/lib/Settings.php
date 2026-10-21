@@ -122,10 +122,11 @@ final class Settings
 
     /**
      * 店舗を並び順で返す：本部専用 → エリア（エリアの設定の順。未設定は最後）→ エリアの中の並び順 → 店舗コード。
-     * 各行に area（エリア名。未設定は ''）を付ける
+     * 各行に area（エリア名。未設定は ''）を付ける。自賠請求だけに使う店舗は最後（$withJibaiOnly=false なら除く）
      */
-    public static function storesInOrder(string $where = '1 = 1', array $params = []): array
+    public static function storesInOrder(string $where = '1 = 1', array $params = [], bool $withJibaiOnly = true): array
     {
+        if (!$withJibaiOnly) $where = "($where) AND jibaiOnly = 0";
         $areaOf = [];
         $areaIdx = [];
         foreach (Db::all('SELECT name, storeCodes FROM area ORDER BY sortOrder ASC, name ASC') as $i => $a) {
@@ -135,7 +136,7 @@ final class Settings
         $rows = Db::all("SELECT * FROM store WHERE $where", $params);
         foreach ($rows as &$r) $r['area'] = $areaOf[$r['code']] ?? '';
         unset($r);
-        $key = fn($r) => [(int)($r['hqOnly'] ?? 0) ? 0 : 1, $r['area'] === '' ? PHP_INT_MAX : $areaIdx[$r['area']], (int)($r['sortOrder'] ?? 0), (string)$r['code']];
+        $key = fn($r) => [(int)($r['jibaiOnly'] ?? 0), (int)($r['hqOnly'] ?? 0) ? 0 : 1, $r['area'] === '' ? PHP_INT_MAX : $areaIdx[$r['area']], (int)($r['sortOrder'] ?? 0), (string)$r['code']];
         usort($rows, fn($a, $b) => $key($a) <=> $key($b));
         return $rows;
     }

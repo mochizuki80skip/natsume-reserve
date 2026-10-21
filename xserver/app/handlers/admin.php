@@ -45,10 +45,10 @@ function adm_me(): never
 {
     $s = Auth::requireSession();
     $store = Auth::resolveStore($s);
-    $stores = $s['role'] === 'hq' ? array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly']], Settings::storesInOrder()) : [];
+    $stores = $s['role'] === 'hq' ? array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly'], 'jibaiOnly' => (bool)$r['jibaiOnly']], Settings::storesInOrder()) : [];
     Http::json([
         'session' => ['code' => $s['code'], 'role' => $s['role'], 'name' => $s['role'] === 'hq' ? (Auth::account()['name'] ?? '') : '', 'canManage' => $s['role'] === 'hq' && (int)(Auth::account()['canManage'] ?? 0) === 1],
-        'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active']] : null,
+        'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active'], 'jibaiOnly' => (bool)($store['jibaiOnly'] ?? 0)] : null,
         'stores' => $stores,
         'today' => Time::nowJst()['date'],
         'smsEnabled' => Sms::enabled(),

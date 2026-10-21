@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 40, date: '2026-10-21', title: '自賠請求だけに使う店舗', audience: ['本部'],
+    items: ['本部の店舗一覧の「編集・URL」に「自賠請求のみ」を足しました。チェックした店舗（ミツカル接骨院など）は、店舗一覧（いちばん下の「表示する」で見られます）・全店状況・新患・再来集計・店舗えらびページ・WEB 予約に出ません。自賠集計には今までどおり入ります。その店舗でログインすると、メニューは自賠請求だけになります。'],
+  },
+  {
     id: 39, date: '2026-10-21', title: '店舗の URL を QR コードで保存', audience: ['店舗', '本部'],
     items: ['店舗設定に「この店舗の URL・QR コード」を足しました。顧客URL（WEB 予約）と管理URL（店舗のログイン）の QR コードが出て、「QR 画像を保存」で PNG 画像として保存できます。本部の店舗一覧の「編集・URL」にも同じものが出ます。'],
   },

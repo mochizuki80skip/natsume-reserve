@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StoreUrlCards } from './UrlQrCard';
 
-interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean; area?: string; hqOnly?: boolean }
+interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean; area?: string; hqOnly?: boolean; jibaiOnly?: boolean }
 interface SettingForm {
   slotMinutes: number; newVisitSlots: number; returnVisitSlots: number; webCutoffMinutes: number; phoneCutoffMinutes: number;
   phoneMarkRemaining: number; closeOnHolidays: boolean; adminExtraSlots: number; retentionDays: number; hours: string;
@@ -11,7 +11,8 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
   const [s, setS] = useState(setting);
   const [ns, setNs] = useState({ code: '', name: '', phone: '', password: '' });
   const [msg, setMsg] = useState('');
-  const [edit, setEdit] = useState<{ code: string; newCode: string; name: string; phone: string; hqOnly: boolean } | null>(null);
+  const [edit, setEdit] = useState<{ code: string; newCode: string; name: string; phone: string; hqOnly: boolean; jibaiOnly: boolean } | null>(null);
+  const [showJibai, setShowJibai] = useState(false);
 
   async function saveSetting(e: React.FormEvent) {
     e.preventDefault();
@@ -38,7 +39,7 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
   async function saveEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!edit) return;
-    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: edit.code, action: 'update', newCode: edit.newCode, name: edit.name, phone: edit.phone, hqOnly: edit.hqOnly }) });
+    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: edit.code, action: 'update', newCode: edit.newCode, name: edit.name, phone: edit.phone, hqOnly: edit.hqOnly, jibaiOnly: edit.jibaiOnly }) });
     setMsg(r.ok ? '店舗情報を更新しました' : (await r.json()).error ?? '更新に失敗しました');
     if (r.ok) { setEdit(null); onRefresh(); }
   }
@@ -49,10 +50,14 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
     onRefresh();
   }
   // 一覧のまとまり：本部専用 → エリア（エリアの設定の順）→ エリア未設定
+  // 自賠請求だけに使う店舗（ミツカル接骨院など）は一覧に出さず、いちばん下の「表示する」を押したときだけ出す
+  const jibaiStores = stores.filter((x) => x.jibaiOnly);
+  const main = stores.filter((x) => !x.jibaiOnly);
   const groups = [
-    { key: '#hq', label: '本部専用（本部の人だけが見る店舗）', list: stores.filter((x) => x.hqOnly) },
-    ...areas.map((a) => ({ key: a, label: a, list: stores.filter((x) => !x.hqOnly && x.area === a) })),
-    { key: '#none', label: 'エリア未設定', list: stores.filter((x) => !x.hqOnly && (!x.area || !areas.includes(x.area))) },
+    { key: '#hq', label: '本部専用（本部の人だけが見る店舗）', list: main.filter((x) => x.hqOnly) },
+    ...areas.map((a) => ({ key: a, label: a, list: main.filter((x) => !x.hqOnly && x.area === a) })),
+    { key: '#none', label: 'エリア未設定', list: main.filter((x) => !x.hqOnly && (!x.area || !areas.includes(x.area))) },
+    ...(showJibai ? [{ key: '#jibai', label: '自賠請求のみの店舗（予約表・集計・店舗えらびページ・WEB 予約には出しません）', list: jibaiStores }] : []),
   ].filter((g) => g.list.length > 0 || g.key === '#none');
   const num = (k: keyof SettingForm) => (e: React.ChangeEvent<HTMLInputElement>) => setS({ ...s, [k]: Number(e.target.value) });
 
@@ -62,7 +67,7 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
 
       <section className="rounded border bg-white p-4">
-        <h2 className="mb-1 font-bold">店舗一覧（{stores.length} 店舗）</h2>
+        <h2 className="mb-1 font-bold">店舗一覧（{main.length} 店舗）</h2>
         <p className="mb-3 text-xs text-slate-500">各店舗には「管理URL」（/admin/login/店舗コード：パスワードだけでログイン）と「顧客URL」（/s/店舗コード）を配布してください。</p>
         <table className="w-full text-sm">
           <thead><tr className="text-left text-slate-500"><th className="w-16">並び</th><th>コード</th><th>店舗名</th><th>エリア</th><th>電話</th><th>ベッド</th><th>状態</th><th></th></tr></thead>
@@ -77,6 +82,7 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
                       <input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} placeholder="店舗名" required className="w-48 rounded border px-2 py-1" />
                       <input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} placeholder="電話番号" required className="w-40 rounded border px-2 py-1" />
                       <label className="flex items-center gap-1 rounded border border-violet-300 bg-white px-2 py-1 text-xs"><input type="checkbox" checked={edit.hqOnly} onChange={(e) => setEdit({ ...edit, hqOnly: e.target.checked })} />本部専用（店舗のアカウントではログインできない）</label>
+                      <label className="flex items-center gap-1 rounded border border-amber-400 bg-white px-2 py-1 text-xs"><input type="checkbox" checked={edit.jibaiOnly} onChange={(e) => setEdit({ ...edit, jibaiOnly: e.target.checked })} />自賠請求のみ（店舗一覧・集計・WEB 予約に出さない）</label>
                       <button type="submit" className="rounded bg-brand px-3 py-1 text-white">保存</button>
                       <button type="button" onClick={() => setEdit(null)} className="rounded border px-3 py-1">やめる</button>
                       <span className="text-xs text-slate-500">店舗コードを変えると顧客URLとログインIDも変わります</span>
@@ -98,11 +104,11 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
                     </select>
                   </td>
                   <td>{st.phone}</td><td>{st.beds}</td>
-                  <td>{st.active ? '稼働' : '停止'}{st.hqOnly && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-bold text-violet-800">本部専用</span>}</td>
+                  <td>{st.active ? '稼働' : '停止'}{st.hqOnly && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] font-bold text-violet-800">本部専用</span>}{st.jibaiOnly && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-800">自賠のみ</span>}</td>
                   <td className="space-x-2 whitespace-nowrap text-right">
                     <a href={`/s/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">顧客URL</a>
                     <a href={`/admin/login/${st.code}`} target="_blank" rel="noreferrer" className="text-brand underline">管理URL</a>
-                    <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name, phone: st.phone, hqOnly: !!st.hqOnly })} className="rounded border px-2">編集・URL</button>
+                    <button type="button" onClick={() => setEdit({ code: st.code, newCode: st.code, name: st.name, phone: st.phone, hqOnly: !!st.hqOnly, jibaiOnly: !!st.jibaiOnly })} className="rounded border px-2">編集・URL</button>
                     <button type="button" onClick={() => storeAction(st.code, 'reset')} className="rounded border px-2">PW再設定</button>
                     <button type="button" onClick={() => storeAction(st.code, 'toggle')} className="rounded border px-2">{st.active ? '停止' : '再開'}</button>
                     <button type="button" onClick={() => storeAction(st.code, 'delete')} className="rounded border border-red-300 px-2 text-red-700">削除</button>
@@ -113,6 +119,11 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
             </tbody>
           ))}
         </table>
+        {jibaiStores.length > 0 && (
+          <button type="button" onClick={() => setShowJibai(!showJibai)} aria-expanded={showJibai} className="mt-2 rounded border bg-white px-3 py-1 text-xs text-slate-600">
+            {showJibai ? '▾' : '▸'} 自賠請求のみの店舗（{jibaiStores.length} 店舗）を{showJibai ? 'しまう' : '表示する'}
+          </button>
+        )}
         <p className="mt-2 text-xs text-slate-500">エリアの名前・順番は「新患・再来集計（全店）」→「選択肢・エリアの設定」で変えられます。ここでの並び順は、上の店舗切り替え・全店状況・新患・再来集計・店舗えらびページにもそろいます。</p>
         <form onSubmit={addStore} className="mt-4 grid grid-cols-2 gap-2 border-t pt-3 text-sm md:grid-cols-5">
           <input placeholder="店舗コード (例: S003)" value={ns.code} onChange={(e) => setNs({ ...ns, code: e.target.value })} required className="rounded border px-2 py-1" />

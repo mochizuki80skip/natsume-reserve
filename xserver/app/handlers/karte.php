@@ -68,7 +68,7 @@ function hq_karte_get(): never
     $to = Http::query('to');
     if (!Time::isValidDate($from) || !Time::isValidDate($to) || $from > $to) Http::error('期間が正しくありません', 400);
     if ($s['role'] === 'hq') {
-        $stores = Settings::storesInOrder();
+        $stores = Settings::storesInOrder('1 = 1', [], false);
         $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
     } else {
         $own = Auth::context()['store'];
@@ -98,7 +98,7 @@ function hq_karte_options_get(): never
     // 選択肢は店舗の集計画面でも使う（店舗にはエリア・店舗一覧は返さない）
     if (Auth::requireSession()['role'] !== 'hq') Http::json(['options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'areas' => [], 'stores' => []]);
     $areas = array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
-    Http::json(['options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'areas' => $areas, 'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name']], Settings::storesInOrder())]);
+    Http::json(['options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'areas' => $areas, 'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name']], Settings::storesInOrder('1 = 1', [], false))]);
 }
 
 /** 選択肢の保存（{ category, labels: [...] }） */

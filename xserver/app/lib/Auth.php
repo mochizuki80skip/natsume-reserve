@@ -123,7 +123,7 @@ final class Auth
             $s = Db::one('SELECT * FROM store WHERE code = ?', [$code]);
             if ($s) return self::$store = $s;
         }
-        return self::$store = (Settings::storesInOrder('active = 1')[0] ?? null);
+        return self::$store = (Settings::storesInOrder('active = 1', [], false)[0] ?? null);
     }
 
     /** API 用：セッション＋店舗。店舗が無ければ 404 */

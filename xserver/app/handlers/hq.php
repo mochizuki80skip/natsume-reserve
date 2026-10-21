@@ -8,7 +8,7 @@ function hq_get(): never
     $setting = Settings::global();
     $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'phone' => $r['phone'], 'beds' => (int)$r['beds'], 'active' => (bool)$r['active'],
         'address' => (string)$r['address'], 'lat' => $r['lat'] !== null ? (float)$r['lat'] : null, 'lng' => $r['lng'] !== null ? (float)$r['lng'] : null, 'listed' => (bool)$r['listed'],
-        'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly']],
+        'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly'], 'jibaiOnly' => (bool)$r['jibaiOnly']],
         Settings::storesInOrder());
     Http::json([
         'stores' => $stores,
@@ -150,8 +150,9 @@ function hq_stores_put(): never
             if (strtoupper($newCode) === 'HQ' || Db::one('SELECT id FROM admin_account WHERE code = ?', [$newCode])) Http::error('この店舗コードは既に使われています', 409);
         }
         $hqOnly = array_key_exists('hqOnly', $b) ? (Http::bool($b, 'hqOnly') ? 1 : 0) : (int)($store['hqOnly'] ?? 0);
-        Db::transaction(function () use ($store, $newCode, $name, $phone, $hqOnly) {
-            Db::exec('UPDATE store SET code = ?, name = ?, phone = ?, hqOnly = ? WHERE id = ?', [$newCode ?? $store['code'], $name ?? $store['name'], $phone ?? $store['phone'], $hqOnly, $store['id']]);
+        $jibaiOnly = array_key_exists('jibaiOnly', $b) ? (Http::bool($b, 'jibaiOnly') ? 1 : 0) : (int)($store['jibaiOnly'] ?? 0);
+        Db::transaction(function () use ($store, $newCode, $name, $phone, $hqOnly, $jibaiOnly) {
+            Db::exec('UPDATE store SET code = ?, name = ?, phone = ?, hqOnly = ?, jibaiOnly = ? WHERE id = ?', [$newCode ?? $store['code'], $name ?? $store['name'], $phone ?? $store['phone'], $hqOnly, $jibaiOnly, $store['id']]);
             if ($newCode !== null && $newCode !== $store['code']) {
                 Db::exec('UPDATE admin_account SET code = ? WHERE storeId = ? AND role = ?', [$newCode, $store['id'], 'store']);
                 // エリアの設定に入っている店舗コードもそろえる
@@ -167,7 +168,7 @@ function hq_stores_put(): never
         $dir = (int)($b['dir'] ?? 0) < 0 ? -1 : 1;
         $all = Settings::storesInOrder();
         foreach ($all as $i => $r) Db::exec('UPDATE store SET sortOrder = ? WHERE id = ?', [$i + 1, $r['id']]);
-        $group = fn($r) => (int)$r['hqOnly'] ? '#hq' : $r['area'];
+        $group = fn($r) => (int)$r['jibaiOnly'] ? '#jibai' : ((int)$r['hqOnly'] ? '#hq' : $r['area']);
         $idx = array_search($store['id'], array_column($all, 'id'), true);
         $j = $idx === false ? false : $idx + $dir;
         if ($j !== false && isset($all[$j]) && $group($all[$j]) === $group($all[$idx])) {
@@ -213,7 +214,7 @@ function hq_overview(): never
     $date = Http::query('date');
     if (!$date || !Time::isValidDate($date)) $date = $today;
     $setting = Settings::global();
-    $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder('active = 1'));
+    $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder('active = 1', [], false));
     $rows = [];
     $sum = ['rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0, 'cancel' => 0, 'noshow' => 0];
     foreach ($stores as $store) {

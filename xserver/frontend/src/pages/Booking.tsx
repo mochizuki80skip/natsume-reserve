@@ -3,14 +3,14 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import BookingApp from '@/components/BookingApp';
 
-interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean }
+interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean }
 
 export default function Booking() {
   const { code = '' } = useParams();
   const [params] = useSearchParams();
   const { data, error, loading } = useFetch<StoreInfo>(`/api/public/${encodeURIComponent(code)}/store`);
   if (loading) return <main className="mx-auto max-w-lg px-3 pt-8 text-sm text-slate-500">読み込み中…</main>;
-  if (error || !data) {
+  if (error || !data || data.jibaiOnly) { // 自賠請求だけに使う店舗は WEB 予約のページを出さない
     return (
       <main className="mx-auto max-w-lg px-3 pt-16 text-center">
         <h1 className="text-lg font-bold">ページが見つかりません</h1>
