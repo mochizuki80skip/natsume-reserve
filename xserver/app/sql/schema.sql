@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS `cell` (
   `time` INT NOT NULL,
   `bed` INT NOT NULL,
   `text` VARCHAR(100) NOT NULL,
+  `phone` VARCHAR(20) NULL,  -- 電話で取った予約の電話番号（+81…。氏名の下に出す。セルの文字には入れない）
   `visited` TINYINT(1) NOT NULL DEFAULT 0,
   `reservationId` VARCHAR(32) NULL,
   `menus` VARCHAR(300) NOT NULL DEFAULT '',

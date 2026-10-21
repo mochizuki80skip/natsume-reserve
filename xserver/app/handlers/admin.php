@@ -108,6 +108,8 @@ function adm_cells_put(): never
                 Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
             } else {
                 Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE text = VALUES(text)', [Db::newId(), $sid, $date, $time, $bed, $text]);
+                // 別の人の名前に書き換えたら、前の人の電話番号は外す（（初診）を付けた・外しただけなら残す）
+                if ($wasText !== '' && Karte::nameOfText($wasText) !== Karte::nameOfText($text)) Db::exec('UPDATE cell SET phone = NULL WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
             }
         }
         // WEB予約のセルがすべて消えたら、その予約は取消扱いにする
@@ -385,7 +387,7 @@ function adm_move_post(): never
             if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
             // 移動先に空文字のセルが残っていれば消してから入れる
             Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($targetTimes) . ')', array_merge([$sid, $toDate, $toBed], $targetTimes));
-            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus, staff, visited) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? ''), (string)($cell['staff'] ?? ''), $visited]);
+            Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus, staff, visited, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? ''), (string)($cell['staff'] ?? ''), $visited, $cell['phone'] ?? null]);
             if ($cont) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime + $step, $toBed, $cont['text'], $cont['reservationId']]);
             if ($cell['reservationId']) Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]);
             // 元に戻す：動かしたときの「予約変更」の記録を消すだけ（新しい記録は作らない）
@@ -1010,3 +1012,85 @@ function adm_special_days_delete(): never
     Settings::clearSpecialCache();
     Http::json(['ok' => true]);
 }
+
+// ---------- 電話で取った予約の電話番号 ----------
+/** セルに電話番号を付ける・直す・外す（{ date, time, bed, phone }。phone が空なら外す）。氏名の入ったセルだけ */
+function adm_cell_phone_put(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    $time = Http::int($b, 'time', 0, 1440);
+    $bed = Http::int($b, 'bed', 1, 20);
+    $raw = trim(mb_convert_kana((string)($b['phone'] ?? ''), 'n', 'UTF-8'));
+    $phone = null;
+    if ($raw !== '') {
+        $phone = Text::normalizeJpPhone($raw);
+        if (!$phone) Http::error('電話番号の形式が正しくありません（例：090-1234-5678）', 400);
+    }
+    $cell = Db::one('SELECT id, text FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed]);
+    if (!$cell || !Availability::isPatientText($cell['text']) || Text::isContinuationText((string)$cell['text'])) Http::error('氏名の入ったセルにだけ付けられます', 404);
+    Db::exec('UPDATE cell SET phone = ? WHERE id = ?', [$phone, $cell['id']]);
+    Http::json(['ok' => true, 'phone' => $phone]);
+}
+
+// ---------- 予約を探す（氏名・診察券番号） ----------
+/**
+ * 氏名または診察券番号で、この店舗の予約（予約表のセル・WEB 予約）を探す（{ q }）。
+ * 診察券番号は、店舗設定で取り込んだ患者一覧で氏名に直し、WEB 予約に書かれた診察券番号とも合わせる。
+ * 期間は 30 日前から 1 年先まで（予約表は保存期間を過ぎると消えるため、それより前は出ない）
+ */
+function adm_find_get(): never
+{
+    $ctx = Auth::context();
+    $sid = $ctx['store']['id'];
+    $q = trim(mb_convert_kana((string)Http::query('q', ''), 'asn', 'UTF-8'));
+    if (mb_strlen($q) < 1) Http::json(['rows' => [], 'names' => []]);
+    $today = Time::nowJst()['date'];
+    $from = Time::addDays($today, -30);
+    $to = Time::addDays($today, 366);
+    $names = [];
+    $cardNos = [];
+    if (preg_match('/^\d{1,12}[a-z]?$/i', $q)) {
+        // 診察券番号 → 氏名（頭の 0 は付けても付けなくても同じ）
+        $no = (string)(int)preg_replace('/[a-z]$/i', '', $q);
+        foreach (Db::all('SELECT cardNo, name FROM patient_card WHERE storeId = ?', [$sid]) as $p) {
+            if ((string)(int)preg_replace('/[a-z]$/i', '', (string)$p['cardNo']) === $no) $names[] = (string)$p['name'];
+        }
+        $names = array_values(array_unique($names));
+        $cardNos = [$q, $no];
+    } else {
+        $names = [$q];
+    }
+    $flat = fn(string $s) => str_replace([' ', '　'], '', $s);
+    $rows = [];
+    $seenRes = [];
+    // 予約表のセル（電話・窓口・WEB）
+    if ($names) {
+        $conds = implode(' OR ', array_fill(0, count($names), "REPLACE(REPLACE(c.text, ' ', ''), '　', '') LIKE ?"));
+        $params = array_merge([$sid, $from, $to], array_map(fn($n) => '%' . $flat($n) . '%', $names));
+        foreach (Db::all("SELECT c.date, c.time, c.bed, c.text, c.phone, c.visited, r.id AS rId, r.phone AS rPhone FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId
+            WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0 AND ($conds) ORDER BY c.date ASC, c.time ASC LIMIT 200", $params) as $c) {
+            if (Text::isContinuationText((string)$c['text']) || !Availability::isPatientText($c['text'])) continue;
+            if ($c['rId']) $seenRes[$c['rId']] = true;
+            $rows[] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'source' => $c['rId'] ? 'WEB' : ($c['phone'] ? 'PHONE' : 'GRID'),
+                'phone' => Text::formatJpPhone($c['rPhone'] ?? $c['phone'] ?? ''), 'status' => 'BOOKED', 'visited' => (bool)$c['visited']];
+        }
+    }
+    // WEB 予約（取り消し済みも。診察券番号で入れた WEB 予約も）
+    $wc = [];
+    $wp = [$sid, $from, $to];
+    foreach ($names as $n) { $wc[] = "REPLACE(REPLACE(name, ' ', ''), '　', '') LIKE ?"; $wp[] = '%' . $flat($n) . '%'; }
+    foreach ($cardNos as $cn) { $wc[] = 'cardNo = ?'; $wp[] = $cn; }
+    if ($wc) {
+        foreach (Db::all('SELECT id, date, time, bed, name, kind, phone, status FROM reservation WHERE storeId = ? AND date BETWEEN ? AND ? AND (' . implode(' OR ', $wc) . ') ORDER BY date ASC, time ASC LIMIT 200', $wp) as $r) {
+            if (isset($seenRes[$r['id']])) continue;
+            $rows[] = ['date' => $r['date'], 'time' => (int)$r['time'], 'bed' => (int)$r['bed'], 'text' => PublicApi::cellName($r['kind'], $r['name']), 'source' => 'WEB',
+                'phone' => Text::formatJpPhone($r['phone']), 'status' => $r['status'] === 'CANCELLED' ? 'CANCELLED' : 'MISSING', 'visited' => false];
+        }
+    }
+    usort($rows, fn($a, $b) => [$a['date'], $a['time']] <=> [$b['date'], $b['time']]);
+    Http::json(['rows' => $rows, 'names' => $names, 'today' => $today]);
+}
+

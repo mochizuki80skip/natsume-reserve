@@ -16,6 +16,8 @@ import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cance
 import { applyKindTag, kindTagOf, type KindTag, KIND_TAGS } from '@/lib/kindTag';
 import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
 import { dropHonorific } from '@/lib/nameText';
+import PhoneBookingDialog, { type PhoneKind } from './PhoneBookingDialog';
+import FindDialog from './FindDialog';
 import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, staffColorMap } from '@/lib/cellColor';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
@@ -43,6 +45,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const staffOptions = data.staffOptions ?? [];
   // 担当の色（2・3・6・12回目のセルに使う）
   const staffColors = useMemo(() => staffColorMap(data.colorStaff), [data.colorStaff]);
+  // 電話で取った予約の電話番号（セルごと）
+  const phoneInfo = useMemo(() => new Map(data.cells.filter((c) => c.phone).map((c) => [key(c.time, c.bed), c.phone!])), [data.cells]);
+  const [phoneDlg, setPhoneDlg] = useState<{ time: number; bed: number; phoneOnly?: { name: string; phone: string } } | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
   const webInfo = useMemo(() => new Map(data.cells.filter((c) => c.web).map((c) => [key(c.time, c.bed), c.web!])), [data.cells]);
   const [day, setDay] = useState(data.day);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -538,6 +544,24 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     setCellsTracked(changes);
     inputs.current.get(key(time, bed))?.focus();
   }
+  // 電話で取った予約：氏名と（初診）などをセルに入れ、電話番号はセルとは別に保存する。電話番号だけ直すときにも使う
+  async function savePhoneBooking(time: number, bed: number, v: { kind: PhoneKind; name: string; phone: string }, phoneOnly: boolean): Promise<string | null> {
+    if (!phoneOnly) {
+      const suffix = { NEW: '（初診）', ACCIDENT: '（新自）', REVISIT: '（再来）', RETURN: '' }[v.kind];
+      const cont = v.kind === 'REVISIT' ? '上記再来対応' : v.kind === 'RETURN' ? null : '上記初診対応';
+      const changes = [{ time, bed, text: `${dropHonorific(v.name)}${suffix}` }];
+      const t2 = time + data.slotMinutes;
+      if (cont && rows.includes(t2) && !(cells.get(key(t2, bed)) ?? '').trim()) changes.push({ time: t2, bed, text: cont });
+      setCellsTracked(changes);
+      await flush();
+    }
+    const r = await fetch('/api/admin/cell-phone', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time, bed, phone: v.phone }) });
+    const j = await r.json().catch(() => ({}));
+    onRefresh();
+    if (!r.ok) return phoneOnly ? j.error ?? '保存できませんでした' : `予約表には入れましたが、電話番号は保存できませんでした：${j.error ?? ''}（セルの「⋯」→「電話番号を入れる・直す」で入れ直してください）`;
+    setPasteInfo(phoneOnly ? `${minToHm(time)} ベッド${bed} の電話番号を${v.phone ? '保存しました' : '外しました'}` : `${minToHm(time)} ベッド${bed} に電話予約「${v.name}」を入れました`);
+    return null;
+  }
   // 下のセルに「上記初診対応」「上記再来対応」を入れる（手入力の初診・再来用。打ち込まなくてよい）
   function fillBelow(time: number, bed: number, text: string) {
     setMenu(null);
@@ -653,6 +677,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '保存しました' : saveState === 'error' ? '保存に失敗しました' : '入力すると自動保存されます'}
           <span className="ml-2 hidden text-slate-400 2xl:inline">（30秒ごとに最新の内容に自動更新）</span>
         </span>
+        <button type="button" onClick={() => setFindOpen(true)} className="rounded border bg-white px-3 py-1" title="氏名または診察券番号で、いつ予約が入っているかを探します">🔍 予約を探す</button>
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white">印刷／PDF</a>
       </div>
 
@@ -817,7 +842,13 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                   })}
                 </>
               ) : (
-                <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自・メニュー・物販・担当を付けられます</span>
+                <>
+                  {sel && !multi && !sText.trim() && (
+                    <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setPhoneDlg({ time: sel.time, bed: sel.bed })}
+                      className="rounded border-2 border-brand bg-white px-2 py-0.5 text-xs font-bold text-brand-dark hover:bg-brand-light">📞 {minToHm(sel.time)} ベッド{sel.bed} に電話予約を入れる</button>
+                  )}
+                  <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自・メニュー・物販・担当を付けられます{sel && !sText.trim() ? '。空いたセルでは電話予約（氏名・電話番号）を入れられます' : ''}</span>
+                </>
               )}
             </div>
             {goodsOptions.length > 0 && (
@@ -963,6 +994,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                                     <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => fillBelow(t, b, '上記再来対応')}>下のセルに「上記再来対応」</button>
                                   </>
                                 )}
+                                {!web && <button type="button" className="block w-full px-3 py-1.5 text-left hover:bg-brand-light" onClick={() => { setMenu(null); setPhoneDlg({ time: t, bed: b, phoneOnly: { name: text, phone: formatJpPhone(phoneInfo.get(k) ?? '') } }); }}>📞 電話番号を入れる・直す</button>}
                                 <div className="my-1 border-t" />
                                 <button type="button" className="block w-full px-3 py-1.5 text-left font-bold hover:bg-brand-light" onClick={() => openChange(t, b)}>キャンセル・予約変更…</button>
                                 <div className="my-1 border-t" />
@@ -972,6 +1004,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                           </div>
                           {web && hasName && (
                             <div className="no-print px-1 pb-0.5 text-[7px] leading-none tabular-nums text-slate-500" title="WEB予約の電話番号（印刷には出ません）">{formatJpPhone(web.phone)}</div>
+                          )}
+                          {!web && hasName && phoneInfo.get(k) && (
+                            <div className="no-print px-1 pb-0.5 text-[7px] leading-none tabular-nums text-slate-500" title="電話予約の電話番号（印刷には出ません）">📞{formatJpPhone(phoneInfo.get(k))}</div>
                           )}
                         </td>
                       );
@@ -1010,6 +1045,12 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         </table>
       </div>
 
+      {phoneDlg && (
+        <PhoneBookingDialog date={data.date} time={phoneDlg.time} bed={phoneDlg.bed} phoneOnly={phoneDlg.phoneOnly}
+          belowFree={rows.includes(phoneDlg.time + data.slotMinutes) && !(cells.get(key(phoneDlg.time + data.slotMinutes, phoneDlg.bed)) ?? '').trim()}
+          onSubmit={(v) => savePhoneBooking(phoneDlg.time, phoneDlg.bed, v, !!phoneDlg.phoneOnly)} onClose={() => setPhoneDlg(null)} />
+      )}
+      {findOpen && <FindDialog onClose={() => setFindOpen(false)} />}
       {changeDlg && <ChangeDialog from={changeDlg} onClose={() => setChangeDlg(null)} onMoved={moved} onCancelled={cancelled} />}
       {moveMsg && (
         <div role={moveMsg.error ? 'alert' : 'status'} className={`no-print fixed bottom-4 left-1/2 z-40 flex max-w-[90vw] -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-2 text-sm text-white shadow-lg ${moveMsg.error ? 'bg-red-700' : 'bg-slate-900'}`}>

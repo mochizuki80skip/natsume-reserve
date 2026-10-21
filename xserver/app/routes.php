@@ -83,6 +83,8 @@ function route_table(): array
         ['PUT', '#^/api/admin/hq/stores$#', 'hq_stores_put'],
         ['PUT', '#^/api/admin/hq/stores-page$#', 'hq_stores_page_put'],
         ['GET', '#^/api/admin/special-days$#', 'adm_special_days_get'],
+        ['PUT', '#^/api/admin/cell-phone$#', 'adm_cell_phone_put'],
+        ['GET', '#^/api/admin/find$#', 'adm_find_get'],
         ['PUT', '#^/api/admin/special-days$#', 'adm_special_days_put'],
         ['DELETE', '#^/api/admin/special-days$#', 'adm_special_days_delete'],
         ['GET', '#^/api/admin/hq/referrals$#', 'hq_referrals_get'],

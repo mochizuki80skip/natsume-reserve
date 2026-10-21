@@ -11,7 +11,7 @@ const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('dialog', 
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 await p.goto(B + '/admin/login/S001'); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
 const api = (m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
-const D = '2026-10-20', D2 = '2026-10-21';
+const D = '2026-11-17', D2 = '2026-11-18';
 // WEB booking at 11:00 (NEW → 2 slots)
 const wb = await api('POST', '/api/public/S001/reserve', { kind: 'NEW', date: D, time: 660, name: 'ウェブ 花子', phone: '09012340000' });
 ok('WEB予約', wb[0] === 200);
@@ -56,7 +56,7 @@ ok('変更ダイアログ用に枠の残りとベッドの空きを返す', s990
 for (let b = 1; b <= bedsAll; b++) await api('PUT', '/api/admin/cells', { date: D2, cells: [{ time: 960, bed: b, text: `満${b}` }] });
 const nf = await api('POST', '/api/admin/move', { date: D, time: 600, bed: 1, toDate: D2, toTime: 960, allowOver: true });
 ok('空いていないときは通知', nf[0] === 409 && nf[1].error.includes('空いていません'), nf[1]?.error);
-const cl = await api('POST', '/api/admin/move', { date: D, time: 600, bed: 1, toDate: '2026-10-22', toTime: 600 });
+const cl = await api('POST', '/api/admin/move', { date: D, time: 600, bed: 1, toDate: '2026-11-19', toTime: 600 });
 ok('休診日は移動できない', cl[0] === 409, cl[1]?.error);
 // dialog error shown in UI
 await p.goto(`${B}/admin/day/${D}`); await p.waitForSelector('#grid');
