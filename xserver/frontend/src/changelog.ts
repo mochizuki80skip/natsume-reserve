@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 39, date: '2026-10-21', title: '店舗の URL を QR コードで保存', audience: ['店舗', '本部'],
+    items: ['店舗設定に「この店舗の URL・QR コード」を足しました。顧客URL（WEB 予約）と管理URL（店舗のログイン）の QR コードが出て、「QR 画像を保存」で PNG 画像として保存できます。本部の店舗一覧の「編集・URL」にも同じものが出ます。'],
+  },
+  {
     id: 38, date: '2026-10-21', title: '電話予約に電話番号／予約を探す', audience: ['店舗', '本部'],
     items: [
       '予約表の空いたセルを選ぶと、上の帯に「📞 電話予約を入れる」が出ます。WEB 予約と同じように来院区分・お名前・電話番号を入れると、（初診）などと 2 枠目も入り、電話番号は氏名の下に小さく出ます（印刷・新患継続率には出ません）。氏名の入ったセルの「⋯」→「電話番号を入れる・直す」でも付けられます。',

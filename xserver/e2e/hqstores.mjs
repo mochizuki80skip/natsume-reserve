@@ -33,7 +33,8 @@ ok('エリアを選び直せる（後ろに入る）', (await order()) === 'S002
 // 2) 編集・URL：URL のコピーと本部専用
 await hp.locator('tr', { hasText: '見本 東' }).getByRole('button', { name: '編集・URL' }).click();
 ok('顧客URL・管理URL が出る', (await hp.locator('code', { hasText: '/s/S003' }).count()) === 1 && (await hp.locator('code', { hasText: '/admin/login/S003' }).count()) === 1);
-await hp.locator('div', { hasText: /^顧客URL/ }).getByRole('button', { name: 'コピー' }).click();
+await hp.locator('div.rounded.border', { hasText: '顧客URL（WEB 予約）' }).getByRole('button', { name: 'URL をコピー' }).click();
+ok('QR コードも出る', (await hp.getByAltText('顧客URL（WEB 予約）の QR コード').count()) === 1);
 ok('コピーできる', (await hp.evaluate(() => navigator.clipboard.readText())).endsWith('/s/S003'));
 await hp.screenshot({ path: O + 'hq-stores.png', clip: { x: 0, y: 0, width: 1400, height: 700 } });
 await hp.getByLabel(/本部専用（店舗のアカウント/).check(); await hp.getByRole('button', { name: '保存' }).first().click(); await hp.waitForTimeout(800);
@@ -53,7 +54,18 @@ ok('店舗切り替えに本部専用とエリアの見出し', groups.join('|')
 const sp = await br.newPage({ viewport: { width: 1400, height: 1000 } });
 sp.on('pageerror', (e) => errs.push(e.message));
 await sp.goto(`${B}/admin/login/S001`); await sp.fill('input[type=password]', 'password'); await sp.click('button[type=submit]'); await sp.waitForURL(/admin\/day/);
-const D = '2026-10-29';
+// 店舗設定にも URL・QR コード（保存できる）
+await sp.goto(`${B}/admin/settings`); await sp.waitForSelector('text=この店舗の URL・QR コード');
+ok('店舗設定に顧客URL・管理URL の QR', (await sp.getByAltText('顧客URL（WEB 予約）の QR コード').count()) === 1 && (await sp.getByAltText('管理URL（店舗のログイン）の QR コード').count()) === 1);
+const save = sp.getByRole('link', { name: 'QR 画像を保存' }).first();
+ok('保存のファイル名（店舗名入り）', (await save.getAttribute('download')) === 'QR_サンプル本店_顧客URL.png' && (await save.getAttribute('href')).startsWith('blob:'), await save.getAttribute('download'));
+const dl = sp.waitForEvent('download');
+await save.click();
+const file = await dl;
+ok('QR 画像を保存できる（PNG）', (await file.createReadStream().then((st) => new Promise((res) => { const b = []; st.on('data', (c) => b.push(c)); st.on('end', () => res(Buffer.concat(b))); }))).subarray(1, 4).toString() === 'PNG');
+await sp.locator('section[aria-label="この店舗の URL・QR コード"]').screenshot({ path: O + 'store-qr.png' });
+// 次の木曜（定休日）。公開している範囲に入るよう、今日から 2〜8 日先
+const D = (() => { const t = new Date(Date.now() + 9 * 3600 * 1000); t.setUTCDate(t.getUTCDate() + 2); while (t.getUTCDay() !== 4) t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); })();
 const before = (await api(sp, 'GET', `/api/admin/day?date=${D}`))[1].data;
 ok('準備：木曜は定休日', before.times.length === 0);
 await sp.goto(`${B}/admin/settings`); await sp.waitForSelector('text=特別な営業日（プレオープン・イベントなど）');

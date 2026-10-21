@@ -1,6 +1,6 @@
 // 本部：紹介元（業者）ごとの専用 QR。QR から店舗えらびページを開いて予約した初診の方は、初回カルテのきっかけが「業者紹介」、内訳が業者名で入る
-import { useEffect, useState } from 'react';
-import QRCode from 'qrcode';
+import { useState } from 'react';
+import { useQrBlobUrl } from './UrlQrCard';
 import { useFetch } from '@/lib/api';
 
 interface Ref { id: string; code: string; name: string; active: boolean; createdAt: string; reservations: number; kartes: number }
@@ -8,10 +8,7 @@ interface Ref { id: string; code: string; name: string; active: boolean; created
 const urlOf = (code: string) => `${location.origin}/stores?ref=${code}`;
 
 function Qr({ code, name }: { code: string; name: string }) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    QRCode.toDataURL(urlOf(code), { width: 600, margin: 2, errorCorrectionLevel: 'M' }).then(setSrc).catch(() => setSrc(''));
-  }, [code]);
+  const src = useQrBlobUrl(urlOf(code));
   if (!src) return null;
   return (
     <div className="flex items-center gap-2">

@@ -1,22 +1,10 @@
 import { useState } from 'react';
+import { StoreUrlCards } from './UrlQrCard';
 
 interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean; area?: string; hqOnly?: boolean }
 interface SettingForm {
   slotMinutes: number; newVisitSlots: number; returnVisitSlots: number; webCutoffMinutes: number; phoneCutoffMinutes: number;
   phoneMarkRemaining: number; closeOnHolidays: boolean; adminExtraSlots: number; retentionDays: number; hours: string;
-}
-
-/** URL を文字で出して、ボタンでコピーできるようにする */
-function CopyUrl({ label, url }: { label: string; url: string }) {
-  const [done, setDone] = useState(false);
-  return (
-    <div className="flex flex-wrap items-center gap-2 text-xs">
-      <span className="w-16 flex-none font-bold text-slate-600">{label}</span>
-      <code className="break-all rounded bg-white px-2 py-0.5">{url}</code>
-      <button type="button" onClick={() => navigator.clipboard.writeText(url).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {})} className="rounded border bg-white px-2 py-0.5">{done ? 'コピーしました' : 'コピー'}</button>
-      <a href={url} target="_blank" rel="noreferrer" className="text-brand underline">開く↗</a>
-    </div>
-  );
 }
 
 export default function HqClient({ stores, areas = [], setting, onRefresh }: { stores: StoreRow[]; areas?: string[]; setting: SettingForm; onRefresh: () => void }) {
@@ -93,8 +81,7 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
                       <button type="button" onClick={() => setEdit(null)} className="rounded border px-3 py-1">やめる</button>
                       <span className="text-xs text-slate-500">店舗コードを変えると顧客URLとログインIDも変わります</span>
                     </form>
-                    <CopyUrl label="顧客URL" url={`${location.origin}/s/${st.code}`} />
-                    <CopyUrl label="管理URL" url={`${location.origin}/admin/login/${st.code}`} />
+                    <StoreUrlCards code={st.code} name={st.name} />
                   </td>
                 </tr>
               ) : (

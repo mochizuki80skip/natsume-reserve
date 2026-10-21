@@ -5,6 +5,7 @@ import StoreSettingsForm from '@/components/StoreSettingsForm';
 import StaffList from '@/components/StaffList';
 import PatientImport from '@/components/PatientImport';
 import SpecialDaysEditor from '@/components/SpecialDaysEditor';
+import { StoreUrlCards } from '@/components/UrlQrCard';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -45,6 +46,11 @@ function StoreSettings() {
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
         <StoreSettingsForm store={data.store} globalHours={data.globalHours} slotMinutes={data.slotMinutes ?? 15} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
         <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}:${m.canFirst}:${m.canRevisit}:${m.color}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
+        <section className="rounded-lg border bg-white p-4 text-sm xl:col-span-2" aria-label="この店舗の URL・QR コード">
+          <h2 className="mb-1 font-bold">この店舗の URL・QR コード</h2>
+          <p className="mb-2 text-xs text-slate-500">「QR 画像を保存」で PNG 画像として保存できます（印刷物・掲示用）。店舗コードを変えると URL も変わるので、そのときは作り直してください。</p>
+          <StoreUrlCards code={data.store.code} name={data.store.name} />
+        </section>
         <SpecialDaysEditor />
         <PatientImport />
       </div>
