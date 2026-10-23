@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 42, date: '2026-10-23', title: 'ご予約の確認ページの名前', audience: ['店舗', '本部'],
+    items: ['患者様の「ご予約の確認ページ」と「📅 ご予約の確認」の一覧で、お名前の最後の 1 文字を「＊」にしていたのをやめ、フルネームで出すようにしました（文字化けに見えるため）。'],
+  },
+  {
     id: 41, date: '2026-10-23', title: '「使い方」ガイド', audience: ['店舗', '本部'],
     items: ['上のメニューに「使い方」を足しました。予約表・シフト・新患継続率・自賠請求・店舗設定などの使い方を、実際の画面の写真つきで見られます。開いていた画面の記事がいちばん上に出て、言葉で調べることもできます。'],
   },

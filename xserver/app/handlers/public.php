@@ -134,13 +134,6 @@ function pub_base_url(): string
     return ($https ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
 }
 
-/** お名前の最後の 1 文字を伏せる（確認ページは URL を知っている人なら開けるため） */
-function pub_mask_name(string $name): string
-{
-    $n = mb_strlen($name);
-    return $n <= 1 ? '＊' : mb_substr($name, 0, $n - 1) . '＊';
-}
-
 /** 患者様の「ご予約の確認ページ」。予約日の翌日まで見られる。変更・キャンセルは電話のみ */
 function pub_reservation_view(array $p): never
 {
@@ -153,7 +146,7 @@ function pub_reservation_view(array $p): never
     // 予約日の翌日を過ぎたら中身は出さない
     if ($daysLeft < -1) Http::json(['state' => 'ENDED', 'store' => $store]);
     $state = $r['status'] === 'CANCELLED' ? 'CANCELLED' : ($daysLeft < 0 ? 'PAST' : 'BOOKED');
-    Http::json(['state' => $state, 'store' => $store, 'date' => $r['date'], 'time' => (int)$r['time'], 'kind' => $r['kind'], 'name' => pub_mask_name($r['name']), 'daysLeft' => $daysLeft, 'today' => $today]);
+    Http::json(['state' => $state, 'store' => $store, 'date' => $r['date'], 'time' => (int)$r['time'], 'kind' => $r['kind'], 'name' => $r['name'], 'daysLeft' => $daysLeft, 'today' => $today]);
 }
 
 /**

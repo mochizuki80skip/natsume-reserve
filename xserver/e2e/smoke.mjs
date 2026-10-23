@@ -94,11 +94,11 @@ ok('予約確定', true, `${dateTitle} ${slotLabel}`);
 const doneText = await page.textContent('main');
 ok('完了画面の案内（現金のみ・マイナンバーカード・受給者証・時間に余裕）', ['現金のみ', 'マイナンバーカード', '受給者証', '余裕をもって'].every((w) => doneText.includes(w)));
 await page.screenshot({ path: 'e2e/out-customer-done.png' });
-// ご予約の確認ページ（名前の最後の 1 文字は伏せる）
+// ご予約の確認ページ（名前はフルネーム）
 await page.getByRole('link', { name: 'ご予約の確認ページを開く' }).click();
 await page.waitForSelector('text=ご予約中', { timeout: 15000 });
 const viewText = await page.textContent('main');
-ok('確認ページに日時と伏せた名前', viewText.includes('テスト 太＊') && !viewText.includes('テスト 太郎') && /月.*日/.test(viewText) && viewText.includes('現金のみ'), viewText.slice(0, 120));
+ok('確認ページに日時と名前', viewText.includes('テスト 太郎 様') && !viewText.includes('＊') && /月.*日/.test(viewText) && viewText.includes('現金のみ'), viewText.slice(0, 120));
 ok('確認ページの URL は推測できない長さ', /\/r\/[0-9a-f]{32}$/.test(page.url()), page.url());
 ok('合言葉が違えば見つからない', (await fetch(`${BASE}/api/public-reservation/${'0'.repeat(32)}`)).status === 404);
 // 同じ端末の 2 回目：前回の内容が入っている

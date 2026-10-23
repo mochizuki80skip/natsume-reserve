@@ -32,12 +32,12 @@ await cp.getByRole('button', { name: 'この内容で予約する' }).click();
 await cp.waitForSelector('text=ご予約が確定しました', { timeout: 15000 });
 ok('予約した直後から上に出る', await cp.getByRole('link', { name: '📅 ご予約の確認' }).isVisible());
 
-// 3) 予約ページに戻ると「ご予約の確認」→ 一覧に日時・店舗・伏せた名前
+// 3) 予約ページに戻ると「ご予約の確認」→ 一覧に日時・店舗・名前
 await cp.goto(`${B}/s/S001`); await cp.waitForSelector('table.wk tbody tr', { timeout: 15000 });
 await cp.getByRole('link', { name: '📅 ご予約の確認' }).click(); await cp.waitForURL(/\/my\?store=S001/);
 await cp.waitForSelector('text=ご予約中');
 const t = await cp.textContent('main');
-ok('一覧に日時・店舗・伏せた名前', /月.*日.*〜/.test(t) && t.includes('サンプル本店') && t.includes(`確認 花子${sfx}`.slice(0, -1) + '＊'), t.slice(0, 160));
+ok('一覧に日時・店舗・名前（フルネーム）', /月.*日.*〜/.test(t) && t.includes('サンプル本店') && t.includes(`確認 花子${sfx}`) && !t.includes('＊'), t.slice(0, 160));
 ok('電話番号は出さない', !/070\d/.test(t));
 await cp.screenshot({ path: O + 'myres.png' });
 
