@@ -32,6 +32,7 @@ function OldCalendar() {
   return <Navigate to={`/admin/settings?tab=calendar${month ? `&month=${encodeURIComponent(month)}` : ''}`} replace />;
 }
 import UpdatesPage from './pages/admin/UpdatesPage';
+import GuidePage from './pages/admin/GuidePage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -60,6 +61,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="hq/karte" element={<KarteHqPage />} />
           <Route path="hq/accounts" element={<AccountsPage />} />
           <Route path="updates" element={<UpdatesPage />} />
+          <Route path="guide" element={<GuidePage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />

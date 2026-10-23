@@ -44,7 +44,7 @@ export default function AdminLayout() {
   const store = me.store;
   const today = me.today;
   // 自賠請求だけに使う店舗では、予約表などの画面は開かず自賠請求へ（本部のページはそのまま）
-  if (store?.jibaiOnly && !/^\/admin\/(jibai|hq|updates)/.test(location.pathname)) return <Navigate to="/admin/jibai" replace />;
+  if (store?.jibaiOnly && !/^\/admin\/(jibai|hq|updates|guide)/.test(location.pathname)) return <Navigate to="/admin/jibai" replace />;
   return (
     <div className="min-h-screen">
       <UpdateBanner role={me.session.role} />
@@ -89,6 +89,8 @@ export default function AdminLayout() {
                 <Link to="/admin/hq/accounts">アカウント</Link>
               </DropMenu>
             )}
+            {/* 使い方：開いていた画面の記事を上に出す */}
+            <Link to={location.pathname.startsWith('/admin/guide') ? location.pathname + location.search : `/admin/guide?from=${encodeURIComponent(location.pathname + location.search)}`} className="hover:underline">使い方</Link>
             <DropMenu label="その他" plain>
               {!store?.jibaiOnly && <Link to="/admin/story">ストーリー画像</Link>}
               <Link to="/admin/updates">更新のお知らせ</Link>
@@ -99,10 +101,10 @@ export default function AdminLayout() {
         </div>
       </header>
       {store && <WebNotifier key={store.id} />}
-      <div className={`mx-auto ${wide ? 'max-w-none px-4 py-3' : 'max-w-6xl px-4 py-4'}`}>
+      <main className={`mx-auto ${wide ? 'max-w-none px-4 py-3' : 'max-w-6xl px-4 py-4'}`}>
         <Outlet context={{ me, refreshMe: reload } satisfies AdminContext} />
         <p className="no-print mt-6 text-right text-[10px] text-slate-400">画面の版 {APP_VERSION}</p>
-      </div>
+      </main>
     </div>
   );
 }
