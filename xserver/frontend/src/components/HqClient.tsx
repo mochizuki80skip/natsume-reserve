@@ -144,7 +144,7 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
           <label>WEB予約の締切（開始N分前）<input type="number" min={0} max={1440} value={s.webCutoffMinutes} onChange={num('webCutoffMinutes')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>電話受付の締切（開始N分前）<input type="number" min={0} max={1440} value={s.phoneCutoffMinutes} onChange={num('phoneCutoffMinutes')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>管理側の追加枠数（受付終了後の行）<input type="number" min={0} max={8} value={s.adminExtraSlots} onChange={num('adminExtraSlots')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-          <label>個人情報の保持日数<input type="number" min={7} max={3650} value={s.retentionDays} onChange={num('retentionDays')} className="mt-1 w-full rounded border px-2 py-1" /></label>
+          <label>予約表・シフトの保持日数<span className="block text-[10px] text-slate-500">WEB予約・キャンセル名簿・入力の履歴・新患継続率は消しません</span><input type="number" min={7} max={3650} value={s.retentionDays} onChange={num('retentionDays')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label className="flex items-end gap-2 pb-2"><input type="checkbox" checked={s.closeOnHolidays} onChange={(e) => setS({ ...s, closeOnHolidays: e.target.checked })} />祝日は休診</label>
         </div>
         <label className="block text-sm">営業時間（全店共通。曜日 0=日〜6=土。無い曜日は休診。[開始, 最終枠の開始]）

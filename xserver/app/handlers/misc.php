@@ -2,13 +2,13 @@
 // 初期設定・自動削除
 declare(strict_types=1);
 
-/** 保持期間を過ぎた個人情報（予約・セル・名簿など）を削除 */
+/** 保持期間を過ぎた予約表（セル）・シフトなどを削除。WEB 予約・キャンセル名簿・入力の履歴は残す（あとから見返すため） */
 function cleanup_run(): array
 {
     $setting = Settings::global();
     $cutoff = Time::addDays(Time::nowJst()['date'], -$setting['retentionDays']);
     $deleted = [];
-    foreach (['cell', 'reservation', 'day_status', 'shift', 'help_in', 'slot_block', 'cancel_log', 'cell_log'] as $t) {
+    foreach (['cell', 'day_status', 'shift', 'help_in', 'slot_block'] as $t) {
         $deleted[$t] = Db::exec("DELETE FROM `$t` WHERE date < ?", [$cutoff]);
     }
     $jibai = Jibai::cleanupNames(); // 自賠請求の氏名も保持期間を過ぎたら消す（金額は残す）
