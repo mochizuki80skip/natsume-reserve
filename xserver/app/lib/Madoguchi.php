@@ -53,7 +53,9 @@ final class Madoguchi
         $selfAcu = $n('self') + $n('acu');
         $total = $copayTotal + $selfAcu;
         $match = $total + $n('goods') + $n('colCopay') + $n('colSelf') + $n('diffCopay') + $n('diffSelf') + $n('unknown') + $n('deposit') + $n('cert');
-        $bad = (isset($v['mail']) && $v['mail'] !== null && (int)$v['mail'] !== $match) || (isset($v['bank']) && $v['bank'] !== null && (int)$v['bank'] !== $match);
+        // 合計・報告メール合計・通帳入金額の 3 つがそろっていない（入っていないものも含む）。何も入れていない日は見ない
+        $entered = (bool)array_intersect_key($v, self::DAY_KEYS);
+        $bad = $entered && (!isset($v['mail']) || !isset($v['bank']) || (int)$v['mail'] !== $match || (int)$v['bank'] !== $match);
         return ['copayTotal' => $copayTotal, 'selfAcu' => $selfAcu, 'total' => $total, 'match' => $match, 'mismatch' => $bad];
     }
 

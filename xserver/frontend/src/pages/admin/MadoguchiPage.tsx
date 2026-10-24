@@ -145,9 +145,10 @@ export default function MadoguchiPage() {
                       <td className="border px-1 text-center">{md(d.date)}</td>
                       <td className={`border px-1 text-center ${w === 0 || d.closed ? 'bg-red-500 font-bold text-white' : w === 6 ? 'font-bold text-blue-700' : ''}`}>{WD[w]}</td>
                       {COLS.map((c, i) => {
-                        if (c.c) return <td key={i} className={`border px-1 text-right ${c.cls ?? ''}`}>{d.calc[c.c] || Object.keys(v).length ? yen(d.calc[c.c] as number) : ''}</td>;
-                        const bad = (c.k === 'mail' || c.k === 'bank') && v[c.k!] !== undefined && v[c.k!] !== d.calc.match;
-                        return <td key={i} className={`border p-0 ${bad ? 'bg-red-500 font-bold text-white' : ''}`}><Num value={v[c.k!]} readOnly={ro} label={`${md(d.date)} ${c.g ? `${c.g} ` : ''}${c.l}`} onSave={(x) => saveDay(d.date, { [c.k!]: x })} /></td>;
+                        // 金額を一致させてください：合計・報告メール・通帳入金がそろっていなければ 3 つとも赤
+                        const red = d.calc.mismatch && (c.c === 'match' || c.k === 'mail' || c.k === 'bank');
+                        if (c.c) return <td key={i} className={`border px-1 text-right ${red ? 'bg-red-500 font-bold text-white' : c.cls ?? ''}`}>{d.calc[c.c] || Object.keys(v).length ? yen(d.calc[c.c] as number) : ''}</td>;
+                        return <td key={i} className={`border p-0 ${red ? 'bg-red-500 font-bold text-white' : ''}`}><Num value={v[c.k!]} readOnly={ro} label={`${md(d.date)} ${c.g ? `${c.g} ` : ''}${c.l}`} onSave={(x) => saveDay(d.date, { [c.k!]: x })} /></td>;
                       })}
                     </tr>
                   );
@@ -159,7 +160,7 @@ export default function MadoguchiPage() {
               </tfoot>
             </table>
           </div>
-          <p className="mt-1 text-[11px] text-slate-500">白＝入力、黄・橙＝自動で計算、赤＝「合計」と報告メール・通帳入金が合っていない。グレーの行は休診日です（入力もできます）。全角の数字で打っても半角で入ります。</p>
+          <p className="mt-1 text-[11px] text-slate-500">白＝入力、黄・橙＝自動で計算、赤＝「合計」「報告メール合計」「通帳入金額」の 3 つがそろっていない（まだ入れていないときも赤）。グレーの行は休診日です（入力もできます）。全角の数字で打っても半角で入ります。</p>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <table className="w-full border-collapse rounded border bg-white text-sm" aria-label="月末に入れる欄">
               <tbody>{MONTH_KEYS.map(([k, l]) => <tr key={k}><td className="border px-2 py-1">{l}</td><td className="w-40 border p-0"><Num value={data.extra[k]} readOnly={ro} label={l} onSave={(x) => saveMonth({ extra: { [k]: x } })} /></td></tr>)}</tbody>
