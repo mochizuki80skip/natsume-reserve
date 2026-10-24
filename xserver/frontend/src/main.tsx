@@ -36,6 +36,7 @@ import UpdatesPage from './pages/admin/UpdatesPage';
 import GuidePage from './pages/admin/GuidePage';
 import MadoguchiPage from './pages/admin/MadoguchiPage';
 import AcctPage from './pages/admin/AcctPage';
+import StaffingPage from './pages/admin/StaffingPage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -68,6 +69,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="guide" element={<GuidePage />} />
           <Route path="madoguchi" element={<MadoguchiPage />} />
           <Route path="acct" element={<AcctPage />} />
+          <Route path="staffing" element={<StaffingPage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />

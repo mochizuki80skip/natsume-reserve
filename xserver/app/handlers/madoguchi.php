@@ -320,3 +320,57 @@ function hq_goods_put(): never
     }
     Http::json(['ok' => true]);
 }
+
+// ---------- 人員の過不足（本部・管轄MG）：人員基準と、その月の在籍人数（施術者・受付）を店舗ごとに ----------
+function staffing_get(): never
+{
+    $s = Auth::requireSession();
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') Http::error('forbidden', 403);
+    $ym = mado_month_param(Http::query('month'));
+    $dates = Time::datesOfMonth($ym);
+    $first = $dates[0];
+    $last = end($dates);
+    $rows = [];
+    foreach (acct_stores($s) as $st) {
+        $members = Db::all('SELECT name, role, active, startDate, endDate, joinType FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$st['id']]);
+        $out = ['code' => $st['code'], 'name' => $st['name'], 'area' => $st['area'] ?? '', 'changes' => [], 'paused' => []];
+        foreach (['THERAPIST' => 'therapist', 'RECEPTION' => 'reception'] as $role => $k) {
+            $act = array_filter($members, fn($m) => $m['role'] === $role && (int)$m['active'] === 1);
+            $count = fn(string $d) => count(array_filter($act, fn($m) => Settings::inPeriod($m, $d)));
+            // 月の中でいちばん少ない日の人数（月の途中で辞める・入る人がいても「ひと月を通して」いるか）
+            $min = PHP_INT_MAX;
+            foreach ($dates as $d) $min = min($min, $count($d));
+            $std = $st[$k === 'therapist' ? 'stdTherapists' : 'stdReception'];
+            $out[$k] = ['std' => $std === null ? null : (int)$std, 'start' => $count($first), 'end' => $count($last), 'min' => $min];
+            foreach ($act as $m) {
+                if ($m['startDate'] && $m['startDate'] >= $first && $m['startDate'] <= $last) $out['changes'][] = ['name' => $m['name'], 'role' => $k, 'in' => true, 'date' => $m['startDate'], 'joinType' => $m['joinType']];
+                if ($m['endDate'] && $m['endDate'] >= $first && $m['endDate'] <= $last) $out['changes'][] = ['name' => $m['name'], 'role' => $k, 'in' => false, 'date' => $m['endDate'], 'joinType' => null];
+            }
+            foreach ($members as $m) if ($m['role'] === $role && (int)$m['active'] === 0 && Settings::inPeriod($m, $last)) $out['paused'][] = ['name' => $m['name'], 'role' => $k];
+        }
+        usort($out['changes'], fn($a, $b) => strcmp($a['date'], $b['date']));
+        $rows[] = $out;
+    }
+    Http::json(['month' => $ym, 'rows' => $rows]);
+}
+
+/** 人員基準（{ store, therapists, reception }）。本部・管轄MG（管轄の店舗だけ） */
+function staffing_std_put(): never
+{
+    $s = Auth::requireSession();
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') Http::error('forbidden', 403);
+    Http::requireJson();
+    $b = Http::body();
+    $st = Settings::findStoreByCode((string)($b['store'] ?? ''));
+    if (!$st || !Auth::canOpenStore($s, $st)) Http::error('not found', 404);
+    $set = [];
+    foreach (['therapists' => 'stdTherapists', 'reception' => 'stdReception'] as $k => $col) {
+        if (!array_key_exists($k, $b)) continue;
+        $v = $b[$k];
+        if ($v === null || $v === '') { $set[$col] = null; continue; }
+        if (!is_numeric($v) || (int)$v != $v || (int)$v < 0 || (int)$v > 50) Http::error('人数が正しくありません', 400);
+        $set[$col] = (int)$v;
+    }
+    if ($set) Db::exec('UPDATE store SET ' . implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($set))) . ' WHERE id = ?', array_merge(array_values($set), [$st['id']]));
+    Http::json(['ok' => true]);
+}

@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 25;
+    private const VERSION = 26;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -209,6 +209,10 @@ final class Migrate
                 // 管轄MG（エリアの店舗）・経理アカウントと、窓口集計（月間窓口表・物販内訳・返戻）
                 if (!self::hasColumn($pdo, 'admin_account', 'area')) $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `area` VARCHAR(40) NULL');
                 foreach ([self::MADOGUCHI_DAY_DDL, self::MADOGUCHI_MONTH_DDL, self::MADOGUCHI_HENREI_DDL, self::GOODS_ITEM_DDL] as $ddl) $pdo->exec($ddl);
+            }
+            if ($ver < 26 && !self::hasColumn($pdo, 'store', 'stdTherapists')) {
+                // 人員基準（施術者・受付の人数）。人員の過不足（採用のための一覧）に使う
+                $pdo->exec('ALTER TABLE `store` ADD COLUMN `stdTherapists` INT NULL, ADD COLUMN `stdReception` INT NULL');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

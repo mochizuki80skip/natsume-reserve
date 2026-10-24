@@ -102,6 +102,8 @@ function route_table(): array
         ['PUT', '#^/api/admin/acct/madoguchi/check$#', 'acct_mado_check'],
         ['PUT', '#^/api/admin/acct/madoguchi/target$#', 'acct_mado_target'],
         ['GET', '#^/api/admin/acct/madoguchi/export$#', 'acct_mado_export'],
+        ['GET', '#^/api/admin/staffing$#', 'staffing_get'],
+        ['PUT', '#^/api/admin/staffing/std$#', 'staffing_std_put'],
         ['GET', '#^/api/admin/hq/goods$#', 'hq_goods_get'],
         ['PUT', '#^/api/admin/hq/goods$#', 'hq_goods_put'],
         ['GET', '#^/api/admin/hq/privacy$#', 'hq_privacy_get'],

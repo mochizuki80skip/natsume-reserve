@@ -34,7 +34,7 @@ function DropMenu({ label, plain, children }: { label: string; plain?: boolean; 
 export default function AdminLayout() {
   const location = useLocation();
   // 表の幅が広い画面（新患継続率・本部の集計）は横幅いっぱいに使う
-  const wide = /^\/admin\/(karte|hq\/karte|madoguchi|acct)/.test(location.pathname);
+  const wide = /^\/admin\/(karte|hq\/karte|madoguchi|acct|staffing)/.test(location.pathname);
   const { data: me, error, loading, reload } = useFetch<Me>('/api/admin/me');
   useEffect(() => {
     if (error && error.status === 401) goLogin();
@@ -55,7 +55,6 @@ export default function AdminLayout() {
       <header className="no-print border-b bg-white">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap px-3 py-1.5">
           <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' || acct ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
-          {me.session.role === 'mg' && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">管轄MG（{me.session.area}）</span>}
           {acct && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">経理</span>}
           {(me.session.role === 'hq' || me.session.role === 'mg') && (
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
@@ -88,7 +87,12 @@ export default function AdminLayout() {
               <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
               <Link to="/admin/madoguchi" className="hover:underline">窓口集計</Link>
               <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
-              {me.session.role === 'mg' && <Link to="/admin/acct" className="hover:underline">エリアの窓口集計</Link>}
+              {me.session.role === 'mg' && (
+                <DropMenu label={`MG（${me.session.area}）`}>
+                  <Link to="/admin/acct">エリアの窓口集計</Link>
+                  <Link to="/admin/staffing">人員の過不足</Link>
+                </DropMenu>
+              )}
             </>)}
             {me.session.role === 'hq' && (
               <DropMenu label="本部メニュー">
@@ -96,6 +100,7 @@ export default function AdminLayout() {
                 <Link to="/admin/hq/karte">新患・再来集計（全店）</Link>
                 <Link to="/admin/hq/jibai">自賠集計</Link>
                 <Link to="/admin/acct">窓口集計（全店）</Link>
+                <Link to="/admin/staffing">人員の過不足</Link>
                 <Link to="/admin/hq">本部（店舗・設定）</Link>
                 <Link to="/admin/hq/accounts">アカウント</Link>
               </DropMenu>

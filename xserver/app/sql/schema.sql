@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS `store` (
   `defaultActiveBeds` INT NOT NULL DEFAULT 3,
   `maxTherapists` INT NOT NULL DEFAULT 6,
   `maxReception` INT NOT NULL DEFAULT 4,
+  `stdTherapists` INT NULL,   -- 人員基準（施術者の人数）。本部・管轄MG が決める
+  `stdReception` INT NULL,    -- 人員基準（受付の人数）
   `publishDaysAhead` INT NOT NULL DEFAULT 30,
   `hoursOverride` LONGTEXT NULL,
   `notifyPhone` VARCHAR(20) NULL,
