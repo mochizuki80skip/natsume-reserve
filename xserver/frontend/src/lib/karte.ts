@@ -4,6 +4,8 @@ export interface KarteVisit { d: string; s: string; t: string }
 export interface KarteRow {
   id: string; date: string; auto: boolean; karteNo: string; kind: KarteKind; trig: string; trigDetail: string; name: string; nameOk?: boolean;
   age: number | null; sex: string; symptomCat: string; symptom: string; staff: string; treatment: string; visits: KarteVisit[];
+  /** 予後（中止・転院）・アンケート（チェック欄） */
+  stopped?: boolean; transferred?: boolean; survey?: boolean;
 }
 export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[]; partner?: string[] }
 /** 内訳が必要なきっかけ → 内訳の選択肢の種類（null は記入のみ） */

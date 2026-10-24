@@ -107,7 +107,7 @@ function audit_register(string $fn, string $method): void
     $detail = [];
     foreach (['date', 'code', 'month'] as $k) if (is_array($b) && is_scalar($b[$k] ?? null) && $b[$k] !== '') $detail[] = (string)$b[$k];
     $ja = ['karteNo' => 'カルテNo', 'kind' => '新・再', 'trig' => 'きっかけ', 'trigDetail' => '内訳', 'name' => '名前', 'age' => '年齢', 'sex' => '性別', 'symptomCat' => '症状カテゴリー',
-        'symptom' => '症状', 'staff' => '担当', 'treatment' => '施術', 'visits' => '2〜6回目', 'date' => '日付', 'active' => '利用中／停止', 'canManage' => '発行・停止の権限', 'password' => 'パスワード再設定'];
+        'symptom' => '症状', 'staff' => '担当', 'treatment' => '施術', 'visits' => '2〜6回目', 'stopped' => '中止', 'transferred' => '転院', 'survey' => 'アンケート', 'date' => '日付', 'active' => '利用中／停止', 'canManage' => '発行・停止の権限', 'password' => 'パスワード再設定'];
     $keys = fn(array $x) => implode('・', array_map(fn($k) => $ja[$k] ?? $k, array_keys($x)));
     if (is_array($b) && isset($b['patch']) && is_array($b['patch'])) $detail[] = '項目：' . $keys($b['patch']);
     if ($fn === 'karte_import' && is_array($b) && is_array($b['rows'] ?? null)) $detail[] = count($b['rows']) . ' 行';

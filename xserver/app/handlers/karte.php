@@ -209,11 +209,13 @@ function karte_export(): never
     $md = fn(string $d) => $d === '' ? '' : (int)substr($d, 5, 2) . '/' . (int)substr($d, 8, 2);
     $header = ['日付', 'カルテNo', 'きっかけ／再来アクション', '内訳', '氏名', '新・再', '年齢', '性別', '症状カテゴリー', '症状', '担当', '施術内容'];
     for ($i = 2; $i <= 6; $i++) array_push($header, "{$i}回目 日付", "{$i}回目 担当", "{$i}回目 施術");
+    array_push($header, '予後 中止', '予後 転院', 'アンケート');
     $out = [];
     foreach ($rows as $r) {
         $o = Karte::rowOut($r);
         $line = [$md($o['date']), $o['karteNo'], $o['trig'], $o['trigDetail'], $o['name'], $kindJa[$o['kind']] ?? $o['kind'], $o['age'] ?? '', $o['sex'], $o['symptomCat'], $o['symptom'], $o['staff'], $o['treatment']];
         foreach ($o['visits'] as $v) array_push($line, $md($v['d']), $v['s'], $v['t']);
+        array_push($line, $o['stopped'] ? '✓' : '', $o['transferred'] ? '✓' : '', $o['survey'] ? '✓' : '');
         $out[] = $line;
     }
     $label = '新患継続率';

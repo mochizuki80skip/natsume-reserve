@@ -120,6 +120,9 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
       {row.visits.map((v, i) => (
         <VisitCells key={i} n={i + 2} v={v} base={row.date} staff={data.staff} onChange={(x) => setVisit(i, x)} />
       ))}
+      {([['stopped', '中止'], ['transferred', '転院'], ['survey', 'アンケート']] as const).map(([k, l]) => (
+        <td key={k} className="border text-center"><input type="checkbox" checked={!!row[k]} onChange={(ev) => p({ [k]: ev.target.checked })} aria-label={l} className="h-3.5 w-3.5 align-middle" /></td>
+      ))}
       <td className="border px-0.5 text-center">
         {!row.auto && <button type="button" onClick={() => onDelete(row.id)} title="この行を削除" className="text-[11px] text-slate-400 hover:text-red-700">✕</button>}
       </td>
@@ -243,17 +246,20 @@ export default function KartePage() {
             <tr>
               <th colSpan={12} className="border bg-[#f4cccc] px-1 py-0.5">初回入力　※初回入力欄はすべて埋めてください　再来のきっかけ（再来アクション）は空欄でも可</th>
               {Array.from({ length: VISIT_COUNT }, (_, i) => <th key={i} colSpan={3} className="border px-1 py-0.5" style={{ background: VISIT_HEAD[i] }}>{i + 2}回目</th>)}
+              <th colSpan={2} className="border bg-[#d9ead3] px-1 py-0.5">予後</th>
+              <th className="border bg-slate-100" />
               <th className="border bg-slate-100" />
             </tr>
             <tr className="bg-slate-100 text-[10.5px]">
               {[['日付', 40], ['カルテNo', 44], ['きっかけ', 92], ['内訳', 104], ['氏名', 96], ['新・再', 42], ['年齢', 34], ['性別', 32], ['症状ｶﾃｺﾞﾘｰ', 60], ['症状', 96], ['担当', 48], ['施術', 44]].map(([h, w]) => <th key={h as string} className="whitespace-nowrap border px-0.5 py-0.5" style={{ minWidth: w as number }}>{h}</th>)}
               {Array.from({ length: VISIT_COUNT }, (_, i) => ['日付', '担当', '施術'].map((h) => <th key={`${i}${h}`} className="border px-0.5 py-0.5" style={{ minWidth: h === '日付' ? 36 : 42 }}>{h}</th>))}
+              {['中止', '転院', 'アンケート'].map((h) => <th key={h} className="whitespace-nowrap border px-0.5 py-0.5">{h}</th>)}
               <th className="border" />
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => <Row key={r.id} row={r} data={data} onPatch={patch} onDelete={del} />)}
-            {rows.length === 0 && <tr><td colSpan={12 + VISIT_COUNT * 3 + 1} className="p-4 text-center text-slate-500">この月はまだありません。予約表で「（初診）（初）（初自）（再）」の人に来院チェックを付けると、ここに自動で入ります。</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={12 + VISIT_COUNT * 3 + 4} className="p-4 text-center text-slate-500">この月はまだありません。予約表で「（初診）（初）（初自）（再）」の人に来院チェックを付けると、ここに自動で入ります。</td></tr>}
           </tbody>
         </table>
       </div>

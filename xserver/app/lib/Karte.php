@@ -22,7 +22,7 @@ final class Karte
     /** 内訳が必要なきっかけ（値＝内訳の選択肢の種類。null は記入のみ） */
     public const DETAIL_FOR = ['紹介他事業' => 'otherBiz', 'キャンペーン' => 'campaign', 'イベント' => null, '業者紹介' => 'partner'];
 
-    public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'nameOk', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits'];
+    public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'nameOk', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits', 'stopped', 'transferred', 'survey'];
 
     /** @return array<string, string[]> */
     public static function options(): array
@@ -192,6 +192,7 @@ final class Karte
             'id' => $r['id'], 'date' => $r['date'], 'auto' => (bool)$r['auto'], 'karteNo' => $r['karteNo'], 'kind' => $r['kind'],
             'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'name' => $r['name'], 'nameOk' => (bool)($r['nameOk'] ?? 0), 'age' => $r['age'] === null ? null : (int)$r['age'], 'sex' => $r['sex'],
             'symptomCat' => $r['symptomCat'], 'symptom' => $r['symptom'], 'staff' => $r['staff'], 'treatment' => $r['treatment'], 'visits' => $visits,
+            'stopped' => (bool)($r['stopped'] ?? 0), 'transferred' => (bool)($r['transferred'] ?? 0), 'survey' => (bool)($r['survey'] ?? 0),
         ];
     }
 
@@ -209,6 +210,9 @@ final class Karte
                     if (!in_array($v, self::KINDS, true)) throw new HttpError(400, 'bad request');
                     $set[$k] = $v; break;
                 case 'nameOk':
+                case 'stopped':
+                case 'transferred':
+                case 'survey':
                     $set[$k] = $v ? 1 : 0; break;
                 case 'age':
                     if ($v === null || $v === '') { $set[$k] = null; break; }

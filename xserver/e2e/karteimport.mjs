@@ -77,6 +77,25 @@ await p.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain',
 await p.waitForTimeout(300);
 ok('1 つのセルの貼り付けでは開かない', (await p.getByRole('form', { name: 'スプレッドシートから貼り付け' }).count()) === 0);
 
+// 3c) 予後（中止・転院）・アンケート：画面のチェック欄と、スプレッドシートの並び（内訳なし・TRUE/FALSE）の貼り付け
+await p.goto(`${B}/admin/karte?month=2026-06`); await p.waitForSelector('text=継続の状況');
+const rowSel = p.locator('tbody tr').filter({ has: p.locator('input[value="見本 六郎"]') }).first();
+await p.getByRole('checkbox', { name: 'アンケート' }).first().check(); await p.waitForTimeout(800);
+let j6 = (await api('GET', '/api/admin/karte?month=2026-06'))[1].rows;
+ok('アンケートのチェックを保存', j6.filter((r) => r.survey).length === 1, JSON.stringify(j6.map((r) => [r.name, r.survey])));
+void rowSel;
+const sheetRow = (a) => [...a, ...Array(29 - a.length).fill('')].join(T);
+await p.evaluate((t) => { const dt = new DataTransfer(); dt.setData('text/plain', t); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); },
+  sheetRow(['6/12', '1400', 'HP', '見本 六郎', '新患', '28', '♂', '肩', '肩こり', '見本A', '矯正', '6/15', '見本A', '矯正', '', '', '', '', '', '', '', '', '', '', '', '', 'TRUE', 'FALSE', 'FALSE']));
+const dlg3 = p.getByRole('form', { name: 'スプレッドシートから貼り付け' });
+await dlg3.getByRole('table', { name: '取り込みの確認' }).waitFor();
+await dlg3.getByRole('button', { name: '1 件を取り込む' }).click(); await p.waitForTimeout(1000);
+j6 = (await api('GET', '/api/admin/karte?month=2026-06'))[1].rows;
+const six = j6.find((r) => r.name === '見本 六郎');
+ok('貼り付けで中止・転院・アンケート（上書き）', six.stopped === true && six.transferred === false && six.survey === false && six.karteNo === '1400' && six.trigDetail === '', JSON.stringify(six));
+const xr = await p.evaluate(async () => (await fetch('/api/admin/karte/export?month=2026-06')).status);
+ok('Excel で保存できる', xr === 200);
+
 // 4) 年度（4月〜）の継続率
 await p.goto(`${B}/admin/karte?month=2026-10`); await p.waitForSelector('text=継続の状況');
 await p.getByRole('group', { name: '継続率の期間' }).getByRole('button', { name: /2026年度/ }).click();

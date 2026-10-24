@@ -5,11 +5,15 @@ import { VISIT_COUNT, parseMd, type KarteKind, type KarteVisit } from './karte';
 export interface ImportRow {
   date: string; karteNo: string; trig: string; trigDetail: string; name: string; kind: KarteKind;
   age: number | null; sex: string; symptomCat: string; symptom: string; staff: string; treatment: string; visits: KarteVisit[];
+  /** 予後（中止・転院）・アンケート。スプレッドシートにその列があるときだけ入れる */
+  stopped?: boolean; transferred?: boolean; survey?: boolean;
 }
 export interface ParsedLine { line: number; row?: ImportRow; error?: string }
 export interface ParseResult { lines: ParsedLine[]; columns: string[]; error?: string }
 
-type Field = 'date' | 'karteNo' | 'trig' | 'trigDetail' | 'name' | 'kind' | 'age' | 'sex' | 'symptomCat' | 'symptom' | 'staff' | 'treatment';
+type Field = 'date' | 'karteNo' | 'trig' | 'trigDetail' | 'name' | 'kind' | 'age' | 'sex' | 'symptomCat' | 'symptom' | 'staff' | 'treatment' | CheckField;
+type CheckField = 'stopped' | 'transferred' | 'survey';
+const CHECKS: CheckField[] = ['stopped', 'transferred', 'survey'];
 type Col = { field: Field; visit?: undefined } | { field: 'd' | 's' | 't'; visit: number };
 
 /** Google スプレッドシート・Excel のコピー（タブ区切り。改行やタブを含むセルは "…" で囲まれる） */
@@ -47,6 +51,9 @@ function fieldOf(h: string): Field | 'd' | 's' | 't' | null {
   if (n.includes('症状')) return 'symptom';
   if (n.includes('担当')) return 'staff';
   if (n.includes('施術')) return 'treatment';
+  if (n === '中止') return 'stopped';
+  if (n === '転院') return 'transferred';
+  if (n.includes('アンケート')) return 'survey';
   return null;
 }
 
@@ -59,6 +66,7 @@ function columnsOf(head: string[], above: string[] | undefined): (Col | null)[] 
   let seenDate = false;
   return head.map((h, i) => {
     const f = fieldOf(h);
+    if (f && (CHECKS as string[]).includes(f)) return { field: f as CheckField }; // 予後・アンケートは回数と関係ない
     const m = norm(h).match(/(\d+)回目/) ?? norm(groups[i]).match(/(\d+)回目/);
     let v = m ? Number(m[1]) : 0;
     if (!m && f === 'date') { if (seenDate) visit = visit ? visit + 1 : 2; seenDate = true; }
@@ -157,6 +165,8 @@ export function parseSheet(text: string, fy: number): ParseResult {
         age: age && Number(age[0]) <= 120 ? Number(age[0]) : null, sex: sexOf(get('sex')),
         symptomCat: get('symptomCat').slice(0, 20), symptom: get('symptom').slice(0, 100), staff: get('staff').slice(0, 30), treatment: treatmentOf(get('treatment')),
         visits,
+        // チェック欄：TRUE・✓・○ などはチェックあり。列がないときは送らない（今の値のまま）
+        ...Object.fromEntries(CHECKS.filter((f) => cols.some((c) => c && !c.visit && c.field === f)).map((f) => [f, /^(true|✓|✔|○|〇|◯|1|済|有|あり|はい|yes)$/i.test(get(f).normalize('NFKC').trim())])),
       },
     });
   }

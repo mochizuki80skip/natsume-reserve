@@ -94,7 +94,7 @@ export default function KarteImportDialog({ today, month, initialText = '', opti
           <div className="mt-2 max-h-[55vh] overflow-auto rounded border">
             <table className="w-full border-collapse text-[11.5px]" aria-label="取り込みの確認">
               <thead className="sticky top-0 bg-slate-100 text-[10.5px] text-slate-600">
-                <tr>{['行', '結果', '日付', 'カルテNo', '氏名', '新・再', 'きっかけ', '内訳', '年齢', '性別', '症状ｶﾃｺﾞﾘｰ', '担当', '施術', '2回目', '3回目', '4回目', '5回目', '6回目'].map((h) => <th key={h} className="whitespace-nowrap border-b px-1.5 py-1 text-left font-medium">{h}</th>)}</tr>
+                <tr>{['行', '結果', '日付', 'カルテNo', '氏名', '新・再', 'きっかけ', '内訳', '年齢', '性別', '症状ｶﾃｺﾞﾘｰ', '担当', '施術', '2回目', '3回目', '4回目', '5回目', '6回目', '中止', '転院', 'ｱﾝｹｰﾄ'].map((h) => <th key={h} className="whitespace-nowrap border-b px-1.5 py-1 text-left font-medium">{h}</th>)}</tr>
               </thead>
               <tbody>
                 {lines.map((l) => {
@@ -116,7 +116,8 @@ export default function KarteImportDialog({ today, month, initialText = '', opti
                         <td className="whitespace-nowrap px-1.5">{r.staff}</td>
                         <td className="px-1.5">{r.treatment}</td>
                         {r.visits.map((v, i) => <td key={i} className="whitespace-nowrap px-1.5">{md(v.d)}</td>)}
-                      </> : <td colSpan={16} />}
+                        {(['stopped', 'transferred', 'survey'] as const).map((k) => <td key={k} className="px-1.5 text-center">{r[k] ? '✓' : ''}</td>)}
+                      </> : <td colSpan={19} />}
                     </tr>
                   );
                 })}

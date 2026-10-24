@@ -71,3 +71,16 @@ describe('店舗のスプレッドシートの並び（内訳なし・予後・�
     expect(r[1]).toMatchObject({ name: '見本 花子', kind: 'REVISIT', symptomCat: '肩' });
   });
 });
+
+describe('予後（中止・転院）・アンケート', () => {
+  const sheet = (a: string[]) => [...a, ...Array(29 - a.length).fill('')].join('\t');
+  it('見出しなしでも 6回目の後ろの TRUE/FALSE を読む', () => {
+    const r = parseSheet(sheet(['10/2', '1', 'チラシ', '見本 一郎', '新患', '40', '♂', '腰', '腰', '見本A', '矯正', '10/3', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'TRUE', 'FALSE', 'TRUE']), 2026).lines[0].row!;
+    expect([r.stopped, r.transferred, r.survey]).toEqual([true, false, true]);
+    expect(r.visits[0].d).toBe('2026-10-03');
+  });
+  it('列がない並び（画面と同じ）なら送らない', () => {
+    const r = parseSheet(['4/3', '1', 'チラシ', '', '見本 一郎', '新患'].join('\t'), 2026).lines[0].row!;
+    expect('stopped' in r).toBe(false);
+  });
+});

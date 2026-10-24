@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 22;
+    private const VERSION = 23;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -195,6 +195,10 @@ final class Migrate
             if ($ver < 22 && self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'jibaiOnly')) {
                 // 自賠請求だけに使う店舗（予約表・集計・店舗えらびページ・WEB 予約には出さない）
                 $pdo->exec('ALTER TABLE `store` ADD COLUMN `jibaiOnly` TINYINT(1) NOT NULL DEFAULT 0');
+            }
+            if ($ver < 23 && self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'stopped')) {
+                // 新患継続率の「予後（中止・転院）」「アンケート」（店舗のスプレッドシートと同じチェック欄）
+                $pdo->exec('ALTER TABLE `karte` ADD COLUMN `stopped` TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN `transferred` TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN `survey` TINYINT(1) NOT NULL DEFAULT 0');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
