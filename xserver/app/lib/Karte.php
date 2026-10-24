@@ -36,7 +36,7 @@ final class Karte
             }
         }
         // 業者紹介の内訳＝本部が登録した紹介元（業者）の名前（本部の「紹介元の QR」で増やす）
-        $out['partner'] = array_column(Db::all('SELECT name FROM referral ORDER BY createdAt ASC, name ASC'), 'name');
+        $out['partner'] = array_column(Db::all("SELECT name FROM referral WHERE kind = 'partner' ORDER BY createdAt ASC, name ASC"), 'name');
         return $out;
     }
 
@@ -77,7 +77,7 @@ final class Karte
         $dates = Time::datesOfMonth($ym);
         $first = $dates[0];
         $last = $dates[count($dates) - 1];
-        $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard, rf.name AS refName FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId LEFT JOIN referral rf ON rf.code = r.refCode WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
+        $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard, rf.name AS refName, rf.kind AS refKind, rf.trig AS refTrig FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId LEFT JOIN referral rf ON rf.code = r.refCode WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
         $want = [];
         $exists = [];
         foreach ($cells as $c) {
@@ -85,7 +85,7 @@ final class Karte
             $exists[$k] = true;
             if (!(int)$c['visited']) continue;
             $kind = self::kindOfText((string)$c['text']);
-            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1, 'ref' => (string)($c['refName'] ?? '')];
+            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1, 'ref' => (string)($c['refName'] ?? ''), 'refTrig' => ($c['refKind'] ?? '') === 'media' ? (string)$c['refTrig'] : '業者紹介'];
         }
         $rows = Db::all('SELECT id, date, srcTime, srcBed, edited FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? AND auto = 1', [$store['id'], $first, $last]);
         $have = [];
@@ -98,10 +98,10 @@ final class Karte
         }
         foreach ($want as $k => $w) {
             if (isset($have[$k])) continue;
-            // きっかけ：紹介元（業者）の QR から → 業者紹介（内訳＝業者名）、紹介カードの QR から → ギフトカード
+            // きっかけ：紹介元（業者）の QR から → 業者紹介（内訳＝業者名）、媒体の URL から → 媒体に決めたきっかけ（内訳＝媒体名）、紹介カードの QR から → ギフトカード
             Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)', [
                 Db::newId(), $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr($w['name'], 0, 40),
-                $w['ref'] !== '' ? '業者紹介' : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
+                $w['ref'] !== '' && $w['refTrig'] !== '' ? $w['refTrig'] : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' && $w['refTrig'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
         }
     }

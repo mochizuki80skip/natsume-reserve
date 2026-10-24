@@ -233,9 +233,21 @@ CREATE TABLE IF NOT EXISTS `referral` (
   `code` VARCHAR(16) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
   `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `kind` VARCHAR(10) NOT NULL DEFAULT 'partner',
+  `trig` VARCHAR(30) NOT NULL DEFAULT '',
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `referral_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- プライバシーポリシーなど、本部が文章を書く共通のページ（k = 'privacy'）
+CREATE TABLE IF NOT EXISTS `site_page` (
+  `k` VARCHAR(30) NOT NULL,
+  `body` MEDIUMTEXT NOT NULL,
+  `published` TINYINT(1) NOT NULL DEFAULT 0,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedBy` VARCHAR(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`k`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 特別な営業日（プレオープン・イベントなど）。その日だけこの時間で営業する（sessions は [["10:00","12:30"],...]。受付の最後の時刻まで）

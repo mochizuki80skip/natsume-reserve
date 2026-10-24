@@ -3,6 +3,7 @@ import { useFetch } from '@/lib/api';
 import HqClient from '@/components/HqClient';
 import StoresPageEditor, { type ListingStore } from '@/components/StoresPageEditor';
 import ReferralEditor from '@/components/ReferralEditor';
+import PrivacyEditor from '@/components/PrivacyEditor';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -23,6 +24,8 @@ export default function HqPage() {
       <HqClient key={data.stores.map((s) => `${s.code}:${s.name}:${s.active}`).join(',')} stores={data.stores} areas={data.areas ?? []} setting={data.setting} onRefresh={() => { reload(); refreshMe(); }} />
       <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} />
+      <ReferralEditor pageOpen={!!data.storesPageOpen} kind="media" />
+      <PrivacyEditor />
     </>
   );
 }

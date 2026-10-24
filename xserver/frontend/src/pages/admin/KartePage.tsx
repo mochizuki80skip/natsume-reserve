@@ -55,7 +55,8 @@ function DateTxt({ value, base, onSave, label }: { value: string; base: string; 
 function DetailCell({ row, detailFor, options, onSave, err }: { row: KarteRow; detailFor: DetailFor; options: KarteOptions; onSave: (v: string) => void; err: boolean }) {
   const kind = row.kind !== 'REVISIT' && row.trig in detailFor ? detailFor[row.trig] : undefined;
   const [other, setOther] = useState(false);
-  if (kind === undefined) return <td className="border bg-slate-50 text-center text-slate-300">—</td>;
+  // 内訳のないきっかけでも、媒体の URL から入った行は媒体の名前が入っている（直せる・消せる）
+  if (kind === undefined) return row.trigDetail ? <td className="border"><Txt value={row.trigDetail} onSave={onSave} label="内訳" maxLength={60} align="left" /></td> : <td className="border bg-slate-50 text-center text-slate-300">—</td>;
   if (kind === 'otherBiz') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.otherBiz} onChange={onSave} label="内訳" /></td>;
   if (kind === 'partner') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.partner ?? []} onChange={onSave} label="内訳（紹介元）" /></td>;
   if (kind === 'campaign') {

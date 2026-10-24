@@ -7,6 +7,7 @@ import Booking from './pages/Booking';
 import MyReservations from './pages/MyReservations';
 import ReservationView from './pages/ReservationView';
 import Stores from './pages/Stores';
+import Privacy from './pages/Privacy';
 import Login from './pages/Login';
 import AdminLayout from './pages/admin/Layout';
 import AdminIndex from './pages/admin/Index';
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/r/:token" element={<ReservationView />} />
         <Route path="/my" element={<MyReservations />} />
         <Route path="/stores" element={<Stores />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/admin/login" element={<Login />} />
         <Route path="/admin/login/:code" element={<Login />} />
         <Route path="/admin/print/:date" element={<PrintPage />} />

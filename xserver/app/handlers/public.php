@@ -232,3 +232,10 @@ function pub_quiet_times(array $store, array $setting, string $today): ?array
     return null;
 }
 
+/** プライバシーポリシー（全店共通）。本部が公開したときだけ中身を返す */
+function pub_privacy(): never
+{
+    $r = Db::one("SELECT body, published, updatedAt FROM site_page WHERE k = 'privacy'");
+    if (!$r || !(int)$r['published']) Http::json(['published' => false]);
+    Http::json(['published' => true, 'body' => $r['body'], 'updatedAt' => $r['updatedAt']]);
+}

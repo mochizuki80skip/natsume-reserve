@@ -1,6 +1,7 @@
 // 患者様：この端末で WEB 予約した予約の一覧 /my（予約ページの「ご予約の確認」から）
 // 中身は 1 件ずつ「ご予約の確認ページ」と同じ API で聞く。予約日の翌日を過ぎたものは一覧から消える
 import { useEffect, useState } from 'react';
+import PublicFooter from '@/components/PublicFooter';
 import { Link, useSearchParams } from 'react-router-dom';
 import { formatDateJa, minToHm } from '@/lib/time';
 import { loadMyReservations, removeMyReservations } from '@/lib/myReservations';
@@ -60,6 +61,7 @@ export default function MyReservations() {
       <p className="mt-3 text-sm text-slate-700">変更・キャンセルは、各店舗へ<b>お電話</b>でお願いします（くわしく見る から電話番号を押せます）。</p>
       {back && <Link to={`/s/${encodeURIComponent(back)}`} className="mt-4 block rounded-lg bg-brand px-4 py-3 text-center text-base font-bold text-white no-underline">WEB 予約の画面に戻る</Link>}
       <p className="mt-2 text-xs text-slate-500">終わった予約は、予約日の翌日まで出て、そのあと消えます。</p>
+      <PublicFooter />
     </main>
   );
 }

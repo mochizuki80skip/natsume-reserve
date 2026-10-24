@@ -1,5 +1,6 @@
 
 import { useState } from 'react';
+import PublicFooter, { PrivacyNote } from './PublicFooter';
 import { formatDateJa, minToHm } from '@/lib/time';
 import { formatJpPhone } from '@/lib/format';
 import { Link } from 'react-router-dom';
@@ -161,6 +162,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode }: Props) {
             <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">氏名</dt><dd className="font-bold">{form.name}</dd></div>
             <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">電話番号</dt><dd className="font-bold tabular-nums">{formatJpPhone(form.phone) || form.phone}</dd></div>
           </dl>
+          <PrivacyNote />
           <button type="button" onClick={submit} disabled={loading} className="mt-4 w-full rounded-lg bg-brand px-4 py-3 text-base font-bold text-white disabled:opacity-50">
             {loading ? '送信中…' : 'この内容で予約する'}
           </button>
@@ -205,6 +207,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode }: Props) {
       )}
 
       {step !== 1 && phoneBanner}
+      <PublicFooter />
     </main>
   );
 }

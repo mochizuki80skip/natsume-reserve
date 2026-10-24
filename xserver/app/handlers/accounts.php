@@ -92,7 +92,7 @@ const AUDIT_LABEL = [
     'karte_post' => 'カルテ集計 行の追加', 'karte_patch' => 'カルテ集計 入力', 'karte_delete' => 'カルテ集計 行の削除', 'karte_import' => '新患継続率 スプレッドシートの取り込み',
     'hq_settings_put' => '全店共通設定', 'hq_stores_post' => '店舗の追加', 'hq_karte_options_put' => '選択肢（カルテ・メニュー）', 'hq_areas_put' => 'エリア',
     'hq_accounts_post' => '本部アカウントの発行', 'hq_accounts_put' => '本部アカウントの変更',
-    'hq_stores_put' => '店舗の変更・停止・削除', 'hq_stores_page_put' => '店舗えらびページの公開', 'hq_referrals_put' => '紹介元（業者）の QR', 'adm_special_days_put' => '特別な営業日', 'adm_cell_phone_put' => '電話予約の電話番号', 'adm_special_days_delete' => '特別な営業日の削除', 'hq_jibai_settings_put' => '自賠の設定', 'adm_cancel_patch' => 'キャンセル名簿のメモ', 'adm_reservations_delete' => 'WEB予約の削除',
+    'hq_stores_put' => '店舗の変更・停止・削除', 'hq_stores_page_put' => '店舗えらびページの公開', 'hq_referrals_put' => '紹介元（業者）・媒体の QR', 'hq_privacy_put' => 'プライバシーポリシー', 'adm_special_days_put' => '特別な営業日', 'adm_cell_phone_put' => '電話予約の電話番号', 'adm_special_days_delete' => '特別な営業日の削除', 'hq_jibai_settings_put' => '自賠の設定', 'adm_cancel_patch' => 'キャンセル名簿のメモ', 'adm_reservations_delete' => 'WEB予約の削除',
     'jibai_submit' => '自賠請求の提出', 'jibai_claims_put' => '自賠請求の変更', 'jibai_claims_delete' => '自賠請求の削除', 'jibai_verify' => '自賠請求の確認',
 ];
 

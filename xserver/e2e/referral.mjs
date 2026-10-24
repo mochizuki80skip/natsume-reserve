@@ -18,7 +18,7 @@ const NAME = `ワタモ${sfx}`;
 
 // 1) 本部で紹介元を追加 → 専用 URL と QR
 await hp.goto(`${B}/admin/hq`); await hp.waitForSelector('text=紹介元（業者）の専用 QR');
-ok('公開前は「準備中」の注意', await hp.getByText('店舗えらびページがまだ「非公開」です').isVisible());
+ok('公開前は「準備中」の注意', await hp.getByText('店舗えらびページがまだ「非公開」です').first().isVisible());
 await hp.getByLabel('新しい紹介元の名前').fill(NAME); await hp.getByRole('button', { name: '紹介元を追加' }).click();
 await hp.waitForSelector(`text=「${NAME}」を追加しました`);
 const ref = (await api(hp, 'GET', '/api/admin/hq/referrals'))[1].rows.find((r) => r.name === NAME);

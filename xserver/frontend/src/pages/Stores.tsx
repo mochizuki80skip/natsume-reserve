@@ -2,6 +2,7 @@
 // 全店舗をエリアごとに並べ、住所・地図・今日（休診日は次の営業日）の空いている時間帯を出す。店舗を選ぶと WEB 予約へ。
 // 本部が「公開する」にするまでは「準備中」の案内だけを出す
 import { useEffect, useMemo, useState } from 'react';
+import PublicFooter from '@/components/PublicFooter';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { WEEKDAY_JA, weekdayOf } from '@/lib/time';
@@ -162,6 +163,7 @@ export default function Stores() {
         ※「近い順」はスマホの位置情報を使います（並べ替えにだけ使い、送信・保存はしません）。<br />
         ※「空いている時間帯」は、今日（休診日は次の営業日）の予約の入り方から出した目安です。
       </p>
+      <PublicFooter />
     </main>
   );
 }

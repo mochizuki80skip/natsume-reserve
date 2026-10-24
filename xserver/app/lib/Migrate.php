@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 23;
+    private const VERSION = 24;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -200,6 +200,11 @@ final class Migrate
                 // 新患継続率の「予後（中止・転院）」「アンケート」（店舗のスプレッドシートと同じチェック欄）
                 $pdo->exec('ALTER TABLE `karte` ADD COLUMN `stopped` TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN `transferred` TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN `survey` TINYINT(1) NOT NULL DEFAULT 0');
             }
+            if ($ver < 24) {
+                // 媒体ごとの店舗えらび URL（紹介元と同じ表。kind=media のときは trig のきっかけを入れる）と、プライバシーポリシーなどの共通ページ
+                if (self::hasTable($pdo, 'referral') && !self::hasColumn($pdo, 'referral', 'kind')) $pdo->exec("ALTER TABLE `referral` ADD COLUMN `kind` VARCHAR(10) NOT NULL DEFAULT 'partner', ADD COLUMN `trig` VARCHAR(30) NOT NULL DEFAULT ''");
+                $pdo->exec(self::SITE_PAGE_DDL);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -224,6 +229,15 @@ final class Migrate
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `referral_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+    public const SITE_PAGE_DDL = 'CREATE TABLE IF NOT EXISTS `site_page` (
+  `k` VARCHAR(30) NOT NULL,
+  `body` MEDIUMTEXT NOT NULL,
+  `published` TINYINT(1) NOT NULL DEFAULT 0,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedBy` VARCHAR(60) NOT NULL DEFAULT \'\',
+  PRIMARY KEY (`k`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const PATIENT_CARD_DDL = 'CREATE TABLE IF NOT EXISTS `patient_card` (

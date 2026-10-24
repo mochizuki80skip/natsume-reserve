@@ -22,6 +22,7 @@ function route_table(): array
         ['POST', '#^/api/public/([^/]+)/reserve$#', 'pub_reserve'],
         ['GET', '#^/api/public-reservation/([0-9a-f]{32})$#', 'pub_reservation_view'],
         ['GET', '#^/api/public-stores$#', 'pub_stores'],
+        ['GET', '#^/api/public-privacy$#', 'pub_privacy'],
         // ログイン
         ['POST', '#^/api/admin/login$#', 'adm_login'],
         ['POST', '#^/api/admin/logout$#', 'adm_logout'],
@@ -90,6 +91,8 @@ function route_table(): array
         ['DELETE', '#^/api/admin/special-days$#', 'adm_special_days_delete'],
         ['GET', '#^/api/admin/hq/referrals$#', 'hq_referrals_get'],
         ['PUT', '#^/api/admin/hq/referrals$#', 'hq_referrals_put'],
+        ['GET', '#^/api/admin/hq/privacy$#', 'hq_privacy_get'],
+        ['PUT', '#^/api/admin/hq/privacy$#', 'hq_privacy_put'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
         // 自賠責請求の速報集計
         ['GET', '#^/api/admin/jibai$#', 'jibai_get'],

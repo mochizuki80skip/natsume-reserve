@@ -37,11 +37,12 @@ function hq_stores_page_put(): never
 function hq_referrals_get(): never
 {
     Auth::requireHq();
-    $rows = Db::all('SELECT f.id, f.code, f.name, f.active, f.createdAt, (SELECT COUNT(*) FROM reservation r WHERE r.refCode = f.code) AS reservations, (SELECT COUNT(*) FROM karte k WHERE k.trig = ? AND k.trigDetail = f.name) AS kartes FROM referral f ORDER BY f.createdAt ASC, f.name ASC', ['業者紹介']);
-    Http::json(['rows' => array_map(fn($r) => ['id' => $r['id'], 'code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'createdAt' => $r['createdAt'], 'reservations' => (int)$r['reservations'], 'kartes' => (int)$r['kartes']], $rows)]);
+    // 新患継続率の数：紹介元は「業者紹介」、媒体は決めたきっかけで、内訳が名前の行
+    $rows = Db::all("SELECT f.id, f.code, f.name, f.active, f.kind, f.trig, f.createdAt, (SELECT COUNT(*) FROM reservation r WHERE r.refCode = f.code) AS reservations, (SELECT COUNT(*) FROM karte k WHERE k.trig = IF(f.kind = 'media', f.trig, ?) AND k.trigDetail = f.name) AS kartes FROM referral f ORDER BY f.createdAt ASC, f.name ASC", ['業者紹介']);
+    Http::json(['rows' => array_map(fn($r) => ['id' => $r['id'], 'code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'createdAt' => $r['createdAt'], 'reservations' => (int)$r['reservations'], 'kartes' => (int)$r['kartes']], $rows)]);
 }
 
-/** 紹介元の追加（{ name }）・名前の変更・止める／再開（{ id, name?, active? }） */
+/** 紹介元・媒体の追加（{ name, kind?, trig? }）・名前やきっかけの変更・止める／再開（{ id, name?, trig?, active? }） */
 function hq_referrals_put(): never
 {
     Auth::requireHq();
@@ -50,8 +51,13 @@ function hq_referrals_put(): never
     $name = isset($b['name']) ? mb_substr(trim((string)$b['name']), 0, 40) : null;
     if ($name !== null && $name === '') Http::error('紹介元の名前を入れてください', 400);
     $id = (string)($b['id'] ?? '');
+    // 媒体のきっかけは、新患継続率のきっかけの選択肢から（業者紹介・紹介他事業などの内訳つきのものとギフトカードは使わない）
+    $trig = isset($b['trig']) ? (string)$b['trig'] : null;
+    if ($trig !== null && (!in_array($trig, Karte::options()['trigger'], true) || array_key_exists($trig, Karte::DETAIL_FOR) || $trig === 'ギフトカード')) Http::error('きっかけを選んでください', 400);
     if ($id === '') {
         if ($name === null) Http::error('紹介元の名前を入れてください', 400);
+        $kind = ($b['kind'] ?? 'partner') === 'media' ? 'media' : 'partner';
+        if ($kind === 'media' && $trig === null) Http::error('きっかけを選んでください', 400);
         if (Db::one('SELECT id FROM referral WHERE name = ?', [$name])) Http::error('同じ名前の紹介元があります', 409);
         // QR の URL に使う短い文字（読み間違えやすい 0・o・1・l・i は使わない）
         $chars = 'abcdefghjkmnpqrstuvwxyz23456789';
@@ -59,7 +65,7 @@ function hq_referrals_put(): never
             $code = '';
             for ($i = 0; $i < 6; $i++) $code .= $chars[random_int(0, strlen($chars) - 1)];
         } while (Db::one('SELECT id FROM referral WHERE code = ?', [$code]));
-        Db::exec('INSERT INTO referral (id, code, name, active, createdAt) VALUES (?, ?, ?, 1, ?)', [Db::newId(), $code, $name, Time::nowJstDateTime()]);
+        Db::exec('INSERT INTO referral (id, code, name, active, kind, trig, createdAt) VALUES (?, ?, ?, 1, ?, ?, ?)', [Db::newId(), $code, $name, $kind, $kind === 'media' ? $trig : '', Time::nowJstDateTime()]);
         Http::json(['ok' => true]);
     }
     $row = Db::one('SELECT * FROM referral WHERE id = ?', [$id]);
@@ -69,7 +75,15 @@ function hq_referrals_put(): never
         // 名前を変えたら、初回カルテの内訳もそろえる
         Db::transaction(function () use ($id, $name, $row) {
             Db::exec('UPDATE referral SET name = ? WHERE id = ?', [$name, $id]);
-            Db::exec('UPDATE karte SET trigDetail = ? WHERE trig = ? AND trigDetail = ?', [$name, '業者紹介', $row['name']]);
+            Db::exec('UPDATE karte SET trigDetail = ? WHERE trig = ? AND trigDetail = ?', [$name, $row['kind'] === 'media' ? $row['trig'] : '業者紹介', $row['name']]);
+        });
+        $row['name'] = $name;
+    }
+    if ($trig !== null && $row['kind'] === 'media' && $trig !== $row['trig']) {
+        // 媒体のきっかけを変えたら、その媒体から入った新患継続率の行もそろえる
+        Db::transaction(function () use ($id, $trig, $row) {
+            Db::exec('UPDATE referral SET trig = ? WHERE id = ?', [$trig, $id]);
+            Db::exec('UPDATE karte SET trig = ? WHERE trig = ? AND trigDetail = ?', [$trig, $row['trig'], $row['name']]);
         });
     }
     if (array_key_exists('active', $b)) Db::exec('UPDATE referral SET active = ? WHERE id = ?', [Http::bool($b, 'active') ? 1 : 0, $id]);
@@ -237,4 +251,30 @@ function hq_overview(): never
         $rows[] = $r;
     }
     Http::json(['date' => $date, 'today' => $today, 'rows' => $rows, 'sum' => $sum, 'storeCount' => count($stores)]);
+}
+
+/** プライバシーポリシーの文章（まだなければ body は空。画面が下書きを出す） */
+function hq_privacy_get(): never
+{
+    Auth::requireHq();
+    $r = Db::one("SELECT body, published, updatedAt, updatedBy FROM site_page WHERE k = 'privacy'");
+    Http::json(['body' => $r['body'] ?? '', 'published' => (bool)(int)($r['published'] ?? 0), 'updatedAt' => $r['updatedAt'] ?? null, 'updatedBy' => $r['updatedBy'] ?? '']);
+}
+
+/** 保存・公開（{ body, published }）。【 】（まだ埋めていない所）が残っているうちは公開しない */
+function hq_privacy_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    $body = str_replace("\r\n", "\n", (string)($b['body'] ?? ''));
+    if (mb_strlen($body) > 30000) Http::error('文章が長すぎます', 400);
+    $published = Http::bool($b, 'published');
+    if ($published && trim($body) === '') Http::error('文章を入れてください', 400);
+    if ($published && str_contains($body, '【')) Http::error('【 】の所（まだ決まっていない所）が残っています。埋めてから公開してください', 400);
+    $s = Auth::requireSession();
+    $by = $s['role'] === 'hq' ? (string)((Auth::account()['name'] ?? '') ?: $s['code']) : $s['code'];
+    Db::exec('INSERT INTO site_page (k, body, published, updatedAt, updatedBy) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE body = VALUES(body), published = VALUES(published), updatedAt = VALUES(updatedAt), updatedBy = VALUES(updatedBy)',
+        ['privacy', $body, $published ? 1 : 0, Time::nowJstDateTime(), mb_substr($by, 0, 60)]);
+    Http::json(['ok' => true]);
 }
