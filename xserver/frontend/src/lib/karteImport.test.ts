@@ -53,3 +53,21 @@ describe('見出しなし', () => {
     expect(parseSheet('a\tb\nc\td', 2026).error).toContain('読めませんでした');
   });
 });
+
+describe('店舗のスプレッドシートの並び（内訳なし・予後・アンケートあり）', () => {
+  const sheet = (a: string[]) => [...a, ...Array(29 - a.length).fill('')].join('\t');
+  const row = sheet(['10/2', '1,611', 'チラシ', '見本 一郎', '新患', '77', '♀', '腰', '腰', '見本A', 'マッサージ', '10/3', '見本A', 'マッサージ', '10/10', '見本B', '矯正', '', '', '', '', '', '', '', '', '', 'FALSE', 'TRUE', 'FALSE']);
+  it('見出しありで読む（中止・転院・アンケートは読まない）', () => {
+    const h1 = ['初回入力 ※初回入力欄はすべて埋めてください 再来のきっかけは入力不要', ...Array(10).fill(''), '2回目', '', '', '3回目', '', '', '4回目', '', '', '5回目', '', '', '6回目', '', '', '予後', '', ''].join('\t');
+    const h2 = ['日付', 'カルテNo', 'きっかけ', '氏名', '新・再', '年齢', '性別', '症状カテゴリー', '症状', '担当', '施術内容', ...Array(5).fill(['日付', '担当', '施術内容']).flat(), '中止', '転院', 'アンケート'].join('\t');
+    const r = parseSheet([h1, h2, row].join('\n'), 2026).lines[0].row!;
+    expect(r).toMatchObject({ date: '2026-10-02', karteNo: '1611', trig: 'チラシ', trigDetail: '', name: '見本 一郎', kind: 'NEW', age: 77, sex: '♀', symptomCat: '腰', staff: '見本A', treatment: 'マッサ' });
+    expect(r.visits[1]).toEqual({ d: '2026-10-10', s: '見本B', t: '矯正' });
+  });
+  it('見出しなしでも、内訳のない並びを見分ける', () => {
+    const r = parseSheet(row + '\n' + sheet(['10/3', '327', '', '見本 花子', '再来', '42', '♀', '肩', '肩', '見本A', '矯正']), 2026).lines.map((l) => l.row!);
+    expect(r[0]).toMatchObject({ name: '見本 一郎', kind: 'NEW', age: 77, treatment: 'マッサ' });
+    expect(r[0].visits[0].d).toBe('2026-10-03');
+    expect(r[1]).toMatchObject({ name: '見本 花子', kind: 'REVISIT', symptomCat: '肩' });
+  });
+});

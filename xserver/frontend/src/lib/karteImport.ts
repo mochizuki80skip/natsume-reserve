@@ -103,6 +103,15 @@ const dropSama = (s: string) => s.trim().replace(/[\s　]*様$/, '');
 
 /** 新患継続率の画面（＝スプレッドシート）と同じ列の並び。見出しの行をコピーしなかったときに使う */
 export const SCREEN_HEAD = ['日付', 'カルテNo', 'きっかけ', '内訳', '氏名', '新・再', '年齢', '性別', '症状ｶﾃｺﾞﾘｰ', '症状', '担当', '施術', ...Array.from({ length: VISIT_COUNT }, () => ['日付', '担当', '施術']).flat()];
+/** 店舗のスプレッドシートの並び（「内訳」の列がなく、6回目の後ろに 予後〔中止・転院〕・アンケート がある） */
+export const SHEET_HEAD = ['日付', 'カルテNo', 'きっかけ', '氏名', '新・再', '年齢', '性別', '症状カテゴリー', '症状', '担当', '施術内容', ...Array.from({ length: VISIT_COUNT }, () => ['日付', '担当', '施術内容']).flat(), '中止', '転院', 'アンケート'];
+
+/** 見出しなしのとき、「新・再」（新患・再来など）が何列目にあるかで並びを決める（5 列目＝スプレッドシート、6 列目＝画面） */
+function headOf(table: string[][]): string[] {
+  const isKind = (s: string | undefined) => /^(新患|新自|初自|初診|再来|再診|新|初|再)$/.test(norm(s ?? ''));
+  const at = (k: number) => table.filter((r) => isKind(r[k])).length;
+  return at(4) > at(5) ? SHEET_HEAD : SCREEN_HEAD;
+}
 
 export function parseSheet(text: string, fy: number): ParseResult {
   const table = parseTsv(text);
@@ -112,7 +121,7 @@ export function parseSheet(text: string, fy: number): ParseResult {
   else {
     // 見出しなし：画面と同じ並びとして読む（1 列目が日付の行があるときだけ）
     if (!table.some((r) => (r[0] ?? '').trim() && parseSheetDate(r[0], fy))) return { lines: [], columns: [], error: '読めませんでした。新患継続率と同じ並び（日付・カルテNo・きっかけ…）の行をコピーするか、見出しの行もいっしょにコピーしてください。' };
-    cols = columnsOf(SCREEN_HEAD, undefined);
+    cols = columnsOf(headOf(table), undefined);
     hi = -1;
   }
   const columns = cols.map((c) => (c ? (c.visit ? `${c.visit}回目${{ d: '日付', s: '担当', t: '施術' }[c.field]}` : c.field) : '')).filter(Boolean);
@@ -143,7 +152,7 @@ export function parseSheet(text: string, fy: number): ParseResult {
     lines.push({
       line,
       row: {
-        date, name: name.slice(0, 40), karteNo: get('karteNo').slice(0, 20), kind: kindOf(get('kind')),
+        date, name: name.slice(0, 40), karteNo: get('karteNo').replace(/^(\d{1,3}(?:,\d{3})+)$/, (x) => x.replace(/,/g, '')).slice(0, 20), kind: kindOf(get('kind')),
         trig: get('trig').slice(0, 30), trigDetail: get('trigDetail').slice(0, 60),
         age: age && Number(age[0]) <= 120 ? Number(age[0]) : null, sex: sexOf(get('sex')),
         symptomCat: get('symptomCat').slice(0, 20), symptom: get('symptom').slice(0, 100), staff: get('staff').slice(0, 30), treatment: treatmentOf(get('treatment')),
