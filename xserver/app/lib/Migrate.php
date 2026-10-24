@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 26;
+    private const VERSION = 27;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -214,6 +214,10 @@ final class Migrate
                 // 人員基準（施術者・受付の人数）。人員の過不足（採用のための一覧）に使う
                 $pdo->exec('ALTER TABLE `store` ADD COLUMN `stdTherapists` INT NULL, ADD COLUMN `stdReception` INT NULL');
             }
+            if ($ver < 27) {
+                // 離反者リスト・2 週間フォロー（予約表を自動削除する前に来院の記録を残す表も）
+                foreach ([self::VISIT_ARCHIVE_DDL, self::CHURN_DDL, self::FOLLOW_DDL] as $ddl) $pdo->exec($ddl);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -295,6 +299,61 @@ final class Migrate
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+    public const VISIT_ARCHIVE_DDL = 'CREATE TABLE IF NOT EXISTS `visit_archive` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `staff` VARCHAR(30) NOT NULL DEFAULT \'\',
+  `cardNo` VARCHAR(20) NOT NULL DEFAULT \'\',
+  PRIMARY KEY (`id`),
+  KEY `visit_archive_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_visit_archive_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+    public const CHURN_DDL = 'CREATE TABLE IF NOT EXISTS `churn` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `churnDate` CHAR(10) NOT NULL,
+  `patientKey` VARCHAR(60) NOT NULL DEFAULT \'\',
+  `lastVisit` CHAR(10) NULL,
+  `cardNo` VARCHAR(20) NOT NULL DEFAULT \'\',
+  `name` VARCHAR(40) NOT NULL DEFAULT \'\',
+  `sex` VARCHAR(2) NOT NULL DEFAULT \'\',
+  `age` INT NULL,
+  `kind` VARCHAR(10) NOT NULL DEFAULT \'\',
+  `visits` VARCHAR(10) NOT NULL DEFAULT \'\',
+  `staff` VARCHAR(30) NOT NULL DEFAULT \'\',
+  `symptom` VARCHAR(100) NOT NULL DEFAULT \'\',
+  `treatment` VARCHAR(10) NOT NULL DEFAULT \'\',
+  `manage` VARCHAR(10) NOT NULL DEFAULT \'\',
+  `reason` VARCHAR(200) NOT NULL DEFAULT \'\',
+  `source` VARCHAR(10) NOT NULL DEFAULT \'auto\',
+  `edited` TINYINT(1) NOT NULL DEFAULT 0,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `churn_store_date` (`storeId`, `churnDate`),
+  CONSTRAINT `fk_churn_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+    public const FOLLOW_DDL = 'CREATE TABLE IF NOT EXISTS `follow` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `listDate` CHAR(10) NOT NULL,
+  `patientKey` VARCHAR(60) NOT NULL,
+  `lastVisit` CHAR(10) NOT NULL,
+  `cardNo` VARCHAR(20) NOT NULL DEFAULT \'\',
+  `name` VARCHAR(40) NOT NULL DEFAULT \'\',
+  `staff` VARCHAR(30) NOT NULL DEFAULT \'\',
+  `contactedAt` CHAR(10) NULL,
+  `nextText` VARCHAR(40) NOT NULL DEFAULT \'\',
+  `noBooking` TINYINT(1) NOT NULL DEFAULT 0,
+  `note` VARCHAR(200) NOT NULL DEFAULT \'\',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `follow_store_day_patient` (`storeId`, `listDate`, `patientKey`),
+  CONSTRAINT `fk_follow_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const SITE_PAGE_DDL = 'CREATE TABLE IF NOT EXISTS `site_page` (

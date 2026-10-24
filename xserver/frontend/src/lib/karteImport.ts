@@ -105,8 +105,8 @@ export function kindOf(s: string): KarteKind {
   if (n.startsWith('再')) return 'REVISIT';
   return 'NEW';
 }
-const sexOf = (s: string) => { const n = norm(s); return /^(♂|男|m)/.test(n) ? '♂' : /^(♀|女|f)/.test(n) ? '♀' : ''; };
-const treatmentOf = (s: string) => (norm(s).includes('マッサ') ? 'マッサ' : norm(s).includes('矯正') ? '矯正' : '');
+export const sexOf = (s: string) => { const n = norm(s); return /^(♂|男|m)/.test(n) ? '♂' : /^(♀|女|f)/.test(n) ? '♀' : ''; };
+export const treatmentOf = (s: string) => (norm(s).includes('マッサ') ? 'マッサ' : norm(s).includes('矯正') ? '矯正' : '');
 const dropSama = (s: string) => s.trim().replace(/[\s　]*様$/, '');
 
 /** 新患継続率の画面（＝スプレッドシート）と同じ列の並び。見出しの行をコピーしなかったときに使う */

@@ -393,3 +393,59 @@ CREATE TABLE IF NOT EXISTS `goods_item` (
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 離反者リスト・2 週間フォロー・予約表を消す前に残す来院の記録
+CREATE TABLE IF NOT EXISTS `visit_archive` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `staff` VARCHAR(30) NOT NULL DEFAULT '',
+  `cardNo` VARCHAR(20) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `visit_archive_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_visit_archive_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `churn` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `churnDate` CHAR(10) NOT NULL,
+  `patientKey` VARCHAR(60) NOT NULL DEFAULT '',
+  `lastVisit` CHAR(10) NULL,
+  `cardNo` VARCHAR(20) NOT NULL DEFAULT '',
+  `name` VARCHAR(40) NOT NULL DEFAULT '',
+  `sex` VARCHAR(2) NOT NULL DEFAULT '',
+  `age` INT NULL,
+  `kind` VARCHAR(10) NOT NULL DEFAULT '',
+  `visits` VARCHAR(10) NOT NULL DEFAULT '',
+  `staff` VARCHAR(30) NOT NULL DEFAULT '',
+  `symptom` VARCHAR(100) NOT NULL DEFAULT '',
+  `treatment` VARCHAR(10) NOT NULL DEFAULT '',
+  `manage` VARCHAR(10) NOT NULL DEFAULT '',
+  `reason` VARCHAR(200) NOT NULL DEFAULT '',
+  `source` VARCHAR(10) NOT NULL DEFAULT 'auto',
+  `edited` TINYINT(1) NOT NULL DEFAULT 0,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `churn_store_date` (`storeId`, `churnDate`),
+  CONSTRAINT `fk_churn_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `follow` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `listDate` CHAR(10) NOT NULL,
+  `patientKey` VARCHAR(60) NOT NULL,
+  `lastVisit` CHAR(10) NOT NULL,
+  `cardNo` VARCHAR(20) NOT NULL DEFAULT '',
+  `name` VARCHAR(40) NOT NULL DEFAULT '',
+  `staff` VARCHAR(30) NOT NULL DEFAULT '',
+  `contactedAt` CHAR(10) NULL,
+  `nextText` VARCHAR(40) NOT NULL DEFAULT '',
+  `noBooking` TINYINT(1) NOT NULL DEFAULT 0,
+  `note` VARCHAR(200) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `follow_store_day_patient` (`storeId`, `listDate`, `patientKey`),
+  CONSTRAINT `fk_follow_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -34,7 +34,7 @@ function DropMenu({ label, plain, children }: { label: string; plain?: boolean; 
 export default function AdminLayout() {
   const location = useLocation();
   // 表の幅が広い画面（新患継続率・本部の集計）は横幅いっぱいに使う
-  const wide = /^\/admin\/(karte|hq\/karte|madoguchi|acct|staffing)/.test(location.pathname);
+  const wide = /^\/admin\/(karte|hq\/karte|madoguchi|acct|staffing|churn)/.test(location.pathname);
   const { data: me, error, loading, reload } = useFetch<Me>('/api/admin/me');
   useEffect(() => {
     if (error && error.status === 401) goLogin();
@@ -83,6 +83,7 @@ export default function AdminLayout() {
               <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
               <Link to="/admin/karte" className="hover:underline">新患継続率</Link>
               {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
+              <Link to="/admin/churn" className="hover:underline" title="離反者リスト・2週間フォロー">離反</Link>
               <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
               <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
               <Link to="/admin/madoguchi" className="hover:underline">窓口集計</Link>

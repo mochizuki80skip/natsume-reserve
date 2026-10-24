@@ -10,6 +10,7 @@ require_once __DIR__ . '/handlers/jibai.php';
 require_once __DIR__ . '/handlers/karte.php';
 require_once __DIR__ . '/handlers/accounts.php';
 require_once __DIR__ . '/handlers/madoguchi.php';
+require_once __DIR__ . '/handlers/churn.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -102,6 +103,14 @@ function route_table(): array
         ['PUT', '#^/api/admin/acct/madoguchi/check$#', 'acct_mado_check'],
         ['PUT', '#^/api/admin/acct/madoguchi/target$#', 'acct_mado_target'],
         ['GET', '#^/api/admin/acct/madoguchi/export$#', 'acct_mado_export'],
+        ['GET', '#^/api/admin/churn$#', 'churn_get'],
+        ['POST', '#^/api/admin/churn$#', 'churn_post'],
+        ['PATCH', '#^/api/admin/churn$#', 'churn_patch'],
+        ['DELETE', '#^/api/admin/churn$#', 'churn_delete'],
+        ['POST', '#^/api/admin/churn/import$#', 'churn_import'],
+        ['GET', '#^/api/admin/churn/export$#', 'churn_export'],
+        ['GET', '#^/api/admin/follow$#', 'follow_get'],
+        ['PATCH', '#^/api/admin/follow$#', 'follow_patch'],
         ['GET', '#^/api/admin/staffing$#', 'staffing_get'],
         ['PUT', '#^/api/admin/staffing/std$#', 'staffing_std_put'],
         ['GET', '#^/api/admin/hq/goods$#', 'hq_goods_get'],

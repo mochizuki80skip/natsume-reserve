@@ -140,12 +140,14 @@ const listRows = () => mg.locator('table[aria-label="窓口集計の一覧"] tbo
 let lr = await listRows();
 ok('管轄MG：はじめは管轄店舗だけ', lr.length === 1 && lr[0].includes('サンプル駅前院') && (await mg.getByRole('region', { name: '売上サマリー' }).textContent()).includes('売上サマリー（管轄店舗'), lr.join(' | '));
 await mg.getByRole('group', { name: '表示の単位' }).getByRole('button', { name: 'エリア別' }).click();
+await mg.waitForSelector('text=売上サマリー（エリア別）'); await mg.waitForTimeout(300);
 lr = await listRows();
 ok('エリア別：エリアの小計と店舗', lr.some((t) => t.startsWith('見本エリア（1 店舗）')) && lr.some((t) => t.startsWith('エリア未設定（1 店舗）')) && lr.length === 4, lr.map((t) => t.slice(0, 14)).join(' | '));
 await mg.getByRole('group', { name: '表示の単位' }).getByRole('button', { name: '全体' }).click();
+await mg.waitForSelector('text=売上サマリー（全体）'); await mg.waitForTimeout(300);
 lr = await listRows();
 const sum = await mg.getByRole('region', { name: '売上サマリー' }).textContent();
-ok('全体：2 店舗と売上サマリー（売上・目標・達成率・前月比）', lr.length === 2 && sum.includes('売上目標') && sum.includes('達成率') && sum.includes('前月比'), sum.slice(0, 120));
+ok('全体：2 店舗と売上サマリー（売上・目標・達成率・前月比）', lr.length === 2 && sum.includes('売上目標') && sum.includes('達成率') && sum.includes('前月比'), `${lr.length} ${sum.slice(0, 120)}`);
 await mg.screenshot({ path: O + 'acct-summary.png', fullPage: true });
 ok('管轄MG：管轄外の店舗の窓口表も見られる（見るだけ）', (await api(mg, 'GET', `/api/admin/madoguchi?month=${M}&store=S001`))[1].canEdit === false);
 const kh = (await api(mg, 'GET', `/api/admin/hq/karte?from=${M}-01&to=${M}-31`))[1];
