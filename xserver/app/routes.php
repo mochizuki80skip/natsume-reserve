@@ -9,6 +9,7 @@ require_once __DIR__ . '/handlers/misc.php';
 require_once __DIR__ . '/handlers/jibai.php';
 require_once __DIR__ . '/handlers/karte.php';
 require_once __DIR__ . '/handlers/accounts.php';
+require_once __DIR__ . '/handlers/madoguchi.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -91,6 +92,18 @@ function route_table(): array
         ['DELETE', '#^/api/admin/special-days$#', 'adm_special_days_delete'],
         ['GET', '#^/api/admin/hq/referrals$#', 'hq_referrals_get'],
         ['PUT', '#^/api/admin/hq/referrals$#', 'hq_referrals_put'],
+        ['GET', '#^/api/admin/madoguchi$#', 'mado_get'],
+        ['PUT', '#^/api/admin/madoguchi/day$#', 'mado_day_put'],
+        ['PUT', '#^/api/admin/madoguchi/month$#', 'mado_month_put'],
+        ['PUT', '#^/api/admin/madoguchi/henrei$#', 'mado_henrei_put'],
+        ['DELETE', '#^/api/admin/madoguchi/henrei$#', 'mado_henrei_delete'],
+        ['GET', '#^/api/admin/madoguchi/export$#', 'mado_export'],
+        ['GET', '#^/api/admin/acct/madoguchi$#', 'acct_mado_get'],
+        ['PUT', '#^/api/admin/acct/madoguchi/check$#', 'acct_mado_check'],
+        ['PUT', '#^/api/admin/acct/madoguchi/target$#', 'acct_mado_target'],
+        ['GET', '#^/api/admin/acct/madoguchi/export$#', 'acct_mado_export'],
+        ['GET', '#^/api/admin/hq/goods$#', 'hq_goods_get'],
+        ['PUT', '#^/api/admin/hq/goods$#', 'hq_goods_put'],
         ['GET', '#^/api/admin/hq/privacy$#', 'hq_privacy_get'],
         ['PUT', '#^/api/admin/hq/privacy$#', 'hq_privacy_put'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],

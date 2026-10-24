@@ -6,7 +6,7 @@ const OWNER_CODE = 'HQ'; // 最初の管理者アカウント。停止や権限�
 
 function acc_row(array $a): array
 {
-    return ['id' => $a['id'], 'code' => $a['code'], 'name' => $a['name'], 'active' => (bool)$a['active'], 'canManage' => (bool)$a['canManage'],
+    return ['id' => $a['id'], 'code' => $a['code'], 'name' => $a['name'], 'role' => $a['role'], 'area' => (string)($a['area'] ?? ''), 'active' => (bool)$a['active'], 'canManage' => (bool)$a['canManage'],
         'lastLoginAt' => $a['lastLoginAt'] ? Time::formatDateTimeShort($a['lastLoginAt']) : '', 'owner' => $a['code'] === OWNER_CODE];
 }
 
@@ -14,8 +14,9 @@ function hq_accounts_get(): never
 {
     Auth::requireHq();
     $me = Auth::account();
-    $rows = Db::all("SELECT * FROM admin_account WHERE role = 'hq' ORDER BY code = ? DESC, active DESC, createdAt ASC", [OWNER_CODE]);
-    Http::json(['accounts' => array_map('acc_row', $rows), 'me' => ['id' => $me['id'], 'canManage' => (bool)$me['canManage']]]);
+    $rows = Db::all("SELECT * FROM admin_account WHERE role IN ('hq', 'mg', 'acct') ORDER BY code = ? DESC, FIELD(role, 'hq', 'mg', 'acct'), active DESC, createdAt ASC", [OWNER_CODE]);
+    Http::json(['accounts' => array_map('acc_row', $rows), 'me' => ['id' => $me['id'], 'canManage' => (bool)$me['canManage']],
+        'areas' => array_column(Db::all('SELECT name FROM area ORDER BY sortOrder ASC, name ASC'), 'name')]);
 }
 
 function hq_accounts_post(): never
@@ -29,9 +30,13 @@ function hq_accounts_post(): never
     if (!preg_match('/^[A-Za-z0-9_-]{2,20}$/', $code)) Http::error('ID は英数字 2〜20 文字にしてください', 400);
     if ($name === '') Http::error('名前を入力してください', 400);
     if (strlen($password) < 8) Http::error('パスワードは 8 文字以上にしてください', 400);
+    // 種類：本部（hq）・管轄MG（mg：エリアを選ぶ）・経理（acct）
+    $role = in_array($b['role'] ?? 'hq', ['hq', 'mg', 'acct'], true) ? (string)($b['role'] ?? 'hq') : 'hq';
+    $area = $role === 'mg' ? trim((string)($b['area'] ?? '')) : null;
+    if ($role === 'mg' && !Db::one('SELECT id FROM area WHERE name = ?', [$area])) Http::error('管轄エリアを選んでください', 400);
     if (Db::one('SELECT 1 AS x FROM admin_account WHERE code = ?', [$code]) || Db::one('SELECT 1 AS x FROM store WHERE code = ?', [$code])) Http::error('この ID はすでに使われています（店舗コードとも重ならないようにしてください）', 400);
-    Db::exec("INSERT INTO admin_account (id, code, passwordHash, role, storeId, name, active, canManage) VALUES (?, ?, ?, 'hq', NULL, ?, 1, ?)",
-        [Db::newId(), $code, password_hash($password, PASSWORD_BCRYPT), $name, Http::bool($b, 'canManage') ? 1 : 0]);
+    Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId, name, active, canManage, area) VALUES (?, ?, ?, ?, NULL, ?, 1, ?, ?)',
+        [Db::newId(), $code, password_hash($password, PASSWORD_BCRYPT), $role, $name, $role === 'hq' && Http::bool($b, 'canManage') ? 1 : 0, $area]);
     Http::json(['ok' => true]);
 }
 
@@ -42,7 +47,7 @@ function hq_accounts_put(): never
     Http::requireJson();
     $b = Http::body();
     $me = Auth::account();
-    $a = Db::one("SELECT * FROM admin_account WHERE id = ? AND role = 'hq'", [(string)($b['id'] ?? '')]);
+    $a = Db::one("SELECT * FROM admin_account WHERE id = ? AND role IN ('hq', 'mg', 'acct')", [(string)($b['id'] ?? '')]);
     if (!$a) Http::error('not found', 404);
     $set = [];
     $params = [];
@@ -58,6 +63,11 @@ function hq_accounts_put(): never
         if (!$v && $a['id'] === $me['id']) Http::error("自分のアカウントは{$what}ができません", 400);
         $set[] = "$k = ?"; $params[] = $v ? 1 : 0;
     }
+    if (array_key_exists('area', $b)) {
+        if ($a['role'] !== 'mg' || !Db::one('SELECT id FROM area WHERE name = ?', [(string)$b['area']])) Http::error('管轄エリアを選んでください', 400);
+        $set[] = 'area = ?'; $params[] = (string)$b['area'];
+    }
+    if (array_key_exists('canManage', $b) && $a['role'] !== 'hq' && Http::bool($b, 'canManage')) Http::error('発行・停止の権限は本部アカウントだけに付けられます', 400);
     if (array_key_exists('password', $b)) {
         $pw = (string)$b['password'];
         if (strlen($pw) < 8) Http::error('パスワードは 8 文字以上にしてください', 400);
@@ -80,7 +90,7 @@ function hq_audit_get(): never
         FROM audit_log l JOIN (SELECT accountId, MAX(id) AS mid FROM audit_log GROUP BY accountId) m ON m.mid = l.id
         LEFT JOIN admin_account a ON a.id = l.accountId LEFT JOIN store s ON s.id = a.storeId ORDER BY (a.role = \'hq\') DESC, l.actor ASC');
     $label = fn($x) => $x['role'] === 'store' && $x['storeName'] ? "{$x['storeName']}（{$x['actor']}）" : $x['actor'];
-    Http::json(['actors' => array_map(fn($x) => ['id' => $x['accountId'], 'label' => $label($x), 'hq' => $x['role'] === 'hq', 'count' => (int)$x['n']], $actors), 'rows' => array_map(fn($r) => ['at' => Time::formatDateTimeShort($r['at']), 'actor' => $r['actor'], 'store' => $r['storeCode'], 'action' => $r['action'], 'detail' => $r['detail'], 'ok' => (int)$r['status'] < 400], $rows)]);
+    Http::json(['actors' => array_map(fn($x) => ['id' => $x['accountId'], 'label' => $label($x), 'hq' => $x['role'] !== 'store', 'count' => (int)$x['n']], $actors), 'rows' => array_map(fn($r) => ['at' => Time::formatDateTimeShort($r['at']), 'actor' => $r['actor'], 'store' => $r['storeCode'], 'action' => $r['action'], 'detail' => $r['detail'], 'ok' => (int)$r['status'] < 400], $rows)]);
 }
 
 // ---------- 操作の記録 ----------
@@ -92,14 +102,14 @@ const AUDIT_LABEL = [
     'karte_post' => 'カルテ集計 行の追加', 'karte_patch' => 'カルテ集計 入力', 'karte_delete' => 'カルテ集計 行の削除', 'karte_import' => '新患継続率 スプレッドシートの取り込み',
     'hq_settings_put' => '全店共通設定', 'hq_stores_post' => '店舗の追加', 'hq_karte_options_put' => '選択肢（カルテ・メニュー）', 'hq_areas_put' => 'エリア',
     'hq_accounts_post' => '本部アカウントの発行', 'hq_accounts_put' => '本部アカウントの変更',
-    'hq_stores_put' => '店舗の変更・停止・削除', 'hq_stores_page_put' => '店舗えらびページの公開', 'hq_referrals_put' => '紹介元（業者）・媒体の QR', 'hq_privacy_put' => 'プライバシーポリシー', 'adm_special_days_put' => '特別な営業日', 'adm_cell_phone_put' => '電話予約の電話番号', 'adm_special_days_delete' => '特別な営業日の削除', 'hq_jibai_settings_put' => '自賠の設定', 'adm_cancel_patch' => 'キャンセル名簿のメモ', 'adm_reservations_delete' => 'WEB予約の削除',
+    'hq_stores_put' => '店舗の変更・停止・削除', 'hq_stores_page_put' => '店舗えらびページの公開', 'hq_referrals_put' => '紹介元（業者）・媒体の QR', 'hq_privacy_put' => 'プライバシーポリシー', 'mado_day_put' => '窓口集計 入力', 'mado_month_put' => '窓口集計 月の欄', 'mado_henrei_put' => '返戻 入力', 'mado_henrei_delete' => '返戻 削除', 'acct_mado_check' => '窓口集計 経理確認', 'acct_mado_target' => '売上目標', 'hq_goods_put' => '物販の商品', 'adm_special_days_put' => '特別な営業日', 'adm_cell_phone_put' => '電話予約の電話番号', 'adm_special_days_delete' => '特別な営業日の削除', 'hq_jibai_settings_put' => '自賠の設定', 'adm_cancel_patch' => 'キャンセル名簿のメモ', 'adm_reservations_delete' => 'WEB予約の削除',
     'jibai_submit' => '自賠請求の提出', 'jibai_claims_put' => '自賠請求の変更', 'jibai_claims_delete' => '自賠請求の削除', 'jibai_verify' => '自賠請求の確認',
 ];
 
 /** 管理画面の書き込み操作を記録する（応答のあとに書く。氏名などの個人情報は残さない） */
 function audit_register(string $fn, string $method): void
 {
-    if ($method === 'GET' || in_array($fn, ['adm_login', 'adm_logout', 'adm_switch'], true) || !str_starts_with($fn, 'adm_') && !str_starts_with($fn, 'hq_') && !str_starts_with($fn, 'karte_') && !str_starts_with($fn, 'jibai_')) return;
+    if ($method === 'GET' || in_array($fn, ['adm_login', 'adm_logout', 'adm_switch'], true) || !str_starts_with($fn, 'adm_') && !str_starts_with($fn, 'hq_') && !str_starts_with($fn, 'karte_') && !str_starts_with($fn, 'jibai_') && !str_starts_with($fn, 'mado_') && !str_starts_with($fn, 'acct_')) return;
     $s = Auth::session();
     if (!$s) return;
     $b = json_decode((string)file_get_contents('php://input'), true);
@@ -118,7 +128,7 @@ function audit_register(string $fn, string $method): void
     register_shutdown_function(function () use ($fn, $s, $detail) {
         try {
             $store = Auth::resolveStore($s);
-            $actor = $s['role'] === 'hq' ? ((Auth::account()['name'] ?? '') . '（' . $s['code'] . '）') : $s['code'];
+            $actor = $s['role'] !== 'store' ? ((Auth::account()['name'] ?? '') . '（' . $s['code'] . '）') : $s['code'];
             Db::exec('INSERT INTO audit_log (accountId, actor, storeCode, action, detail, status) VALUES (?, ?, ?, ?, ?, ?)', [
                 $s['accountId'], mb_substr($actor, 0, 60), str_starts_with($fn, 'hq_') ? '' : (string)($store['code'] ?? ''), mb_substr(AUDIT_LABEL[$fn] ?? $fn, 0, 60), mb_substr(implode(' ', $detail), 0, 120), (int)http_response_code(),
             ]);

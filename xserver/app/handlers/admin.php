@@ -16,7 +16,7 @@ function adm_login(): never
     // 本部専用の店舗は、店舗のアカウントではログインできない（本部のアカウントで切り替えて使う）
     if ($acc['role'] === 'store' && (int)($acc['storeHqOnly'] ?? 0)) Http::error('この店舗は本部専用です。本部のアカウントでログインしてください', 403);
     Db::exec('UPDATE admin_account SET lastLoginAt = ? WHERE id = ?', [Time::nowJstDateTime(), $acc['id']]);
-    Auth::setSessionCookie(['accountId' => $acc['id'], 'role' => $acc['role'] === 'hq' ? 'hq' : 'store', 'storeId' => $acc['storeId'], 'code' => $acc['code']]);
+    Auth::setSessionCookie(['accountId' => $acc['id'], 'role' => in_array($acc['role'], ['hq', 'mg', 'acct'], true) ? $acc['role'] : 'store', 'storeId' => $acc['storeId'], 'code' => $acc['code']]);
     Http::json(['ok' => true]);
 }
 
@@ -31,10 +31,11 @@ function adm_logout(): never
 /** 本部の店舗切替（フォーム POST） */
 function adm_switch(): never
 {
-    $s = Auth::session();
-    if (!$s || $s['role'] !== 'hq') Http::error('forbidden', 403);
+    $s = Auth::requireSession();
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') Http::error('forbidden', 403);
     $code = (string)($_POST['store'] ?? '');
-    if (!Settings::findStoreByCode($code)) Http::error('not found', 404);
+    $st = Settings::findStoreByCode($code);
+    if (!$st || !Auth::canOpenStore($s, $st)) Http::error('not found', 404);
     Auth::setStoreCookie($code);
     $back = (string)($_POST['back'] ?? '/admin');
     Http::redirect(str_starts_with($back, '/admin') ? $back : '/admin');
@@ -45,9 +46,11 @@ function adm_me(): never
 {
     $s = Auth::requireSession();
     $store = Auth::resolveStore($s);
-    $stores = $s['role'] === 'hq' ? array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly'], 'jibaiOnly' => (bool)$r['jibaiOnly']], Settings::storesInOrder()) : [];
+    // 店舗切り替えに出す店舗：本部＝全店、管轄MG＝管轄エリアの店舗
+    $list = $s['role'] === 'hq' ? Settings::storesInOrder() : ($s['role'] === 'mg' ? Auth::mgStores() : []);
+    $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'] ?? '', 'hqOnly' => (bool)($r['hqOnly'] ?? 0), 'jibaiOnly' => (bool)($r['jibaiOnly'] ?? 0)], $list);
     Http::json([
-        'session' => ['code' => $s['code'], 'role' => $s['role'], 'name' => $s['role'] === 'hq' ? (Auth::account()['name'] ?? '') : '', 'canManage' => $s['role'] === 'hq' && (int)(Auth::account()['canManage'] ?? 0) === 1],
+        'session' => ['code' => $s['code'], 'role' => $s['role'], 'name' => $s['role'] !== 'store' ? (Auth::account()['name'] ?? '') : '', 'canManage' => $s['role'] === 'hq' && (int)(Auth::account()['canManage'] ?? 0) === 1, 'area' => $s['role'] === 'mg' ? (string)(Auth::account()['area'] ?? '') : ''],
         'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active'], 'jibaiOnly' => (bool)($store['jibaiOnly'] ?? 0)] : null,
         'stores' => $stores,
         'today' => Time::nowJst()['date'],

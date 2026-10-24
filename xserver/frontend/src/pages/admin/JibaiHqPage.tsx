@@ -16,10 +16,11 @@ export default function JibaiHqPage() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
   const ymParam = sp.get('ym') ?? '';
-  const { data, error, reload } = useFetch<Resp>(me.session.role === 'hq' ? `/api/admin/hq/jibai?ym=${encodeURIComponent(ymParam)}` : null);
+  const isHq = me.session.role === 'hq'; // 経理アカウントは見るだけ（明細・経理確認と保持期間の設定は本部）
+  const { data, error, reload } = useFetch<Resp>(isHq || me.session.role === 'acct' ? `/api/admin/hq/jibai?ym=${encodeURIComponent(ymParam)}` : null);
   const [days, setDays] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
-  if (me.session.role !== 'hq') return <Navigate to="/admin" replace />;
+  if (!isHq && me.session.role !== 'acct') return <Navigate to="/admin" replace />;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   const { ym, rows, sum } = data;
@@ -82,10 +83,10 @@ export default function JibaiHqPage() {
                 <td className={num}>{r.verifiedCount > 0 ? r.verifiedTotal.toLocaleString('ja-JP') : ''}</td>
                 <td className={`${num} ${r.verifiedCount > 0 && r.verifiedCount === r.count && r.verifiedTotal !== r.total ? 'text-amber-700' : 'text-slate-500'}`}>{r.verifiedCount > 0 && r.verifiedCount === r.count ? (r.verifiedTotal - r.total).toLocaleString('ja-JP') : ''}</td>
                 <td className="whitespace-nowrap px-2 py-1">
-                  <form action="/api/admin/switch" method="post" className="inline">
+                  {isHq && <form action="/api/admin/switch" method="post" className="inline">
                     <input type="hidden" name="store" value={r.code} /><input type="hidden" name="back" value={`/admin/jibai?ym=${ym}`} />
                     <button className="text-brand underline">明細・経理確認</button>
-                  </form>
+                  </form>}
                 </td>
               </tr>
             ))}
@@ -126,7 +127,7 @@ export default function JibaiHqPage() {
             </tbody>
           </table>
         </section>
-        <section className="rounded border bg-white p-4">
+        {isHq && <section className="rounded border bg-white p-4">
           <h2 className="mb-2 font-bold">氏名の保持期間</h2>
           <form onSubmit={saveDays} className="flex flex-wrap items-center gap-2 text-sm">
             <span>対象月の翌月 1 日から</span>
@@ -136,7 +137,7 @@ export default function JibaiHqPage() {
           </form>
           <p className="mt-2 text-xs text-slate-500">患者番号・実日数・金額・確認結果は残り、氏名だけが消えます。住所・生年月日はそもそも読み取らず、保存もしません。毎日の自動削除（Cron）で実行されます。経理の照合が終わるまでの期間より長めにしてください。</p>
           {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1 text-sm">{msg}</p>}
-        </section>
+        </section>}
       </div>
     </div>
   );

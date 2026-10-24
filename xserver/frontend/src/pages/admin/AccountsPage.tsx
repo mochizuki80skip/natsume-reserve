@@ -3,8 +3,9 @@ import { useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { useAdmin } from './Layout';
 
-interface Account { id: string; code: string; name: string; active: boolean; canManage: boolean; lastLoginAt: string; owner: boolean }
-interface Resp { accounts: Account[]; me: { id: string; canManage: boolean } }
+interface Account { id: string; code: string; name: string; role: 'hq' | 'mg' | 'acct'; area: string; active: boolean; canManage: boolean; lastLoginAt: string; owner: boolean }
+interface Resp { accounts: Account[]; me: { id: string; canManage: boolean }; areas: string[] }
+const ROLE_JA = { hq: '本部', mg: '管轄MG', acct: '経理' } as const;
 interface AuditRow { at: string; actor: string; store: string; action: string; detail: string; ok: boolean }
 
 async function send(method: string, body: object) {
@@ -17,7 +18,7 @@ export default function AccountsPage() {
   const { me } = useAdmin();
   const { data, error, reload } = useFetch<Resp>('/api/admin/hq/accounts');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [f, setF] = useState({ code: '', name: '', password: '', canManage: false });
+  const [f, setF] = useState({ code: '', name: '', password: '', canManage: false, role: 'hq' as Account['role'], area: '' });
   if (me.session.role !== 'hq') return <p>本部アカウントでログインしてください。</p>;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
@@ -32,14 +33,15 @@ export default function AccountsPage() {
     e.preventDefault();
     const r = await send('POST', f);
     setMsg({ ok: r.ok, text: r.ok ? `「${f.name}」さんのアカウント（ID：${f.code}）を発行しました。ID とパスワードを本人に伝えてください。` : r.error });
-    if (r.ok) { setF({ code: '', name: '', password: '', canManage: false }); reload(); }
+    if (r.ok) { setF({ code: '', name: '', password: '', canManage: false, role: 'hq', area: '' }); reload(); }
   }
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold">本部アカウント</h1>
-        <p className="text-sm text-slate-600">MG以上の本部メンバーは、一人ずつ自分のアカウントでログインします（ログイン画面で ID とパスワード）。できることは全員同じ（全店の閲覧・設定・集計）です。
+        <h1 className="text-xl font-bold">本部・管轄MG・経理のアカウント</h1>
+        <p className="text-sm text-slate-600">一人ずつ自分のアカウントでログインします（ログイン画面で ID とパスワード）。
+          <b>本部</b>＝全店の閲覧・設定・集計、<b>管轄MG</b>＝管轄エリアの店舗で店舗アカウントと同じこと（エリアの店舗が増えれば自動で増えます）、<b>経理</b>＝窓口集計・自賠集計を見る・Excel で保存・経理確認（予約表などは見えません）。
           {can ? '「発行・停止の権限」がある人だけが、この画面でアカウントを発行・停止できます。' : 'アカウントの発行・停止は、権限がある人（HQ・部長クラスなど）に依頼してください。'}</p>
       </div>
       {msg && <p className={`rounded px-3 py-2 text-sm ${msg.ok ? 'bg-brand-light text-brand-dark' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
@@ -47,7 +49,7 @@ export default function AccountsPage() {
       <div className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500">
-            <tr><th className="px-3 py-2 text-left">名前</th><th className="px-3 py-2 text-left">ID</th><th className="px-3 py-2 text-left">状態</th><th className="px-3 py-2 text-left">発行・停止の権限</th><th className="px-3 py-2 text-left">最終ログイン</th>{can && <th className="px-3 py-2 text-left">操作</th>}</tr>
+            <tr><th className="px-3 py-2 text-left">名前</th><th className="px-3 py-2 text-left">ID</th><th className="px-3 py-2 text-left">種類</th><th className="px-3 py-2 text-left">状態</th><th className="px-3 py-2 text-left">発行・停止の権限</th><th className="px-3 py-2 text-left">最終ログイン</th>{can && <th className="px-3 py-2 text-left">操作</th>}</tr>
           </thead>
           <tbody>
             {data.accounts.map((a) => (
@@ -57,9 +59,17 @@ export default function AccountsPage() {
                   {a.id === data.me.id && <span className="ml-1 rounded bg-brand-light px-1 text-[10px] text-brand-dark">自分</span>}
                 </td>
                 <td className="px-3 py-2 font-mono">{a.code}{a.owner && <span className="ml-1 text-[10px] text-slate-500">（管理者）</span>}</td>
+                <td className="px-3 py-2">
+                  {ROLE_JA[a.role]}
+                  {a.role === 'mg' && (can
+                    ? <select value={a.area} onChange={(e) => act({ id: a.id, area: e.target.value }, '管轄エリアを変えました')} aria-label="管轄エリア" className="ml-1 rounded border px-1 py-0.5 text-xs">
+                      {[...new Set([a.area, ...data.areas])].map((x) => <option key={x} value={x}>{x || '（未設定）'}</option>)}
+                    </select>
+                    : <span className="ml-1 text-xs">（{a.area}）</span>)}
+                </td>
                 <td className="px-3 py-2">{a.active ? <span className="text-green-700">利用中</span> : <span>停止中</span>}</td>
                 <td className="px-3 py-2">
-                  {can && !a.owner && a.id !== data.me.id
+                  {a.role !== 'hq' ? '－' : can && !a.owner && a.id !== data.me.id
                     ? <label className="inline-flex cursor-pointer items-center gap-1"><input type="checkbox" checked={a.canManage} onChange={(e) => act({ id: a.id, canManage: e.target.checked }, e.target.checked ? '権限を付けました' : '権限を外しました')} />{a.canManage ? 'あり' : 'なし'}</label>
                     : a.canManage ? 'あり' : 'なし'}
                 </td>
@@ -86,7 +96,20 @@ export default function AccountsPage() {
             <label className="text-xs">名前<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required maxLength={30} placeholder="例）山田 MG" className="mt-0.5 block w-36 rounded border px-2 py-1 text-sm" /></label>
             <label className="text-xs">ID（英数字）<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required pattern="[A-Za-z0-9_\-]{2,20}" placeholder="例）yamada" className="mt-0.5 block w-32 rounded border px-2 py-1 font-mono text-sm" /></label>
             <label className="text-xs">初期パスワード（8文字以上）<input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} className="mt-0.5 block w-40 rounded border px-2 py-1 text-sm" /></label>
-            <label className="flex items-center gap-1 pb-1.5 text-xs"><input type="checkbox" checked={f.canManage} onChange={(e) => setF({ ...f, canManage: e.target.checked })} />発行・停止の権限を付ける</label>
+            <label className="text-xs">種類
+              <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Account['role'], canManage: false })} aria-label="アカウントの種類" className="mt-0.5 block rounded border px-2 py-1 text-sm">
+                <option value="hq">本部</option><option value="mg">管轄MG</option><option value="acct">経理</option>
+              </select>
+            </label>
+            {f.role === 'mg' && (
+              <label className="text-xs">管轄エリア
+                <select value={f.area} onChange={(e) => setF({ ...f, area: e.target.value })} required aria-label="管轄エリア" className="mt-0.5 block rounded border px-2 py-1 text-sm">
+                  <option value="">選んでください</option>
+                  {data.areas.map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </label>
+            )}
+            {f.role === 'hq' && <label className="flex items-center gap-1 pb-1.5 text-xs"><input type="checkbox" checked={f.canManage} onChange={(e) => setF({ ...f, canManage: e.target.checked })} />発行・停止の権限を付ける</label>}
             <button type="submit" className="rounded bg-brand px-4 py-1.5 font-bold text-white">発行</button>
           </div>
           <p className="mt-2 text-xs text-slate-500">本人は、店舗設定の「パスワード変更」から自分のパスワードに変えられます。異動・退職のときは「停止」してください（記録は残ります）。</p>
@@ -109,7 +132,7 @@ function Audit() {
         <label className="ml-auto flex items-center gap-1 text-xs">操作した人
           <select value={account} onChange={(e) => setAccount(e.target.value)} className="rounded border px-2 py-1 text-sm">
             <option value="">全員</option>
-            {actors.some((a) => a.hq) && <optgroup label="本部">{actors.filter((a) => a.hq).map((a) => <option key={a.id} value={a.id}>{a.label}（{a.count}件）</option>)}</optgroup>}
+            {actors.some((a) => a.hq) && <optgroup label="本部・管轄MG・経理">{actors.filter((a) => a.hq).map((a) => <option key={a.id} value={a.id}>{a.label}（{a.count}件）</option>)}</optgroup>}
             {actors.some((a) => !a.hq) && <optgroup label="店舗">{actors.filter((a) => !a.hq).map((a) => <option key={a.id} value={a.id}>{a.label}（{a.count}件）</option>)}</optgroup>}
           </select>
         </label>

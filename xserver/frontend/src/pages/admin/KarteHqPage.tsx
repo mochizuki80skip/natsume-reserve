@@ -34,6 +34,15 @@ type Bucket = { label: string; from: string; to: string; title: string };
 export default function KarteHqPage() {
   const { me } = useAdmin();
   const [tab, setTab] = useState<'sum' | 'settings'>('sum');
+  // 管轄MG：管轄エリアの店舗の集計（全体＝エリアの合計・店舗ごと。選択肢の設定はなし）
+  if (me.session.role === 'mg') {
+    return (
+      <div>
+        <h1 className="mb-3 text-lg font-bold">新患・再来 集計（{me.session.area}）</h1>
+        <Summary />
+      </div>
+    );
+  }
   // 店舗アカウント：自店舗だけの集計（対象の切替・選択肢の設定はなし）
   if (me.session.role !== 'hq') {
     return (
@@ -135,7 +144,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border bg-white px-3 py-2 text-sm">
         {!storeOnly && <span>対象</span>}
-        {!storeOnly && <Seg value={target} onChange={(v) => setTarget(v as typeof target)} items={[['all', '全体'], ['area', 'エリア'], ['store', '店舗']]} />}
+        {!storeOnly && <Seg value={target} onChange={(v) => setTarget(v as typeof target)} items={data.areas.length ? [['all', '全体'], ['area', 'エリア'], ['store', '店舗']] : [['all', '全体'], ['store', '店舗']]} />}
         {target === 'area' && (data.areas.length
           ? <select value={areaIdx} onChange={(e) => setAreaIdx(Number(e.target.value))} className="rounded border px-2 py-1">{data.areas.map((a, i) => <option key={i} value={i}>{a.name}（{a.stores.length}店舗）</option>)}</select>
           : <span className="text-xs text-slate-500">エリアは「選択肢・エリアの設定」で作れます</span>)}

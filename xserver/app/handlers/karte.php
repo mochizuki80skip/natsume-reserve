@@ -134,6 +134,11 @@ function hq_karte_get(): never
     if ($s['role'] === 'hq') {
         $stores = Settings::storesInOrder('1 = 1', [], false);
         $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
+    } elseif ($s['role'] === 'mg') {
+        // 管轄MG：管轄エリアの店舗の合計
+        $stores = Auth::mgStores();
+        $ids = array_column($stores, 'id') ?: [''];
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE storeId IN (' . Db::inList($ids) . ') AND date BETWEEN ? AND ?', array_merge($ids, [$from, $to]));
     } else {
         $own = Auth::context()['store'];
         $stores = [['id' => $own['id'], 'code' => $own['code'], 'name' => $own['name'], 'active' => $own['active']]];

@@ -4,6 +4,7 @@ import HqClient from '@/components/HqClient';
 import StoresPageEditor, { type ListingStore } from '@/components/StoresPageEditor';
 import ReferralEditor from '@/components/ReferralEditor';
 import PrivacyEditor from '@/components/PrivacyEditor';
+import GoodsEditor from '@/components/GoodsEditor';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -25,6 +26,7 @@ export default function HqPage() {
       <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} kind="media" />
+      <GoodsEditor />
       <PrivacyEditor />
     </>
   );

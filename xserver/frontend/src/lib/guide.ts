@@ -261,6 +261,19 @@ export const GUIDE: GuideArticle[] = [
     words: '自賠責 交通事故 請求書 スクショ',
   },
   {
+    id: 'madoguchi', cat: 'そのほかの画面', title: '窓口集計（月間窓口表・物販内訳・返戻）',
+    lead: '今までのスプレッドシートの「月間窓口表」「物販内訳表」「返戻」と同じものを、日ごとに入れる画面です。経理は月ごとに全店を確認します。',
+    steps: [
+      { text: '上のメニューの「**窓口集計**」を開き、月を選びます。' },
+      { text: '**月間窓口表**：その日の一部負担金・自費・鍼・物販・報告メール合計・通帳入金額などを入れます。一部負担金合計・自費＋鍼・合計は自動で計算されます。「金額を一致させてください」の 3 つが合わない日は**赤**になります。' },
+      { text: '**物販内訳**：商品ごとの個数を入れると、販売合計・利益・月末の在庫が出ます（商品と価格は本部が決めます）。月初の在庫も入れます。' },
+      { text: '**返戻**：月内にあった返戻を「＋ 行を追加」で入れます（毎月 10 日までに）。特殊返戻は下の表です。' },
+      { text: '月末に「月遅れ請求・労災・当月請求」と備考を入れます。「Excel で保存」で書き出せます。' },
+    ],
+    tips: ['全角の数字で打っても半角で入ります。', '経理が確認したあとに直すと、経理の画面に「確認後に変更あり」と出ます。', '売上＝窓口の合計＋保険請求＋自賠責請求（日々の入力）で、本部が入れた売上目標と比べて達成率が出ます。'],
+    related: ['jibai'], words: '窓口 売上 物販 返戻 経理 入金 通帳 報告メール 目標',
+  },
+  {
     id: 'settings', cat: 'そのほかの画面', title: '店舗設定',
     lead: '店舗の情報・スタッフ・患者一覧・特別な営業日・URL などを設定します。',
     steps: [
@@ -301,6 +314,7 @@ export const GUIDE_FOR_SCREEN: { prefix: string; label: string; ids: string[] }[
   { prefix: '/admin/karte', label: '新患継続率', ids: ['karte', 'visit'] },
   { prefix: '/admin/staff-counts', label: '担当数', ids: ['staffcounts', 'staff'] },
   { prefix: '/admin/jibai', label: '自賠請求', ids: ['jibai'] },
+  { prefix: '/admin/madoguchi', label: '窓口集計', ids: ['madoguchi'] },
   { prefix: '/admin/settings', label: '店舗設定', ids: ['settings', 'publish', 'cardno'] },
 ];
 

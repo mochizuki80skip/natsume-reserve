@@ -173,7 +173,7 @@ function jibai_verify(): never
 /** 本部：指定月の店舗別合計と全社合計 */
 function hq_jibai(): never
 {
-    Auth::requireHq();
+    Auth::requireHqOrAcct(); // 経理アカウントも見られる（経理確認は今までどおり本部）
     Jibai::ensureTables();
     $ym = Http::query('ym', '');
     if (!Jibai::isValidYm($ym)) $ym = Jibai::currentYm();

@@ -39,7 +39,7 @@ final class Auth
         $j = json_decode(base64_decode(strtr($payload, '-_', '+/')), true);
         if (!is_array($j) || !isset($j['accountId'], $j['role'], $j['exp'])) return null;
         if ($j['exp'] < time()) return null;
-        if ($j['role'] !== 'store' && $j['role'] !== 'hq') return null;
+        if (!in_array($j['role'], ['store', 'hq', 'mg', 'acct'], true)) return null;
         return ['accountId' => (string)$j['accountId'], 'role' => $j['role'], 'storeId' => isset($j['storeId']) ? (string)$j['storeId'] : null, 'code' => (string)($j['code'] ?? ''), 'exp' => (int)$j['exp']];
     }
 
@@ -73,8 +73,8 @@ final class Auth
     {
         $s = self::session();
         if (!$s) throw new HttpError(401, 'unauthorized');
-        // 本部アカウントは毎回、停止されていないか確かめる（停止したら次の操作から使えなくする）
-        if ($s['role'] === 'hq' && !self::account()) throw new HttpError(401, 'unauthorized');
+        // 本部・管轄MG・経理のアカウントは毎回、停止されていないか確かめる（停止したら次の操作から使えなくする）
+        if ($s['role'] !== 'store' && !self::account()) throw new HttpError(401, 'unauthorized');
         // 使っている間はログインを延長する（最後の延長から 1 時間たったら有効期限を 12 時間先に延ばす）
         if (($s['exp'] ?? 0) - time() < self::MAX_AGE - 3600 && !headers_sent()) {
             self::setSessionCookie(['accountId' => $s['accountId'], 'role' => $s['role'], 'storeId' => $s['storeId'], 'code' => $s['code']]);
@@ -82,13 +82,13 @@ final class Auth
         return $s;
     }
 
-    /** ログイン中の本部アカウント（停止中・存在しないときは null） */
+    /** ログイン中の本部・管轄MG・経理のアカウント（停止中・存在しないときは null） */
     public static function account(): ?array
     {
         if (self::$account !== null) return self::$account ?: null;
         $s = self::session();
-        $a = $s ? Db::one('SELECT id, code, name, role, active, canManage FROM admin_account WHERE id = ?', [$s['accountId']]) : null;
-        $ok = $a && (int)$a['active'] === 1 && $a['role'] === 'hq';
+        $a = $s ? Db::one('SELECT id, code, name, role, active, canManage, area FROM admin_account WHERE id = ?', [$s['accountId']]) : null;
+        $ok = $a && (int)$a['active'] === 1 && $a['role'] !== 'store' && $a['role'] === $s['role'];
         self::$account = $ok ? $a : [];
         return $ok ? $a : null;
     }
@@ -108,6 +108,34 @@ final class Auth
         return $s;
     }
 
+    /** 本部か経理（自賠集計・窓口集計の全店の確認） */
+    public static function requireHqOrAcct(): array
+    {
+        $s = self::requireSession();
+        if ($s['role'] !== 'hq' && $s['role'] !== 'acct') throw new HttpError(403, 'forbidden');
+        return $s;
+    }
+
+    /** 管轄MG が開ける店舗（管轄エリアの店舗。エリアの店舗が増えれば自動で増える） */
+    public static function mgStores(): array
+    {
+        $area = (string)(self::account()['area'] ?? '');
+        $a = $area !== '' ? Db::one('SELECT storeCodes FROM area WHERE name = ?', [$area]) : null;
+        $codes = $a ? array_values(array_filter(explode(',', (string)$a['storeCodes']))) : [];
+        if (!$codes) return [];
+        return Settings::storesInOrder('code IN (' . Db::inList($codes) . ') AND hqOnly = 0', $codes);
+    }
+
+    /** そのアカウントが開ける店舗（本部・経理＝全店、管轄MG＝エリアの店舗、店舗＝自店舗） */
+    public static function canOpenStore(array $session, array $store): bool
+    {
+        return match ($session['role']) {
+            'hq', 'acct' => true,
+            'mg' => in_array($store['code'], array_column(self::mgStores(), 'code'), true),
+            default => $store['id'] === $session['storeId'],
+        };
+    }
+
     /** 操作対象の店舗。本部は Cookie（店舗切替）で選んだ店舗、無ければ先頭の稼働店舗 */
     public static function resolveStore(array $session): ?array
     {
@@ -119,6 +147,13 @@ final class Auth
             return self::$store = ($st && (int)($st['hqOnly'] ?? 0)) ? null : $st;
         }
         $code = $_COOKIE[self::STORE_COOKIE] ?? '';
+        if ($session['role'] === 'acct') return self::$store = null; // 経理は店舗の画面を使わない
+        if ($session['role'] === 'mg') {
+            // 管轄MG：切り替えた店舗が管轄エリアにあればその店舗、なければエリアの先頭の店舗
+            $mine = self::mgStores();
+            foreach ($mine as $st) if ($st['code'] === $code) return self::$store = Db::one('SELECT * FROM store WHERE id = ?', [$st['id']]);
+            return self::$store = $mine ? Db::one('SELECT * FROM store WHERE id = ?', [$mine[0]['id']]) : null;
+        }
         if ($code !== '') {
             $s = Db::one('SELECT * FROM store WHERE code = ?', [$code]);
             if ($s) return self::$store = $s;
@@ -130,8 +165,9 @@ final class Auth
     public static function context(): array
     {
         $s = self::requireSession();
+        if ($s['role'] === 'acct') throw new HttpError(403, 'この画面は経理アカウントでは使えません');
         $store = self::resolveStore($s);
-        if (!$store) throw new HttpError(404, '店舗が登録されていません');
+        if (!$store) throw new HttpError(404, $s['role'] === 'mg' ? '管轄エリアに店舗がありません（本部に確認してください）' : '店舗が登録されていません');
         return ['session' => $s, 'store' => $store];
     }
 }

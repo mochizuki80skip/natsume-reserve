@@ -34,7 +34,7 @@ function DropMenu({ label, plain, children }: { label: string; plain?: boolean; 
 export default function AdminLayout() {
   const location = useLocation();
   // 表の幅が広い画面（新患継続率・本部の集計）は横幅いっぱいに使う
-  const wide = location.pathname.startsWith('/admin/karte') || location.pathname.startsWith('/admin/hq/karte');
+  const wide = /^\/admin\/(karte|hq\/karte|madoguchi|acct)/.test(location.pathname);
   const { data: me, error, loading, reload } = useFetch<Me>('/api/admin/me');
   useEffect(() => {
     if (error && error.status === 401) goLogin();
@@ -44,15 +44,20 @@ export default function AdminLayout() {
   const store = me.store;
   const today = me.today;
   // 自賠請求だけに使う店舗では、予約表などの画面は開かず自賠請求へ（本部のページはそのまま）
-  if (store?.jibaiOnly && !/^\/admin\/(jibai|hq|updates|guide)/.test(location.pathname)) return <Navigate to="/admin/jibai" replace />;
+  if (store?.jibaiOnly && me.session.role !== 'acct' && !/^\/admin\/(jibai|hq|updates|guide)/.test(location.pathname)) return <Navigate to="/admin/jibai" replace />;
+  // 経理アカウント：窓口集計・自賠集計だけ（予約表などの店舗の画面は開かない）
+  const acct = me.session.role === 'acct';
+  if (acct && !/^\/admin\/(acct|madoguchi|hq\/jibai|updates|guide)/.test(location.pathname)) return <Navigate to="/admin/acct" replace />;
   return (
     <div className="min-h-screen">
       <UpdateBanner role={me.session.role} />
       <WhatsNew role={me.session.role} />
       <header className="no-print border-b bg-white">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap px-3 py-1.5">
-          <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
-          {me.session.role === 'hq' && (
+          <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' || acct ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
+          {me.session.role === 'mg' && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">管轄MG（{me.session.area}）</span>}
+          {acct && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">経理</span>}
+          {(me.session.role === 'hq' || me.session.role === 'mg') && (
             <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
               <input type="hidden" name="back" value={location.pathname + location.search} />
               <select name="store" defaultValue={store?.code ?? ''} className="rounded border px-2 py-1">
@@ -67,7 +72,10 @@ export default function AdminLayout() {
             </form>
           )}
           <nav className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
-            {store?.jibaiOnly ? (
+            {acct ? (<>
+              <Link to="/admin/acct" className="hover:underline">窓口集計（全店）</Link>
+              <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>
+            </>) : store?.jibaiOnly ? (
               // 自賠請求だけに使う店舗：メニューは自賠請求だけ
               <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
             ) : (<>
@@ -78,13 +86,16 @@ export default function AdminLayout() {
               {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
               <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
               <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
+              <Link to="/admin/madoguchi" className="hover:underline">窓口集計</Link>
               <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
+              {me.session.role === 'mg' && <Link to="/admin/acct" className="hover:underline">エリアの窓口集計</Link>}
             </>)}
             {me.session.role === 'hq' && (
               <DropMenu label="本部メニュー">
                 <Link to="/admin/hq/overview">全店状況</Link>
                 <Link to="/admin/hq/karte">新患・再来集計（全店）</Link>
                 <Link to="/admin/hq/jibai">自賠集計</Link>
+                <Link to="/admin/acct">窓口集計（全店）</Link>
                 <Link to="/admin/hq">本部（店舗・設定）</Link>
                 <Link to="/admin/hq/accounts">アカウント</Link>
               </DropMenu>
@@ -92,9 +103,9 @@ export default function AdminLayout() {
             {/* 使い方：開いていた画面の記事を上に出す */}
             <Link to={location.pathname.startsWith('/admin/guide') ? location.pathname + location.search : `/admin/guide?from=${encodeURIComponent(location.pathname + location.search)}`} className="hover:underline">使い方</Link>
             <DropMenu label="その他" plain>
-              {!store?.jibaiOnly && <Link to="/admin/story">ストーリー画像</Link>}
+              {!store?.jibaiOnly && !acct && <Link to="/admin/story">ストーリー画像</Link>}
               <Link to="/admin/updates">更新のお知らせ</Link>
-              {store && !store.jibaiOnly && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer">顧客ページ↗</a>}
+              {store && !store.jibaiOnly && !acct && <a href={`/s/${store.code}`} target="_blank" rel="noreferrer">顧客ページ↗</a>}
               <form action="/api/admin/logout" method="post" className="mt-1 border-t pt-1"><button className="w-full px-3 py-1.5 text-left hover:bg-brand-light">ログアウト{me.session.name ? `（${me.session.name}）` : ''}</button></form>
             </DropMenu>
           </nav>

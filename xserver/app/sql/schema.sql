@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS `admin_account` (
   `name` VARCHAR(30) NOT NULL DEFAULT '',      -- 本部アカウントの使用者名
   `active` TINYINT(1) NOT NULL DEFAULT 1,      -- 0＝停止（ログインできない）
   `canManage` TINYINT(1) NOT NULL DEFAULT 0,   -- 1＝本部アカウントの発行・停止ができる
+  `area` VARCHAR(40) NULL,                     -- 管轄MG（role = mg）の管轄エリアの名前
   `lastLoginAt` DATETIME NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -331,4 +332,62 @@ CREATE TABLE IF NOT EXISTS `audit_log` (
   `status` INT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `audit_at` (`at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 窓口集計（日ごとの入力・月の欄と経理確認・返戻・物販の商品）
+CREATE TABLE IF NOT EXISTS `madoguchi_day` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `vals` TEXT NOT NULL,
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`storeId`, `date`),
+  CONSTRAINT `fk_madoguchi_day_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `madoguchi_month` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `ym` CHAR(7) NOT NULL,
+  `target` INT NULL,
+  `extra` TEXT NULL,
+  `memo` TEXT NULL,
+  `goods` TEXT NULL,
+  `stockStart` TEXT NULL,
+  `editedAt` DATETIME NULL,
+  `checkedAt` DATETIME NULL,
+  `checkedBy` VARCHAR(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`storeId`, `ym`),
+  CONSTRAINT `fk_madoguchi_month_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `madoguchi_henrei` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `ym` CHAR(7) NOT NULL,
+  `special` TINYINT(1) NOT NULL DEFAULT 0,
+  `treatYm` VARCHAR(20) NOT NULL DEFAULT '',
+  `claimMonth` VARCHAR(20) NOT NULL DEFAULT '',
+  `patient` VARCHAR(40) NOT NULL DEFAULT '',
+  `relation` VARCHAR(10) NOT NULL DEFAULT '',
+  `insurer` VARCHAR(60) NOT NULL DEFAULT '',
+  `insurerCode` VARCHAR(20) NOT NULL DEFAULT '',
+  `amount` INT NULL,
+  `reamount` INT NULL,
+  `place` VARCHAR(60) NOT NULL DEFAULT '',
+  `action` VARCHAR(20) NOT NULL DEFAULT '',
+  `reason` VARCHAR(100) NOT NULL DEFAULT '',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `madoguchi_henrei_store_ym` (`storeId`, `ym`),
+  CONSTRAINT `fk_madoguchi_henrei_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `goods_item` (
+  `id` VARCHAR(32) NOT NULL,
+  `name` VARCHAR(40) NOT NULL,
+  `price` INT NOT NULL DEFAULT 0,
+  `cost` INT NOT NULL DEFAULT 0,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

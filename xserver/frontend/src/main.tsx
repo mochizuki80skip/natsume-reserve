@@ -34,6 +34,8 @@ function OldCalendar() {
 }
 import UpdatesPage from './pages/admin/UpdatesPage';
 import GuidePage from './pages/admin/GuidePage';
+import MadoguchiPage from './pages/admin/MadoguchiPage';
+import AcctPage from './pages/admin/AcctPage';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -64,6 +66,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="hq/accounts" element={<AccountsPage />} />
           <Route path="updates" element={<UpdatesPage />} />
           <Route path="guide" element={<GuidePage />} />
+          <Route path="madoguchi" element={<MadoguchiPage />} />
+          <Route path="acct" element={<AcctPage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />
