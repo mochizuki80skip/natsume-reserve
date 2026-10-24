@@ -7,6 +7,7 @@ import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, parseMd, type D
 import KarteRetention, { type RetRow } from '@/components/KarteRetention';
 import KarteImportDialog from '@/components/KarteImportDialog';
 import { nameCheck } from '@/lib/nameText';
+import { halfNum, halfNumInput } from '@/lib/format';
 import { useAdmin } from './Layout';
 
 interface Resp { month: string; today: string; storeName: string; rows: KarteRow[]; options: KarteOptions; detailFor: DetailFor; staff: string[] }
@@ -29,10 +30,12 @@ function Sel({ value, options, onChange, className = '', blank = '', label }: { 
   );
 }
 
-function Txt({ value, onSave, className = '', label, inputMode, maxLength, align = 'center' }: { value: string; onSave: (v: string) => void; className?: string; label: string; inputMode?: 'numeric'; maxLength?: number; align?: 'left' | 'center' }) {
+/** half：全角の数字で打っても半角で入れる（カルテNo・年齢） */
+function Txt({ value, onSave, className = '', label, inputMode, maxLength, align = 'center', half }: { value: string; onSave: (v: string) => void; className?: string; label: string; inputMode?: 'numeric'; maxLength?: number; align?: 'left' | 'center'; half?: boolean }) {
   return (
     <input key={value} defaultValue={value} aria-label={label} inputMode={inputMode} maxLength={maxLength}
-      onBlur={(e) => e.target.value.trim() !== value && onSave(e.target.value.trim())}
+      {...(half ? { onInput: (e: React.FormEvent<HTMLInputElement>) => { if (!(e.nativeEvent as InputEvent).isComposing) halfNumInput(e.currentTarget); }, onCompositionEnd: (e: React.CompositionEvent<HTMLInputElement>) => halfNumInput(e.currentTarget) } : {})}
+      onBlur={(e) => { const v = (half ? halfNum(e.target.value) : e.target.value).trim(); if (half) e.target.value = v; if (v !== value) onSave(v); }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
       className={`${cellBase} ${align === 'left' ? 'text-left' : ''} ${className}`} />
   );
@@ -41,8 +44,9 @@ function Txt({ value, onSave, className = '', label, inputMode, maxLength, align
 function DateTxt({ value, base, onSave, label }: { value: string; base: string; onSave: (iso: string) => void; label: string }) {
   const [bad, setBad] = useState(false);
   return (
-    <input key={value} defaultValue={md(value)} aria-label={label} placeholder="" title="例）9/5 または 0905"
-      onBlur={(e) => { const iso = parseMd(e.target.value, base); if (iso === null) { setBad(true); return; } setBad(false); if (iso !== value) onSave(iso); }}
+    <input key={value} defaultValue={md(value)} aria-label={label} placeholder="" title="例）9/5 または 0905（全角でも可）"
+      onInput={(e) => { if (!(e.nativeEvent as InputEvent).isComposing) halfNumInput(e.currentTarget); }} onCompositionEnd={(e) => halfNumInput(e.currentTarget)}
+      onBlur={(e) => { halfNumInput(e.target); const iso = parseMd(e.target.value, base); if (iso === null) { setBad(true); return; } setBad(false); if (iso !== value) onSave(iso); else e.target.value = md(value); }}
       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
       className={`${cellBase} ${bad ? 'bg-red-200' : ''}`} />
   );
@@ -86,7 +90,7 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
   return (
     <tr className="hover:bg-sky-50/40">
       <td className={`border ${autoCls}`}><DateTxt value={row.date} base={row.date} onSave={(v) => v && p({ date: v })} label="日付" /></td>
-      <td className={`border ${e('karteNo')}`}><Txt value={row.karteNo} onSave={(v) => p({ karteNo: v })} label="カルテNo" maxLength={20} /></td>
+      <td className={`border ${e('karteNo')}`}><Txt value={row.karteNo} onSave={(v) => p({ karteNo: v })} label="カルテNo" maxLength={20} half /></td>
       <td className={`border ${isRe ? 'bg-sky-50' : ''} ${e('trig')}`}>
         <Sel value={row.trig} options={isRe ? data.options.revisitAction : data.options.trigger} label={isRe ? '再来アクション' : 'きっかけ'}
           onChange={(v) => p({ trig: v, ...(v in data.detailFor || !row.trigDetail ? {} : { trigDetail: '' }) })} />
@@ -103,7 +107,7 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
           {(['NEW', 'ACCIDENT', 'REVISIT'] as KarteKind[]).map((k) => <option key={k} value={k} className="bg-white text-slate-900">{KIND_LABEL[k]}</option>)}
         </select>
       </td>
-      <td className={`border ${e('age')}`}><Txt value={row.age === null ? '' : String(row.age)} onSave={(v) => p({ age: v === '' ? null : (v as unknown as number) })} label="年齢" inputMode="numeric" maxLength={3} /></td>
+      <td className={`border ${e('age')}`}><Txt value={row.age === null ? '' : String(row.age)} onSave={(v) => p({ age: v === '' ? null : (v as unknown as number) })} label="年齢" inputMode="numeric" maxLength={3} half /></td>
       <td className={`border ${row.sex === '♂' ? 'bg-[#2a78d6] text-white' : row.sex === '♀' ? 'bg-[#e34948] text-white' : e('sex')}`}>
         <select value={row.sex} onChange={(ev) => p({ sex: ev.target.value })} aria-label="性別" className={`${cellBase} appearance-none`}>
           <option value="" /><option value="♂" className="bg-white text-slate-900">♂</option><option value="♀" className="bg-white text-slate-900">♀</option>

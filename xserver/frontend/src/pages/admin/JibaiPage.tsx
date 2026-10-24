@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, formatYmWithEra, LOG_ACTION_JA, ymOptions, yen, type JibaiClaim, type JibaiLog, type JibaiMonth } from '@/lib/jibai';
+import { halfNum } from '@/lib/format';
 import { readInvoiceImage, warmUpOcr, type InvoiceReadResult, type OcrProgress } from '@/lib/jibaiOcr';
 import JibaiSizeGuide from '@/components/JibaiSizeGuide';
 import { useAdmin } from './Layout';
@@ -332,7 +333,7 @@ export default function JibaiPage() {
               return (
                 <tr key={r.key} className={`border-t align-top ${r.dirty || !r.id ? 'bg-yellow-50' : ''}`}>
                   <td className="px-2 py-1 text-xs text-slate-500">{i + 1}{(r.dirty || !r.id) && <span className="ml-1 rounded bg-yellow-200 px-1 text-[10px] text-yellow-900">未保存</span>}</td>
-                  <td className="px-2 py-1"><input value={r.patientNo} disabled={!editable} onChange={(e) => update(r.key, { patientNo: e.target.value })} className={`${inputCls} w-28 font-mono ${dup ? 'border-amber-500' : ''}`} placeholder="003862a" />{dup && <div className="text-[11px] text-amber-700">同じ番号が複数あります</div>}</td>
+                  <td className="px-2 py-1"><input value={r.patientNo} disabled={!editable} onChange={(e) => update(r.key, { patientNo: halfNum(e.target.value) })} className={`${inputCls} w-28 font-mono ${dup ? 'border-amber-500' : ''}`} placeholder="003862a" />{dup && <div className="text-[11px] text-amber-700">同じ番号が複数あります</div>}</td>
                   <td className="px-2 py-1"><input value={r.patientName} disabled={!editable} onChange={(e) => update(r.key, { patientName: e.target.value })} className={`${inputCls} w-36`} placeholder="氏名" /></td>
                   <td className="px-2 py-1">
                     <select value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} aria-label="請求月" title="請求書に印字された「令和 年 月」" className={`${inputCls} min-w-[11.5rem] ${!r.invoiceYm ? 'border-2 border-red-500 bg-red-50' : r.invoiceYm !== ym ? 'border-amber-500' : ''}`}>
@@ -346,8 +347,8 @@ export default function JibaiPage() {
                       <div className="text-[11px] font-bold text-red-700">{r.ocr ? '請求月を読み取れませんでした。' : ''}何年何月分かを選んでください<br /><button type="button" disabled={!editable} onClick={() => update(r.key, { invoiceYm: ym })} className="font-normal underline">{formatYm(ym)} 分にする</button></div>
                     )}
                   </td>
-                  <td className="px-2 py-1"><input value={r.days} disabled={!editable} onChange={(e) => update(r.key, { days: e.target.value })} inputMode="numeric" className={`${inputCls} w-14 text-right`} /></td>
-                  <td className="px-2 py-1"><input value={r.amount} disabled={!editable || lockAmount} onChange={(e) => update(r.key, { amount: e.target.value.replace(/[^\d]/g, '') })} inputMode="numeric" className={`${inputCls} w-28 text-right font-bold tabular-nums`} />{r.amount !== '' && <div className="text-right text-[11px] text-slate-500">{yen(Number(r.amount))}</div>}</td>
+                  <td className="px-2 py-1"><input value={r.days} disabled={!editable} onChange={(e) => update(r.key, { days: halfNum(e.target.value) })} inputMode="numeric" className={`${inputCls} w-14 text-right`} /></td>
+                  <td className="px-2 py-1"><input value={r.amount} disabled={!editable || lockAmount} onChange={(e) => update(r.key, { amount: halfNum(e.target.value).replace(/[^\d]/g, '') })} inputMode="numeric" className={`${inputCls} w-28 text-right font-bold tabular-nums`} />{r.amount !== '' && <div className="text-right text-[11px] text-slate-500">{yen(Number(r.amount))}</div>}</td>
                   <td className="px-2 py-1 text-xs">
                     {r.ocr ? (
                       <div className="space-y-1">
@@ -419,7 +420,7 @@ function VerifyCell({ row, onVerify }: { row: Row; onVerify: (verifiedAmount: nu
         <div className="text-green-700">✓ 確定 {yen(saved.verifiedAmount)}{diff !== 0 && diff !== null && <span className="ml-1 text-amber-700">（差 {diff > 0 ? '+' : ''}{diff.toLocaleString('ja-JP')}円）</span>}<span className="ml-1 text-slate-400">{saved.verifiedBy} {formatDateTime(saved.verifiedAt)}</span></div>
       )}
       <div className="flex items-center gap-1">
-        <input value={v} onChange={(e) => setV(e.target.value.replace(/[^\d]/g, ''))} inputMode="numeric" className="w-24 rounded border px-1 py-0.5 text-right tabular-nums" placeholder="確定金額" />
+        <input value={v} onChange={(e) => setV(halfNum(e.target.value).replace(/[^\d]/g, ''))} inputMode="numeric" className="w-24 rounded border px-1 py-0.5 text-right tabular-nums" placeholder="確定金額" />
         <button type="button" onClick={() => v !== '' && onVerify(Number(v), note)} className="rounded bg-brand px-2 py-0.5 text-white">確認</button>
         {saved.verifiedAmount !== null && <button type="button" onClick={() => onVerify(null, note)} className="rounded border bg-white px-2 py-0.5">取消</button>}
       </div>

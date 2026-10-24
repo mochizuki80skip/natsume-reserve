@@ -22,3 +22,17 @@ export function isSameName(a: string | null | undefined, b: string | null | unde
   const x = normalizeName(a), y = normalizeName(b);
   return x.length > 0 && x === y;
 }
+
+/** 全角の英数字・記号（０-９ Ａ-Ｚ ／ ． － ： ，）を半角に。数字を入れる欄（カルテNo の「003842a」なども）で、全角で打っても半角で入るようにする */
+export function halfNum(s: string): string {
+  return s.replace(/[０-９Ａ-Ｚａ-ｚ／．：，]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[－−‐]/g, '-');
+}
+
+/** 入力欄（文字を書き換えてよい欄）を、打つたびに半角にそろえる。変換中（IME）は待って、確定したときにそろえる */
+export function halfNumInput(el: HTMLInputElement) {
+  const v = halfNum(el.value);
+  if (v === el.value) return;
+  const pos = el.selectionStart;
+  el.value = v; // 1 文字ずつの置き換えなので、カーソルの位置は変わらない
+  if (pos !== null) el.setSelectionRange(pos, pos);
+}

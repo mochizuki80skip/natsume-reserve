@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatJpPhone, isSameName, normalizeName } from './format';
+import { formatJpPhone, isSameName, normalizeName, halfNum } from './format';
 
 describe('format', () => {
   it('電話番号の整形', () => {
@@ -15,5 +15,13 @@ describe('format', () => {
     expect(isSameName('ＹＡＭＡＤＡ', 'yamada')).toBe(true);
     expect(isSameName('山田 太郎', '山田 花子')).toBe(false); // 親子（同じ電話番号でも別人）
     expect(isSameName('', '')).toBe(false);
+  });
+});
+
+describe('halfNum', () => {
+  it('全角の数字・記号を半角に', () => {
+    expect(halfNum('６／１０')).toBe('6/10');
+    expect(halfNum('０９０－１２３４')).toBe('090-1234');
+    expect(halfNum('山田　１２')).toBe('山田　12');
   });
 });

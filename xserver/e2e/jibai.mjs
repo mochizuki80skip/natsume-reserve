@@ -95,7 +95,7 @@ await ctx.clearCookies(); // ログアウト（Cookie を消す）
 await login('HQ', HQ_PASSWORD);
 await page.goto(`${BASE}/admin/hq/jibai?ym=${ym}`);
 await page.waitForSelector('text=全店集計');
-const s001 = page.locator('tbody tr', { hasText: 'S001' }).first();
+const s001 = page.locator('tbody tr', { hasText: 'サンプル本店' }).first();
 const s001Text = await s001.textContent();
 ok('本部集計に S001 の合計が出る', s001Text.includes(total.toLocaleString('ja-JP')) && s001Text.includes('提出済み'), s001Text);
 ok('全社合計が出る', (await page.locator('tfoot').textContent()).includes(total.toLocaleString('ja-JP')));
@@ -119,7 +119,7 @@ await page.screenshot({ path: 'e2e/out-jibai-verify.png', fullPage: true });
 
 await page.goto(`${BASE}/admin/hq/jibai?ym=${ym}`);
 await page.waitForSelector('text=全店集計');
-const s001b = await page.locator('tbody tr', { hasText: 'S001' }).first().textContent();
+const s001b = await page.locator('tbody tr', { hasText: 'サンプル本店' }).first().textContent();
 ok('本部集計に確定合計と差額が出る', s001b.includes((total + 500).toLocaleString('ja-JP')) && s001b.includes('500'), s001b);
 
 // 氏名の保持期間の設定
