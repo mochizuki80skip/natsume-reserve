@@ -3,7 +3,10 @@ import { useState, type ReactNode } from 'react';
 import { isNewKind, pct, retentionOf, VISIT_COUNT, type KarteVisit, type Retention } from '@/lib/karte';
 
 /** 継続率に使う行（店舗の行は visits、本部の集計用の行は reached） */
-export interface RetRow { kind: string; staff: string; visits?: KarteVisit[]; reached?: boolean[] }
+export interface RetRow { kind: string; staff: string; visits?: KarteVisit[]; reached?: boolean[]; stopped?: boolean; transferred?: boolean }
+
+/** 予後で中止・転院にチェックがある人 */
+export const isDropped = (r: { stopped?: boolean; transferred?: boolean }) => !!(r.stopped || r.transferred);
 import { PercentLines, SERIES_COLORS } from './charts';
 
 const HEAD = ['初回', ...Array.from({ length: VISIT_COUNT }, (_, i) => `${i + 2}回目`)];
@@ -13,8 +16,12 @@ function Meter({ v, color }: { v: number; color: string }) {
   return <div className="mx-auto mt-0.5 h-1 w-11 overflow-hidden rounded bg-slate-200"><i className="block h-full" style={{ width: `${v}%`, background: color }} /></div>;
 }
 
-export default function KarteRetention({ rows, monthLabel, switcher }: { rows: RetRow[]; monthLabel: string; switcher?: ReactNode }) {
+export default function KarteRetention({ rows: allRows, monthLabel, switcher }: { rows: RetRow[]; monthLabel: string; switcher?: ReactNode }) {
   const [tab, setTab] = useState<'new' | 're'>('new');
+  // 中止・転院（予後）の人を継続率に含めるか除くか
+  const [drop, setDrop] = useState<'in' | 'ex'>('in');
+  const dropped = allRows.filter(isDropped).length;
+  const rows = drop === 'ex' ? allRows.filter((r) => !isDropped(r)) : allRows;
   const newRows = rows.filter((r) => isNewKind(r.kind));
   const reRows = rows.filter((r) => r.kind === 'REVISIT');
   const staffNames = [...new Set(rows.map((r) => r.staff || '（担当未入力）'))].sort((a, b) => (a.startsWith('（') ? 1 : b.startsWith('（') ? -1 : 0));
@@ -57,6 +64,15 @@ export default function KarteRetention({ rows, monthLabel, switcher }: { rows: R
       <div className="mb-2 flex flex-wrap items-baseline gap-3">
         <h2 className="text-base font-bold">継続の状況（{monthLabel}の初回 {rows.length}名）</h2>
         {switcher}
+        <span className="no-print inline-flex items-center gap-1 text-xs" role="group" aria-label="中止・転院の人">
+          中止・転院の人を
+          <span className="inline-flex overflow-hidden rounded border">
+            {([['in', '含める'], ['ex', '除く']] as const).map(([v, l]) => (
+              <button key={v} type="button" aria-pressed={drop === v} onClick={() => setDrop(v)} className={`px-2.5 py-0.5 ${drop === v ? 'bg-brand font-bold text-white' : 'bg-white'}`}>{l}</button>
+            ))}
+          </span>
+          <span className="text-slate-500">（{drop === 'ex' ? `${dropped}名を除いています` : `${dropped}名を含みます`}）</span>
+        </span>
         <span className="text-xs text-slate-500">2〜6回目の「日付」が入っている人を継続として数えます。月末に近い初回の人は、まだ次回が来ていないため低めに出ます。新患＝初診・初・初自。</span>
       </div>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_1.3fr_0.95fr]">

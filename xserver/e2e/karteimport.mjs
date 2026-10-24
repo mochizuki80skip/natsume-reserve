@@ -96,6 +96,12 @@ ok('貼り付けで中止・転院・アンケート（上書き）', six.stoppe
 const xr = await p.evaluate(async () => (await fetch('/api/admin/karte/export?month=2026-06')).status);
 ok('Excel で保存できる', xr === 200);
 
+// 3d) 中止・転院の人を継続率に含める／除く
+await p.goto(`${B}/admin/karte?month=2026-06`); await p.waitForSelector('text=継続の状況（2026年6月の初回 2名）');
+await p.getByRole('group', { name: '中止・転院の人' }).getByRole('button', { name: '除く' }).click();
+ok('除くと初回の人数が減る', await p.getByText('継続の状況（2026年6月の初回 1名）').isVisible() && await p.getByText('1名を除いています').isVisible());
+await p.getByRole('group', { name: '中止・転院の人' }).getByRole('button', { name: '含める' }).click();
+
 // 4) 年度（4月〜）の継続率
 await p.goto(`${B}/admin/karte?month=2026-10`); await p.waitForSelector('text=継続の状況');
 await p.getByRole('group', { name: '継続率の期間' }).getByRole('button', { name: /2026年度/ }).click();
@@ -110,5 +116,13 @@ await h.goto(`${B}/admin/hq/karte`); await h.getByRole('button', { name: '年度
 await h.waitForSelector('text=2026年度');
 const ht = await h.textContent('body');
 ok('本部：年度の合計（4月〜）', /合計\s*6\s*前年度 0/.test(ht.replace(/\s+/g, ' ')), ht.replace(/\s+/g, ' ').match(/合計.{0,20}/)?.[0]);
+const hh = (await h.textContent('body')).replace(/\s+/g, ' ');
+const fyRet = () => h.locator('tr', { hasText: '全体' }).last().textContent();
+const retBefore = await fyRet();
+await h.getByRole('button', { name: '除く' }).click();
+ok('本部：中止・転院を除くと継続率が変わる', retBefore !== await fyRet(), `${retBefore} → ${await fyRet()}`);
+void hh;
+await h.goto(`${B}/admin/hq`); await h.waitForSelector('text=店舗えらびページ');
+ok('本部：店舗えらびの URL・QR（ふつう・紹介カード用）', await h.getByText('店舗えらびの URL（ふつう）').isVisible() && (await h.textContent('body')).includes('/stores?from=card'));
 ok('ページのエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();

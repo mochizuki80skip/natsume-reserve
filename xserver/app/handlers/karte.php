@@ -133,11 +133,11 @@ function hq_karte_get(): never
     if (!Time::isValidDate($from) || !Time::isValidDate($to) || $from > $to) Http::error('期間が正しくありません', 400);
     if ($s['role'] === 'hq') {
         $stores = Settings::storesInOrder('1 = 1', [], false);
-        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
     } else {
         $own = Auth::context()['store'];
         $stores = [['id' => $own['id'], 'code' => $own['code'], 'name' => $own['name'], 'active' => $own['active']]];
-        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$own['id'], $from, $to]);
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$own['id'], $from, $to]);
     }
     $codeOf = array_column($stores, 'code', 'id');
     $out = [];
@@ -147,7 +147,7 @@ function hq_karte_get(): never
         for ($i = 0; $i < Karte::VISITS; $i++) $reached[] = !empty($v[$i]['d']);
         $missing = $r['karteNo'] === '' || $r['age'] === null || $r['sex'] === '' || $r['symptomCat'] === '' || $r['symptom'] === '' || $r['staff'] === '' || $r['treatment'] === ''
             || ($r['kind'] !== 'REVISIT' && ($r['trig'] === '' || (array_key_exists($r['trig'], Karte::DETAIL_FOR) && $r['trigDetail'] === '')));
-        $out[] = ['store' => $codeOf[$r['storeId']] ?? '', 'date' => $r['date'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'staff' => $r['staff'], 'reached' => $reached, 'missing' => $missing];
+        $out[] = ['store' => $codeOf[$r['storeId']] ?? '', 'date' => $r['date'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'staff' => $r['staff'], 'reached' => $reached, 'missing' => $missing, 'stopped' => (bool)(int)$r['stopped'], 'transferred' => (bool)(int)$r['transferred']];
     }
     $areas = $s['role'] !== 'hq' ? [] : array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
     Http::json([

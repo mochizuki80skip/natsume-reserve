@@ -1,5 +1,6 @@
 // 本部：店舗えらびページ（紹介カードの QR の行き先）の公開と、店舗ごとの住所・地図の位置・載せるか
 import { useState } from 'react';
+import UrlQrCard from './UrlQrCard';
 
 export interface ListingStore { code: string; name: string; active: boolean; address: string; lat: number | null; lng: number | null; listed: boolean }
 
@@ -70,6 +71,12 @@ export default function StoresPageEditor({ stores, open, onRefresh }: { stores: 
         入力済み {done}／載せる店舗 {shown}。すべて入れ終わってから「公開する」を押してください。
       </p>
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}
+      {/* 店舗えらびページの URL と QR（ふつう用と紹介カード用。紹介カード用から予約すると、きっかけに「ギフトカード」が入る） */}
+      <div className="mt-2 grid gap-2 md:grid-cols-2">
+        <UrlQrCard label="店舗えらびの URL（ふつう）" help="ホームページ・チラシ・SNS などに。全店舗の一覧から店舗を選んで WEB 予約します" url={`${location.origin}/stores`} fileName="QR_店舗えらび" />
+        <UrlQrCard label="店舗えらびの URL（紹介カード用）" help="紹介カードに印刷する QR。ここから予約すると、新患継続率のきっかけに「ギフトカード」が入ります" url={`${location.origin}/stores?from=card`} fileName="QR_店舗えらび_紹介カード" />
+      </div>
+      {!open && <p className="mt-1 text-xs text-amber-800">※ 今は非公開なので、この URL を開いた患者様には「準備中」と出ます。公開してから配ってください。</p>}
       <div className="mt-2 overflow-x-auto">
         <table className="w-full">
           <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">載せる・店舗</th><th className="pr-2">住所</th><th className="pr-2">地図の位置（緯度, 経度）</th><th /></tr></thead>

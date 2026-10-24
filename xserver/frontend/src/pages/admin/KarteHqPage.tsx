@@ -2,10 +2,11 @@
 import { useMemo, useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { KIND_COLOR, isNewKind, pct, retentionOf, VISIT_COUNT, type DetailFor, type KarteOptions } from '@/lib/karte';
+import { isDropped } from '@/components/KarteRetention';
 import { Donut, SERIES_COLORS, StackedColumns } from '@/components/charts';
 import { useAdmin } from './Layout';
 
-interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean }
+interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean }
 interface Area { id?: string; name: string; stores: string[] }
 interface StoreInfo { code: string; name: string; active?: boolean }
 interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string }
@@ -67,6 +68,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
   const [fy, setFy] = useState(now.getUTCMonth() >= 3 ? now.getUTCFullYear() : now.getUTCFullYear() - 1); // 年度（4月はじまり）
   const [openTrig, setOpenTrig] = useState<string | null>(null);
   const [retKind, setRetKind] = useState<'new' | 're' | 'all'>('new');
+  const [drop, setDrop] = useState<'in' | 'ex'>('in'); // 中止・転院（予後）の人を継続率に含めるか
 
   const range = unit === 'fy' ? { from: `${fy - 1}-04-01`, to: `${fy + 1}-03-31` } : unit === 'month' ? { from: `${year - 1}-01-01`, to: `${year}-12-31` } : { from: `${shiftYm(ym, -1)}-01`, to: daysOf(ym).slice(-1)[0] };
   const { data, error } = useFetch<DataResp>(`/api/admin/hq/karte?from=${range.from}&to=${range.to}`);
@@ -117,7 +119,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
     ? [...data.areas.map((a) => ({ name: a.name, codes: a.stores })), { name: 'エリア未設定', codes: storesInTarget.map((s) => s.code).filter((c) => !data.areas.some((a) => a.stores.includes(c))) }].filter((g) => g.codes.length)
     : [{ name: target === 'area' ? view.area?.name ?? '' : storeName.get(storeCode || data.stores[0]?.code) ?? '', codes: storesInTarget.map((s) => s.code) }];
   const StoreLine = ({ label, list, bold, sub }: { label: string; list: HqRow[]; bold?: boolean; sub?: boolean }) => {
-    const ret = retentionOf(list.filter((r) => (retKind === 'new' ? isNewKind(r.kind) : retKind === 're' ? r.kind === 'REVISIT' : true)));
+    const ret = retentionOf(list.filter((r) => (retKind === 'new' ? isNewKind(r.kind) : retKind === 're' ? r.kind === 'REVISIT' : true) && (drop === 'in' || !isDropped(r))));
     return (
       <tr className={`${bold ? 'bg-slate-50 font-bold' : ''} border-b border-slate-100`}>
         <td className={`whitespace-nowrap px-2 py-1 text-left ${sub ? 'pl-5' : ''}`}>{label}</td>
@@ -212,6 +214,8 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
           <h2 className="text-sm font-bold">{storeOnly ? '件数と継続率' : '店舗別の人数と継続率'}（{periodLabel}）</h2>
           <span className="text-xs text-slate-600">継続率の対象</span>
           <Seg value={retKind} onChange={(v) => setRetKind(v as typeof retKind)} items={[['new', '新規（新患＋初自）'], ['re', '再来'], ['all', '全体']]} />
+          <span className="text-xs text-slate-600">中止・転院の人を</span>
+          <Seg value={drop} onChange={(v) => setDrop(v as typeof drop)} items={[['in', '含める'], ['ex', '除く']]} />
         </div>
         <table className="w-full text-right text-xs tabular-nums">
           <thead>
@@ -227,7 +231,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
             {target === 'all' && <StoreLine label="全体" list={curRows} bold />}
           </tbody>
         </table>
-        <p className="mt-1 text-[11px] text-slate-500">継続＝{retKind === 'new' ? '新規（初診・初・初自）' : retKind === 're' ? '再来' : '新規と再来をあわせた人'}のうち、2〜6回目の日付が入っている割合（横の数字は人数）。未入力＝カルテ集計で黄色の欄が残っている件数。</p>
+        <p className="mt-1 text-[11px] text-slate-500">継続＝{retKind === 'new' ? '新規（初診・初・初自）' : retKind === 're' ? '再来' : '新規と再来をあわせた人'}のうち、2〜6回目の日付が入っている割合（横の数字は人数）。{drop === 'ex' ? '予後で中止・転院にチェックがある人は継続率から除いています（人数の列には入ります）。' : ''}未入力＝カルテ集計で黄色の欄が残っている件数。</p>
       </div>
     </div>
   );
