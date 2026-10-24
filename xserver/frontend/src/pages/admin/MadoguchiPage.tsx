@@ -26,13 +26,13 @@ const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
 /** 月間窓口表の列（k＝入力、c＝自動の計算）。g は上の段の見出し */
 const COLS: { k?: string; c?: keyof Calc; l: string; g?: string; cls?: string }[] = [
-  { k: 'copay', l: '一部負担金' }, { k: 'third', l: '第三者' }, { c: 'copayTotal', l: '一部負担金合計', cls: 'bg-yellow-100' },
-  { k: 'self', l: '自費' }, { k: 'acu', l: '鍼' }, { c: 'selfAcu', l: '自費＋鍼', cls: 'bg-orange-100' }, { c: 'total', l: '合計', cls: 'bg-yellow-100 font-bold' },
+  { k: 'copay', l: '一部負担金' }, { k: 'third', l: '第三者' }, { c: 'copayTotal', l: '一部負担金合計', cls: 'bg-yellow-300' },
+  { k: 'self', l: '自費' }, { k: 'acu', l: '鍼' }, { c: 'selfAcu', l: '自費＋鍼', cls: 'bg-orange-300' }, { c: 'total', l: '合計', cls: 'bg-yellow-300 font-bold' },
   { k: 'goods', l: '物販' },
   { k: 'colCopay', l: '一部負担金', g: '未収回収' }, { k: 'colSelf', l: '自費', g: '未収回収' },
   { k: 'diffCopay', l: '一部負担金', g: '差額' }, { k: 'diffSelf', l: '自費', g: '差額' },
   { k: 'unknown', l: '不明金' }, { k: 'deposit', l: '保証金' }, { k: 'cert', l: '証明書代' },
-  { c: 'match', l: '合計', g: '金額を一致させてください', cls: 'bg-amber-200 font-bold' }, { k: 'mail', l: '報告メール合計', g: '金額を一致させてください' }, { k: 'bank', l: '通帳入金額', g: '金額を一致させてください' },
+  { c: 'match', l: '合計', g: '金額を一致させてください', cls: 'bg-amber-400 font-bold' }, { k: 'mail', l: '報告メール合計', g: '金額を一致させてください' }, { k: 'bank', l: '通帳入金額', g: '金額を一致させてください' },
   { k: 'insClaim', l: '保険請求金額' }, { k: 'jibaiClaim', l: '自賠責請求金額' },
 ];
 const MONTH_KEYS: [string, string][] = [['lateIns', '保険請求 月遅れ請求'], ['lateJibai', '自賠責 月遅れ請求'], ['rousai', '労災（月末入力）'], ['curClaim', '当月請求（月末入力）']];
@@ -125,13 +125,13 @@ export default function MadoguchiPage() {
         <>
           <div className="overflow-auto rounded border border-slate-300 bg-white">
             <table className="w-full border-collapse text-[11.5px] tabular-nums" aria-label="月間窓口表">
-              <thead className="sticky top-0 z-10 bg-slate-100 text-[10.5px]">
+              <thead className="sticky top-0 z-10 bg-slate-300 text-[10.5px]">
                 <tr>
                   <th rowSpan={2} className="border px-1">日付</th><th rowSpan={2} className="border px-1">曜</th>
                   {COLS.map((c, i) => {
                     if (!c.g) return <th key={i} rowSpan={2} className={`border px-1 ${c.cls ?? ''}`}>{c.l}</th>;
                     if (COLS[i - 1]?.g === c.g) return null;
-                    return <th key={i} colSpan={COLS.filter((x) => x.g === c.g).length} className={`border px-1 ${c.g.startsWith('金額') ? 'bg-amber-200' : ''}`}>{c.g}</th>;
+                    return <th key={i} colSpan={COLS.filter((x) => x.g === c.g).length} className={`border px-1 ${c.g.startsWith('金額') ? 'bg-amber-400' : ''}`}>{c.g}</th>;
                   })}
                 </tr>
                 <tr>{COLS.filter((c) => c.g).map((c, i) => <th key={i} className={`border px-1 ${c.cls ?? ''}`}>{c.l}</th>)}</tr>
@@ -141,21 +141,21 @@ export default function MadoguchiPage() {
                   const v = d.vals as Record<string, number | undefined>;
                   const w = new Date(`${d.date}T00:00:00`).getDay();
                   return (
-                    <tr key={d.date} className={d.closed ? 'bg-slate-100 text-slate-400' : ''}>
+                    <tr key={d.date} className={d.closed ? 'bg-slate-200 text-slate-500' : ''}>
                       <td className="border px-1 text-center">{md(d.date)}</td>
-                      <td className={`border px-1 text-center ${w === 0 || d.closed ? 'text-red-600' : w === 6 ? 'text-blue-600' : ''}`}>{WD[w]}</td>
+                      <td className={`border px-1 text-center ${w === 0 || d.closed ? 'bg-red-500 font-bold text-white' : w === 6 ? 'font-bold text-blue-700' : ''}`}>{WD[w]}</td>
                       {COLS.map((c, i) => {
                         if (c.c) return <td key={i} className={`border px-1 text-right ${c.cls ?? ''}`}>{d.calc[c.c] || Object.keys(v).length ? yen(d.calc[c.c] as number) : ''}</td>;
                         const bad = (c.k === 'mail' || c.k === 'bank') && v[c.k!] !== undefined && v[c.k!] !== d.calc.match;
-                        return <td key={i} className={`border p-0 ${bad ? 'bg-red-200 font-bold text-red-800' : ''}`}><Num value={v[c.k!]} readOnly={ro} label={`${md(d.date)} ${c.g ? `${c.g} ` : ''}${c.l}`} onSave={(x) => saveDay(d.date, { [c.k!]: x })} /></td>;
+                        return <td key={i} className={`border p-0 ${bad ? 'bg-red-500 font-bold text-white' : ''}`}><Num value={v[c.k!]} readOnly={ro} label={`${md(d.date)} ${c.g ? `${c.g} ` : ''}${c.l}`} onSave={(x) => saveDay(d.date, { [c.k!]: x })} /></td>;
                       })}
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot className="font-bold">
-                <tr className="bg-yellow-50"><td colSpan={2} className="border px-1 text-center">計</td>{COLS.map((c, i) => <td key={i} className="border px-1 text-right">{yen(data.sum[(c.k ?? c.c)!])}</td>)}</tr>
-                <tr className="bg-yellow-50"><td colSpan={2} className="border px-1 text-center">税抜</td>{COLS.map((c, i) => <td key={i} className="border px-1 text-right">{c.k === 'insClaim' || c.k === 'jibaiClaim' ? '' : yen(exTax(data.sum[(c.k ?? c.c)!]))}</td>)}</tr>
+                <tr className="bg-yellow-300"><td colSpan={2} className="border px-1 text-center">計</td>{COLS.map((c, i) => <td key={i} className="border px-1 text-right">{yen(data.sum[(c.k ?? c.c)!])}</td>)}</tr>
+                <tr className="bg-yellow-200"><td colSpan={2} className="border px-1 text-center">税抜</td>{COLS.map((c, i) => <td key={i} className="border px-1 text-right">{c.k === 'insClaim' || c.k === 'jibaiClaim' ? '' : yen(exTax(data.sum[(c.k ?? c.c)!]))}</td>)}</tr>
               </tfoot>
             </table>
           </div>
@@ -190,31 +190,31 @@ function GoodsTab({ data, ro, saveDay, saveMonth }: { data: Resp; ro: boolean; s
       <p className="mb-1 text-sm">販売合計 <b className="tabular-nums">{yen(data.sum.goodsSales)}</b>　利益（その他を除く） <b className="tabular-nums">{yen(profit)}</b></p>
       <div className="overflow-auto rounded border border-slate-300 bg-white">
         <table className="w-full border-collapse text-[11.5px] tabular-nums" aria-label="物販内訳">
-          <thead className="sticky top-0 z-10 bg-slate-100 text-[10.5px]">
-            <tr><th className="border px-1">日付</th><th className="border px-1">曜</th>{data.goods.map((g) => <th key={g.id} className="border px-1">{g.name}</th>)}<th className="border px-1">その他 金額</th><th className="border px-1">その他の内訳（商品名×個数）</th><th className="border bg-yellow-100 px-1">販売合計</th></tr>
+          <thead className="sticky top-0 z-10 bg-slate-300 text-[10.5px]">
+            <tr><th className="border px-1">日付</th><th className="border px-1">曜</th>{data.goods.map((g) => <th key={g.id} className="border px-1">{g.name}</th>)}<th className="border px-1">その他 金額</th><th className="border px-1">その他の内訳（商品名×個数）</th><th className="border bg-yellow-300 px-1">販売合計</th></tr>
           </thead>
           <tbody>
             {data.days.map((d) => {
               const gc = d.vals.goodsCount ?? {};
               const w = new Date(`${d.date}T00:00:00`).getDay();
               return (
-                <tr key={d.date} className={d.closed ? 'bg-slate-100 text-slate-400' : ''}>
-                  <td className="border px-1 text-center">{md(d.date)}</td><td className={`border px-1 text-center ${w === 0 || d.closed ? 'text-red-600' : ''}`}>{WD[w]}</td>
+                <tr key={d.date} className={d.closed ? 'bg-slate-200 text-slate-500' : ''}>
+                  <td className="border px-1 text-center">{md(d.date)}</td><td className={`border px-1 text-center ${w === 0 || d.closed ? 'bg-red-500 font-bold text-white' : ''}`}>{WD[w]}</td>
                   {data.goods.map((g) => <td key={g.id} className="border p-0"><Num value={gc[g.id]} readOnly={ro} label={`${md(d.date)} ${g.name}`} onSave={(x) => saveDay(d.date, { goodsCount: { [g.id]: x } })} /></td>)}
                   <td className="border p-0"><Num value={d.vals.otherAmt as number | undefined} readOnly={ro} label={`${md(d.date)} その他 金額`} onSave={(x) => saveDay(d.date, { otherAmt: x })} /></td>
                   <td className="border p-0"><Txt value={(d.vals.otherNote as string) ?? ''} readOnly={ro} label={`${md(d.date)} その他の内訳`} onSave={(x) => saveDay(d.date, { otherNote: x })} /></td>
-                  <td className="border bg-yellow-50 px-1 text-right">{d.calc.goodsSales ? yen(d.calc.goodsSales) : ''}</td>
+                  <td className="border bg-yellow-200 px-1 text-right">{d.calc.goodsSales ? yen(d.calc.goodsSales) : ''}</td>
                 </tr>
               );
             })}
           </tbody>
           <tfoot>
-            <tr className="bg-yellow-50 font-bold"><td colSpan={2} className="border px-1 text-center">販売個数</td>{data.goods.map((g) => <td key={g.id} className="border px-1 text-right">{data.goodsSum[g.id] ?? 0}</td>)}<td className="border px-1 text-right">{yen(data.sum.otherAmt)}</td><td className="border" /><td className="border px-1 text-right">{yen(data.sum.goodsSales)}</td></tr>
+            <tr className="bg-yellow-300 font-bold"><td colSpan={2} className="border px-1 text-center">販売個数</td>{data.goods.map((g) => <td key={g.id} className="border px-1 text-right">{data.goodsSum[g.id] ?? 0}</td>)}<td className="border px-1 text-right">{yen(data.sum.otherAmt)}</td><td className="border" /><td className="border px-1 text-right">{yen(data.sum.goodsSales)}</td></tr>
             <tr><td colSpan={2} className="border px-1 text-center">販売価格</td>{data.goods.map((g) => <td key={g.id} className="border px-1 text-right">{yen(g.price)}</td>)}<td colSpan={3} className="border" /></tr>
             <tr><td colSpan={2} className="border px-1 text-center">原価</td>{data.goods.map((g) => <td key={g.id} className="border px-1 text-right">{yen(g.cost)}</td>)}<td colSpan={3} className="border" /></tr>
             <tr className="font-bold"><td colSpan={2} className="border px-1 text-center">利益</td>{data.goods.map((g) => <td key={g.id} className="border px-1 text-right">{yen((data.goodsSum[g.id] ?? 0) * (g.price - g.cost))}</td>)}<td colSpan={3} className="border" /></tr>
             <tr><td colSpan={2} className="border px-1 text-center">月初の在庫</td>{data.goods.map((g) => <td key={g.id} className="border p-0"><Num value={data.stockStart[g.id]} readOnly={ro} label={`${g.name} 月初の在庫`} onSave={(x) => saveMonth({ stockStart: { [g.id]: x } })} /></td>)}<td colSpan={3} className="border" /></tr>
-            <tr><td colSpan={2} className="border px-1 text-center">月末の在庫</td>{data.goods.map((g) => <td key={g.id} className="border bg-yellow-50 px-1 text-right">{data.stockStart[g.id] === undefined ? '' : data.stockStart[g.id] - (data.goodsSum[g.id] ?? 0)}</td>)}<td colSpan={3} className="border" /></tr>
+            <tr><td colSpan={2} className="border px-1 text-center">月末の在庫</td>{data.goods.map((g) => <td key={g.id} className="border bg-yellow-200 px-1 text-right">{data.stockStart[g.id] === undefined ? '' : data.stockStart[g.id] - (data.goodsSum[g.id] ?? 0)}</td>)}<td colSpan={3} className="border" /></tr>
           </tfoot>
         </table>
       </div>
@@ -239,12 +239,12 @@ function HenreiTab({ data, ro, onSaved, onError }: { data: Resp; ro: boolean; on
         <h2 className="mb-1 text-base font-bold">{special ? '特殊返戻' : '返戻'}</h2>
         <div className="overflow-auto rounded border border-slate-300 bg-white">
           <table className="w-full border-collapse text-[11.5px]" aria-label={special ? '特殊返戻' : '返戻'}>
-            <thead className="bg-slate-100 text-[10.5px]"><tr>{HENREI_COLS.map((c) => <th key={c.k} className={`border px-1 ${c.k === 'amount' ? 'bg-amber-200' : ''}`} style={{ minWidth: c.w }}>{c.l}</th>)}{!ro && <th className="border" />}</tr></thead>
+            <thead className="bg-slate-300 text-[10.5px]"><tr>{HENREI_COLS.map((c) => <th key={c.k} className={`border px-1 ${c.k === 'amount' ? 'bg-amber-400' : ''}`} style={{ minWidth: c.w }}>{c.l}</th>)}{!ro && <th className="border" />}</tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
                   {HENREI_COLS.map((c) => (
-                    <td key={c.k} className={`border p-0 ${c.k === 'amount' ? 'bg-amber-50' : ''}`}>
+                    <td key={c.k} className={`border p-0 ${c.k === 'amount' ? 'bg-amber-200' : ''}`}>
                       {c.num ? <Num value={r[c.k] as number | null} readOnly={ro} label={c.l} onSave={(x) => run(() => put('/api/admin/madoguchi/henrei', { id: r.id, patch: { [c.k]: x } }))} />
                         : c.opts && !ro ? (
                           <select value={r[c.k] as string} aria-label={c.l} onChange={(e) => run(() => put('/api/admin/madoguchi/henrei', { id: r.id, patch: { [c.k]: e.target.value } }))} className="w-full bg-transparent px-1">
@@ -258,7 +258,7 @@ function HenreiTab({ data, ro, onSaved, onError }: { data: Resp; ro: boolean; on
               ))}
               {rows.length === 0 && <tr><td colSpan={HENREI_COLS.length + 1} className="px-2 py-3 text-center text-slate-400">この月はありません</td></tr>}
             </tbody>
-            <tfoot><tr className="font-bold"><td colSpan={6} className="border px-1 text-right">計</td><td className="border bg-amber-100 px-1 text-right">{yen(rows.reduce((a, r) => a + (r.amount ?? 0), 0))}</td><td className="border px-1 text-right">{yen(rows.reduce((a, r) => a + (r.reamount ?? 0), 0))}</td><td colSpan={ro ? 3 : 4} className="border" /></tr></tfoot>
+            <tfoot><tr className="font-bold"><td colSpan={6} className="border px-1 text-right">計</td><td className="border bg-amber-400 px-1 text-right">{yen(rows.reduce((a, r) => a + (r.amount ?? 0), 0))}</td><td className="border px-1 text-right">{yen(rows.reduce((a, r) => a + (r.reamount ?? 0), 0))}</td><td colSpan={ro ? 3 : 4} className="border" /></tr></tfoot>
           </table>
         </div>
         {!ro && <button type="button" onClick={() => run(() => put('/api/admin/madoguchi/henrei', { month: data.month, special, patch: {} }))} className="mt-1 rounded border bg-white px-3 py-0.5 text-sm">＋ 行を追加</button>}

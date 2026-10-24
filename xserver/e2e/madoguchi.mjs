@@ -51,6 +51,7 @@ const d2 = m.days.find((d) => d.date === D);
 ok('自動の計算（一部負担金合計・自費＋鍼・合計・照合の合計）', d2.vals.copay === 43980 && d2.calc.copayTotal === 43980 && d2.calc.selfAcu === 67620 && d2.calc.total === 111600 && d2.calc.match === 111100, JSON.stringify(d2.calc));
 ok('通帳入金が合わない日', d2.calc.mismatch === true && m.mismatchDays === 1);
 ok('売上＝合計＋保険請求＋自賠責', m.sales === 111600 + 130692 + 31380, String(m.sales));
+await sp.screenshot({ path: O + 'madoguchi-ng.png' });
 await cell('金額を一致させてください 通帳入金額').fill('111100'); await cell('金額を一致させてください 通帳入金額').press('Enter'); await sp.waitForTimeout(1000);
 m = (await api(sp, 'GET', `/api/admin/madoguchi?month=${M}`))[1];
 ok('直すと合う', m.mismatchDays === 0);
