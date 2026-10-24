@@ -67,6 +67,14 @@ ok('公開すると一覧が出る（住所・位置・営業時間）', js.open
 ok('空いている時間帯（今日 or 次の営業日）', s1.quiet && /^\d{4}-\d{2}-\d{2}$/.test(s1.quiet.date) && (s1.quiet.am === null || /^\d+:00〜\d+:00$/.test(s1.quiet.am)), JSON.stringify(s1.quiet));
 await pub.goto(`${B}/stores?from=card`); await pub.waitForSelector('article');
 ok('店舗のカード', (await pub.locator('article').filter({ hasText: 'サンプル本店' }).count()) === 1 && (await pub.textContent('body')).includes('営業時間（全店共通）'));
+// 市・町で絞り込む（エリアではなく住所から）
+await api(hq, 'PUT', '/api/admin/hq/stores', { code: 'S002', action: 'listing', address: '静岡県駿東郡長泉町下土狩1-1', lat: 35.13, lng: 138.9, listed: true });
+await pub.reload(); await pub.waitForSelector('article');
+const chips = await pub.getByRole('group', { name: '市・町' }).getByRole('button').allTextContents();
+ok('市・町のボタン', chips.join(',') === 'すべて,静岡市,長泉町', chips.join(','));
+await pub.getByRole('group', { name: '市・町' }).getByRole('button', { name: '長泉町' }).click();
+ok('長泉町だけ', (await pub.locator('article').count()) === 1 && (await pub.locator('article').textContent()).includes('サンプル駅前院'));
+await pub.getByRole('group', { name: '市・町' }).getByRole('button', { name: 'すべて' }).click();
 await pub.setViewportSize({ width: 390, height: 844 });
 await pub.screenshot({ path: O + 'stores.png', fullPage: true });
 await pub.locator('article').filter({ hasText: 'サンプル本店' }).getByRole('link', { name: 'WEB 予約' }).click();

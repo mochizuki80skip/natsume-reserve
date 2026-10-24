@@ -67,7 +67,7 @@ export default function StoresPageEditor({ stores, open, onRefresh }: { stores: 
         <a href="/stores?from=card&preview=1" target="_blank" rel="noreferrer" className="text-brand underline">表示を確認する ↗</a>
       </div>
       <p className="mt-1 text-xs text-slate-600">
-        チェックした店舗をエリアごと（新患・再来集計の「エリアの設定」）に並べます。住所を入れて「住所から調べる」を押すと地図の位置（近い順・地図ボタンに使う）が入ります。
+        チェックした店舗を、住所の市・町ごと（静岡市・長泉町など。本部の店舗一覧の順）に分けて並べます。患者様は市・町のボタンで絞り込めます。住所を入れて「住所から調べる」を押すと地図の位置（近い順・地図ボタンに使う）が入ります。
         入力済み {done}／載せる店舗 {shown}。すべて入れ終わってから「公開する」を押してください。
       </p>
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}

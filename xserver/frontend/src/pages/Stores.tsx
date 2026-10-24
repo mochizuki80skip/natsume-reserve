@@ -2,6 +2,7 @@
 // 全店舗をエリアごとに並べ、住所・地図・今日（休診日は次の営業日）の空いている時間帯を出す。店舗を選ぶと WEB 予約へ。
 // 本部が「公開する」にするまでは「準備中」の案内だけを出す
 import { useEffect, useMemo, useState } from 'react';
+import { cityOf } from '@/lib/city';
 import PublicFooter from '@/components/PublicFooter';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
@@ -38,7 +39,7 @@ export default function Stores() {
   const preview = params.get('preview') === '1'; // 本部の確認用（公開前でも本部でログイン中なら見られる）
   const { data, error } = useFetch<Resp>(`/api/public-stores${preview ? '?preview=1' : ''}`);
   const [q, setQ] = useState('');
-  const [area, setArea] = useState('');
+  const [area, setArea] = useState(''); // 市・町（住所から）
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
   const [geoMsg, setGeoMsg] = useState('');
 
@@ -47,7 +48,7 @@ export default function Stores() {
   const list = useMemo(() => {
     const all = data?.stores ?? [];
     const word = q.trim();
-    let xs = all.filter((s) => (!area || s.area === area) && (!word || s.name.includes(word) || s.address.includes(word)));
+    let xs = all.filter((s) => (!area || cityOf(s.address) === area) && (!word || s.name.includes(word) || s.address.includes(word)));
     if (here) xs = [...xs].sort((a, b) => (a.lat == null ? 1e9 : distanceKm(here, { lat: a.lat, lng: a.lng! })) - (b.lat == null ? 1e9 : distanceKm(here, { lat: b.lat, lng: b.lng! })));
     return xs;
   }, [data, q, area, here]);
@@ -81,10 +82,11 @@ export default function Stores() {
   }
   if (!data) return <main className="mx-auto max-w-md px-4 pt-10 text-sm text-slate-500">読み込み中…</main>;
 
-  const areas = (data.areas ?? []).filter((a) => (data.stores ?? []).some((s) => s.area === a));
+  // 患者様に分かりやすいよう、エリアではなく住所の市・町で分ける（並びは本部の店舗一覧の順に、はじめて出てきた順）
+  const areas = [...new Set((data.stores ?? []).map((s) => cityOf(s.address)).filter(Boolean))];
   const groups = here || area || q.trim()
     ? [{ name: '', stores: list }]
-    : [...areas.map((a) => ({ name: a, stores: list.filter((s) => s.area === a) })), { name: areas.length ? 'そのほか' : '', stores: list.filter((s) => !s.area || !areas.includes(s.area)) }].filter((g) => g.stores.length);
+    : [...areas.map((a) => ({ name: a, stores: list.filter((s) => cityOf(s.address) === a) })), { name: areas.length ? 'そのほか' : '', stores: list.filter((s) => !cityOf(s.address)) }].filter((g) => g.stores.length);
 
   return (
     <main className="mx-auto min-h-screen max-w-md bg-sky-50/40 pb-10">
@@ -111,7 +113,7 @@ export default function Stores() {
           <button type="button" onClick={near} aria-pressed={!!here} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm font-bold ${here ? 'border-sky-700 bg-sky-700 text-white' : 'border-sky-400 bg-sky-50 text-sky-800'}`}>📍 近い順</button>
         </div>
         {areas.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="エリア">
+          <div className="flex flex-wrap gap-1.5 pb-0.5" role="group" aria-label="市・町">
             {['', ...areas].map((a) => (
               <button key={a || 'all'} type="button" aria-pressed={area === a} onClick={() => setArea(a)}
                 className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs ${area === a ? 'border-sky-700 bg-sky-700 text-white' : 'bg-white'}`}>{a || 'すべて'}</button>
