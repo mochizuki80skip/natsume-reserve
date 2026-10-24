@@ -1,14 +1,17 @@
 // 新患継続率：スプレッドシートからコピーした行を貼り付けて取り込む。取り込む前に、行ごとの結果（新しく入る／上書き／読めない）を見せる
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KIND_LABEL, md, type KarteOptions } from '@/lib/karte';
 import { parseSheet, type ImportRow, type ParsedLine } from '@/lib/karteImport';
 
 type Checked = ParsedLine & { status?: 'new' | 'update' | 'error'; serverError?: string };
 
-export default function KarteImportDialog({ today, options, onClose, onDone }: { today: string; options: KarteOptions; onClose: () => void; onDone: (months: string[]) => void }) {
-  const thisFy = Number(today.slice(5, 7)) >= 4 ? Number(today.slice(0, 4)) : Number(today.slice(0, 4)) - 1;
-  const [fy, setFy] = useState(thisFy);
-  const [text, setText] = useState('');
+const fyOf = (date: string) => (Number(date.slice(5, 7)) >= 4 ? Number(date.slice(0, 4)) : Number(date.slice(0, 4)) - 1);
+
+/** month：開いている月（年のない日付はその月の年度で読む）。initialText：画面で Ctrl+V したときの中身（すぐ確認まで進める） */
+export default function KarteImportDialog({ today, month, initialText = '', options, onClose, onDone }: { today: string; month: string; initialText?: string; options: KarteOptions; onClose: () => void; onDone: (months: string[]) => void }) {
+  const thisFy = fyOf(today);
+  const [fy, setFy] = useState(fyOf(`${month}-01`));
+  const [text, setText] = useState(initialText);
   const [lines, setLines] = useState<Checked[] | null>(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -45,6 +48,8 @@ export default function KarteImportDialog({ today, options, onClose, onDone }: {
     } catch (e) { setErr((e as Error).message); setBusy(false); }
   }
 
+  useEffect(() => { if (initialText) void check(initialText); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const nNew = lines?.filter((l) => l.status === 'new').length ?? 0;
   const nUp = lines?.filter((l) => l.status === 'update').length ?? 0;
   const nErr = lines?.filter((l) => l.status === 'error').length ?? 0;
@@ -61,14 +66,14 @@ export default function KarteImportDialog({ today, options, onClose, onDone }: {
           <button type="button" onClick={onClose} aria-label="閉じる" className="ml-auto text-slate-500">✕</button>
         </div>
         <ol className="mb-2 list-decimal space-y-0.5 pl-5 text-xs text-slate-600">
-          <li>スプレッドシートで、<b>見出しの行（日付・氏名・2回目…）から</b>取り込みたい行までを選んでコピー（Ctrl+C）します。</li>
-          <li>下の欄に貼り付け（Ctrl+V）ます。年のない日付（「4/3」など）は、選んだ年度で読みます。</li>
+          <li>スプレッドシートで、取り込みたい行を選んでコピー（Ctrl+C）します。</li>
+          <li>下の欄に貼り付け（Ctrl+V）ます。新患継続率の画面のどこで Ctrl+V しても、ここが開きます。見出しの行がなくても、画面と同じ並びなら読めます。年のない日付（「4/3」など）は、選んだ年度で読みます。</li>
           <li>同じ日付・同じ氏名の行がもうあるときは、<b>貼り付けた内容で上書き</b>します（貼り付けた側が空の欄は、今の内容のままです）。</li>
         </ol>
         <div className="mb-2 flex items-center gap-2">
           <label className="flex items-center gap-1">年度
             <select value={fy} onChange={(e) => { setFy(Number(e.target.value)); setLines(null); }} className="rounded border px-2 py-1">
-              {[thisFy - 2, thisFy - 1, thisFy].map((y) => <option key={y} value={y}>{y}年度（{y}年4月〜{y + 1}年3月）</option>)}
+              {[...new Set([thisFy - 2, thisFy - 1, thisFy, fy])].sort().map((y) => <option key={y} value={y}>{y}年度（{y}年4月〜{y + 1}年3月）</option>)}
             </select>
           </label>
         </div>

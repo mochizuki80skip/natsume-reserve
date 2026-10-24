@@ -27,8 +27,8 @@ describe('parseSheet', () => {
     expect(r.lines[0].row!.visits[0].d).toBe('2026-04-06');
     expect(r.lines[0].row!.visits[1].s).toBe('見本B');
   });
-  it('見出しがないとき', () => {
-    expect(parseSheet(r1, 2026).error).toContain('見出し');
+  it('見出しがなくても、画面と同じ並びなら読む', () => {
+    expect(parseSheet(r1, 2026).lines[0].row?.name).toBe('見本 一郎');
   });
   it('年度で年を決める・読めない日付', () => {
     expect(parseSheetDate('3/31', 2026)).toBe('2027-03-31');
@@ -38,5 +38,18 @@ describe('parseSheet', () => {
   });
   it('セルの中の改行（"…" で囲まれる）', () => {
     expect(parseTsv('a\t"b\nc"\td\n1\t2\t3')).toEqual([['a', 'b\nc', 'd'], ['1', '2', '3']]);
+  });
+});
+
+describe('見出しなし', () => {
+  it('画面と同じ並びとして読む', () => {
+    const r1 = ['4/3', '1203', 'チラシ', '', '見本 一郎', '新患', '45', '男', '腰', '腰痛', '見本A', '矯正', '4/6', '見本A', '矯正'].join('\t');
+    const r = parseSheet(r1 + '\n', 2026);
+    expect(r.error).toBeUndefined();
+    expect(r.lines[0].row).toMatchObject({ date: '2026-04-03', name: '見本 一郎', karteNo: '1203' });
+    expect(r.lines[0].row!.visits[0]).toEqual({ d: '2026-04-06', s: '見本A', t: '矯正' });
+  });
+  it('日付でない表は読まない', () => {
+    expect(parseSheet('a\tb\nc\td', 2026).error).toContain('読めませんでした');
   });
 });

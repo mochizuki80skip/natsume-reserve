@@ -101,11 +101,20 @@ const sexOf = (s: string) => { const n = norm(s); return /^(♂|男|m)/.test(n) 
 const treatmentOf = (s: string) => (norm(s).includes('マッサ') ? 'マッサ' : norm(s).includes('矯正') ? '矯正' : '');
 const dropSama = (s: string) => s.trim().replace(/[\s　]*様$/, '');
 
+/** 新患継続率の画面（＝スプレッドシート）と同じ列の並び。見出しの行をコピーしなかったときに使う */
+export const SCREEN_HEAD = ['日付', 'カルテNo', 'きっかけ', '内訳', '氏名', '新・再', '年齢', '性別', '症状ｶﾃｺﾞﾘｰ', '症状', '担当', '施術', ...Array.from({ length: VISIT_COUNT }, () => ['日付', '担当', '施術']).flat()];
+
 export function parseSheet(text: string, fy: number): ParseResult {
   const table = parseTsv(text);
-  const hi = table.findIndex((r) => r.some((c) => fieldOf(c) === 'name') && r.some((c) => fieldOf(c) === 'date'));
-  if (hi < 0) return { lines: [], columns: [], error: '見出しの行（「日付」「氏名」など）が見つかりません。見出しの行もいっしょにコピーしてください。' };
-  const cols = columnsOf(table[hi], hi > 0 ? table[hi - 1] : undefined);
+  let hi = table.findIndex((r) => r.some((c) => fieldOf(c) === 'name') && r.some((c) => fieldOf(c) === 'date'));
+  let cols: (Col | null)[];
+  if (hi >= 0) cols = columnsOf(table[hi], hi > 0 ? table[hi - 1] : undefined);
+  else {
+    // 見出しなし：画面と同じ並びとして読む（1 列目が日付の行があるときだけ）
+    if (!table.some((r) => (r[0] ?? '').trim() && parseSheetDate(r[0], fy))) return { lines: [], columns: [], error: '読めませんでした。新患継続率と同じ並び（日付・カルテNo・きっかけ…）の行をコピーするか、見出しの行もいっしょにコピーしてください。' };
+    cols = columnsOf(SCREEN_HEAD, undefined);
+    hi = -1;
+  }
   const columns = cols.map((c) => (c ? (c.visit ? `${c.visit}回目${{ d: '日付', s: '担当', t: '施術' }[c.field]}` : c.field) : '')).filter(Boolean);
   const lines: ParsedLine[] = [];
   for (let i = hi + 1; i < table.length; i++) {

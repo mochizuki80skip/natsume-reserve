@@ -162,7 +162,19 @@ export default function KartePage() {
   const { data, error, reload } = useFetch<Resp>(`/api/admin/karte?month=${encodeURIComponent(month)}`);
   const [rows, setRows] = useState<KarteRow[]>([]);
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [importOpen, setImportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState<false | { text: string }>(false);
+  // 画面のどこで Ctrl+V しても、スプレッドシートの行（タブ区切り・複数行）なら取り込みの確認を開く
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if ((e.target as HTMLElement | null)?.closest?.('[aria-label="スプレッドシートから貼り付け"]')) return;
+      const t = e.clipboardData?.getData('text/plain') ?? '';
+      if (!t.includes('\t') || (!t.trim().includes('\n') && t.split('\t').length < 6)) return; // 1 つのセルの貼り付けはそのまま
+      e.preventDefault();
+      setImportOpen({ text: t });
+    };
+    document.addEventListener('paste', onPaste, true);
+    return () => document.removeEventListener('paste', onPaste, true);
+  }, []);
   // 継続の状況：この月／年度（4月〜）。年度は表示中の月を含む年度
   const [period, setPeriod] = useState<'month' | 'fy'>('month');
   const vm = data?.month ?? '';
@@ -219,7 +231,7 @@ export default function KartePage() {
         <a href={`/api/admin/karte/export?month=${ym}`} className="rounded border bg-white px-2 py-0.5 text-sm">Excelで保存</a>
         <button type="button" onClick={() => window.print()} className="rounded border bg-white px-2 py-0.5 text-sm">印刷</button>
         <button type="button" onClick={addRow} className="rounded border bg-white px-2 py-0.5 text-sm">＋ 行を追加</button>
-        <button type="button" onClick={() => setImportOpen(true)} className="rounded border bg-white px-2 py-0.5 text-sm">📋 スプレッドシートから貼り付け</button>
+        <button type="button" onClick={() => setImportOpen({ text: '' })} className="rounded border bg-white px-2 py-0.5 text-sm">📋 スプレッドシートから貼り付け</button>
       </div>
       <div className="max-h-[470px] overflow-auto rounded border border-slate-300 bg-white print:max-h-none">
         <table className="w-full border-collapse text-[11.5px]">
@@ -247,7 +259,7 @@ export default function KartePage() {
         日付は「9/5」や「0905」で入力できます。予約表から入った行は、来院チェックを外すと消えます（手を加えた行は残ります）。
         <Link to={`/admin/day/${data.today}`} className="ml-2 text-brand underline">予約表へ</Link>
       </p>
-      {importOpen && <KarteImportDialog today={data.today} options={data.options} onClose={() => setImportOpen(false)}
+      {importOpen && <KarteImportDialog today={data.today} month={ym} initialText={importOpen.text} options={data.options} onClose={() => setImportOpen(false)}
         onDone={(months) => { setImportOpen(false); if (months[0] && months[0] !== ym) setSp({ month: months[0] }); else reload(); fyData.reload(); }} />}
       <KarteRetention
         rows={period === 'fy' ? (fyData.data?.rows ?? []).filter((r) => r.store === me.store!.code) : rows}

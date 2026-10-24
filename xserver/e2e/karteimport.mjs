@@ -62,10 +62,25 @@ const a2 = (await api('GET', '/api/admin/karte?month=2026-04'))[1].rows.find((r)
 ok('上書き：空の欄は残す・4回目を足す', st === 200 && j.counts.update === 1 && a2.karteNo === '1203' && a2.age === 45 && a2.visits[0].d === '2026-04-06' && a2.visits[2].d === '2026-04-20', JSON.stringify(a2.visits));
 ok('日付・氏名がない行はエラー', (await api('POST', '/api/admin/karte/import', { rows: [{ name: 'x' }], dryRun: true }))[1].counts.error === 1);
 
+// 3b) 月のページで Ctrl+V（見出しなし・画面と同じ並び）→ そのまま確認が開く
+await p.goto(`${B}/admin/karte?month=2026-06`); await p.waitForSelector('text=継続の状況');
+await p.evaluate((t) => { const dt = new DataTransfer(); dt.setData('text/plain', t); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); },
+  [row(['6/12', '1400', 'HP', '', '見本 六郎', '新患', '28', '男', '肩', '肩こり', '見本A', '矯正', '6/15', '見本A', '矯正']), row(['6/13', '', '', '', '見本 七子', '再'])].join('\n'));
+const dlg2 = p.getByRole('form', { name: 'スプレッドシートから貼り付け' });
+await dlg2.getByRole('table', { name: '取り込みの確認' }).waitFor();
+ok('Ctrl+V で確認が開く（見出しなし）', /新しく入る 2 件・上書き 0 件/.test(await dlg2.textContent()));
+await dlg2.getByRole('button', { name: '2 件を取り込む' }).click(); await p.waitForTimeout(1000);
+const jun = (await api('GET', '/api/admin/karte?month=2026-06'))[1].rows;
+ok('6 月に入る', jun.length === 2 && jun.find((r) => r.name === '見本 六郎')?.visits[0].d === '2026-06-15', JSON.stringify(jun.map((r) => [r.date, r.name])));
+// セル 1 つの貼り付けは、今までどおり入力欄に入る
+await p.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', '見本'); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); });
+await p.waitForTimeout(300);
+ok('1 つのセルの貼り付けでは開かない', (await p.getByRole('form', { name: 'スプレッドシートから貼り付け' }).count()) === 0);
+
 // 4) 年度（4月〜）の継続率
 await p.goto(`${B}/admin/karte?month=2026-10`); await p.waitForSelector('text=継続の状況');
 await p.getByRole('group', { name: '継続率の期間' }).getByRole('button', { name: /2026年度/ }).click();
-await p.waitForSelector('text=2026年度（2026年4月〜2027年3月）の初回 4名');
+await p.waitForSelector('text=2026年度（2026年4月〜2027年3月）の初回 6名');
 ok('年度の初回人数', true);
 await p.screenshot({ path: O + 'karte-fy.png', fullPage: true });
 
@@ -75,6 +90,6 @@ await h.goto(`${B}/admin/login`); await h.fill('input[autocomplete="username"]',
 await h.goto(`${B}/admin/hq/karte`); await h.getByRole('button', { name: '年度（4月〜）' }).click();
 await h.waitForSelector('text=2026年度');
 const ht = await h.textContent('body');
-ok('本部：年度の合計（4月〜）', /合計\s*4\s*前年度 0/.test(ht.replace(/\s+/g, ' ')), ht.replace(/\s+/g, ' ').match(/合計.{0,20}/)?.[0]);
+ok('本部：年度の合計（4月〜）', /合計\s*6\s*前年度 0/.test(ht.replace(/\s+/g, ' ')), ht.replace(/\s+/g, ' ').match(/合計.{0,20}/)?.[0]);
 ok('ページのエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();
