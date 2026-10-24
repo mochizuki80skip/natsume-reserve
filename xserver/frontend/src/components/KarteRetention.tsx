@@ -1,6 +1,9 @@
 // 継続の状況：店舗の継続率（新患／再来／全体）・初回担当者別の継続率・推移グラフ
-import { useState } from 'react';
-import { isNewKind, pct, retentionOf, VISIT_COUNT, type KarteRow, type Retention } from '@/lib/karte';
+import { useState, type ReactNode } from 'react';
+import { isNewKind, pct, retentionOf, VISIT_COUNT, type KarteVisit, type Retention } from '@/lib/karte';
+
+/** 継続率に使う行（店舗の行は visits、本部の集計用の行は reached） */
+export interface RetRow { kind: string; staff: string; visits?: KarteVisit[]; reached?: boolean[] }
 import { PercentLines, SERIES_COLORS } from './charts';
 
 const HEAD = ['初回', ...Array.from({ length: VISIT_COUNT }, (_, i) => `${i + 2}回目`)];
@@ -10,13 +13,13 @@ function Meter({ v, color }: { v: number; color: string }) {
   return <div className="mx-auto mt-0.5 h-1 w-11 overflow-hidden rounded bg-slate-200"><i className="block h-full" style={{ width: `${v}%`, background: color }} /></div>;
 }
 
-export default function KarteRetention({ rows, monthLabel }: { rows: KarteRow[]; monthLabel: string }) {
+export default function KarteRetention({ rows, monthLabel, switcher }: { rows: RetRow[]; monthLabel: string; switcher?: ReactNode }) {
   const [tab, setTab] = useState<'new' | 're'>('new');
   const newRows = rows.filter((r) => isNewKind(r.kind));
   const reRows = rows.filter((r) => r.kind === 'REVISIT');
   const staffNames = [...new Set(rows.map((r) => r.staff || '（担当未入力）'))].sort((a, b) => (a.startsWith('（') ? 1 : b.startsWith('（') ? -1 : 0));
   const colorOf = (name: string) => SERIES_COLORS[staffNames.indexOf(name) % SERIES_COLORS.length];
-  const byStaff = (list: KarteRow[]) => staffNames.map((s) => ({ name: s, r: retentionOf(list.filter((x) => (x.staff || '（担当未入力）') === s)) })).filter((x) => x.r.first > 0);
+  const byStaff = (list: RetRow[]) => staffNames.map((s) => ({ name: s, r: retentionOf(list.filter((x) => (x.staff || '（担当未入力）') === s)) })).filter((x) => x.r.first > 0);
 
   const storeRows: [string, Retention, string][] = [['新患', retentionOf(newRows), '#e34948'], ['再来', retentionOf(reRows), '#2a78d6'], ['全体', retentionOf(rows), STORE_COLOR]];
   const chartList = tab === 'new' ? newRows : reRows;
@@ -25,12 +28,12 @@ export default function KarteRetention({ rows, monthLabel }: { rows: KarteRow[];
     ...(chartList.length ? [{ name: '店舗合計', color: STORE_COLOR, bold: true, values: [100, ...retentionOf(chartList).reached.map((v) => pct(v, chartList.length))], counts: [`${chartList.length}名`, ...retentionOf(chartList).reached.map((v) => `${v}/${chartList.length}名`)] }] : []),
   ];
 
-  const StaffTable = ({ label, list }: { label: string; list: KarteRow[] }) => {
+  const StaffTable = ({ label, list }: { label: string; list: RetRow[] }) => {
     const total = retentionOf(list);
     return (
       <>
         <tr className="bg-slate-50"><td colSpan={7} className="px-2 pt-1.5 text-left text-[11.5px] font-bold">{label}</td></tr>
-        {list.length === 0 && <tr><td colSpan={7} className="px-2 py-1 text-left text-xs text-slate-400">この月はいません</td></tr>}
+        {list.length === 0 && <tr><td colSpan={7} className="px-2 py-1 text-left text-xs text-slate-400">この期間はいません</td></tr>}
         {byStaff(list).map(({ name, r }) => (
           <tr key={name} className="border-b border-slate-100">
             <td className="whitespace-nowrap px-2 py-1 text-left"><i className="mr-1 inline-block h-[3px] w-3 rounded align-middle" style={{ background: colorOf(name) }} />{name}</td>
@@ -53,6 +56,7 @@ export default function KarteRetention({ rows, monthLabel }: { rows: KarteRow[];
     <section className="mt-4">
       <div className="mb-2 flex flex-wrap items-baseline gap-3">
         <h2 className="text-base font-bold">継続の状況（{monthLabel}の初回 {rows.length}名）</h2>
+        {switcher}
         <span className="text-xs text-slate-500">2〜6回目の「日付」が入っている人を継続として数えます。月末に近い初回の人は、まだ次回が来ていないため低めに出ます。新患＝初診・初・初自。</span>
       </div>
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_1.3fr_0.95fr]">
@@ -90,7 +94,7 @@ export default function KarteRetention({ rows, monthLabel }: { rows: KarteRow[];
             </div>
           </div>
           <div className="mb-1 flex flex-wrap gap-x-3 text-[11px]">{series.map((s) => <span key={s.name}><i className="mr-1 inline-block h-[3px] w-3 rounded align-middle" style={{ background: s.color }} />{s.name}</span>)}</div>
-          {series.length ? <PercentLines xLabels={HEAD} series={series} /> : <p className="py-10 text-center text-xs text-slate-400">この月はいません</p>}
+          {series.length ? <PercentLines xLabels={HEAD} series={series} /> : <p className="py-10 text-center text-xs text-slate-400">この期間はいません</p>}
         </div>
       </div>
     </section>

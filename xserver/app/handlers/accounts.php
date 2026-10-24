@@ -89,7 +89,7 @@ const AUDIT_LABEL = [
     'adm_days_put' => '日の設定（公開・休診・枠数）', 'adm_shifts_put' => 'シフト', 'adm_help_in_put' => 'ヘルプ（他店から）',
     'adm_block_post' => 'ブロックの追加', 'adm_move_post' => '予約の変更（日時の移動）', 'adm_cell_menus_put' => '予約表のメニュー', 'adm_cell_staff_put' => '予約表の担当者', 'adm_patients_post' => '患者一覧（診察券番号）の取り込み', 'adm_block_delete' => 'ブロックの解除', 'adm_staff_post' => 'スタッフ追加', 'adm_staff_put' => 'スタッフ変更', 'adm_staff_delete' => 'スタッフ削除',
     'adm_store_put' => '店舗設定', 'adm_store_patch' => '自分のパスワード変更',
-    'karte_post' => 'カルテ集計 行の追加', 'karte_patch' => 'カルテ集計 入力', 'karte_delete' => 'カルテ集計 行の削除',
+    'karte_post' => 'カルテ集計 行の追加', 'karte_patch' => 'カルテ集計 入力', 'karte_delete' => 'カルテ集計 行の削除', 'karte_import' => '新患継続率 スプレッドシートの取り込み',
     'hq_settings_put' => '全店共通設定', 'hq_stores_post' => '店舗の追加', 'hq_karte_options_put' => '選択肢（カルテ・メニュー）', 'hq_areas_put' => 'エリア',
     'hq_accounts_post' => '本部アカウントの発行', 'hq_accounts_put' => '本部アカウントの変更',
     'hq_stores_put' => '店舗の変更・停止・削除', 'hq_stores_page_put' => '店舗えらびページの公開', 'hq_referrals_put' => '紹介元（業者）の QR', 'adm_special_days_put' => '特別な営業日', 'adm_cell_phone_put' => '電話予約の電話番号', 'adm_special_days_delete' => '特別な営業日の削除', 'hq_jibai_settings_put' => '自賠の設定', 'adm_cancel_patch' => 'キャンセル名簿のメモ', 'adm_reservations_delete' => 'WEB予約の削除',
@@ -103,12 +103,14 @@ function audit_register(string $fn, string $method): void
     $s = Auth::session();
     if (!$s) return;
     $b = json_decode((string)file_get_contents('php://input'), true);
+    if ($fn === 'karte_import' && is_array($b) && !empty($b['dryRun'])) return; // 取り込み前の確認は記録しない
     $detail = [];
     foreach (['date', 'code', 'month'] as $k) if (is_array($b) && is_scalar($b[$k] ?? null) && $b[$k] !== '') $detail[] = (string)$b[$k];
     $ja = ['karteNo' => 'カルテNo', 'kind' => '新・再', 'trig' => 'きっかけ', 'trigDetail' => '内訳', 'name' => '名前', 'age' => '年齢', 'sex' => '性別', 'symptomCat' => '症状カテゴリー',
         'symptom' => '症状', 'staff' => '担当', 'treatment' => '施術', 'visits' => '2〜6回目', 'date' => '日付', 'active' => '利用中／停止', 'canManage' => '発行・停止の権限', 'password' => 'パスワード再設定'];
     $keys = fn(array $x) => implode('・', array_map(fn($k) => $ja[$k] ?? $k, array_keys($x)));
     if (is_array($b) && isset($b['patch']) && is_array($b['patch'])) $detail[] = '項目：' . $keys($b['patch']);
+    if ($fn === 'karte_import' && is_array($b) && is_array($b['rows'] ?? null)) $detail[] = count($b['rows']) . ' 行';
     if ($fn === 'hq_accounts_put' && is_array($b)) {
         $t = Db::one('SELECT code, name FROM admin_account WHERE id = ?', [(string)($b['id'] ?? '')]);
         $detail[] = ($t ? "{$t['name']}（{$t['code']}）：" : '') . $keys(array_diff_key($b, ['id' => 1]));

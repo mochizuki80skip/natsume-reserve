@@ -61,13 +61,14 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
   const [target, setTarget] = useState<'all' | 'area' | 'store'>(storeOnly ? 'store' : 'all');
   const [areaIdx, setAreaIdx] = useState(0);
   const [storeCode, setStoreCode] = useState('');
-  const [unit, setUnit] = useState<'day' | 'week' | 'month'>('day');
+  const [unit, setUnit] = useState<'day' | 'week' | 'month' | 'fy'>('day');
   const [ym, setYm] = useState(iso(now).slice(0, 7));
   const [year, setYear] = useState(now.getUTCFullYear());
+  const [fy, setFy] = useState(now.getUTCMonth() >= 3 ? now.getUTCFullYear() : now.getUTCFullYear() - 1); // 年度（4月はじまり）
   const [openTrig, setOpenTrig] = useState<string | null>(null);
   const [retKind, setRetKind] = useState<'new' | 're' | 'all'>('new');
 
-  const range = unit === 'month' ? { from: `${year - 1}-01-01`, to: `${year}-12-31` } : { from: `${shiftYm(ym, -1)}-01`, to: daysOf(ym).slice(-1)[0] };
+  const range = unit === 'fy' ? { from: `${fy - 1}-04-01`, to: `${fy + 1}-03-31` } : unit === 'month' ? { from: `${year - 1}-01-01`, to: `${year}-12-31` } : { from: `${shiftYm(ym, -1)}-01`, to: daysOf(ym).slice(-1)[0] };
   const { data, error } = useFetch<DataResp>(`/api/admin/hq/karte?from=${range.from}&to=${range.to}`);
   const opt = useFetch<OptResp>('/api/admin/hq/karte/options').data;
 
@@ -80,15 +81,17 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
       ? daysOf(ym).map((d) => ({ label: String(Number(d.slice(8))), from: d, to: d, title: `${mdj(d)}（${wd(d)}）` }))
       : unit === 'week'
         ? weeksOf(ym).map((w) => ({ ...w, title: w.label }))
-        : Array.from({ length: 12 }, (_, i) => { const m = `${year}-${String(i + 1).padStart(2, '0')}`; return { label: `${i + 1}月`, from: `${m}-01`, to: daysOf(m).slice(-1)[0], title: `${year}年${i + 1}月` }; });
+        : unit === 'fy'
+          ? Array.from({ length: 12 }, (_, i) => { const mo = ((i + 3) % 12) + 1, y = mo >= 4 ? fy : fy + 1, m = `${y}-${String(mo).padStart(2, '0')}`; return { label: `${mo}月`, from: `${m}-01`, to: daysOf(m).slice(-1)[0], title: `${y}年${mo}月` }; })
+          : Array.from({ length: 12 }, (_, i) => { const m = `${year}-${String(i + 1).padStart(2, '0')}`; return { label: `${i + 1}月`, from: `${m}-01`, to: daysOf(m).slice(-1)[0], title: `${year}年${i + 1}月` }; });
     const cur = { from: buckets[0].from, to: buckets[buckets.length - 1].to };
-    const prev = unit === 'month' ? { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` } : { from: `${shiftYm(ym, -1)}-01`, to: daysOf(shiftYm(ym, -1)).slice(-1)[0] };
+    const prev = unit === 'fy' ? { from: `${fy - 1}-04-01`, to: `${fy}-03-31` } : unit === 'month' ? { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` } : { from: `${shiftYm(ym, -1)}-01`, to: daysOf(shiftYm(ym, -1)).slice(-1)[0] };
     const inR = (r: HqRow, x: { from: string; to: string }) => r.date >= x.from && r.date <= x.to;
     const curRows = rows.filter((r) => inR(r, cur));
     const prevRows = rows.filter((r) => inR(r, prev));
-    const trigBuckets = unit === 'month' ? buckets : weeksOf(ym).map((w) => ({ ...w, title: w.label }));
+    const trigBuckets = unit === 'month' || unit === 'fy' ? buckets : weeksOf(ym).map((w) => ({ ...w, title: w.label }));
     return { rows, curRows, prevRows, buckets, trigBuckets, area };
-  }, [data, opt, target, areaIdx, storeCode, unit, ym, year]);
+  }, [data, opt, target, areaIdx, storeCode, unit, ym, year, fy]);
 
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data || !opt || !view) return <p className="text-sm text-slate-500">読み込み中…</p>;
@@ -96,8 +99,8 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
   const kinds = [['NEW', '新患（初診・初）'], ['ACCIDENT', '初自（自賠）'], ['REVISIT', '再来']] as const;
   const cnt = (list: HqRow[], k?: string) => (k ? list.filter((r) => r.kind === k).length : list.length);
   const diff = (a: number, b: number) => (a - b >= 0 ? `+${a - b}` : `${a - b}`);
-  const prevLabel = unit === 'month' ? '前年' : '前月';
-  const periodLabel = unit === 'month' ? `${year}年` : `${Number(ym.slice(0, 4))}年${Number(ym.slice(5))}月`;
+  const prevLabel = unit === 'fy' ? '前年度' : unit === 'month' ? '前年' : '前月';
+  const periodLabel = unit === 'fy' ? `${fy}年度` : unit === 'month' ? `${year}年` : `${Number(ym.slice(0, 4))}年${Number(ym.slice(5))}月`;
 
   // きっかけ別（新患＋初自）
   const newCur = curRows.filter((r) => isNewKind(r.kind));
@@ -136,8 +139,10 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
           : <span className="text-xs text-slate-500">エリアは「選択肢・エリアの設定」で作れます</span>)}
         {target === 'store' && !storeOnly && <select value={storeCode || data.stores[0]?.code} onChange={(e) => setStoreCode(e.target.value)} className="rounded border px-2 py-1">{data.stores.map((s) => <option key={s.code} value={s.code}>{s.name}</option>)}</select>}
         <span className={storeOnly ? '' : 'ml-3'}>単位</span>
-        <Seg value={unit} onChange={(v) => setUnit(v as typeof unit)} items={[['day', '日別'], ['week', '週別'], ['month', '月別']]} />
-        {unit === 'month' ? (
+        <Seg value={unit} onChange={(v) => setUnit(v as typeof unit)} items={[['day', '日別'], ['week', '週別'], ['month', '月別'], ['fy', '年度（4月〜）']]} />
+        {unit === 'fy' ? (
+          <><button type="button" onClick={() => setFy(fy - 1)} className="rounded border px-2">‹</button><b>{fy}年度</b><button type="button" onClick={() => setFy(fy + 1)} className="rounded border px-2">›</button></>
+        ) : unit === 'month' ? (
           <><button type="button" onClick={() => setYear(year - 1)} className="rounded border px-2">‹</button><b>{year}年</b><button type="button" onClick={() => setYear(year + 1)} className="rounded border px-2">›</button></>
         ) : (
           <><button type="button" onClick={() => setYm(shiftYm(ym, -1))} className="rounded border px-2">‹</button><b>{periodLabel}</b><button type="button" onClick={() => setYm(shiftYm(ym, 1))} className="rounded border px-2">›</button></>
@@ -165,7 +170,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
 
       <div className="mb-3 grid grid-cols-1 gap-3 xl:grid-cols-[1.5fr_1fr]">
         <div className="overflow-x-auto rounded-lg border bg-white p-3">
-          <h2 className="mb-1 text-sm font-bold">きっかけ別（{unit === 'month' ? '月ごと' : '週ごと'}・新患＋初自）</h2>
+          <h2 className="mb-1 text-sm font-bold">きっかけ別（{unit === 'month' || unit === 'fy' ? '月ごと' : '週ごと'}・新患＋初自）</h2>
           <table className="w-full text-right text-xs tabular-nums">
             <thead><tr className="bg-slate-50 text-[10.5px] text-slate-500"><th className="px-2 py-1 text-left">きっかけ</th>{trigBuckets.map((b) => <th key={b.label} className="whitespace-nowrap px-2 py-1">{b.label}</th>)}<th className="px-2 py-1">計</th></tr></thead>
             <tbody>

@@ -59,6 +59,70 @@ function karte_delete(): never
     Http::json(['ok' => true]);
 }
 
+/**
+ * スプレッドシートから貼り付けた行を取り込む（{ rows: [{ date, name, kind, … }], dryRun }）。
+ * 同じ日付・同じ氏名の行があれば、貼り付けた内容で上書き（空の欄は今の値のまま）。なければ手で入れた行として足す。
+ * dryRun のときは書き込まずに、行ごとの結果（new / update / error）だけ返す
+ */
+function karte_import(): never
+{
+    $ctx = Auth::context();
+    $sid = $ctx['store']['id'];
+    Http::requireJson();
+    $b = Http::body();
+    $list = $b['rows'] ?? null;
+    if (!is_array($list) || count($list) === 0 || count($list) > 3000) Http::error('取り込む行がありません（一度に 3000 行まで）', 400);
+    $dry = !empty($b['dryRun']);
+    $result = [];
+    $n = ['new' => 0, 'update' => 0, 'error' => 0];
+    if (!$dry) Db::pdo()->beginTransaction();
+    try {
+        foreach ($list as $i => $r) {
+            if (!is_array($r)) { $result[] = ['status' => 'error', 'error' => '行が読めません']; $n['error']++; continue; }
+            // 空の欄は上書きしない（visits は日付が 1 つでもあるときだけ）
+            $patch = array_filter($r, fn($v, $k) => in_array($k, Karte::EDITABLE, true) && $k !== 'nameOk' && $v !== null && $v !== '' && $k !== 'visits', ARRAY_FILTER_USE_BOTH);
+            try {
+                $set = Karte::cleanPatch($patch);
+                unset($set['nameOk']);
+                if (($set['date'] ?? '') === '') throw new HttpError(400, '日付がありません');
+                if (($set['name'] ?? '') === '') throw new HttpError(400, '氏名がありません');
+                $visits = is_array($r['visits'] ?? null) ? Karte::cleanPatch(['visits' => $r['visits']])['visits'] : null;
+            } catch (HttpError $e) {
+                $result[] = ['status' => 'error', 'error' => $e->getMessage()]; $n['error']++; continue;
+            }
+            $same = null;
+            foreach (Db::all('SELECT id, name, visits FROM karte WHERE storeId = ? AND date = ?', [$sid, $set['date']]) as $x) {
+                if (Text::isSameName($x['name'], $set['name'])) { $same = $x; break; }
+            }
+            $status = $same ? 'update' : 'new';
+            $result[] = ['status' => $status];
+            $n[$status]++;
+            if ($dry) continue;
+            if ($visits !== null) {
+                // 回ごとに、貼り付けた側に日付があればその回を上書き
+                $old = $same ? (json_decode((string)$same['visits'], true) ?: []) : [];
+                $new = json_decode($visits, true);
+                foreach ($new as $k => $v) if ($v['d'] === '' && isset($old[$k])) $new[$k] = $old[$k] + ['d' => '', 's' => '', 't' => ''];
+                $set['visits'] = json_encode($new, JSON_UNESCAPED_UNICODE);
+            }
+            if ($same) {
+                $cols = implode(', ', array_map(fn($k) => "`$k` = ?", array_keys($set)));
+                Db::exec("UPDATE karte SET $cols, edited = 1 WHERE id = ?", array_merge(array_values($set), [$same['id']]));
+            } else {
+                $set += ['visits' => Karte::emptyVisits()];
+                $id = Db::newId();
+                $cols = implode(', ', array_map(fn($k) => "`$k`", array_keys($set)));
+                Db::exec("INSERT INTO karte (id, storeId, auto, edited, $cols) VALUES (?, ?, 0, 1, " . implode(', ', array_fill(0, count($set), '?')) . ')', array_merge([$id, $sid], array_values($set)));
+            }
+        }
+        if (!$dry) Db::pdo()->commit();
+    } catch (Throwable $e) {
+        if (!$dry && Db::pdo()->inTransaction()) Db::pdo()->rollBack();
+        throw $e;
+    }
+    Http::json(['ok' => true, 'dryRun' => $dry, 'counts' => $n, 'rows' => $result]);
+}
+
 // ---------- 本部 ----------
 /** 集計用の行（氏名は返さない）。期間 from〜to。本部は全店、店舗アカウントは自店舗だけ */
 function hq_karte_get(): never

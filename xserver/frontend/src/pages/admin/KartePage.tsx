@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, parseMd, type DetailFor, type KarteKind, type KarteOptions, type KarteRow, type KarteVisit } from '@/lib/karte';
-import KarteRetention from '@/components/KarteRetention';
+import KarteRetention, { type RetRow } from '@/components/KarteRetention';
+import KarteImportDialog from '@/components/KarteImportDialog';
 import { nameCheck } from '@/lib/nameText';
 import { useAdmin } from './Layout';
 
@@ -161,6 +162,12 @@ export default function KartePage() {
   const { data, error, reload } = useFetch<Resp>(`/api/admin/karte?month=${encodeURIComponent(month)}`);
   const [rows, setRows] = useState<KarteRow[]>([]);
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [importOpen, setImportOpen] = useState(false);
+  // 継続の状況：この月／年度（4月〜）。年度は表示中の月を含む年度
+  const [period, setPeriod] = useState<'month' | 'fy'>('month');
+  const vm = data?.month ?? '';
+  const fy = vm ? (Number(vm.slice(5, 7)) >= 4 ? Number(vm.slice(0, 4)) : Number(vm.slice(0, 4)) - 1) : 0;
+  const fyData = useFetch<{ rows: (RetRow & { store: string })[] }>(period === 'fy' && fy ? `/api/admin/hq/karte?from=${fy}-04-01&to=${fy + 1}-03-31` : null);
   useEffect(() => { if (data) setRows(data.rows); }, [data]);
   if (!me.store) return <p>店舗が登録されていません。</p>;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
@@ -212,6 +219,7 @@ export default function KartePage() {
         <a href={`/api/admin/karte/export?month=${ym}`} className="rounded border bg-white px-2 py-0.5 text-sm">Excelで保存</a>
         <button type="button" onClick={() => window.print()} className="rounded border bg-white px-2 py-0.5 text-sm">印刷</button>
         <button type="button" onClick={addRow} className="rounded border bg-white px-2 py-0.5 text-sm">＋ 行を追加</button>
+        <button type="button" onClick={() => setImportOpen(true)} className="rounded border bg-white px-2 py-0.5 text-sm">📋 スプレッドシートから貼り付け</button>
       </div>
       <div className="max-h-[470px] overflow-auto rounded border border-slate-300 bg-white print:max-h-none">
         <table className="w-full border-collapse text-[11.5px]">
@@ -239,7 +247,20 @@ export default function KartePage() {
         日付は「9/5」や「0905」で入力できます。予約表から入った行は、来院チェックを外すと消えます（手を加えた行は残ります）。
         <Link to={`/admin/day/${data.today}`} className="ml-2 text-brand underline">予約表へ</Link>
       </p>
-      <KarteRetention rows={rows} monthLabel={monthLabel} />
+      {importOpen && <KarteImportDialog today={data.today} options={data.options} onClose={() => setImportOpen(false)}
+        onDone={(months) => { setImportOpen(false); if (months[0] && months[0] !== ym) setSp({ month: months[0] }); else reload(); fyData.reload(); }} />}
+      <KarteRetention
+        rows={period === 'fy' ? (fyData.data?.rows ?? []).filter((r) => r.store === me.store!.code) : rows}
+        monthLabel={period === 'fy' ? `${fy}年度（${fy}年4月〜${fy + 1}年3月）` : monthLabel}
+        switcher={(
+          <span className="no-print inline-flex overflow-hidden rounded border text-xs" role="group" aria-label="継続率の期間">
+            {([['month', 'この月'], ['fy', `${fy}年度（4月〜）`]] as const).map(([v, l]) => (
+              <button key={v} type="button" aria-pressed={period === v} onClick={() => setPeriod(v)} className={`px-3 py-0.5 ${period === v ? 'bg-brand font-bold text-white' : 'bg-white'}`}>{l}</button>
+            ))}
+            {period === 'fy' && fyData.loading && <span className="px-2 py-0.5 text-slate-500">読み込み中…</span>}
+          </span>
+        )}
+      />
     </div>
   );
 }

@@ -60,6 +60,7 @@ function route_table(): array
         ['POST', '#^/api/admin/karte$#', 'karte_post'],
         ['PATCH', '#^/api/admin/karte$#', 'karte_patch'],
         ['DELETE', '#^/api/admin/karte$#', 'karte_delete'],
+        ['POST', '#^/api/admin/karte/import$#', 'karte_import'],
         ['GET', '#^/api/admin/hq/karte$#', 'hq_karte_get'],
         ['GET', '#^/api/admin/hq/karte/options$#', 'hq_karte_options_get'],
         ['PUT', '#^/api/admin/hq/karte/options$#', 'hq_karte_options_put'],
