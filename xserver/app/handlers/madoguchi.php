@@ -215,7 +215,13 @@ function acct_mado_get(): never
     if ($s['role'] === 'store') Http::error('forbidden', 403);
     $ym = mado_month_param(Http::query('month'));
     Http::json([
-        'month' => $ym, 'rows' => array_map(fn($st) => Madoguchi::summary($st, $ym) + ['canTarget' => $s['role'] === 'hq' || ($s['role'] === 'mg' && Auth::canEditStore($s, $st))], acct_stores($s)),
+        // 店舗ごと：今月の数字・前月の売上（前月比）・エリア・管轄かどうか（管轄MG）
+        'month' => $ym, 'areas' => array_column(Db::all('SELECT name FROM area ORDER BY sortOrder ASC, name ASC'), 'name'),
+        'rows' => array_map(fn($st) => Madoguchi::summary($st, $ym) + [
+            'area' => $st['area'] ?? '', 'mine' => $s['role'] !== 'mg' || Auth::canEditStore($s, $st),
+            'prevSales' => Madoguchi::month($st, substr(Time::addDays($ym . '-01', -1), 0, 7))['sales'],
+            'canTarget' => $s['role'] === 'hq' || ($s['role'] === 'mg' && Auth::canEditStore($s, $st)),
+        ], acct_stores($s)),
         'canCheck' => in_array($s['role'], ['hq', 'acct'], true), 'canTarget' => $s['role'] === 'hq' || $s['role'] === 'mg',
     ]);
 }
