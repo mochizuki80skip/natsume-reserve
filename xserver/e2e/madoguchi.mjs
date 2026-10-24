@@ -120,16 +120,24 @@ ok('確認後に変更あり', (await ac.locator('tbody tr', { hasText: 'サン�
 // ---- 管轄MG：エリアの店舗だけ・店舗と同じことができる
 const mg = await login('', 'mgpass123', 'mg1');
 const me = (await api(mg, 'GET', '/api/admin/me'))[1];
-ok('管轄MG：表示中はエリアの店舗', me.store?.code === 'S002' && me.stores.map((s) => s.code).join() === 'S002', JSON.stringify([me.store?.code, me.stores.map((s) => s.code)]));
+ok('管轄MG：最初はエリアの店舗・切り替えは全店（管轄外は見るだけの印）', me.store?.code === 'S002' && !me.store.readOnly && me.stores.length === 2 && me.stores.find((s) => s.code === 'S001').mine === false, JSON.stringify([me.store, me.stores]));
 ok('管轄MG：予約表を直せる', (await api(mg, 'PUT', '/api/admin/cells', { date: D, cells: [{ time: 540, bed: 1, text: '見本 MG入力' }] }))[0] === 200);
-const sw = await mg.evaluate(async () => { const f = new FormData(); f.set('store', 'S001'); f.set('back', '/admin'); const r = await fetch('/api/admin/switch', { method: 'POST', body: f, redirect: 'manual' }); return r.status; });
-ok('管轄外の店舗には切り替えられない', sw === 404, String(sw));
+const swTo = (code) => mg.evaluate(async (code) => { const f = new FormData(); f.set('store', code); f.set('back', '/admin'); const r = await fetch('/api/admin/switch', { method: 'POST', body: f, redirect: 'manual' }); return r.status; }, code);
+ok('管轄外の店舗にも切り替えられる', [0, 302, 303].includes(await swTo('S001')));
+const me2 = (await api(mg, 'GET', '/api/admin/me'))[1];
+ok('管轄外は見るだけ（予約表は見られる・直せない）', me2.store.code === 'S001' && me2.store.readOnly === true && (await api(mg, 'GET', `/api/admin/day?date=${D}`))[0] === 200 && (await api(mg, 'PUT', '/api/admin/cells', { date: D, cells: [{ time: 540, bed: 2, text: 'x' }] }))[0] === 403);
+await mg.goto(`${B}/admin/day/${D}`); await mg.waitForSelector('#grid');
+ok('管轄外の店舗では「見るだけ」と出る', await mg.getByText('管轄外の店舗なので見るだけです').isVisible());
+ok('管轄外の窓口集計も見るだけ', (await api(mg, 'GET', `/api/admin/madoguchi?month=${M}`))[1].canEdit === false && (await api(mg, 'PUT', '/api/admin/madoguchi/day', { date: D, patch: { copay: 1 } }))[0] === 403);
+await swTo('S002');
+ok('全店状況・自賠集計を見られる', (await api(mg, 'GET', `/api/admin/hq/overview?date=${D}`))[0] === 200 && (await api(mg, 'GET', `/api/admin/hq/jibai?ym=${M}`))[0] === 200);
+ok('売上目標：管轄の店舗は入れられる・管轄外は入れられない', (await api(mg, 'PUT', '/api/admin/acct/madoguchi/target', { store: 'S002', month: M, target: 3000000 }))[0] === 200 && (await api(mg, 'PUT', '/api/admin/acct/madoguchi/target', { store: 'S001', month: M, target: 1 }))[0] === 403);
 ok('管轄MG：本部の画面は開けない', (await api(mg, 'GET', '/api/admin/hq/goods'))[0] === 403);
 const mgList = (await api(mg, 'GET', `/api/admin/acct/madoguchi?month=${M}`))[1];
-ok('管轄MG：窓口集計の一覧はエリアの店舗だけ', mgList.rows.length === 1 && mgList.rows[0].code === 'S002' && !mgList.canCheck);
-ok('管轄MG：管轄外の店舗の窓口表は見られない', (await api(mg, 'GET', `/api/admin/madoguchi?month=${M}&store=S001`))[0] === 404);
+ok('管轄MG：窓口集計・売上は全店（経理確認はできない・目標は管轄の店舗だけ）', mgList.rows.length === 2 && !mgList.canCheck && mgList.rows.find((r) => r.code === 'S002').canTarget && !mgList.rows.find((r) => r.code === 'S001').canTarget && mgList.rows.find((r) => r.code === 'S002').target === 3000000);
+ok('管轄MG：管轄外の店舗の窓口表も見られる（見るだけ）', (await api(mg, 'GET', `/api/admin/madoguchi?month=${M}&store=S001`))[1].canEdit === false);
 const kh = (await api(mg, 'GET', `/api/admin/hq/karte?from=${M}-01&to=${M}-31`))[1];
-ok('管轄MG：新患・再来集計はエリアの店舗', kh.stores.length === 1 && kh.stores[0].code === 'S002');
+ok('管轄MG：新患・再来集計は全店', kh.stores.length === 2 && kh.areas.length === 1);
 // 管轄MG：店舗設定のスタッフ（初回・再来の担当・異動）も直せる
 const st = (await api(mg, 'POST', '/api/admin/staff-members', { name: '見本 異動', role: 'THERAPIST' }))[1].member;
 const up = await api(mg, 'PUT', '/api/admin/staff-members', { id: st.id, canFirst: true, canRevisit: true });
@@ -139,10 +147,10 @@ const nav2 = await mg.getByRole('navigation').textContent();
 ok('管轄MG のメニュー', nav2.includes('予約表') && nav2.includes('MG（見本エリア）') && !nav2.includes('本部メニュー'), nav2);
 // ---- 人員の過不足（本部・管轄MG）
 ok('管轄MG：人員基準を入れる', (await api(mg, 'PUT', '/api/admin/staffing/std', { store: 'S002', therapists: 2, reception: 0 }))[0] === 200);
-ok('管轄MG：管轄外の人員基準は入れられない', (await api(mg, 'PUT', '/api/admin/staffing/std', { store: 'S001', therapists: 2 }))[0] === 404);
+ok('管轄MG：管轄外の人員基準は入れられない', (await api(mg, 'PUT', '/api/admin/staffing/std', { store: 'S001', therapists: 2 }))[0] === 403);
 const sf = (await api(mg, 'GET', '/api/admin/staffing?month=2026-11'))[1];
-const s2 = sf.rows[0];
-ok('人員の過不足：エリアの店舗だけ・在籍と基準', sf.rows.length === 1 && s2.code === 'S002' && s2.therapist.std === 2 && s2.therapist.min === 1 && s2.reception.std === 0, JSON.stringify(s2));
+const s2 = sf.rows.find((r) => r.code === 'S002');
+ok('人員の過不足：全店・在籍と基準（直せるのは管轄の店舗だけ）', sf.rows.length === 2 && s2.canEdit && !sf.rows.find((r) => r.code === 'S001').canEdit && s2.therapist.std === 2 && s2.therapist.min === 1 && s2.reception.std === 0, JSON.stringify(s2));
 ok('この月の入れ替わり（11/30 に終了）', s2.changes.some((c) => c.name === '見本 異動' && !c.in && c.date === '2026-11-30'));
 ok('店舗アカウントは見られない', (await api(sp, 'GET', '/api/admin/staffing'))[0] === 403);
 ok('本部は全店', (await api(hq, 'GET', '/api/admin/staffing?month=2026-11'))[1].rows.length === 2);

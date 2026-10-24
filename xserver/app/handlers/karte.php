@@ -135,8 +135,8 @@ function hq_karte_get(): never
         $stores = Settings::storesInOrder('1 = 1', [], false);
         $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
     } elseif ($s['role'] === 'mg') {
-        // 管轄MG：管轄エリアの店舗の合計
-        $stores = Auth::mgStores();
+        // 管轄MG：全店を見られる（本部専用の店舗は除く）
+        $stores = Settings::storesInOrder('hqOnly = 0', [], false);
         $ids = array_column($stores, 'id') ?: [''];
         $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE storeId IN (' . Db::inList($ids) . ') AND date BETWEEN ? AND ?', array_merge($ids, [$from, $to]));
     } else {
@@ -154,7 +154,7 @@ function hq_karte_get(): never
             || ($r['kind'] !== 'REVISIT' && ($r['trig'] === '' || (array_key_exists($r['trig'], Karte::DETAIL_FOR) && $r['trigDetail'] === '')));
         $out[] = ['store' => $codeOf[$r['storeId']] ?? '', 'date' => $r['date'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'staff' => $r['staff'], 'reached' => $reached, 'missing' => $missing, 'stopped' => (bool)(int)$r['stopped'], 'transferred' => (bool)(int)$r['transferred']];
     }
-    $areas = $s['role'] !== 'hq' ? [] : array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
+    $areas = $s['role'] !== 'hq' && $s['role'] !== 'mg' ? [] : array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
     Http::json([
         'rows' => $out, 'areas' => $areas,
         'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'active' => (bool)$s['active']], $stores),

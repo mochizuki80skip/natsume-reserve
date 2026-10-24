@@ -34,11 +34,11 @@ type Bucket = { label: string; from: string; to: string; title: string };
 export default function KarteHqPage() {
   const { me } = useAdmin();
   const [tab, setTab] = useState<'sum' | 'settings'>('sum');
-  // 管轄MG：管轄エリアの店舗の集計（全体＝エリアの合計・店舗ごと。選択肢の設定はなし）
+  // 管轄MG：全店の集計を見られる（全体・エリア・店舗。選択肢の設定はなし）
   if (me.session.role === 'mg') {
     return (
       <div>
-        <h1 className="mb-3 text-lg font-bold">新患・再来 集計（{me.session.area}）</h1>
+        <h1 className="mb-3 text-lg font-bold">新患・再来 集計（全店）</h1>
         <Summary />
       </div>
     );

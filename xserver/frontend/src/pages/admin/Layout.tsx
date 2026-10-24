@@ -63,7 +63,7 @@ export default function AdminLayout() {
                 {/* 本部専用 → エリアごと（本部の店舗一覧の並び順） */}
                 {[...new Map(me.stores.map((s) => [s.jibaiOnly ? '自賠請求のみ' : s.hqOnly ? '本部専用' : s.area || 'エリア未設定', 0])).keys()].map((g) => (
                   <optgroup key={g} label={g}>
-                    {me.stores.filter((s) => (s.jibaiOnly ? '自賠請求のみ' : s.hqOnly ? '本部専用' : s.area || 'エリア未設定') === g).map((s) => <option key={s.code} value={s.code}>{s.name}{s.active ? '' : '（停止）'}</option>)}
+                    {me.stores.filter((s) => (s.jibaiOnly ? '自賠請求のみ' : s.hqOnly ? '本部専用' : s.area || 'エリア未設定') === g).map((s) => <option key={s.code} value={s.code}>{s.name}{s.active ? '' : '（停止）'}{s.mine === false ? '（見るだけ）' : ''}</option>)}
                   </optgroup>
                 ))}
               </select>
@@ -89,7 +89,9 @@ export default function AdminLayout() {
               <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
               {me.session.role === 'mg' && (
                 <DropMenu label={`MG（${me.session.area}）`}>
-                  <Link to="/admin/acct">エリアの窓口集計</Link>
+                  <Link to="/admin/hq/overview">全店状況</Link>
+                  <Link to="/admin/acct">窓口集計・売上（全店）</Link>
+                  <Link to="/admin/hq/jibai">自賠集計</Link>
                   <Link to="/admin/staffing">人員の過不足</Link>
                 </DropMenu>
               )}
@@ -116,6 +118,8 @@ export default function AdminLayout() {
           </nav>
         </div>
       </header>
+      {/* 管轄MG が管轄外の店舗を開いているとき */}
+      {store?.readOnly && me.session.role === 'mg' && <p className="no-print border-b border-amber-300 bg-amber-100 px-3 py-1 text-center text-sm font-bold text-amber-900">「{store.name}」は管轄外の店舗なので見るだけです（入力・変更はできません）</p>}
       {store && <WebNotifier key={store.id} />}
       <main className={`mx-auto ${wide ? 'max-w-none px-4 py-3' : 'max-w-6xl px-4 py-4'}`}>
         <Outlet context={{ me, refreshMe: reload } satisfies AdminContext} />

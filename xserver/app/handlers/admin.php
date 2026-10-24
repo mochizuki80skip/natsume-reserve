@@ -47,11 +47,13 @@ function adm_me(): never
     $s = Auth::requireSession();
     $store = Auth::resolveStore($s);
     // 店舗切り替えに出す店舗：本部＝全店、管轄MG＝管轄エリアの店舗
-    $list = $s['role'] === 'hq' ? Settings::storesInOrder() : ($s['role'] === 'mg' ? Auth::mgStores() : []);
-    $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'] ?? '', 'hqOnly' => (bool)($r['hqOnly'] ?? 0), 'jibaiOnly' => (bool)($r['jibaiOnly'] ?? 0)], $list);
+    // 店舗切り替えに出す店舗：本部＝全店、管轄MG＝全店（管轄の店舗に印。管轄外は見るだけ）。本部専用の店舗は本部だけ
+    $list = $s['role'] === 'hq' ? Settings::storesInOrder() : ($s['role'] === 'mg' ? Settings::storesInOrder('hqOnly = 0') : []);
+    $mine = $s['role'] === 'mg' ? array_column(Auth::mgStores(), 'code') : [];
+    $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'] ?? '', 'hqOnly' => (bool)($r['hqOnly'] ?? 0), 'jibaiOnly' => (bool)($r['jibaiOnly'] ?? 0), 'mine' => $s['role'] !== 'mg' || in_array($r['code'], $mine, true)], $list);
     Http::json([
         'session' => ['code' => $s['code'], 'role' => $s['role'], 'name' => $s['role'] !== 'store' ? (Auth::account()['name'] ?? '') : '', 'canManage' => $s['role'] === 'hq' && (int)(Auth::account()['canManage'] ?? 0) === 1, 'area' => $s['role'] === 'mg' ? (string)(Auth::account()['area'] ?? '') : ''],
-        'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active'], 'jibaiOnly' => (bool)($store['jibaiOnly'] ?? 0)] : null,
+        'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active'], 'jibaiOnly' => (bool)($store['jibaiOnly'] ?? 0), 'readOnly' => !Auth::canEditStore($s, $store)] : null,
         'stores' => $stores,
         'today' => Time::nowJst()['date'],
         'smsEnabled' => Sms::enabled(),

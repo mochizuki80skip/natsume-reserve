@@ -116,6 +116,14 @@ final class Auth
         return $s;
     }
 
+    /** 全店を見られる人（本部・経理・管轄MG）。全店状況・自賠集計など、見るだけの画面 */
+    public static function requireViewAll(): array
+    {
+        $s = self::requireSession();
+        if (!in_array($s['role'], ['hq', 'acct', 'mg'], true)) throw new HttpError(403, 'forbidden');
+        return $s;
+    }
+
     /** 管轄MG が開ける店舗（管轄エリアの店舗。エリアの店舗が増えれば自動で増える） */
     public static function mgStores(): array
     {
@@ -126,12 +134,19 @@ final class Auth
         return Settings::storesInOrder('code IN (' . Db::inList($codes) . ') AND hqOnly = 0', $codes);
     }
 
-    /** そのアカウントが開ける店舗（本部・経理＝全店、管轄MG＝エリアの店舗、店舗＝自店舗） */
+    /** そのアカウントが見られる店舗（本部・経理・管轄MG＝全店、店舗＝自店舗） */
     public static function canOpenStore(array $session, array $store): bool
     {
+        return in_array($session['role'], ['hq', 'acct', 'mg'], true) || $store['id'] === $session['storeId'];
+    }
+
+    /** そのアカウントが直せる店舗（本部＝全店、管轄MG＝管轄エリアの店舗、店舗＝自店舗、経理＝なし） */
+    public static function canEditStore(array $session, array $store): bool
+    {
         return match ($session['role']) {
-            'hq', 'acct' => true,
+            'hq' => true,
             'mg' => in_array($store['code'], array_column(self::mgStores(), 'code'), true),
+            'acct' => false,
             default => $store['id'] === $session['storeId'],
         };
     }
@@ -149,10 +164,10 @@ final class Auth
         $code = $_COOKIE[self::STORE_COOKIE] ?? '';
         if ($session['role'] === 'acct') return self::$store = null; // 経理は店舗の画面を使わない
         if ($session['role'] === 'mg') {
-            // 管轄MG：切り替えた店舗が管轄エリアにあればその店舗、なければエリアの先頭の店舗
+            // 管轄MG：切り替えた店舗（管轄外も見るだけで開ける）。まだ選んでいなければエリアの先頭の店舗
+            if ($code !== '' && ($s = Db::one('SELECT * FROM store WHERE code = ? AND hqOnly = 0', [$code]))) return self::$store = $s;
             $mine = self::mgStores();
-            foreach ($mine as $st) if ($st['code'] === $code) return self::$store = Db::one('SELECT * FROM store WHERE id = ?', [$st['id']]);
-            return self::$store = $mine ? Db::one('SELECT * FROM store WHERE id = ?', [$mine[0]['id']]) : null;
+            return self::$store = $mine ? Db::one('SELECT * FROM store WHERE id = ?', [$mine[0]['id']]) : (Settings::storesInOrder('active = 1 AND hqOnly = 0', [], false)[0] ?? null);
         }
         if ($code !== '') {
             $s = Db::one('SELECT * FROM store WHERE code = ?', [$code]);
@@ -167,7 +182,9 @@ final class Auth
         $s = self::requireSession();
         if ($s['role'] === 'acct') throw new HttpError(403, 'この画面は経理アカウントでは使えません');
         $store = self::resolveStore($s);
-        if (!$store) throw new HttpError(404, $s['role'] === 'mg' ? '管轄エリアに店舗がありません（本部に確認してください）' : '店舗が登録されていません');
+        if (!$store) throw new HttpError(404, '店舗が登録されていません');
+        // 管轄MG：管轄外の店舗は見るだけ（書き込みの操作は止める）
+        if ($s['role'] === 'mg' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' && !self::canEditStore($s, $store)) throw new HttpError(403, '管轄外の店舗は見るだけです（直すことはできません）');
         return ['session' => $s, 'store' => $store];
     }
 }

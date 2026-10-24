@@ -24,7 +24,7 @@ function mado_get(): never
     $s = Auth::requireSession();
     $store = mado_store($s, Http::query('store'));
     Http::json(Madoguchi::month($store, mado_month_param(Http::query('month'))) + [
-        'canEdit' => $s['role'] !== 'acct', 'canCheck' => in_array($s['role'], ['hq', 'acct'], true), 'canTarget' => $s['role'] === 'hq',
+        'canEdit' => Auth::canEditStore($s, $store), 'canCheck' => in_array($s['role'], ['hq', 'acct'], true), 'canTarget' => $s['role'] === 'hq',
         'today' => Time::nowJst()['date'],
     ]);
 }
@@ -206,7 +206,7 @@ function mado_export(): never
 // ---------- 経理・本部・管轄MG の一覧 ----------
 function acct_stores(array $s): array
 {
-    return $s['role'] === 'mg' ? Auth::mgStores() : Settings::storesInOrder('hqOnly = 0', [], false);
+    return Settings::storesInOrder('hqOnly = 0', [], false); // 本部・経理・管轄MG とも全店（管轄MG が直せるのは管轄の店舗だけ）
 }
 
 function acct_mado_get(): never
@@ -215,8 +215,8 @@ function acct_mado_get(): never
     if ($s['role'] === 'store') Http::error('forbidden', 403);
     $ym = mado_month_param(Http::query('month'));
     Http::json([
-        'month' => $ym, 'rows' => array_map(fn($st) => Madoguchi::summary($st, $ym), acct_stores($s)),
-        'canCheck' => in_array($s['role'], ['hq', 'acct'], true), 'canTarget' => $s['role'] === 'hq',
+        'month' => $ym, 'rows' => array_map(fn($st) => Madoguchi::summary($st, $ym) + ['canTarget' => $s['role'] === 'hq' || ($s['role'] === 'mg' && Auth::canEditStore($s, $st))], acct_stores($s)),
+        'canCheck' => in_array($s['role'], ['hq', 'acct'], true), 'canTarget' => $s['role'] === 'hq' || $s['role'] === 'mg',
     ]);
 }
 
@@ -236,15 +236,17 @@ function acct_mado_check(): never
     Http::json(['ok' => true]);
 }
 
-/** 売上目標（{ store, month, target }）。本部だけ */
+/** 売上目標（{ store, month, target }）。本部と管轄MG（管轄の店舗だけ） */
 function acct_mado_target(): never
 {
-    Auth::requireHq();
+    $s = Auth::requireSession();
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') Http::error('forbidden', 403);
     Http::requireJson();
     $b = Http::body();
     $ym = (string)($b['month'] ?? '');
     $st = Settings::findStoreByCode((string)($b['store'] ?? ''));
     if (!$st || !Time::isValidMonth($ym)) Http::error('bad request', 400);
+    if (!Auth::canEditStore($s, $st)) Http::error('管轄外の店舗の目標は入れられません', 403);
     $t = $b['target'] ?? null;
     if ($t !== null && $t !== '' && (!is_numeric($t) || (int)$t != $t || (int)$t < 0 || (int)$t > 999999999)) Http::error('目標の金額が正しくありません', 400);
     if (!Madoguchi::monthRow($st['id'], $ym)) Db::exec('INSERT INTO madoguchi_month (storeId, ym) VALUES (?, ?)', [$st['id'], $ym]);
@@ -333,7 +335,7 @@ function staffing_get(): never
     $rows = [];
     foreach (acct_stores($s) as $st) {
         $members = Db::all('SELECT name, role, active, startDate, endDate, joinType FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$st['id']]);
-        $out = ['code' => $st['code'], 'name' => $st['name'], 'area' => $st['area'] ?? '', 'changes' => [], 'paused' => []];
+        $out = ['code' => $st['code'], 'name' => $st['name'], 'area' => $st['area'] ?? '', 'canEdit' => Auth::canEditStore($s, $st), 'changes' => [], 'paused' => []];
         foreach (['THERAPIST' => 'therapist', 'RECEPTION' => 'reception'] as $role => $k) {
             $act = array_filter($members, fn($m) => $m['role'] === $role && (int)$m['active'] === 1);
             $count = fn(string $d) => count(array_filter($act, fn($m) => Settings::inPeriod($m, $d)));
@@ -362,7 +364,7 @@ function staffing_std_put(): never
     Http::requireJson();
     $b = Http::body();
     $st = Settings::findStoreByCode((string)($b['store'] ?? ''));
-    if (!$st || !Auth::canOpenStore($s, $st)) Http::error('not found', 404);
+    if (!$st || !Auth::canEditStore($s, $st)) Http::error('管轄外の店舗の人員基準は入れられません', 403);
     $set = [];
     foreach (['therapists' => 'stdTherapists', 'reception' => 'stdReception'] as $k => $col) {
         if (!array_key_exists($k, $b)) continue;

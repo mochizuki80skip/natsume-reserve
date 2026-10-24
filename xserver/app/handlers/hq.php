@@ -223,7 +223,7 @@ function hq_stores_put(): never
 /** 全店状況：指定日の全店舗の予約・来院・WEB・内訳・キャンセル */
 function hq_overview(): never
 {
-    Auth::requireHq();
+    Auth::requireViewAll(); // 管轄MG・経理も見られる（見るだけ）
     $today = Time::nowJst()['date'];
     $date = Http::query('date');
     if (!$date || !Time::isValidDate($date)) $date = $today;

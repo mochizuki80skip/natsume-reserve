@@ -7,7 +7,7 @@ import { useAdmin } from './Layout';
 
 interface Row {
   code: string; name: string; target: number | null; sales: number; total: number; goods: number; goodsSales: number; insClaim: number; jibaiClaim: number; jibaiSokuhou: number;
-  mismatchDays: number; henreiCount: number; henreiTotal: number; checkedAt: string | null; checkedBy: string; editedAfterCheck: boolean; entered: number;
+  mismatchDays: number; henreiCount: number; henreiTotal: number; checkedAt: string | null; checkedBy: string; editedAfterCheck: boolean; entered: number; canTarget?: boolean;
 }
 interface Resp { month: string; rows: Row[]; canCheck: boolean; canTarget: boolean }
 
@@ -36,7 +36,7 @@ export default function AcctPage() {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h1 className="mr-1 text-lg font-bold">窓口集計（{me.session.role === 'mg' ? me.session.area : '全店'}）</h1>
+        <h1 className="mr-1 text-lg font-bold">窓口集計・売上（全店）</h1>
         <button type="button" onClick={() => setSp({ month: shiftYm(ym, -1) })} className="rounded border bg-white px-2 py-0.5 text-sm">‹ 前月</button>
         <b className="text-sm">{Number(ym.slice(0, 4))}年{Number(ym.slice(5))}月</b>
         <button type="button" onClick={() => setSp({ month: shiftYm(ym, 1) })} className="rounded border bg-white px-2 py-0.5 text-sm">翌月 ›</button>
@@ -67,7 +67,7 @@ export default function AcctPage() {
                   )}
                 </td>
                 <td className={num}>
-                  {data.canTarget
+                  {r.canTarget
                     ? <input key={String(r.target)} defaultValue={r.target ?? ''} inputMode="numeric" aria-label={`${r.name} の売上目標`}
                       onBlur={(e) => { const v = halfNum(e.target.value).replace(/[,\s]/g, ''); if (v !== String(r.target ?? '')) void run(() => put('/api/admin/acct/madoguchi/target', { store: r.code, month: ym, target: v === '' ? null : Number(v) }), `${r.name} の売上目標を保存しました`); }}
                       className="w-28 rounded border px-1 text-right" />
@@ -99,7 +99,7 @@ export default function AcctPage() {
           )}
         </table>
       </div>
-      <p className="mt-1 text-[11px] text-slate-500">売上＝窓口合計＋保険請求＋自賠責請求（日々の入力）。自賠責の「速報」は自賠請求に登録した金額です。「開く」でその店舗の窓口表・物販内訳・返戻を見られます（見るだけ）。{data.canTarget && '売上目標は本部が店舗ごと・月ごとに入れます。'}</p>
+      <p className="mt-1 text-[11px] text-slate-500">売上＝窓口合計＋保険請求＋自賠責請求（日々の入力）。自賠責の「速報」は自賠請求に登録した金額です。「開く」でその店舗の窓口表・物販内訳・返戻を見られます（見るだけ）。{data.canTarget && (me.session.role === 'mg' ? '売上目標は管轄の店舗だけ入れられます。' : '売上目標は本部が店舗ごと・月ごとに入れます。')}</p>
     </div>
   );
 }

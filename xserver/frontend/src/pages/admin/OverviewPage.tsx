@@ -12,8 +12,8 @@ export default function OverviewPage() {
   const [sp] = useSearchParams();
   const navigate = useNavigate();
   const dateParam = sp.get('date') ?? '';
-  const { data, error } = useFetch<Resp>(me.session.role === 'hq' ? `/api/admin/hq/overview?date=${encodeURIComponent(dateParam)}` : null);
-  if (me.session.role !== 'hq') return <Navigate to="/admin" replace />;
+  const { data, error } = useFetch<Resp>(me.session.role === 'hq' || me.session.role === 'mg' ? `/api/admin/hq/overview?date=${encodeURIComponent(dateParam)}` : null);
+  if (me.session.role !== 'hq' && me.session.role !== 'mg') return <Navigate to="/admin" replace />;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…（全店舗分を集計しています）</p>;
   const { date, today, rows, sum } = data;

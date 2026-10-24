@@ -17,10 +17,11 @@ export default function JibaiHqPage() {
   const navigate = useNavigate();
   const ymParam = sp.get('ym') ?? '';
   const isHq = me.session.role === 'hq'; // 経理アカウントは見るだけ（明細・経理確認と保持期間の設定は本部）
-  const { data, error, reload } = useFetch<Resp>(isHq || me.session.role === 'acct' ? `/api/admin/hq/jibai?ym=${encodeURIComponent(ymParam)}` : null);
+  const canSwitch = isHq || me.session.role === 'mg'; // 店舗の明細を開く（管轄MG は管轄外なら見るだけ）
+  const { data, error, reload } = useFetch<Resp>(isHq || me.session.role === 'acct' || me.session.role === 'mg' ? `/api/admin/hq/jibai?ym=${encodeURIComponent(ymParam)}` : null);
   const [days, setDays] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
-  if (!isHq && me.session.role !== 'acct') return <Navigate to="/admin" replace />;
+  if (!isHq && me.session.role !== 'acct' && me.session.role !== 'mg') return <Navigate to="/admin" replace />;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   const { ym, rows, sum } = data;
@@ -83,9 +84,9 @@ export default function JibaiHqPage() {
                 <td className={num}>{r.verifiedCount > 0 ? r.verifiedTotal.toLocaleString('ja-JP') : ''}</td>
                 <td className={`${num} ${r.verifiedCount > 0 && r.verifiedCount === r.count && r.verifiedTotal !== r.total ? 'text-amber-700' : 'text-slate-500'}`}>{r.verifiedCount > 0 && r.verifiedCount === r.count ? (r.verifiedTotal - r.total).toLocaleString('ja-JP') : ''}</td>
                 <td className="whitespace-nowrap px-2 py-1">
-                  {isHq && <form action="/api/admin/switch" method="post" className="inline">
+                  {canSwitch && <form action="/api/admin/switch" method="post" className="inline">
                     <input type="hidden" name="store" value={r.code} /><input type="hidden" name="back" value={`/admin/jibai?ym=${ym}`} />
-                    <button className="text-brand underline">明細・経理確認</button>
+                    <button className="text-brand underline">{isHq ? '明細・経理確認' : '明細'}</button>
                   </form>}
                 </td>
               </tr>
