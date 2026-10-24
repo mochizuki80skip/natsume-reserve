@@ -63,6 +63,18 @@ function hq_accounts_put(): never
         if (!$v && $a['id'] === $me['id']) Http::error("自分のアカウントは{$what}ができません", 400);
         $set[] = "$k = ?"; $params[] = $v ? 1 : 0;
     }
+    // 種類の変更（本部・管轄MG・経理）。管理者（HQ）と自分は変えられない。変えた人は次の操作でログインし直しになる
+    if (array_key_exists('role', $b) && $b['role'] !== $a['role']) {
+        $role = (string)$b['role'];
+        if (!in_array($role, ['hq', 'mg', 'acct'], true)) Http::error('bad request', 400);
+        if ($a['code'] === OWNER_CODE) Http::error('管理者アカウント（HQ）の種類は変えられません', 400);
+        if ($a['id'] === $me['id']) Http::error('自分のアカウントの種類は変えられません', 400);
+        if ($role === 'mg' && !array_key_exists('area', $b) && !Db::one('SELECT id FROM area WHERE name = ?', [(string)($a['area'] ?? '')])) Http::error('管轄エリアを選んでください', 400);
+        $set[] = 'role = ?'; $params[] = $role;
+        if ($role !== 'hq') { $set[] = 'canManage = 0'; }
+        if ($role !== 'mg') { $set[] = 'area = NULL'; }
+        $a['role'] = $role;
+    }
     if (array_key_exists('area', $b)) {
         if ($a['role'] !== 'mg' || !Db::one('SELECT id FROM area WHERE name = ?', [(string)$b['area']])) Http::error('管轄エリアを選んでください', 400);
         $set[] = 'area = ?'; $params[] = (string)$b['area'];

@@ -60,7 +60,18 @@ export default function AccountsPage() {
                 </td>
                 <td className="px-3 py-2 font-mono">{a.code}{a.owner && <span className="ml-1 text-[10px] text-slate-500">（管理者）</span>}</td>
                 <td className="px-3 py-2">
-                  {ROLE_JA[a.role]}
+                  {can && !a.owner && a.id !== data.me.id ? (
+                    <select value={a.role} aria-label={`${a.name} のアカウントの種類`}
+                      onChange={(e) => {
+                        const role = e.target.value as Account['role'];
+                        if (role === 'mg' && !data.areas.length) { setMsg({ ok: false, text: '先にエリアを作ってください（新患・再来集計（全店）→ 選択肢・エリアの設定）' }); return; }
+                        if (!confirm(`${a.name} さんのアカウントを「${ROLE_JA[role]}」に変えますか？（本人はログインし直しになります）`)) return;
+                        void act(role === 'mg' ? { id: a.id, role, area: a.area || data.areas[0] } : { id: a.id, role }, role === 'mg' ? `「${ROLE_JA[role]}」に変えました。管轄エリアを確かめてください` : `「${ROLE_JA[role]}」に変えました`);
+                      }}
+                      className="rounded border px-1 py-0.5 text-xs">
+                      {(['hq', 'mg', 'acct'] as const).map((r) => <option key={r} value={r}>{ROLE_JA[r]}</option>)}
+                    </select>
+                  ) : ROLE_JA[a.role]}
                   {a.role === 'mg' && (can
                     ? <select value={a.area} onChange={(e) => act({ id: a.id, area: e.target.value }, '管轄エリアを変えました')} aria-label="管轄エリア" className="ml-1 rounded border px-1 py-0.5 text-xs">
                       {[...new Set([a.area, ...data.areas])].map((x) => <option key={x} value={x}>{x || '（未設定）'}</option>)}
