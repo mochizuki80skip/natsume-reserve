@@ -161,6 +161,7 @@ export default function MadoguchiPage() {
             </table>
           </div>
           <p className="mt-1 text-[11px] text-slate-500">白＝入力、黄・橙＝自動で計算、赤＝「合計」「報告メール合計」「通帳入金額」の 3 つがそろっていない（まだ入れていないときも赤）。グレーの行は休診日です（入力もできます）。全角の数字で打っても半角で入ります。</p>
+          <UnknownList data={data} ro={ro} saveDay={saveDay} />
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <table className="w-full border-collapse rounded border bg-white text-sm" aria-label="月末に入れる欄">
               <tbody>{MONTH_KEYS.map(([k, l]) => <tr key={k}><td className="border px-2 py-1">{l}</td><td className="w-40 border p-0"><Num value={data.extra[k]} readOnly={ro} label={l} onSave={(x) => saveMonth({ extra: { [k]: x } })} /></td></tr>)}</tbody>
@@ -180,6 +181,34 @@ export default function MadoguchiPage() {
       {tab === 'henrei' && <HenreiTab data={data} ro={ro} onSaved={() => save(async () => undefined)} onError={(t) => setMsg({ ok: false, text: t })} />}
       {me.session.role === 'store' && <p className="mt-4 text-[11px] text-slate-500">経理が確認したあとに直すと、「確認後に変更あり」と経理に伝わります。</p>}
     </div>
+  );
+}
+
+/** 不明金が出た日の一覧（日付・金額は自動。詳細だけ打ち込む） */
+function UnknownList({ data, ro, saveDay }: { data: Resp; ro: boolean; saveDay: (d: string, p: object) => void }) {
+  const days = data.days.filter((d) => Number(d.vals.unknown ?? 0) !== 0);
+  return (
+    <section className="mt-3 rounded border bg-white p-2 text-sm" aria-label="不明金の詳細">
+      <h2 className="mb-1 font-bold">不明金の詳細</h2>
+      {days.length === 0 ? <p className="text-xs text-slate-500">この月は不明金はありません（窓口表の「不明金」に金額を入れると、ここに日付と金額が出ます）。</p> : (
+        <table className="w-full max-w-3xl border-collapse text-[12px]">
+          <thead className="bg-slate-300 text-[11px]"><tr><th className="w-16 border px-1">日付</th><th className="w-24 border px-1">不明金</th><th className="border px-1 text-left">詳細（何があったか）</th></tr></thead>
+          <tbody>
+            {days.map((d) => {
+              const note = (d.vals.unknownNote as string) ?? '';
+              return (
+                <tr key={d.date}>
+                  <td className="border px-1 text-center">{md(d.date)}（{WD[new Date(`${d.date}T00:00:00`).getDay()]}）</td>
+                  <td className="border px-1 text-right font-bold tabular-nums">{yen(Number(d.vals.unknown))}円</td>
+                  <td className={`border p-0 ${!note && !ro ? 'bg-yellow-200' : ''}`}><Txt value={note} readOnly={ro} label={`${md(d.date)} 不明金の詳細`} onSave={(x) => saveDay(d.date, { unknownNote: x })} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {days.some((d) => !d.vals.unknownNote) && !ro && <p className="mt-1 text-[11px] text-amber-800">黄色＝詳細がまだ入っていません。</p>}
+    </section>
   );
 }
 

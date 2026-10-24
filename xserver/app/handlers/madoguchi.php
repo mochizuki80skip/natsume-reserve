@@ -163,6 +163,11 @@ function mado_export(): never
     $rows[] = ['売上（窓口合計＋保険請求＋自賠責請求）', null, $x['sales']];
     $rows[] = ['自賠請求（速報）', null, $x['jibaiSokuhou']['total']];
     $rows[] = ['備考', null, $x['memo']];
+    // 不明金の詳細（不明金がある日）
+    foreach ($x['days'] as $d) {
+        $v = (array)$d['vals'];
+        if (!empty($v['unknown'])) $rows[] = ['不明金 ' . $md($d['date']), null, $v['unknown'], $v['unknownNote'] ?? ''];
+    }
     $rows[] = [];
     // 物販内訳
     $rows[] = array_merge(['物販内訳', ''], array_column($x['goods'], 'name'), ['その他 金額', 'その他の内訳', '販売合計']);

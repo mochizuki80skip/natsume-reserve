@@ -27,7 +27,7 @@ final class Madoguchi
     /** 日の入力 1 つを検証して直す。金額は整数（マイナス可）、物販は {商品id: 個数} */
     public static function cleanDayValue(string $key, mixed $v): mixed
     {
-        if ($key === 'otherNote') return mb_substr(trim((string)$v), 0, 100);
+        if ($key === 'otherNote' || $key === 'unknownNote') return mb_substr(trim((string)$v), 0, 200); // 物販のその他の内訳・不明金の詳細
         if ($key === 'goodsCount') {
             if (!is_array($v)) throw new HttpError(400, 'bad request');
             $out = [];

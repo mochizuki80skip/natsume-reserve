@@ -57,6 +57,11 @@ await sp.screenshot({ path: O + 'madoguchi-ng.png' });
 await cell('金額を一致させてください 通帳入金額').fill('111100'); await cell('金額を一致させてください 通帳入金額').press('Enter'); await sp.waitForTimeout(1000);
 m = (await api(sp, 'GET', `/api/admin/madoguchi?month=${M}`))[1];
 ok('直すと合う', m.mismatchDays === 0 && (await row2.locator('td.bg-red-500').count()) === 0);
+// 不明金の詳細：日付と金額は自動、詳細だけ入れる
+const un = sp.getByRole('region', { name: '不明金の詳細' });
+ok('不明金の日が一覧に出る', (await un.textContent()).includes('10/2') && (await un.textContent()).includes('-500円'));
+await un.getByLabel('10/2 不明金の詳細').fill('会計ミス（見本）'); await un.getByLabel('10/2 不明金の詳細').press('Tab'); await sp.waitForTimeout(800);
+ok('不明金の詳細を保存', (await api(sp, 'GET', `/api/admin/madoguchi?month=${M}`))[1].days.find((d) => d.date === D).vals.unknownNote === '会計ミス（見本）');
 ok('木曜は休診日（グレー）', m.days.find((d) => d.date === '2026-10-01').closed === true);
 await sp.screenshot({ path: O + 'madoguchi.png' });
 // 物販内訳
@@ -125,6 +130,11 @@ ok('管轄MG：窓口集計の一覧はエリアの店舗だけ', mgList.rows.le
 ok('管轄MG：管轄外の店舗の窓口表は見られない', (await api(mg, 'GET', `/api/admin/madoguchi?month=${M}&store=S001`))[0] === 404);
 const kh = (await api(mg, 'GET', `/api/admin/hq/karte?from=${M}-01&to=${M}-31`))[1];
 ok('管轄MG：新患・再来集計はエリアの店舗', kh.stores.length === 1 && kh.stores[0].code === 'S002');
+// 管轄MG：店舗設定のスタッフ（初回・再来の担当・異動）も直せる
+const st = (await api(mg, 'POST', '/api/admin/staff-members', { name: '見本 異動', role: 'THERAPIST' }))[1].member;
+const up = await api(mg, 'PUT', '/api/admin/staff-members', { id: st.id, canFirst: true, canRevisit: true });
+const mv = await api(mg, 'PUT', '/api/admin/staff-members', { id: st.id, endDate: '2026-11-30', joinType: 'TRANSFER' });
+ok('管轄MG：スタッフの追加・初回／再来の担当・異動', st && up[0] === 200 && mv[0] === 200, JSON.stringify([up, mv]).slice(0, 200));
 const nav2 = await mg.getByRole('navigation').textContent();
 ok('管轄MG のメニュー', nav2.includes('予約表') && nav2.includes('エリアの窓口集計') && !nav2.includes('本部メニュー'), nav2);
 // 本部でアカウントを止めると、すぐ使えなくなる
