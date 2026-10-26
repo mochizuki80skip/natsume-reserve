@@ -5,6 +5,7 @@ import StoresPageEditor, { type ListingStore } from '@/components/StoresPageEdit
 import ReferralEditor from '@/components/ReferralEditor';
 import PrivacyEditor from '@/components/PrivacyEditor';
 import GoodsEditor from '@/components/GoodsEditor';
+import ClosureBulkEditor from '@/components/ClosureBulkEditor';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -23,6 +24,7 @@ export default function HqPage() {
   return (
     <>
       <HqClient key={data.stores.map((s) => `${s.code}:${s.name}:${s.active}`).join(',')} stores={data.stores} areas={data.areas ?? []} setting={data.setting} onRefresh={() => { reload(); refreshMe(); }} />
+      <ClosureBulkEditor />
       <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} kind="media" />

@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 28;
+    private const VERSION = 29;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -221,6 +221,10 @@ final class Migrate
             if ($ver < 28 && self::hasTable($pdo, 'day_status') && !self::hasColumn($pdo, 'day_status', 'closedPart')) {
                 // 臨時休業の午前だけ・午後だけ（closedPart = AM / PM）と、予約ページ・店舗えらびに出すお知らせの一言
                 $pdo->exec('ALTER TABLE `day_status` ADD COLUMN `closedPart` VARCHAR(2) NULL, ADD COLUMN `closedNote` VARCHAR(100) NULL');
+            }
+            if ($ver < 29 && self::hasTable($pdo, 'day_status') && !self::hasColumn($pdo, 'day_status', 'closedBy')) {
+                // 本部・管轄MG がまとめて入れた臨時休業（closedBy）と、店舗が「確認しました」を押したか（closedAck）
+                $pdo->exec('ALTER TABLE `day_status` ADD COLUMN `closedBy` VARCHAR(60) NULL, ADD COLUMN `closedAck` TINYINT(1) NOT NULL DEFAULT 1');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

@@ -249,6 +249,7 @@ function adm_days_put(): never
     if (array_key_exists('closed', $b)) { $set[] = 'closed = ?'; $params[] = Http::bool($b, 'closed') ? 1 : 0; }
     // 臨時休業の午前だけ・午後だけ（null で取り消し）と、予約ページに出すお知らせの一言
     if (array_key_exists('closedPart', $b)) { if (!in_array($b['closedPart'], [null, 'AM', 'PM'], true)) Http::error('bad request', 400); $set[] = 'closedPart = ?'; $params[] = $b['closedPart']; }
+    if ((array_key_exists('closed', $b) || array_key_exists('closedPart', $b)) && $ctx['session']['role'] === 'store') { $set[] = 'closedBy = NULL'; $set[] = 'closedAck = 1'; }
     if (array_key_exists('closedNote', $b)) { $set[] = 'closedNote = ?'; $params[] = mb_substr(trim((string)$b['closedNote']), 0, 100); }
     if (array_key_exists('memo', $b)) { $set[] = 'memo = ?'; $params[] = mb_substr((string)$b['memo'], 0, 500); }
     foreach (['capacityAm', 'capacityPm'] as $k) {

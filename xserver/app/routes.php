@@ -11,6 +11,7 @@ require_once __DIR__ . '/handlers/karte.php';
 require_once __DIR__ . '/handlers/accounts.php';
 require_once __DIR__ . '/handlers/madoguchi.php';
 require_once __DIR__ . '/handlers/churn.php';
+require_once __DIR__ . '/handlers/closure.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -118,6 +119,11 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/privacy$#', 'hq_privacy_get'],
         ['PUT', '#^/api/admin/hq/privacy$#', 'hq_privacy_put'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
+        // 臨時休業をまとめて入れる（本部・管轄MG）と、店舗への通知
+        ['GET', '#^/api/admin/closures$#', 'closure_get'],
+        ['PUT', '#^/api/admin/closures$#', 'closure_put'],
+        ['GET', '#^/api/admin/closures/notices$#', 'closure_notices'],
+        ['PUT', '#^/api/admin/closures/ack$#', 'closure_ack'],
         // 自賠責請求の速報集計
         ['GET', '#^/api/admin/jibai$#', 'jibai_get'],
         ['PUT', '#^/api/admin/jibai/claims$#', 'jibai_claims_put'],

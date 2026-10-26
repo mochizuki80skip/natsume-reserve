@@ -1,6 +1,7 @@
 // 管理画面の共通枠（ヘッダー・店舗切替・メニュー）。未ログインならログイン画面へ
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useOutletContext } from 'react-router-dom';
+import ClosureNotices from '@/components/ClosureNotices';
 import { goLogin, useFetch } from '@/lib/api';
 import type { Me } from '@/lib/types';
 import WebNotifier from '@/components/WebNotifier';
@@ -122,6 +123,7 @@ export default function AdminLayout() {
       {/* 管轄MG が管轄外の店舗を開いているとき */}
       {store?.readOnly && me.session.role === 'mg' && <p className="no-print border-b border-amber-300 bg-amber-100 px-3 py-1 text-center text-sm font-bold text-amber-900">「{store.name}」は管轄外の店舗なので見るだけです（入力・変更はできません）</p>}
       {store && <WebNotifier key={store.id} />}
+      {me.session.role === 'store' && <ClosureNotices />}
       <main className={`mx-auto ${wide ? 'max-w-none px-4 py-3' : 'max-w-6xl px-4 py-4'}`}>
         <Outlet context={{ me, refreshMe: reload } satisfies AdminContext} />
         <p className="no-print mt-6 text-right text-[10px] text-slate-400">画面の版 {APP_VERSION}</p>
