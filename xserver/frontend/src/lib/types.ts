@@ -9,7 +9,7 @@ export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: n
 
 export interface DayData {
   date: string;
-  day: { published: boolean | null; closed: boolean; memo: string; capacityAm: number | null; capacityPm: number | null };
+  day: { published: boolean | null; closed: boolean; closedPart?: 'AM' | 'PM' | null; closedNote?: string; memo: string; capacityAm: number | null; capacityPm: number | null };
   sessions: ResolvedSession[];
   times: number[];
   customerTimes: number[];

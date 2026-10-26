@@ -14,7 +14,7 @@ function pub_load_store(string $code, bool $allowJibaiOnly = false): array
 function pub_store(array $p): never
 {
     $ctx = pub_load_store($p[1], true);
-    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0)]);
+    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0), 'closures' => PublicApi::closures($ctx['store'], Time::nowJst()['date'])]);
 }
 
 function pub_week(array $p): never
@@ -85,7 +85,7 @@ function pub_reserve(array $p): never
                 }
             }
             $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
-            $in = PublicApi::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $cells);
+            $in = PublicApi::buildInput($store, $setting, $date, $kind, Settings::closedOf($day), $cells);
             $free = Availability::freeBedsAt($in, $time);
             if (Availability::newByPhoneOnly($in)) {
                 throw new HttpError(409, 'はじめての方のご予約はお電話（' . $store['phone'] . '）で承っております');
@@ -173,7 +173,7 @@ function pub_stores(): never
         $stores[] = [
             'code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'address' => (string)($row['address'] ?? ''),
             'lat' => $row['lat'] !== null ? (float)$row['lat'] : null, 'lng' => $row['lng'] !== null ? (float)$row['lng'] : null,
-            'area' => $areaOf[$st['code']] ?? '', 'quiet' => pub_quiet_times($st, $setting, $today),
+            'area' => $areaOf[$st['code']] ?? '', 'quiet' => pub_quiet_times($st, $setting, $today), 'closures' => PublicApi::closures($st, $today),
         ];
     }
     Http::json(['open' => true, 'today' => $today, 'hours' => pub_hours_summary($setting, $today), 'areas' => $areaOrder, 'stores' => $stores]);
@@ -209,9 +209,9 @@ function pub_quiet_times(array $store, array $setting, string $today): ?array
     for ($i = 0; $i < 8; $i++) {
         $date = Time::addDays($today, $i);
         $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
-        if (!Settings::storeSessions($store, $setting, $date, $day['closed'] ?? false)) { if ($i === 0) $closedToday = true; continue; }
+        if (!Settings::storeSessions($store, $setting, $date, Settings::closedOf($day))) { if ($i === 0) $closedToday = true; continue; }
         if (!PublicApi::isPublished($store, $date, $today, $day['published'] ?? null)) continue;
-        $in = PublicApi::buildInput($store, $setting, $date, 'RETURN', $day['closed'] ?? false);
+        $in = PublicApi::buildInput($store, $setting, $date, 'RETURN', Settings::closedOf($day));
         $byHour = ['AM' => [], 'PM' => []];
         $any = false;
         foreach (Availability::compute($in) as $s) {

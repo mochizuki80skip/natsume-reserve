@@ -37,6 +37,24 @@ final class PublicApi
     }
 
     /** 日付を顧客に公開するか */
+    /**
+     * 予約ページ・店舗えらびに出す臨時休業のお知らせ（今日から、予約を受け付けている期間の分）
+     * @return array<int, array{date:string, part:?string, note:string}>
+     */
+    public static function closures(array $store, string $today): array
+    {
+        $rows = Db::all('SELECT * FROM day_status WHERE storeId = ? AND date >= ? AND (closed = 1 OR closedPart IS NOT NULL) ORDER BY date ASC', [$store['id'], $today]);
+        $out = [];
+        foreach ($rows as $r) {
+            $d = Settings::dayRow($r);
+            if (!self::isPublished($store, $d['date'], $today, $d['published'] ?: null)) continue;
+            $part = $d['closed'] ? null : $d['closedPart'];
+            if (!$d['closed'] && !$part) continue;
+            $out[] = ['date' => $d['date'], 'part' => $part, 'note' => $d['closedNote']];
+        }
+        return $out;
+    }
+
     public static function isPublished(array $store, string $date, string $today, ?bool $published): bool
     {
         if ($published === true) return true;
@@ -53,7 +71,7 @@ final class PublicApi
 
     /** @param array<int, array{time:int,bed:int,text:string}>|null $cells */
     /** @param array<int, array{startTime:int,endTime:int,beds:string}>|null $blocks */
-    public static function buildInput(array $store, array $setting, string $date, string $kind, bool $closed = false, ?array $cells = null, ?array $capacity = null, ?array $blocks = null): array
+    public static function buildInput(array $store, array $setting, string $date, string $kind, bool|string $closed = false, ?array $cells = null, ?array $capacity = null, ?array $blocks = null): array
     {
         $now = Time::nowJst();
         $sessions = Settings::storeSessions($store, $setting, $date, $closed);
@@ -130,7 +148,7 @@ final class PublicApi
         $today = Time::nowJst()['date'];
         $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
         if (!self::isPublished($store, $date, $today, $day['published'] ?? null)) return ['published' => false, 'slots' => []];
-        $in = self::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false);
+        $in = self::buildInput($store, $setting, $date, $kind, Settings::closedOf($day));
         $slots = [];
         foreach (Availability::compute($in) as $s) {
             $slots[] = ['time' => $s['time'], 'status' => $s['status'], 'period' => Hours::isAm($in['sessions'], $s['time']) ? 'AM' : 'PM'];
@@ -168,7 +186,7 @@ final class PublicApi
         foreach ($dates as $date) {
             $day = $r['days'][$date] ?? null;
             if (!self::isPublished($store, $date, $today, $day['published'] ?? null)) { $out[] = ['date' => $date, 'mark' => 'unpublished']; continue; }
-            $in = self::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
+            $in = self::buildInput($store, $setting, $date, $kind, Settings::closedOf($day), $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
             if (count($in['sessions']) === 0) { $out[] = ['date' => $date, 'mark' => 'closed']; continue; }
             $any = false;
             foreach (Availability::compute($in) as $s) if ($s['status'] !== 'closed') { $any = true; break; }
@@ -187,13 +205,13 @@ final class PublicApi
         $out = [];
         foreach ($dates as $date) {
             $day = $r['days'][$date] ?? null;
-            $sessions = Settings::storeSessions($store, $setting, $date, $day['closed'] ?? false);
+            $sessions = Settings::storeSessions($store, $setting, $date, Settings::closedOf($day));
             $label = null;
-            if (count($sessions) === 0) $label = ($day['closed'] ?? false) ? '休診' : (($setting['closeOnHolidays'] && Holidays::isHoliday($date)) ? '祝日' : '定休日');
+            if (count($sessions) === 0) $label = ($day['closed'] ?? false) ? '臨時休業' : (($setting['closeOnHolidays'] && Holidays::isHoliday($date)) ? '祝日' : '定休日');
             elseif ($date < $today) $label = '受付終了';
             elseif (!self::isPublished($store, $date, $today, $day['published'] ?? null)) $label = '受付期間外';
             if ($label) { $out[] = ['date' => $date, 'label' => $label, 'slots' => []]; continue; }
-            $in = self::buildInput($store, $setting, $date, $kind, $day['closed'] ?? false, $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
+            $in = self::buildInput($store, $setting, $date, $kind, Settings::closedOf($day), $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
             $slots = [];
             foreach (Availability::compute($in) as $s) $slots[] = ['time' => $s['time'], 'status' => $s['status']];
             $out[] = ['date' => $date, 'label' => null, 'slots' => $slots];

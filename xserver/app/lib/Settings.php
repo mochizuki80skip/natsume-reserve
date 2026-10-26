@@ -67,9 +67,14 @@ final class Settings
         return Hours::periodForDate($own, $date) ? $own : $global;
     }
 
-    public static function storeSessions(array $store, array $setting, string $date, bool $closed = false): array
+    public static function storeSessions(array $store, array $setting, string $date, bool|string $closed = false): array
     {
-        // 特別な営業日（プレオープン・イベントなど）：その日だけ決めた時間で営業（定休日・祝日でも）。臨時休診にした日は休み
+        // 午前だけ・午後だけの臨時休業：その半分のセッションを外す
+        if (is_string($closed)) {
+            $am = $closed === 'AM';
+            return array_values(array_filter(self::storeSessions($store, $setting, $date), fn($s) => ($s['start'] < Hours::NOON) !== $am));
+        }
+        // 特別な営業日（プレオープン・イベントなど）：その日だけ決めた時間で営業（定休日・祝日でも）。臨時休業にした日は休み
         if (!$closed && isset($store['id']) && ($sp = self::specialDay((string)$store['id'], $date))) {
             $extra = (int)$setting['adminExtraSlots'] * (int)$setting['slotMinutes'];
             $out = [];
@@ -247,11 +252,21 @@ final class Settings
     }
 
     /** day_status の行を型をそろえて返す */
+    /** 臨時休業：終日なら true、午前だけ・午後だけなら 'AM' / 'PM'、休みでなければ false（storeSessions に渡す） */
+    public static function closedOf(?array $day): bool|string
+    {
+        if (!$day) return false;
+        if ($day['closed'] ?? false) return true;
+        return $day['closedPart'] ?? false;
+    }
+
     public static function dayRow(?array $r): ?array
     {
         if (!$r) return null;
         $r['published'] = $r['published'] === null ? null : (bool)$r['published'];
         $r['closed'] = (bool)$r['closed'];
+        $r['closedPart'] = in_array($r['closedPart'] ?? null, ['AM', 'PM'], true) ? $r['closedPart'] : null;
+        $r['closedNote'] = (string)($r['closedNote'] ?? '');
         $r['capacityAm'] = $r['capacityAm'] === null ? null : (int)$r['capacityAm'];
         $r['capacityPm'] = $r['capacityPm'] === null ? null : (int)$r['capacityPm'];
         return $r;

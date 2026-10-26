@@ -57,7 +57,7 @@ export default function OverviewPage() {
               return (
                 <tr key={r.code} className="border-t">
                   <td className="whitespace-nowrap px-2 py-1">{r.name}</td>
-                  <td className="whitespace-nowrap px-2 py-1"><span className={`rounded px-1.5 text-xs ${r.closed ? 'bg-slate-200 text-slate-600' : open ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>{r.closed ? '臨時休診' : r.published === false ? '非公開' : r.published === true ? '公開' : '公開（既定）'}</span></td>
+                  <td className="whitespace-nowrap px-2 py-1"><span className={`rounded px-1.5 text-xs ${r.closed ? 'bg-slate-200 text-slate-600' : open ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>{r.closed ? '臨時休業' : r.published === false ? '非公開' : r.published === true ? '公開' : '公開（既定）'}</span></td>
                   <td className={num}>{r.rAm}</td><td className={num}>{r.rPm}</td><td className={`${num} font-bold`}>{r.rAm + r.rPm}</td>
                   <td className={`${num} text-green-700`}>{r.vAm}</td><td className={`${num} text-green-700`}>{r.vPm}</td><td className={`${num} font-bold text-green-700`}>{r.vAm + r.vPm}</td>
                   <td className={num}>{r.web}</td>

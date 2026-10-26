@@ -23,10 +23,10 @@ export default function SettingsPage() {
   return (
     <div className="max-w-6xl">
       <h1 className="mb-3 text-xl font-bold">店舗設定：{me.store.name}</h1>
-      {/* 店舗設定の中に「カレンダー（WEB 予約の公開日・臨時休診）」を入れる */}
+      {/* 店舗設定の中に「カレンダー（WEB 予約の公開日・臨時休業）」を入れる */}
       <div className="mb-4 flex gap-1 border-b" role="tablist">
         <Link to="/admin/settings" role="tab" aria-selected={tab === 'store'} className={tabCls(tab === 'store')}>店舗・スタッフ</Link>
-        <Link to="/admin/settings?tab=calendar" role="tab" aria-selected={tab === 'calendar'} className={tabCls(tab === 'calendar')}>カレンダー（公開日・臨時休診）</Link>
+        <Link to="/admin/settings?tab=calendar" role="tab" aria-selected={tab === 'calendar'} className={tabCls(tab === 'calendar')}>カレンダー（公開日・臨時休業）</Link>
       </div>
       {tab === 'calendar' ? <CalendarPage /> : <StoreSettings />}
     </div>

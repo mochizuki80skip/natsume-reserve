@@ -17,8 +17,10 @@ final class DayData
         $blocks = Db::all('SELECT id, startTime, endTime, beds, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? ORDER BY time ASC, createdAt ASC', [$sid, $date]);
 
-        $closed = $day['closed'] ?? false;
-        $sessions = Settings::storeSessions($store, $setting, $date, $closed);
+        $closed = Settings::closedOf($day);
+        // 臨時休業でも予約表は出す（入っている予約に連絡するため）。患者様に出す枠（customerTimes）だけ休みの分を外す
+        $sessions = Settings::storeSessions($store, $setting, $date);
+        $customerSessions = $closed ? Settings::storeSessions($store, $setting, $date, $closed) : $sessions;
         $statusByStaff = [];
         foreach ($shifts as $s) $statusByStaff[$s['staffId']] = $s['status'];
         $reception = array_values(array_filter($members, fn($m) => $m['role'] === 'RECEPTION'));
@@ -38,10 +40,10 @@ final class DayData
             'date' => $date,
             // 特別な営業日（プレオープン・イベントなど）なら { sessions, memo }
             'special' => Settings::specialDay((string)$store['id'], $date),
-            'day' => ['published' => $day['published'] ?? null, 'closed' => $closed, 'memo' => $day['memo'] ?? '', 'capacityAm' => $day['capacityAm'] ?? null, 'capacityPm' => $day['capacityPm'] ?? null],
+            'day' => ['published' => $day['published'] ?? null, 'closed' => $closed === true, 'closedPart' => is_string($closed) ? $closed : null, 'closedNote' => $day['closedNote'] ?? '', 'memo' => $day['memo'] ?? '', 'capacityAm' => $day['capacityAm'] ?? null, 'capacityPm' => $day['capacityPm'] ?? null],
             'sessions' => $sessions,
             'times' => Hours::slotTimes($sessions, $setting['slotMinutes'], true),
-            'customerTimes' => Hours::slotTimes($sessions, $setting['slotMinutes']),
+            'customerTimes' => Hours::slotTimes($customerSessions, $setting['slotMinutes']),
             'slotMinutes' => $setting['slotMinutes'],
             'beds' => Settings::allBeds($store),
             'capacity' => $cap,

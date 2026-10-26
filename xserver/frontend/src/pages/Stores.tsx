@@ -7,10 +7,11 @@ import PublicFooter from '@/components/PublicFooter';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { WEEKDAY_JA, weekdayOf } from '@/lib/time';
+import { closureBadge, type Closure } from '@/lib/closure';
 
 const SKY = '#1eb4ec';
 interface Quiet { date: string; isToday: boolean; closedToday: boolean; am: string | null; pm: string | null }
-interface StoreItem { code: string; name: string; phone: string; address: string; lat: number | null; lng: number | null; area: string; quiet: Quiet | null }
+interface StoreItem { code: string; name: string; phone: string; address: string; lat: number | null; lng: number | null; area: string; quiet: Quiet | null; closures?: Closure[] }
 interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[] }
 
 /** 2 点間の距離（km） */
@@ -83,6 +84,7 @@ export default function Stores() {
   if (!data) return <main className="mx-auto max-w-md px-4 pt-10 text-sm text-slate-500">読み込み中…</main>;
 
   // 患者様に分かりやすいよう、エリアではなく住所の市・町で分ける（並びは本部の店舗一覧の順に、はじめて出てきた順）
+  const today = data.today ?? '';
   const areas = [...new Set((data.stores ?? []).map((s) => cityOf(s.address)).filter(Boolean))];
   const groups = here || area || q.trim()
     ? [{ name: '', stores: list }]
@@ -134,17 +136,22 @@ export default function Stores() {
               return (
                 <article key={s.code} className="rounded-2xl border bg-white p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-base font-bold leading-snug">{s.name}</h3>
+                    <div>
+                      <h3 className="text-base font-bold leading-snug">{s.name}</h3>
+                      {(s.closures ?? []).map((c) => <span key={c.date} className="mr-1 mt-0.5 inline-block rounded bg-red-600 px-1.5 text-xs font-bold text-white">{closureBadge(c, today)}</span>)}
+                    </div>
                     {dist !== null && <span className="whitespace-nowrap text-xs font-bold text-sky-800">約 {dist < 10 ? dist.toFixed(1) : Math.round(dist)} km</span>}
                   </div>
                   {s.address && <p className="mt-0.5 text-xs text-slate-500">{s.address}</p>}
                   <div className="mt-2 rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs">
                     {!qt ? <span className="text-slate-600">空き状況はお電話でお問い合わせください</span> : (
                       <>
-                        <b className="text-sky-800">{qt.closedToday ? `本日 休診日 → ${md(qt.date)}` : qt.isToday ? '本日' : md(qt.date)}の空いている時間帯</b>
+                        <b className="text-sky-800">{qt.closedToday ? `本日 ${(s.closures ?? []).some((c) => c.date === today && !c.part) ? '臨時休業' : '休診日'} → ${md(qt.date)}` : qt.isToday ? '本日' : md(qt.date)}の空いている時間帯</b>
                         <div className="mt-0.5 flex flex-wrap gap-x-4 font-bold tabular-nums">
-                          <span>午前 {qt.am ?? '残りわずか'}</span>
-                          <span>午後 {qt.pm ?? '残りわずか'}</span>
+                          {(['AM', 'PM'] as const).map((h) => {
+                            const off = (s.closures ?? []).some((c) => c.date === qt.date && c.part === h);
+                            return <span key={h} className={off ? 'text-red-700' : ''}>{h === 'AM' ? '午前' : '午後'} {off ? '臨時休業' : (h === 'AM' ? qt.am : qt.pm) ?? '残りわずか'}</span>;
+                          })}
                         </div>
                       </>
                     )}

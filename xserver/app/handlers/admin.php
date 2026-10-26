@@ -234,7 +234,7 @@ function adm_web_new_get(): never
     Http::json(['now' => $now, 'items' => $items]);
 }
 
-/** 日付の公開/非公開・臨時休診・メモ・枠数の上書き */
+/** 日付の公開/非公開・臨時休業（終日・午前・午後）・メモ・枠数の上書き */
 function adm_days_put(): never
 {
     $ctx = Auth::context();
@@ -247,6 +247,9 @@ function adm_days_put(): never
     $params = [];
     if (array_key_exists('published', $b)) { if ($b['published'] !== null && !is_bool($b['published'])) Http::error('bad request', 400); $set[] = 'published = ?'; $params[] = $b['published'] === null ? null : ($b['published'] ? 1 : 0); }
     if (array_key_exists('closed', $b)) { $set[] = 'closed = ?'; $params[] = Http::bool($b, 'closed') ? 1 : 0; }
+    // 臨時休業の午前だけ・午後だけ（null で取り消し）と、予約ページに出すお知らせの一言
+    if (array_key_exists('closedPart', $b)) { if (!in_array($b['closedPart'], [null, 'AM', 'PM'], true)) Http::error('bad request', 400); $set[] = 'closedPart = ?'; $params[] = $b['closedPart']; }
+    if (array_key_exists('closedNote', $b)) { $set[] = 'closedNote = ?'; $params[] = mb_substr(trim((string)$b['closedNote']), 0, 100); }
     if (array_key_exists('memo', $b)) { $set[] = 'memo = ?'; $params[] = mb_substr((string)$b['memo'], 0, 500); }
     foreach (['capacityAm', 'capacityPm'] as $k) {
         if (array_key_exists($k, $b)) { $set[] = "$k = ?"; $params[] = $b[$k] === null ? null : Http::int($b, $k, 0, 20); }
@@ -344,7 +347,7 @@ function adm_move_post(): never
 
     // 移動先の時間が、その日の予約表にあるか（管理側だけの枠も可）
     $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$sid, $toDate]));
-    $times = Hours::slotTimes(Settings::storeSessions($store, $setting, $toDate, $day['closed'] ?? false), $step, true);
+    $times = Hours::slotTimes(Settings::storeSessions($store, $setting, $toDate, Settings::closedOf($day)), $step, true);
     for ($k = 0; $k < $need; $k++) {
         if (!in_array($toTime + $k * $step, $times, true)) Http::error($k === 0 ? 'その日のその時間は予約表にありません（休診日・営業時間外）' : '2 枠目の時間が営業時間外になるため移動できません', 409);
     }
@@ -421,7 +424,7 @@ function adm_slot_left(array $store, array $setting, string $date, int $time, in
 {
     $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
     $cells = array_values(array_filter(Db::all('SELECT id, time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]), fn($c) => !in_array($c['id'], $exclude, true)));
-    $in = PublicApi::buildInput($store, $setting, $date, $need >= 2 ? 'NEW' : 'RETURN', $day['closed'] ?? false, $cells, null);
+    $in = PublicApi::buildInput($store, $setting, $date, $need >= 2 ? 'NEW' : 'RETURN', Settings::closedOf($day), $cells, null);
     $left = PHP_INT_MAX;
     for ($k = 0; $k < $need; $k++) {
         $t = $time + $k * $setting['slotMinutes'];
@@ -447,9 +450,9 @@ function adm_move_slots(): never
         foreach (Db::all('SELECT id FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (?, ?)', [$store['id'], $date, $fb, $ft, $ft + $setting['slotMinutes']]) as $c) $exclude[] = $c['id'];
     }
     $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
-    $times = Hours::slotTimes(Settings::storeSessions($store, $setting, $date, $day['closed'] ?? false), $setting['slotMinutes'], true);
+    $times = Hours::slotTimes(Settings::storeSessions($store, $setting, $date, Settings::closedOf($day)), $setting['slotMinutes'], true);
     $cells = array_values(array_filter(Db::all('SELECT id, time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]), fn($c) => !in_array($c['id'], $exclude, true)));
-    $in = PublicApi::buildInput($store, $setting, $date, $need >= 2 ? 'NEW' : 'RETURN', $day['closed'] ?? false, $cells, null);
+    $in = PublicApi::buildInput($store, $setting, $date, $need >= 2 ? 'NEW' : 'RETURN', Settings::closedOf($day), $cells, null);
     $out = [];
     foreach ($times as $t) {
         $ok = true;
@@ -648,9 +651,9 @@ function adm_calendar_get(): never
     $days = [];
     foreach ($dates as $date) {
         $r = $map[$date] ?? null;
-        $open = count(Settings::storeSessions($store, $setting, $date, $r['closed'] ?? false)) > 0;
+        $open = count(Settings::storeSessions($store, $setting, $date, Settings::closedOf($r))) > 0;
         $days[] = [
-            'date' => $date, 'published' => $r['published'] ?? null, 'closed' => $r['closed'] ?? false,
+            'date' => $date, 'published' => $r['published'] ?? null, 'closed' => $r['closed'] ?? false, 'closedPart' => $r['closedPart'] ?? null,
             'businessDay' => $open || ($r['closed'] ?? false),
             'effectivePublished' => PublicApi::isPublished($store, $date, $today, $r['published'] ?? null),
         ];

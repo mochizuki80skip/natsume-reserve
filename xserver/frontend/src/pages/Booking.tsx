@@ -1,9 +1,10 @@
 // 患者様用ページ /s/<店舗コード>
 import { useParams, useSearchParams } from 'react-router-dom';
+import type { Closure } from '@/lib/closure';
 import { useFetch } from '@/lib/api';
 import BookingApp from '@/components/BookingApp';
 
-interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean }
+interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean; closures?: Closure[] }
 
 export default function Booking() {
   const { code = '' } = useParams();
@@ -18,5 +19,5 @@ export default function Booking() {
       </main>
     );
   }
-  return <BookingApp store={{ code: data.code, name: data.name, phone: data.phone }} smsEnabled={data.smsEnabled} via={params.get('from') === 'card' ? 'card' : undefined} refCode={/^[a-z0-9]{4,16}$/.test(params.get('ref') ?? '') ? params.get('ref')! : undefined} />;
+  return <BookingApp store={{ code: data.code, name: data.name, phone: data.phone }} smsEnabled={data.smsEnabled} via={params.get('from') === 'card' ? 'card' : undefined} closures={data.closures ?? []} refCode={/^[a-z0-9]{4,16}$/.test(params.get('ref') ?? '') ? params.get('ref')! : undefined} />;
 }

@@ -1,6 +1,8 @@
 
 import { useState } from 'react';
 import PublicFooter, { PrivacyNote } from './PublicFooter';
+import ClosureNotice from './ClosureNotice';
+import type { Closure } from '@/lib/closure';
 import { formatDateJa, minToHm } from '@/lib/time';
 import { formatJpPhone } from '@/lib/format';
 import { Link } from 'react-router-dom';
@@ -8,9 +10,9 @@ import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
 import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
 import { addMyReservation, loadMyReservations } from '@/lib/myReservations';
 
-interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string }
+interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string; closures?: Closure[] }
 
-export default function BookingApp({ store, smsEnabled, via, refCode }: Props) {
+export default function BookingApp({ store, smsEnabled, via, refCode, closures = [] }: Props) {
   // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=確認, 4=完了
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [kind, setKind] = useState<Kind | null>(null); // 最初は未選択
@@ -98,6 +100,8 @@ export default function BookingApp({ store, smsEnabled, via, refCode }: Props) {
           })}
         </ol>
       </header>
+
+      {step === 1 && <ClosureNotice closures={closures} />}
 
       {error && step !== 1 && <p className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 

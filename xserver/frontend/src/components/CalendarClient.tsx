@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { WEEKDAY_JA, weekdayOf } from '@/lib/time';
 
-interface Day { date: string; published: boolean | null; closed: boolean; businessDay: boolean; effectivePublished: boolean }
+interface Day { date: string; published: boolean | null; closed: boolean; closedPart?: 'AM' | 'PM' | null; businessDay: boolean; effectivePublished: boolean }
 interface Props { month: string; today: string; days: Day[]; publishDaysAhead: number; onRefresh: () => void }
 
 function shiftMonth(ym: string, n: number) {
@@ -36,7 +36,7 @@ export default function CalendarClient({ month, today, days, publishDaysAhead, o
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-3 rounded border bg-white p-2 text-sm">
         <span>日付をクリックしたときの操作：</span>
-        {([['publish', '公開する'], ['unpublish', '非公開にする'], ['auto', '既定に戻す'], ['closed', '臨時休診の切替']] as const).map(([v, l]) => (
+        {([['publish', '公開する'], ['unpublish', '非公開にする'], ['auto', '既定に戻す'], ['closed', '臨時休業の切替']] as const).map(([v, l]) => (
           <label key={v} className="flex items-center gap-1"><input type="radio" name="mode" checked={mode === v} onChange={() => setMode(v)} />{l}</label>
         ))}
         <span className="ml-auto text-xs text-slate-500">既定：今日から {publishDaysAhead} 日先まで公開（店舗設定で変更）</span>
@@ -55,7 +55,7 @@ export default function CalendarClient({ month, today, days, publishDaysAhead, o
               className={`flex h-20 flex-col items-center justify-center rounded border ${cls} ${past ? 'opacity-50' : 'hover:ring-2 hover:ring-brand'}`}>
               <span className="text-base font-bold">{Number(d.date.slice(8))}</span>
               <span className="text-xs">
-                {d.closed ? '臨時休診' : !d.businessDay ? '休診' : d.effectivePublished ? '公開' : '非公開'}
+                {d.closed ? '臨時休業' : d.closedPart ? `${d.closedPart === 'AM' ? '午前' : '午後'}休業` : !d.businessDay ? '休診' : d.effectivePublished ? '公開' : '非公開'}
                 {d.published !== null && !d.closed && d.businessDay ? '(個別)' : ''}
               </span>
               <Link to={`/admin/day/${d.date}`} className="mt-1 text-[10px] text-brand underline" onClick={(e) => e.stopPropagation()}>予約表</Link>

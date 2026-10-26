@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS `day_status` (
   `date` CHAR(10) NOT NULL,
   `published` TINYINT(1) NULL,
   `closed` TINYINT(1) NOT NULL DEFAULT 0,
+  `closedPart` VARCHAR(2) NULL,
+  `closedNote` VARCHAR(100) NULL,
   `memo` TEXT NULL,
   `capacityAm` INT NULL,
   `capacityPm` INT NULL,

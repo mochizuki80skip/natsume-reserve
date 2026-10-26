@@ -725,15 +725,32 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           <span className="font-bold">キャンセル {cancelStat.all}人</span>
           <span className="text-slate-500">うち</span>
           <span className="rounded bg-violet-100 px-2 py-0.5 text-violet-800">予約変更 {cancelStat.changed}人</span>
-          <span className={`rounded px-2 py-0.5 ${cancelStat.none ? 'bg-red-100 font-bold text-red-800' : 'bg-slate-100 text-slate-600'}`}>予約未取得 {cancelStat.none}人</span>
+          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-700">予約未取得 {cancelStat.none}人</span>
         </div>
         <div className="no-print flex flex-wrap items-center gap-3 text-sm">
           <span className={`rounded px-2 py-0.5 ${published && !day.closed ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>
-            顧客サイト：{day.closed ? '臨時休診' : published ? '公開中' : '非公開'}
+            顧客サイト：{day.closed ? '臨時休業' : published ? '公開中' : '非公開'}{!day.closed && day.closedPart ? `（${day.closedPart === 'AM' ? '午前' : '午後'} 臨時休業）` : ''}
           </span>
           <label className="flex items-center gap-1"><input type="checkbox" checked={day.published === true} onChange={(e) => updateDay({ published: e.target.checked ? true : null })} />公開する</label>
           <label className="flex items-center gap-1"><input type="checkbox" checked={day.published === false} onChange={(e) => updateDay({ published: e.target.checked ? false : null })} />非公開にする</label>
-          <label className="flex items-center gap-1"><input type="checkbox" checked={day.closed} onChange={(e) => updateDay({ closed: e.target.checked })} />臨時休診</label>
+        </div>
+        {/* 臨時休業（終日・午前・午後）。休みにしたら、予約ページ・店舗えらびに出るお知らせの一言を入れてもらう */}
+        <div className="no-print flex flex-wrap items-center gap-2 text-sm" role="group" aria-label="臨時休業">
+          <span className="font-bold">臨時休業</span>
+          {([['none', 'なし'], ['all', '終日'], ['AM', '午前'], ['PM', '午後']] as const).map(([v, l]) => {
+            const cur = day.closed ? 'all' : day.closedPart ?? 'none';
+            return <button key={v} type="button" aria-pressed={cur === v} onClick={() => cur !== v && updateDay(v === 'all' ? { closed: true, closedPart: null } : { closed: false, closedPart: v === 'none' ? null : v })}
+              className={`rounded border px-2 py-0.5 ${cur === v ? (v === 'none' ? 'bg-slate-600 text-white' : 'border-red-600 bg-red-600 font-bold text-white') : 'bg-white'}`}>{l}</button>;
+          })}
+          {(day.closed || day.closedPart) && (
+            <label className="flex flex-wrap items-center gap-1">
+              お知らせの一言
+              <input key={data.date} defaultValue={day.closedNote ?? ''} autoFocus={!day.closedNote} maxLength={100} placeholder="例）台風のため"
+                onBlur={(e) => e.target.value.trim() !== (day.closedNote ?? '') && updateDay({ closedNote: e.target.value.trim() })}
+                className={`w-48 rounded border px-2 py-0.5 ${day.closedNote ? '' : 'border-amber-500 ring-2 ring-amber-300'}`} />
+              {!day.closedNote && <span className="text-xs font-bold text-amber-700">← 理由を入れてください（予約ページ・店舗えらびのお知らせに出ます）</span>}
+            </label>
+          )}
         </div>
         <div className="no-print flex flex-wrap items-center gap-1.5">
           {menuOptions.length > 0 && panelBtn('menu', 'メニュー別の人数')}
@@ -802,7 +819,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
       )}
       {pasteInfo && <p className="no-print mb-2 rounded bg-brand-light px-3 py-1 text-xs text-brand-dark">{pasteInfo}</p>}
       {rows.length === 0 ? (
-        <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日・臨時休診）のため予約表はありません。営業する場合は「臨時休診」を外すか、店舗設定の営業時間を確認してください。</p>
+        <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日）のため予約表はありません。営業する場合は、店舗設定の営業時間を確認してください。</p>
       ) : (
         <>
         {(() => {
