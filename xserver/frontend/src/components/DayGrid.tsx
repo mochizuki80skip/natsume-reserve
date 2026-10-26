@@ -51,6 +51,12 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   const [findOpen, setFindOpen] = useState(false);
   const webInfo = useMemo(() => new Map(data.cells.filter((c) => c.web).map((c) => [key(c.time, c.bed), c.web!])), [data.cells]);
   const [day, setDay] = useState(data.day);
+  // キャンセル名簿で入れた次回予約日（画面上の集計にすぐ反映する）
+  const [nextDates, setNextDates] = useState<Map<string, string>>(() => new Map());
+  const cancelStat = useMemo(() => {
+    const changed = data.cancels.filter((c) => (nextDates.get(c.id) ?? c.nextDate ?? '') !== '').length;
+    return { all: data.cancels.length, changed, none: data.cancels.length - changed };
+  }, [data.cancels, nextDates]);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [menu, setMenu] = useState<string | null>(null);
   const [pasteInfo, setPasteInfo] = useState('');
@@ -714,6 +720,13 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             </table>
           </div>
         )}
+        {/* キャンセルの人数（予約変更＝次回予約が入っている、予約未取得＝次回予約なし） */}
+        <div className="flex flex-wrap items-center gap-2 text-sm" aria-label="キャンセルの人数">
+          <span className="font-bold">キャンセル {cancelStat.all}人</span>
+          <span className="text-slate-500">うち</span>
+          <span className="rounded bg-violet-100 px-2 py-0.5 text-violet-800">予約変更 {cancelStat.changed}人</span>
+          <span className={`rounded px-2 py-0.5 ${cancelStat.none ? 'bg-red-100 font-bold text-red-800' : 'bg-slate-100 text-slate-600'}`}>予約未取得 {cancelStat.none}人</span>
+        </div>
         <div className="no-print flex flex-wrap items-center gap-3 text-sm">
           <span className={`rounded px-2 py-0.5 ${published && !day.closed ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>
             顧客サイト：{day.closed ? '臨時休診' : published ? '公開中' : '非公開'}
@@ -1035,7 +1048,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                 <td className="px-2 py-1 text-xs text-slate-500">{c.createdAt} {c.byCode}</td>
                 <td className="whitespace-nowrap px-2 py-1">{c.kind === 'CHANGE'
                   ? (c.nextDate && c.nextDate !== data.date ? <button type="button" className="text-xs text-violet-800 underline" onClick={() => navigate(`/admin/day/${c.nextDate}`)}>→ {changeTargetText(c.nextDate, c.nextTime)}</button> : <span className="text-xs text-violet-800">→ {changeTargetText(c.nextDate, c.nextTime)}</span>)
-                  : <NextDateInput key={c.id + (c.nextDate ?? '')} id={c.id} value={c.nextDate} />}</td>
+                  : <NextDateInput key={c.id + (c.nextDate ?? '')} id={c.id} value={c.nextDate} onSaved={(v) => setNextDates((m) => new Map(m).set(c.id, v))} />}</td>
                 <td className="px-2 py-1"><input defaultValue={c.memo ?? ''} onBlur={(e) => e.target.value !== (c.memo ?? '') && saveMemo(c.id, e.target.value)} placeholder="メモ" className="w-full rounded border px-1 text-xs" /></td>
                 <td className="no-print px-2 py-1 text-right">{c.kind !== 'CHANGE' && <button type="button" onClick={() => restore(c.id)} className="text-xs text-brand underline">予約表に戻す</button>}</td>
               </tr>

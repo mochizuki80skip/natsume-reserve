@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 /** キャンセル名簿の「次回予約日」入力欄。変更すると自動保存する（予約表・予約来院ログで共用） */
-export default function NextDateInput({ id, value, className }: { id: string; value: string | null; className?: string }) {
+export default function NextDateInput({ id, value, className, onSaved }: { id: string; value: string | null; className?: string; onSaved?: (next: string) => void }) {
   const [v, setV] = useState(value ?? '');
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   async function save(next: string) {
@@ -9,6 +9,7 @@ export default function NextDateInput({ id, value, className }: { id: string; va
     setState('saving');
     const r = await fetch('/api/admin/cancel', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, nextDate: next }) });
     setState(r.ok ? 'saved' : 'error');
+    if (r.ok) onSaved?.(next);
   }
   return (
     <span className="inline-flex items-center gap-1">
