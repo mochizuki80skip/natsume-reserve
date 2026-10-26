@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 30;
+    private const VERSION = 31;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -229,6 +229,10 @@ final class Migrate
             if ($ver < 30 && self::hasTable($pdo, 'admin_account') && !self::hasColumn($pdo, 'admin_account', 'sessVer')) {
                 // パスワードの変更・停止で、ログイン中の画面も使えなくする（ログインの Cookie に入れて毎回くらべる）
                 $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `sessVer` INT NOT NULL DEFAULT 0');
+            }
+            if ($ver < 31 && self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'pageCity')) {
+                // 店舗えらびページ：見出しの地域（空なら住所の市・町）と、並び順（空なら本部の店舗一覧の順）
+                $pdo->exec('ALTER TABLE `store` ADD COLUMN `pageCity` VARCHAR(30) NULL, ADD COLUMN `pageOrder` INT NULL');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

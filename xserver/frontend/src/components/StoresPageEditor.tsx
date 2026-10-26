@@ -2,14 +2,17 @@
 import { useState } from 'react';
 import UrlQrCard from './UrlQrCard';
 
-export interface ListingStore { code: string; name: string; active: boolean; address: string; lat: number | null; lng: number | null; listed: boolean }
+import { cityOf } from '@/lib/city';
 
-function Row({ st, onSaved }: { st: ListingStore; onSaved: (msg: string) => void }) {
+export interface ListingStore { code: string; name: string; active: boolean; address: string; lat: number | null; lng: number | null; listed: boolean; pageCity?: string; pageOrder?: number | null }
+
+function Row({ st, onSaved, first, last }: { st: ListingStore; onSaved: (msg: string) => void; first: boolean; last: boolean }) {
   const [address, setAddress] = useState(st.address);
+  const [city, setCity] = useState(st.pageCity ?? '');
   const [pos, setPos] = useState(st.lat != null ? `${st.lat}, ${st.lng}` : '');
   const [listed, setListed] = useState(st.listed);
   const [note, setNote] = useState('');
-  const dirty = address !== st.address || pos !== (st.lat != null ? `${st.lat}, ${st.lng}` : '') || listed !== st.listed;
+  const dirty = city !== (st.pageCity ?? '') || address !== st.address || pos !== (st.lat != null ? `${st.lat}, ${st.lng}` : '') || listed !== st.listed;
 
   // 国土地理院の住所検索（無料・登録不要）で、住所から地図の位置を調べる
   async function findPos() {
@@ -26,16 +29,25 @@ function Row({ st, onSaved }: { st: ListingStore; onSaved: (msg: string) => void
   async function save() {
     const m = pos.trim() === '' ? null : /^\s*(-?\d+(?:\.\d+)?)\s*[,，\s]\s*(-?\d+(?:\.\d+)?)\s*$/.exec(pos);
     if (pos.trim() !== '' && !m) { setNote('地図の位置は「緯度, 経度」（例：34.97, 138.38）の形で入れてください'); return; }
-    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: st.code, action: 'listing', address, lat: m ? Number(m[1]) : null, lng: m ? Number(m[2]) : null, listed }) });
+    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: st.code, action: 'listing', address, pageCity: city, lat: m ? Number(m[1]) : null, lng: m ? Number(m[2]) : null, listed }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { setNote(j.error ?? '保存できませんでした'); return; }
     setNote('');
     onSaved(`${st.name} を保存しました`);
   }
+  async function move(dir: -1 | 1) {
+    const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: st.code, action: 'pageMove', dir }) });
+    if (r.ok) onSaved('並びを変えました');
+  }
   return (
     <tr className={`border-t align-top ${st.active ? '' : 'text-slate-400'}`}>
+      <td className="whitespace-nowrap py-1.5 pr-1">
+        <button type="button" disabled={first} onClick={() => move(-1)} aria-label={`店舗えらびの並び：${st.name}を上に`} className="rounded border px-1 disabled:opacity-30">↑</button>{' '}
+        <button type="button" disabled={last} onClick={() => move(1)} aria-label={`店舗えらびの並び：${st.name}を下に`} className="rounded border px-1 disabled:opacity-30">↓</button>
+      </td>
       <td className="py-1.5 pr-2"><label className="flex items-center gap-1 whitespace-nowrap"><input type="checkbox" checked={listed} onChange={(e) => setListed(e.target.checked)} aria-label={`${st.name} を載せる`} />{st.name}</label>{!st.active && <span className="text-xs">（停止中）</span>}</td>
       <td className="py-1.5 pr-2"><input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="静岡県静岡市…" className="w-full min-w-[16rem] rounded border px-2 py-1" aria-label={`${st.name} の住所`} /></td>
+      <td className="py-1.5 pr-2"><input value={city} onChange={(e) => setCity(e.target.value)} placeholder={cityOf(address) || '（住所から）'} maxLength={30} className="w-28 rounded border px-2 py-1" aria-label={`${st.name} の地域`} title="空欄なら住所の市・町。ほかの見出しにしたいときだけ入れます" /></td>
       <td className="py-1.5 pr-2">
         <div className="flex gap-1">
           <input value={pos} onChange={(e) => setPos(e.target.value)} placeholder="34.97, 138.38" className="w-44 rounded border px-2 py-1 font-mono text-xs" aria-label={`${st.name} の地図の位置`} />
@@ -50,6 +62,8 @@ function Row({ st, onSaved }: { st: ListingStore; onSaved: (msg: string) => void
 
 export default function StoresPageEditor({ stores, open, onRefresh }: { stores: ListingStore[]; open: boolean; onRefresh: () => void }) {
   const [msg, setMsg] = useState('');
+  // 店舗えらびページの並び（決めた順が先、ほかは本部の店舗一覧の順）
+  const sorted = stores.map((s, i) => [s.pageOrder ?? Number.MAX_SAFE_INTEGER, i, s] as const).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((x) => x[2]);
   async function toggle() {
     if (!open && !confirm('店舗えらびページを公開します。紹介カードの QR から開いた患者様に、店舗の一覧が表示されるようになります。よろしいですか？')) return;
     const r = await fetch('/api/admin/hq/stores-page', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open: !open }) });
@@ -67,7 +81,7 @@ export default function StoresPageEditor({ stores, open, onRefresh }: { stores: 
         <a href="/stores?from=card&preview=1" target="_blank" rel="noreferrer" className="text-brand underline">表示を確認する ↗</a>
       </div>
       <p className="mt-1 text-xs text-slate-600">
-        チェックした店舗を、住所の市・町ごと（静岡市・長泉町など。本部の店舗一覧の順）に分けて並べます。患者様は市・町のボタンで絞り込めます。住所を入れて「住所から調べる」を押すと地図の位置（近い順・地図ボタンに使う）が入ります。
+        チェックした店舗を、地域ごと（住所の市・町。静岡市・富士宮市など）に分けて、この表の並び（↑↓で変えられます。管轄エリアの順とは別）で並べます。地域は空欄なら住所から自動で、ほかの見出しにしたいときだけ入れます。患者様は市・町のボタンで絞り込めます。住所を入れて「住所から調べる」を押すと地図の位置（近い順・地図ボタンに使う）が入ります。
         入力済み {done}／載せる店舗 {shown}。すべて入れ終わってから「公開する」を押してください。
       </p>
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}
@@ -79,8 +93,8 @@ export default function StoresPageEditor({ stores, open, onRefresh }: { stores: 
       {!open && <p className="mt-1 text-xs text-amber-800">※ 今は非公開なので、この URL を開いた患者様には「準備中」と出ます。公開してから配ってください。</p>}
       <div className="mt-2 overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">載せる・店舗</th><th className="pr-2">住所</th><th className="pr-2">地図の位置（緯度, 経度）</th><th /></tr></thead>
-          <tbody>{stores.map((st) => <Row key={`${st.code}:${st.address}:${st.lat}:${st.listed}`} st={st} onSaved={(m) => { setMsg(m); onRefresh(); }} />)}</tbody>
+          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-1">並び</th><th className="pr-2">載せる・店舗</th><th className="pr-2">住所</th><th className="pr-2">地域（見出し）</th><th className="pr-2">地図の位置（緯度, 経度）</th><th /></tr></thead>
+          <tbody>{sorted.map((st, i) => <Row key={`${st.code}:${st.address}:${st.lat}:${st.listed}:${st.pageCity}`} st={st} first={i === 0} last={i === sorted.length - 1} onSaved={(m) => { setMsg(m); onRefresh(); }} />)}</tbody>
         </table>
       </div>
     </section>

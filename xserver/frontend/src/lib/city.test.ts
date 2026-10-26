@@ -8,6 +8,9 @@ describe('cityOf', () => {
     expect(cityOf('静岡県駿東郡長泉町下土狩1')).toBe('長泉町');
     expect(cityOf('静岡県富士市錦町1-1')).toBe('富士市');
     expect(cityOf('三島市一番町1')).toBe('三島市');
+    expect(cityOf('静岡県富士宮市淀川町1-1')).toBe('富士宮市');
+    expect(cityOf('〒418-0047 静岡県富士宮市淀川町1-1')).toBe('富士宮市');
+    expect(cityOf('418-0047静岡県富士宮市淀川町')).toBe('富士宮市');
     expect(cityOf('東京都千代田区丸の内1')).toBe('');
     expect(cityOf('')).toBe('');
   });

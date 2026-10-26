@@ -8,6 +8,7 @@ function hq_get(): never
     $setting = Settings::global();
     $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'phone' => $r['phone'], 'beds' => (int)$r['beds'], 'active' => (bool)$r['active'],
         'address' => (string)$r['address'], 'lat' => $r['lat'] !== null ? (float)$r['lat'] : null, 'lng' => $r['lng'] !== null ? (float)$r['lng'] : null, 'listed' => (bool)$r['listed'],
+        'pageCity' => (string)($r['pageCity'] ?? ''), 'pageOrder' => $r['pageOrder'] === null ? null : (int)$r['pageOrder'],
         'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly'], 'jibaiOnly' => (bool)$r['jibaiOnly']],
         Settings::storesInOrder());
     Http::json([
@@ -209,7 +210,15 @@ function hq_stores_put(): never
         $lat = ($b['lat'] ?? '') === '' || ($b['lat'] ?? null) === null ? null : (float)$b['lat'];
         $lng = ($b['lng'] ?? '') === '' || ($b['lng'] ?? null) === null ? null : (float)$b['lng'];
         if (($lat !== null && ($lat < 20 || $lat > 46)) || ($lng !== null && ($lng < 122 || $lng > 154)) || (($lat === null) !== ($lng === null))) Http::error('地図の位置（緯度・経度）が正しくありません', 400);
-        Db::exec('UPDATE store SET address = ?, lat = ?, lng = ?, listed = ? WHERE id = ?', [$address, $lat, $lng, !empty($b['listed']) ? 1 : 0, $store['id']]);
+        $pageCity = mb_substr(trim((string)($b['pageCity'] ?? '')), 0, 30);
+        Db::exec('UPDATE store SET address = ?, lat = ?, lng = ?, listed = ?, pageCity = ? WHERE id = ?', [$address, $lat, $lng, !empty($b['listed']) ? 1 : 0, $pageCity !== '' ? $pageCity : null, $store['id']]);
+    } elseif ($action === 'pageMove') {
+        // 店舗えらびページの並びで 1 つ上・下へ（全店に 1 から番号を振り直す）
+        $dir = (int)($b['dir'] ?? 0) < 0 ? -1 : 1;
+        $list = array_values(Settings::pageSort(Settings::storesInOrder('1 = 1', [], false)));
+        $idx = array_search($store['id'], array_column($list, 'id'), true);
+        if ($idx !== false && isset($list[$idx + $dir])) [$list[$idx], $list[$idx + $dir]] = [$list[$idx + $dir], $list[$idx]];
+        foreach ($list as $n => $r) Db::exec('UPDATE store SET pageOrder = ? WHERE id = ?', [$n + 1, $r['id']]);
     } elseif ($action === 'reset') {
         $password = (string)($b['password'] ?? '');
         if (strlen($password) < 8) Http::error('パスワードは8文字以上', 400);

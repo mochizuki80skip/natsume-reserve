@@ -171,12 +171,12 @@ function pub_stores(): never
         foreach (array_filter(explode(',', (string)$a['storeCodes'])) as $code) $areaOf[$code] ??= $a['name'];
     }
     $stores = [];
-    foreach (Settings::storesInOrder('active = 1 AND listed = 1', [], false) as $row) {
+    foreach (Settings::pageSort(Settings::storesInOrder('active = 1 AND listed = 1', [], false)) as $row) {
         $st = Settings::storeRow($row);
         $stores[] = [
             'code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'address' => (string)($row['address'] ?? ''),
             'lat' => $row['lat'] !== null ? (float)$row['lat'] : null, 'lng' => $row['lng'] !== null ? (float)$row['lng'] : null,
-            'area' => $areaOf[$st['code']] ?? '', 'quiet' => pub_quiet_times($st, $setting, $today), 'closures' => PublicApi::closures($st, $today),
+            'area' => $areaOf[$st['code']] ?? '', 'city' => (string)($row['pageCity'] ?? ''), 'quiet' => pub_quiet_times($st, $setting, $today), 'closures' => PublicApi::closures($st, $today),
         ];
     }
     Http::json(['open' => true, 'today' => $today, 'hours' => pub_hours_summary($setting, $today), 'areas' => $areaOrder, 'stores' => $stores]);

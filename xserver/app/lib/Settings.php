@@ -129,6 +129,15 @@ final class Settings
      * 店舗を並び順で返す：本部専用 → エリア（エリアの設定の順。未設定は最後）→ エリアの中の並び順 → 店舗コード。
      * 各行に area（エリア名。未設定は ''）を付ける。自賠請求だけに使う店舗は最後（$withJibaiOnly=false なら除く）
      */
+    /** 店舗えらびページの並び：pageOrder を決めた店舗が先（決めていなければ本部の店舗一覧の順のまま） */
+    public static function pageSort(array $rows): array
+    {
+        $i = 0;
+        $keyed = array_map(function ($r) use (&$i) { return [$r['pageOrder'] === null ? PHP_INT_MAX : (int)$r['pageOrder'], $i++, $r]; }, $rows);
+        usort($keyed, fn($a, $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
+        return array_map(fn($k) => $k[2], $keyed);
+    }
+
     public static function storesInOrder(string $where = '1 = 1', array $params = [], bool $withJibaiOnly = true): array
     {
         if (!$withJibaiOnly) $where = "($where) AND jibaiOnly = 0";

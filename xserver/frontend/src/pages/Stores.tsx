@@ -3,6 +3,8 @@
 // 本部が「公開する」にするまでは「準備中」の案内だけを出す
 import { useEffect, useMemo, useState } from 'react';
 import { cityOf } from '@/lib/city';
+// 見出しの地域：本部が決めた地域、なければ住所の市・町
+const cityOfStore = (s: { city?: string; address: string }) => s.city || cityOf(s.address);
 import PublicFooter from '@/components/PublicFooter';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
@@ -11,7 +13,7 @@ import { closureBadge, type Closure } from '@/lib/closure';
 
 const SKY = '#1eb4ec';
 interface Quiet { date: string; isToday: boolean; closedToday: boolean; am: string | null; pm: string | null }
-interface StoreItem { code: string; name: string; phone: string; address: string; lat: number | null; lng: number | null; area: string; quiet: Quiet | null; closures?: Closure[] }
+interface StoreItem { code: string; name: string; phone: string; address: string; lat: number | null; lng: number | null; area: string; city?: string; quiet: Quiet | null; closures?: Closure[] }
 interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[] }
 
 /** 2 点間の距離（km） */
@@ -49,7 +51,7 @@ export default function Stores() {
   const list = useMemo(() => {
     const all = data?.stores ?? [];
     const word = q.trim();
-    let xs = all.filter((s) => (!area || cityOf(s.address) === area) && (!word || s.name.includes(word) || s.address.includes(word)));
+    let xs = all.filter((s) => (!area || cityOfStore(s) === area) && (!word || s.name.includes(word) || s.address.includes(word)));
     if (here) xs = [...xs].sort((a, b) => (a.lat == null ? 1e9 : distanceKm(here, { lat: a.lat, lng: a.lng! })) - (b.lat == null ? 1e9 : distanceKm(here, { lat: b.lat, lng: b.lng! })));
     return xs;
   }, [data, q, area, here]);
@@ -85,10 +87,10 @@ export default function Stores() {
 
   // 患者様に分かりやすいよう、エリアではなく住所の市・町で分ける（並びは本部の店舗一覧の順に、はじめて出てきた順）
   const today = data.today ?? '';
-  const areas = [...new Set((data.stores ?? []).map((s) => cityOf(s.address)).filter(Boolean))];
+  const areas = [...new Set((data.stores ?? []).map((s) => cityOfStore(s)).filter(Boolean))];
   const groups = here || area || q.trim()
     ? [{ name: '', stores: list }]
-    : [...areas.map((a) => ({ name: a, stores: list.filter((s) => cityOf(s.address) === a) })), { name: areas.length ? 'そのほか' : '', stores: list.filter((s) => !cityOf(s.address)) }].filter((g) => g.stores.length);
+    : [...areas.map((a) => ({ name: a, stores: list.filter((s) => cityOfStore(s) === a) })), { name: areas.length ? 'そのほか' : '', stores: list.filter((s) => !cityOfStore(s)) }].filter((g) => g.stores.length);
 
   return (
     <main className="mx-auto min-h-screen max-w-md bg-sky-50/40 pb-10">

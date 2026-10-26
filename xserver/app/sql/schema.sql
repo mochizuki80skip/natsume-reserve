@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS `store` (
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `pageCity` VARCHAR(30) NULL,   -- 店舗えらびページの見出しの地域（空なら住所の市・町）
+  `pageOrder` INT NULL,          -- 店舗えらびページの並び順（空なら本部の店舗一覧の順）
   PRIMARY KEY (`id`),
   UNIQUE KEY `store_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
