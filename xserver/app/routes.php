@@ -120,6 +120,8 @@ function route_table(): array
         ['PUT', '#^/api/admin/hq/privacy$#', 'hq_privacy_put'],
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
         // 臨時休業をまとめて入れる（本部・管轄MG）と、店舗への通知
+        ['POST', '#^/api/admin/kind-blocks$#', 'adm_kind_block_post'],
+        ['DELETE', '#^/api/admin/kind-blocks$#', 'adm_kind_block_delete'],
         ['GET', '#^/api/admin/closures$#', 'closure_get'],
         ['PUT', '#^/api/admin/closures$#', 'closure_put'],
         ['GET', '#^/api/admin/closures/notices$#', 'closure_notices'],

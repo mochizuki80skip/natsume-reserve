@@ -795,8 +795,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
               )}
               {data.receptionNames.length > 0 && <span className="ml-3">受付：{data.receptionNames.join('・')}</span>}
               {(cap.firstAm != null || cap.revisitAm != null) && (
-                <span className="ml-3 font-bold text-slate-700" title="スタッフの「初回を担当する」「再来を担当する」にチェックがあり、この日のシフトに入っている人数。WEB で同じ時間に受ける新規・再来はこの人数まで（店舗設定の同時対応数が少なければそちら）">
-                  WEB の同時上限：{cap.firstAm != null && <>新規 午前{cap.firstAm}・午後{cap.firstPm}</>}{cap.firstAm != null && cap.revisitAm != null && '／'}{cap.revisitAm != null && <>再来 午前{cap.revisitAm}・午後{cap.revisitPm}</>}
+                <span className="ml-3 font-bold text-slate-700" title="スタッフの「初回を担当する」「再来を担当する」にチェックがあり、この日のシフトに入っている人数。WEB で同じ時間に受ける新規・再来はこの人数まで（1 人が 1 人の患者様を受ける）">
+                  WEB の同時上限：{cap.firstAm != null && <>新規 午前{cap.firstAm}・午後{cap.firstPm}</>}{cap.firstAm != null && cap.revisitAm != null && '／'}{cap.revisitAm != null && <>再来 午前{cap.revisitAm}・午後{cap.revisitPm}</>}{cap.eitherAm != null && <>／合わせて 午前{cap.eitherAm}・午後{cap.eitherPm}</>}
                 </span>
               )}
             </>
@@ -805,7 +805,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
           )}
           <span className="ml-2">空欄＝シフトからの自動計算。数字を入れるとその日だけ上書きします。</span>
         </div>
-        <BlockPanel key={data.date} date={data.date} times={rows} slotMinutes={data.slotMinutes} beds={cols} blocks={data.blocks ?? []} onRefresh={onRefresh} />
+        <BlockPanel key={data.date} date={data.date} times={rows} slotMinutes={data.slotMinutes} beds={cols} blocks={data.blocks ?? []} kindBlocks={data.kindBlocks ?? []} onRefresh={onRefresh} />
       </div>}
 
       <div className="no-print mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
@@ -942,11 +942,13 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                 const isPmStart = r > 0 && am(rows[r - 1]) && !am(t);
                 const adminOnly = !customerSet.has(t);
                 const blk = (data.blocks ?? []).filter((b) => t >= b.start && t < b.end);
+                const kblk = (data.kindBlocks ?? []).find((b) => t >= b.start && t < b.end);
                 return (
                   <tr key={t} className={isPmStart ? 'border-t-4 border-t-slate-300' : ''}>
                     <td className={`whitespace-nowrap border px-1 text-center font-mono max-sm:px-0 max-sm:text-[9px] ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
                       title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockBedsText(b.beds, cols)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
                       {blk.length > 0 && <span className="no-print mr-0.5 text-[10px]">🔒</span>}{minToHm(t)}
+                      {kblk && <span className="no-print ml-0.5 rounded bg-amber-400 px-0.5 font-sans text-[9px] font-bold text-white max-sm:hidden" title={`新規・再来を止めています${kblk.label ? `（${kblk.label}）` : ''}`}>新再✕</span>}
                     </td>
                     {cols.map((b, c) => {
                       const k = key(t, b);

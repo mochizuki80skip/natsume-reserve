@@ -1,13 +1,13 @@
 // 予約表のブロック（打合せ・ミーティングなど、前もって決まっている時間に WEB 予約を止める）
 import { useState } from 'react';
 import { minToHm } from '@/lib/time';
-import type { SlotBlock } from '@/lib/types';
+import type { KindBlock, SlotBlock } from '@/lib/types';
 
-interface Props { date: string; times: number[]; slotMinutes: number; beds: number[]; blocks: SlotBlock[]; onRefresh: () => void }
+interface Props { date: string; times: number[]; slotMinutes: number; beds: number[]; blocks: SlotBlock[]; kindBlocks?: KindBlock[]; onRefresh: () => void }
 
 export const blockBedsText = (beds: number[], all: number[]) => (beds.length >= all.length ? '全ベッド' : `ベッド${beds.join('・')}`);
 
-export default function BlockPanel({ date, times, slotMinutes, beds, blocks, onRefresh }: Props) {
+export default function BlockPanel({ date, times, slotMinutes, beds, blocks, kindBlocks = [], onRefresh }: Props) {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ start: times[0] ?? 540, end: (times[0] ?? 540) + slotMinutes * 4, beds: [] as number[], label: '' });
   const toggleBed = (b: number) => setF({ ...f, beds: f.beds.includes(b) ? f.beds.filter((x) => x !== b) : [...f.beds, b].sort((x, y) => x - y) });
@@ -31,6 +31,7 @@ export default function BlockPanel({ date, times, slotMinutes, beds, blocks, onR
   }
 
   return (
+    <>
     <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs">
       <span className="font-bold text-slate-700">ブロック</span>
       <span className="text-slate-500">（打合せ・ミーティングなどで、ベッドを使えなくする時間）</span>
@@ -58,6 +59,54 @@ export default function BlockPanel({ date, times, slotMinutes, beds, blocks, onR
             <button type="button" onClick={() => setF({ ...f, beds: f.beds.length === beds.length ? [] : [...beds] })} className="rounded border bg-white px-1.5 py-0.5 text-slate-600">{f.beds.length === beds.length ? '全部外す' : '全部選ぶ'}</button>
           </span>
           <input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} maxLength={30} placeholder="内容（例：打合せ）" className="w-32 rounded border px-1 py-0.5" />
+          <button type="submit" className="rounded bg-brand px-2 py-0.5 font-bold text-white">追加</button>
+          <button type="button" onClick={() => { setOpen(false); setErr(''); }} className="rounded border px-2 py-0.5">やめる</button>
+          {err && <span className="text-red-700">{err}</span>}
+        </form>
+      )}
+    </div>
+    <KindStop date={date} times={times} slotMinutes={slotMinutes} kindBlocks={kindBlocks} onRefresh={onRefresh} />
+    </>
+  );
+}
+
+/** 新規・再来を止める時間帯（院長不在など）。WEB の初診・再来だけ × にして、通院中・新自は今までどおり取れる */
+function KindStop({ date, times, slotMinutes, kindBlocks, onRefresh }: { date: string; times: number[]; slotMinutes: number; kindBlocks: KindBlock[]; onRefresh: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState({ start: times[0] ?? 540, end: (times[0] ?? 540) + slotMinutes * 8, label: '' });
+  const [err, setErr] = useState('');
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    const r = await fetch('/api/admin/kind-blocks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, ...f }) });
+    if (!r.ok) { setErr((await r.json().catch(() => ({}))).error ?? '追加できませんでした'); return; }
+    setOpen(false); setErr(''); setF({ ...f, label: '' });
+    onRefresh();
+  }
+  async function remove(id: string) {
+    if (!confirm('新規・再来を止めるのをやめますか？')) return;
+    await fetch('/api/admin/kind-blocks', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    onRefresh();
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 border-t pt-2 text-xs" aria-label="新規・再来を止める">
+      <span className="font-bold text-slate-700">新規・再来を止める</span>
+      <span className="text-slate-500">（WEB の初診・再来だけ取れなくする時間。通院中・新自は取れます）</span>
+      {kindBlocks.map((b) => (
+        <span key={b.id} className="inline-flex items-center gap-1 rounded border border-amber-400 bg-amber-100 px-2 py-0.5 text-amber-900">
+          新再✕ {minToHm(b.start)}〜{minToHm(b.end)} {b.label && <b>{b.label}</b>}
+          <button type="button" onClick={() => remove(b.id)} className="ml-1 text-amber-700 hover:text-red-700" aria-label="新規・再来を止めるのをやめる">✕</button>
+        </span>
+      ))}
+      {!open && <button type="button" onClick={() => setOpen(true)} className="rounded border px-2 py-0.5">＋ 時間を追加</button>}
+      {open && (
+        <form onSubmit={add} className="flex flex-wrap items-center gap-1 rounded border bg-amber-50 px-2 py-1">
+          <select value={f.start} onChange={(e) => setF({ ...f, start: Number(e.target.value) })} className="rounded border px-1 py-0.5" aria-label="止める開始">
+            {times.map((t) => <option key={t} value={t}>{minToHm(t)}</option>)}
+          </select>〜
+          <select value={f.end} onChange={(e) => setF({ ...f, end: Number(e.target.value) })} className="rounded border px-1 py-0.5" aria-label="止める終了">
+            {times.map((t) => t + slotMinutes).map((t) => <option key={t} value={t}>{minToHm(t)}</option>)}
+          </select>
+          <input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} maxLength={30} placeholder="理由（例：院長不在）" className="w-32 rounded border px-1 py-0.5" />
           <button type="submit" className="rounded bg-brand px-2 py-0.5 font-bold text-white">追加</button>
           <button type="button" onClick={() => { setOpen(false); setErr(''); }} className="rounded border px-2 py-0.5">やめる</button>
           {err && <span className="text-red-700">{err}</span>}

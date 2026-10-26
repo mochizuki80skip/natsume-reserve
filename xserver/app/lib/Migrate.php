@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 32;
+    private const VERSION = 33;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -238,12 +238,29 @@ final class Migrate
                 // 院長（1 店舗に 1 人）・所属が終わる理由（退職／異動）・休職の期間（人員の過不足に出す）
                 $pdo->exec('ALTER TABLE `staff_member` ADD COLUMN `isHead` TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN `endReason` VARCHAR(10) NULL, ADD COLUMN `leaveStart` CHAR(10) NULL, ADD COLUMN `leaveEnd` CHAR(10) NULL');
             }
+            if ($ver < 33) {
+                // 新規・再来だけを止める時間帯（通院中は取れる）と、1 人が WEB で持てる予約の件数・予約できる日数（店舗ごと）
+                $pdo->exec(self::KIND_BLOCK_DDL);
+                if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'maxActiveBookings')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `maxActiveBookings` INT NULL DEFAULT 4, ADD COLUMN `bookDaysAhead` INT NULL DEFAULT 14');
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const KIND_BLOCK_DDL = "CREATE TABLE IF NOT EXISTS `kind_block` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `startTime` INT NOT NULL,
+  `endTime` INT NOT NULL,
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `kind_block_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_kind_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     public const SPECIAL_DAY_DDL = 'CREATE TABLE IF NOT EXISTS `special_day` (
   `storeId` VARCHAR(32) NOT NULL,

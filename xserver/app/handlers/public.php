@@ -71,6 +71,7 @@ function pub_reserve(array $p): never
     $today = Time::nowJst()['date'];
     $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
     if (!PublicApi::isPublished($store, $date, $today, $day['published'] ?? null)) Http::error('この日は現在WEB予約を受け付けていません', 409);
+    if (PublicApi::beyondBookDays($store, $date, $today)) Http::error('WEB でのご予約は ' . (int)$store['bookDaysAhead'] . ' 日先までです。この日のご予約はお電話（' . $store['phone'] . '）で承ります', 409);
 
     $lockName = 'reserve:' . $store['id'] . ':' . $date;
     $got = Db::one('SELECT GET_LOCK(?, 10) AS ok', [$lockName]);
@@ -84,6 +85,11 @@ function pub_reserve(array $p): never
                     // 予約の時刻は出さない（名前と電話番号だけで、ほかの人の予約の時刻を調べられないように）
                     throw new HttpError(409, '同じお名前・電話番号でのご予約が ' . Time::formatDateJa($date, false) . ' にすでに入っています。ご予約の確認・変更はお電話（' . $store['phone'] . '）へお願いします。');
                 }
+            }
+            // 1 人が WEB で持てる予約の件数（同じ店舗・同じ電話番号と氏名・まだ来ていない予約）
+            if (($max = $store['maxActiveBookings'] ?? null) !== null) {
+                $mine = array_filter(Db::all('SELECT name FROM reservation WHERE storeId = ? AND phone = ? AND status = ? AND date >= ?', [$store['id'], $phone, 'BOOKED', Time::nowJst()['date']]), fn($r) => Text::isSameName($r['name'], $name));
+                if (count($mine) >= (int)$max) throw new HttpError(409, 'WEB でお取りいただけるご予約は ' . (int)$max . ' 件までです。次のご予約は、今のご予約のあとでお取りください（お電話でも承ります：' . $store['phone'] . '）。');
             }
             $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
             $in = PublicApi::buildInput($store, $setting, $date, $kind, Settings::closedOf($day), $cells);

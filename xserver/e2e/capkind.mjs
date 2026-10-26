@@ -40,12 +40,11 @@ ok('合計 3 人で、通院中も×', (await st('RETURN', 540)) === 'closed');
 await put([{ time: 630, bed: 1, text: '再来 四（再来）' }, { time: 630, bed: 2, text: '再来 五（再来）' }]);
 ok('再来 2 人なら、再来はまだ取れる', (await st('REVISIT', 630)) !== 'closed');
 ok('再来 2 人なら、新規もまだ取れる', (await st('NEW', 630)) !== 'closed');
-// 店舗設定の「再来の同時対応数」を 2 にすると、再来は×
+// 店舗設定の「再来の同時対応数」は使わない（シフトのスタッフの人数で決める）
 const s0 = (await api('GET', '/api/admin/settings'))[1].store;
 const sv = await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxRevisitConcurrent: 2 });
 ok('店舗設定を保存できる', sv[0] === 200, JSON.stringify(sv));
-ok('再来の同時対応数 2 → 再来は×', (await st('REVISIT', 630)) === 'closed');
-ok('再来の同時対応数は新規には関係ない', (await st('NEW', 630)) !== 'closed');
+ok('店舗設定の同時対応数は使わない（再来はまだ取れる）', (await st('REVISIT', 630)) !== 'closed');
 await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxRevisitConcurrent: null });
 
 // 午後：室塚が午後休み → 新規は午後 1 人まで（ともふさだけ）

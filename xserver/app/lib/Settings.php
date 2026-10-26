@@ -198,7 +198,7 @@ final class Settings
         // WEB の新規・再来の同時上限にする（チェックが 1 人も無い店舗は今までどおり上限なし）
         $useFirst = (bool)array_filter($members, fn($m) => (int)($m['canFirst'] ?? 0) === 1);
         $useRevisit = (bool)array_filter($members, fn($m) => (int)($m['canRevisit'] ?? 0) === 1);
-        $firstAm = $firstPm = $revisitAm = $revisitPm = 0;
+        $firstAm = $firstPm = $revisitAm = $revisitPm = $eitherAm = $eitherPm = 0;
         if ($date !== null) $members = array_values(array_filter($members, fn($m) => self::inPeriod($m, $date)));
         $beds = (int)$store['beds'];
         $namesAm = [];
@@ -208,8 +208,9 @@ final class Settings
         } else {
             foreach ($members as $m) {
                 $st = $statusByStaff[$m['id']] ?? null;
-                if (self::worksAm($st)) { $namesAm[] = $m['name']; $firstAm += (int)($m['canFirst'] ?? 0); $revisitAm += (int)($m['canRevisit'] ?? 0); }
-                if (self::worksPm($st)) { $namesPm[] = $m['name']; $firstPm += (int)($m['canFirst'] ?? 0); $revisitPm += (int)($m['canRevisit'] ?? 0); }
+                $either = (int)(($m['canFirst'] ?? 0) || ($m['canRevisit'] ?? 0));
+                if (self::worksAm($st)) { $namesAm[] = $m['name']; $firstAm += (int)($m['canFirst'] ?? 0); $revisitAm += (int)($m['canRevisit'] ?? 0); $eitherAm += $either; }
+                if (self::worksPm($st)) { $namesPm[] = $m['name']; $firstPm += (int)($m['canFirst'] ?? 0); $revisitPm += (int)($m['canRevisit'] ?? 0); $eitherPm += $either; }
             }
             $autoAm = min(count($namesAm), $beds);
             $autoPm = min(count($namesPm), $beds);
@@ -227,6 +228,8 @@ final class Settings
             // シフトから決まる WEB の新規・再来の同時上限（null＝チェックを使っていないので上限なし）
             'firstAm' => $useFirst ? $firstAm : null, 'firstPm' => $useFirst ? $firstPm : null,
             'revisitAm' => $useRevisit ? $revisitAm : null, 'revisitPm' => $useRevisit ? $revisitPm : null,
+            // 新規と再来を合わせた上限（1 人が 1 人の患者様を受ける：初回か再来を担当できる人数。両方のチェックを使っている店舗だけ）
+            'eitherAm' => $useFirst && $useRevisit ? $eitherAm : null, 'eitherPm' => $useFirst && $useRevisit ? $eitherPm : null,
         ];
     }
 

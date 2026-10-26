@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS `store` (
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `maxActiveBookings` INT NULL DEFAULT 4, -- 1 人が WEB で持てる予約の件数（同じ店舗・まだ来ていない予約。空＝制限なし）
+  `bookDaysAhead` INT NULL DEFAULT 14,    -- WEB で予約できるのは今日から何日先まで（公開する日数より先は電話。空＝公開する日数まで）
   `pageCity` VARCHAR(30) NULL,   -- 店舗えらびページの見出しの地域（空なら住所の市・町）
   `pageOrder` INT NULL,          -- 店舗えらびページの並び順（空なら本部の店舗一覧の順）
   PRIMARY KEY (`id`),
@@ -138,6 +140,19 @@ CREATE TABLE IF NOT EXISTS `slot_block` (
   PRIMARY KEY (`id`),
   KEY `slot_block_store_date` (`storeId`, `date`),
   CONSTRAINT `fk_slot_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 新規・再来だけを止める時間帯（通院中・新自は取れる。WEB だけ）
+CREATE TABLE IF NOT EXISTS `kind_block` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `startTime` INT NOT NULL,
+  `endTime` INT NOT NULL,
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  KEY `kind_block_store_date` (`storeId`, `date`),
+  CONSTRAINT `fk_kind_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 他店からの応援（1 店舗 1 日 1 行。誰が来るか未定なら名前は空）

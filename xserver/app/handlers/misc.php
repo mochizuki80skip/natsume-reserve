@@ -10,7 +10,7 @@ function cleanup_run(): array
     $deleted = [];
     // 予約表を消す前に、来院（来院チェック済み）の記録を残す（離反者リスト・通院回数のため）
     Db::exec('INSERT INTO visit_archive (storeId, date, name, staff, cardNo) SELECT c.storeId, c.date, c.text, COALESCE(c.staff, \'\'), COALESCE(r.cardNo, \'\') FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.date < ? AND c.visited = 1 AND c.bed > 0', [$cutoff]);
-    foreach (['cell', 'day_status', 'shift', 'help_in', 'slot_block'] as $t) {
+    foreach (['cell', 'day_status', 'shift', 'help_in', 'slot_block', 'kind_block'] as $t) {
         $deleted[$t] = Db::exec("DELETE FROM `$t` WHERE date < ?", [$cutoff]);
     }
     $jibai = Jibai::cleanupNames(); // 自賠請求の氏名も保持期間を過ぎたら消す（金額は残す）

@@ -20,6 +20,9 @@
 //   'revisitCap' => ['am' => ?int, 'pm' => ?int],  シフトで「再来を担当する」にチェックのある人数
 //   'revisitCount' => ['time' => int],  その時間に入っている再来の人数
 //   'countsAsRevisit' => bool,          今回の予約が再来か
+//   'eitherCap' => ['am' => ?int, 'pm' => ?int],   新規と再来を合わせた上限（初回か再来を担当できる人数。1 人が 1 人を受ける）
+//   'kindStop' => ['time' => true],     新規・再来を止める時間（予約表の「新規・再来を止める」。今回の予約が初診・再来のとき）
+//   'webFar' => bool,                   WEB で予約できる日数より先の日（空いていても電話マーク）
 // ]
 declare(strict_types=1);
 
@@ -89,6 +92,13 @@ final class Availability
             if (!empty($in['countsAsRevisit']) && ($lim = self::kindLimit($in['revisitLimit'] ?? null, $in['revisitCap'] ?? null, $half)) !== null && (int)($in['revisitCount'][$t] ?? 0) >= $lim) {
                 return 0;
             }
+            // 新規と再来を合わせて、初回か再来を担当できる人数まで（1 人が 1 人の患者様を受ける）
+            if ((!empty($in['countsAsNew']) || !empty($in['countsAsRevisit'])) && ($lim = $in['eitherCap'][$half] ?? null) !== null
+                && (int)($in['newCount'][$t] ?? 0) + (int)($in['revisitCount'][$t] ?? 0) >= $lim) {
+                return 0;
+            }
+            // 新規・再来を止めている時間
+            if (isset($in['kindStop'][$t])) return 0;
         }
         return max(0, min($free, $byCapacity));
     }
@@ -112,7 +122,7 @@ final class Availability
     {
         $out = [];
         // 新規を WEB で受けない店舗（0）：空いている時間は電話マークにして、電話での予約に案内する
-        $phoneOnly = self::newByPhoneOnly($in);
+        $phoneOnly = self::newByPhoneOnly($in) || !empty($in['webFar']);
         $free = $phoneOnly ? ['newLimit' => null] + $in : $in;
         foreach ($in['sessions'] as $s) {
             for ($t = $s['start']; $t <= $s['lastStart']; $t += $in['slotMinutes']) {

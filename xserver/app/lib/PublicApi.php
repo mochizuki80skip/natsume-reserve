@@ -55,6 +55,13 @@ final class PublicApi
         return $out;
     }
 
+    /** WEB で予約できる日数（店舗設定）より先の日か */
+    public static function beyondBookDays(array $store, string $date, string $today): bool
+    {
+        $n = $store['bookDaysAhead'] ?? null;
+        return $n !== null && $date > Time::addDays($today, (int)$n);
+    }
+
     public static function isPublished(array $store, string $date, string $today, ?bool $published): bool
     {
         if ($published === true) return true;
@@ -110,9 +117,19 @@ final class PublicApi
                 }
             }
         }
+        // 新規・再来を止める時間帯（初診・再来の予約だけ。新自・通院中は取れる）
+        $kindStop = [];
+        if ($kind === 'NEW' || $kind === 'REVISIT') {
+            foreach (Db::all('SELECT startTime, endTime FROM kind_block WHERE storeId = ? AND date = ?', [$store['id'], $date]) as $kb) {
+                for ($t = (int)$kb['startTime']; $t < (int)$kb['endTime']; $t += $setting['slotMinutes']) $kindStop[$t] = true;
+            }
+        }
         return [
             'sessions' => $sessions,
             'slotMinutes' => $setting['slotMinutes'],
+            'kindStop' => $kindStop,
+            // WEB で予約できる日数より先の日：空いていても電話マーク（電話で受ける）
+            'webFar' => self::beyondBookDays($store, $date, $now['date']),
             'beds' => Settings::allBeds($store),
             'capacityAm' => $capacity['am'],
             'capacityPm' => $capacity['pm'],
@@ -123,12 +140,14 @@ final class PublicApi
             'nowMinutes' => self::nowMinutesFor($date, $now['date'], $now['minutes']),
             'webCutoffMinutes' => $setting['webCutoffMinutes'],
             'phoneCutoffMinutes' => $setting['phoneCutoffMinutes'],
-            'newLimit' => ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'],
+            // 店舗設定の同時対応数は使わない（シフトのスタッフの人数で決める）
+            'newLimit' => null,
             'newCount' => $newCount,
             'countsAsNew' => $kind === 'NEW' || $kind === 'ACCIDENT',
             // シフトの「初回を担当する」「再来を担当する」にチェックのある人数（午前・午後）。null＝上限なし
             'newCap' => ['am' => $capacity['firstAm'] ?? null, 'pm' => $capacity['firstPm'] ?? null],
-            'revisitLimit' => ($store['maxRevisitConcurrent'] ?? null) === null ? null : (int)$store['maxRevisitConcurrent'],
+            'revisitLimit' => null,
+            'eitherCap' => ['am' => $capacity['eitherAm'] ?? null, 'pm' => $capacity['eitherPm'] ?? null],
             'revisitCap' => ['am' => $capacity['revisitAm'] ?? null, 'pm' => $capacity['revisitPm'] ?? null],
             'revisitCount' => $revisitCount,
             'countsAsRevisit' => $kind === 'REVISIT',

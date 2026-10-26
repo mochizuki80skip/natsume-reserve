@@ -5,7 +5,9 @@ export interface ResolvedSession { start: number; lastStart: number; lastAdmin: 
 export interface GridCell { time: number; bed: number; text: string; visited: boolean; menus?: string[]; staff?: string; staffCheck?: boolean; /** 電話で取った予約の電話番号 */ phone?: string | null; web?: { id: string; kind: string; phone: string; cardNo: string | null } | null }
 export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAt: string }
 export interface SlotBlock { id: string; start: number; end: number; beds: number[]; label: string }
-export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[]; firstAm?: number | null; firstPm?: number | null; revisitAm?: number | null; revisitPm?: number | null }
+/** 新規・再来を止める時間帯（WEB の初診・再来だけ止める） */
+export interface KindBlock { id: string; start: number; end: number; label: string }
+export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[]; firstAm?: number | null; firstPm?: number | null; revisitAm?: number | null; revisitPm?: number | null; eitherAm?: number | null; eitherPm?: number | null }
 
 export interface DayData {
   date: string;
@@ -26,6 +28,7 @@ export interface DayData {
   colorStaff?: { name: string; color: string }[];
   cancels: CancelRow[];
   blocks: SlotBlock[];
+  kindBlocks?: KindBlock[];
   /** 予約表で選べるメニュー（本部の「選択肢の設定」で変更） */
   menuOptions?: string[];
   /** 物販（menuOptions のうち、予約表の帯で別の段に出すもの） */
