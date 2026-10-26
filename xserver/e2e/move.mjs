@@ -12,6 +12,8 @@ const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); 
 await p.goto(B + '/admin/login/S001'); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
 const api = (m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
 const D = '2026-11-17', D2 = '2026-11-18';
+// 先の日に WEB 予約を入れるので、WEB で予約できる日数の制限を外す
+{ const s0 = (await api('GET', '/api/admin/settings'))[1].store; await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, bookDaysAhead: null }); }
 // WEB booking at 11:00 (NEW → 2 slots)
 const wb = await api('POST', '/api/public/S001/reserve', { kind: 'NEW', date: D, time: 660, name: 'ウェブ 花子', phone: '09012340000' });
 ok('WEB予約', wb[0] === 200);
