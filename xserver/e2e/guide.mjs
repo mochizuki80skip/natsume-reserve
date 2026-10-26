@@ -15,6 +15,7 @@ await p.goto(B + '/admin/login/S001'); await p.fill('input[type=password]', 'pas
 // 1) 予約表から「使い方」→ 予約表の記事が上に出る
 await p.getByRole('navigation').getByRole('link', { name: '使い方', exact: true }).click();
 await p.waitForURL(/admin\/guide\?from=/);
+await p.getByText('いま開いていた画面（予約表）の使い方').waitFor({ timeout: 5000 }).catch(() => {});
 ok('開いていた画面の記事', await p.getByText('いま開いていた画面（予約表）の使い方').isVisible());
 ok('目次にカテゴリ', (await p.textContent('main')).includes('こまったとき') && (await p.textContent('main')).includes('WEB 予約'));
 await p.screenshot({ path: O + 'guide-top.png' });
@@ -42,6 +43,7 @@ ok('見つからないとき', await p.getByText('見つかりませんでした
 
 // 4) 店舗設定から開くと店舗設定の記事
 await p.goto(B + '/admin/settings'); await p.waitForSelector('text=スタッフ・シフト'); await p.getByRole('navigation').getByRole('link', { name: '使い方', exact: true }).click(); await p.waitForURL(/from=%2Fadmin%2Fsettings/);
+await p.getByText('いま開いていた画面（店舗設定）の使い方').waitFor({ timeout: 5000 }).catch(() => {});
 ok('店舗設定の記事', await p.getByText('いま開いていた画面（店舗設定）の使い方').isVisible());
 
 // 5) 記事の画像がすべて public/guide/ にある
