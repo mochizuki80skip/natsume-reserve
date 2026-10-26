@@ -25,6 +25,7 @@ body { @apply bg-slate-50 text-slate-800; }
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
   .grid-cell .cell-label.with-check { text-indent: 11px; }
+  .grid-cell .has-check input { padding-left: 12px; } /* 来院チェックの四角の分だけ空ける */
   .grid-cell.dark-cell .cell-label { color: #fff; font-weight: 700; }
   .grid-cell:focus-within .cell-label { display: none; }
 }

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DayData } from '@/lib/types';
-import { addDays, formatDateJa, minToHm, nowJst } from '@/lib/time';
+import { WEEKDAY_JA, addDays, formatDateJa, minToHm, nowJst, weekdayOf } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { planPaste } from '@/lib/paste';
@@ -656,6 +656,8 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
     return noRed(cellState(visited.has(k), t, nowMin));
   }
   // 予約表の上は最小限に：メニュー別の人数・枠数とブロックは、ボタンで開いたときだけ出す（開いた状態はこのパソコンに覚える）。色の見かたはいつも出す
+  // スマホ：公開・臨時休業・枠数・凡例などは「その日の設定」に畳む
+  const [mobSet, setMobSet] = useState(false);
   const [panels, setPanels] = useState<{ menu: boolean; cap: boolean }>(() => {
     try { const j = JSON.parse(localStorage.getItem('natsume.dayPanels') ?? '{}'); return { menu: !!j.menu, cap: !!j.cap }; } catch { return { menu: false, cap: false }; }
   });
@@ -672,21 +674,33 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
-      <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 max-sm:static max-sm:mx-0 flex flex-wrap items-center gap-2 border-b bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
-        <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, -1)}`)}>‹ 前日</button>
-        <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1" aria-label="日付を選ぶ" />
-        <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, 1)}`)}>翌日 ›</button>
-        <h1 className="whitespace-nowrap text-base font-bold text-slate-800">{formatDateJa(data.date)}</h1>
-        <button type="button" className={`rounded px-4 py-1 font-bold ${data.date === today ? 'border border-brand bg-brand-light text-brand-dark' : 'bg-brand text-white'}`} onClick={() => navigate(`/admin/day/${today}`)} aria-current={data.date === today ? 'date' : undefined}>本日</button>
-        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={undo} disabled={historyLen === 0} className="rounded border bg-white px-3 py-1 disabled:opacity-40" title="この画面で入力・削除・貼り付けしたものを 1 つずつ戻します（Ctrl+Z）">↶ 元に戻す{historyLen ? `（${historyLen}）` : ''}</button>
-        <span className="ml-auto text-xs text-slate-500">
+      <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b max-sm:mx-0 max-sm:mb-1 max-sm:flex-nowrap max-sm:gap-1 max-sm:px-0.5 max-sm:py-1 max-sm:text-sm bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
+        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(data.date, -1)}`)} title="前日">‹<span className="max-sm:hidden"> 前日</span></button>
+        <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1 max-sm:min-w-0 max-sm:flex-1 max-sm:px-1" aria-label="日付を選ぶ" />
+        <span className="font-bold sm:hidden">（{WEEKDAY_JA[weekdayOf(data.date)]}）</span>
+        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(data.date, 1)}`)} title="翌日"><span className="max-sm:hidden">翌日 </span>›</button>
+        <h1 className="whitespace-nowrap text-base font-bold text-slate-800 max-sm:hidden">{formatDateJa(data.date)}</h1>
+        <button type="button" className={`rounded px-4 py-1 font-bold max-sm:whitespace-nowrap max-sm:px-2 ${data.date === today ? 'border border-brand bg-brand-light text-brand-dark' : 'bg-brand text-white'}`} onClick={() => navigate(`/admin/day/${today}`)} aria-current={data.date === today ? 'date' : undefined}>本日</button>
+        <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={undo} disabled={historyLen === 0} className="rounded border bg-white px-3 py-1 disabled:opacity-40 max-sm:whitespace-nowrap max-sm:px-2" title="この画面で入力・削除・貼り付けしたものを 1 つずつ戻します（Ctrl+Z）">↶<span className="max-sm:hidden"> 元に戻す</span>{historyLen ? `（${historyLen}）` : ''}</button>
+        <span className="ml-auto text-xs text-slate-500 max-sm:hidden">
           {saveState === 'saving' ? '保存中…' : saveState === 'saved' ? '保存しました' : saveState === 'error' ? '保存に失敗しました' : '入力すると自動保存されます'}
           <span className="ml-2 hidden text-slate-400 2xl:inline">（30秒ごとに最新の内容に自動更新）</span>
         </span>
-        <button type="button" onClick={() => setFindOpen(true)} className="rounded border bg-white px-3 py-1" title="氏名または診察券番号で、いつ予約が入っているかを探します">🔍 予約を探す</button>
-        <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white">印刷／PDF</a>
+        <button type="button" onClick={() => setFindOpen(true)} className="rounded border bg-white px-3 py-1 max-sm:px-2" title="氏名または診察券番号で、いつ予約が入っているかを探します">🔍<span className="max-sm:hidden"> 予約を探す</span></button>
+        <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white max-sm:hidden">印刷／PDF</a>
       </div>
 
+      {/* スマホ：人数は 1 行にまとめ、そのほかは「その日の設定」に畳む */}
+      <div className="no-print mb-1 flex flex-wrap gap-x-2.5 gap-y-0.5 px-0.5 text-[11px] sm:hidden" aria-label="この日の人数">
+        <span>予約 <b className="text-[13px]">{counts.rAm + counts.rPm}</b>（午前{counts.rAm}・午後{counts.rPm}）</span>
+        <span>来院 <b className="text-[13px] text-green-700">{counts.vAm + counts.vPm}</b></span>
+        <span>初診{counts.nAm + counts.nPm} 再来{counts.reAm + counts.rePm} 自賠{counts.jAm + counts.jPm}</span>
+        <span>キャンセル{cancelStat.all}（変更{cancelStat.changed}・未取得{cancelStat.none}）</span>
+      </div>
+      <button type="button" onClick={() => setMobSet(!mobSet)} aria-expanded={mobSet} className="no-print mb-1 w-full rounded border bg-white px-2 py-1 text-left text-xs text-brand-dark sm:hidden">
+        {mobSet ? '▾' : '▸'} その日の設定（{day.closed ? <b className="text-red-700">臨時休業</b> : day.closedPart ? <b className="text-red-700">{day.closedPart === 'AM' ? '午前' : '午後'} 臨時休業</b> : published ? '公開中' : '非公開'}・枠数・凡例）
+      </button>
+      <div className={mobSet ? '' : 'max-sm:hidden'}>
       <div className="mb-2 flex flex-wrap items-end gap-x-6 gap-y-2">
         <table className="text-sm">
           <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
@@ -805,6 +819,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
       </div>
+      </div>
 
       {data.special && (
         <p className="mb-2 rounded border border-amber-300 bg-amber-50 px-3 py-1 text-sm text-amber-900">
@@ -845,9 +860,11 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             </div>
           );
           return (
-            <div style={{ top: navH }} className="no-print sticky z-10 mb-1 flex flex-col gap-1 rounded border max-sm:static bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
+            // スマホ：名前の入ったセルを押したときだけ、画面の下に出す
+            <div style={{ ['--nav-h' as string]: `${navH}px` }} className={`no-print sticky top-[var(--nav-h)] z-10 mb-1 flex flex-col gap-1 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:z-30 max-sm:mb-0 max-sm:rounded-none max-sm:border-x-0 max-sm:bg-white max-sm:pb-2 max-sm:shadow-[0_-4px_12px_rgba(0,0,0,0.15)] ${ok || multi ? '' : 'max-sm:hidden'}`} role="group" aria-label="予約のメニュー">
             <div className="flex min-h-[30px] flex-wrap items-center gap-1.5">
               <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">メニュー</span>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setSel(null); setRange(null); }} className="order-last ml-auto rounded border px-2 py-0.5 text-xs sm:hidden">✕ 閉じる</button>
               {multi ? (
                 <>
                   <span className="mr-1 text-xs text-slate-600"><b className="text-slate-800">{targetCells().length} 件</b>選択中（下の担当を押すと、まとめて付けられます）</span>
@@ -952,7 +969,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                         <td key={b} data-cell={k} className={`grid-cell border p-0 ${dragFrom === k ? 'opacity-40' : ''} ${dragOver === k && dragFrom && dragOver !== dragFrom ? (text.trim() && !(dragFrom && isOwnTwo(dragFrom, k)) ? 'outline-dashed outline-2 -outline-offset-2 outline-red-500' : 'outline-dashed outline-2 -outline-offset-2 outline-sky-600 !bg-sky-100') : ''} ${ranged ? 'bg-indigo-100' : bg} ${color?.dark && !ranged ? 'dark-cell' : ''} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''} ${st === 'visited' ? 'shadow-[inset_4px_0_0_#15803d]' : ''}`}
                           style={color && !ranged ? { background: color.bg } : undefined}
                           title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
-                          <div className={`relative flex items-center ${hasName ? 'pr-4 max-sm:pr-2' : ''}`}>
+                          <div className={`relative flex items-center ${hasName ? 'has-check pr-4 max-sm:pr-2' : ''}`}>
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={() => toggleVisit(t, b)} aria-label={visited.has(k) ? '来院チェックを外す' : '来院チェック'}
                                 className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] max-sm:absolute max-sm:left-px max-sm:top-[3px] max-sm:z-[1] max-sm:ml-0 max-sm:h-2.5 max-sm:w-2.5 max-sm:text-[7px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>

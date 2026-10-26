@@ -1,5 +1,5 @@
 // 管理画面の共通枠（ヘッダー・店舗切替・メニュー）。未ログインならログイン画面へ
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import ClosureNotices from '@/components/ClosureNotices';
 import { goLogin, useFetch } from '@/lib/api';
@@ -37,6 +37,9 @@ export default function AdminLayout() {
   // 表の幅が広い画面（新患継続率・本部の集計）は横幅いっぱいに使う
   const wide = /^\/admin\/(karte|hq\/karte|madoguchi|acct|staffing|churn)/.test(location.pathname);
   const { data: me, error, loading, reload } = useFetch<Me>('/api/admin/me');
+  // スマホ：上のメニューは ☰ で開く（画面を移ったら閉じる）
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => setNavOpen(false), [location.pathname, location.search]);
   useEffect(() => {
     if (error && error.status === 401) goLogin();
   }, [error]);
@@ -57,8 +60,9 @@ export default function AdminLayout() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap px-3 py-1.5">
           <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' || acct ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {acct && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">経理</span>}
+          <button type="button" onClick={() => setNavOpen(!navOpen)} aria-expanded={navOpen} aria-label="メニュー" className="ml-auto rounded border px-2.5 py-0.5 text-lg leading-6 sm:hidden">{navOpen ? '✕' : '☰'}</button>
           {(me.session.role === 'hq' || me.session.role === 'mg') && (
-            <form action="/api/admin/switch" method="post" className="flex items-center gap-1 text-sm">
+            <form action="/api/admin/switch" method="post" className={`flex items-center gap-1 text-sm ${navOpen ? 'max-sm:w-full' : 'max-sm:hidden'}`}>
               <input type="hidden" name="back" value={location.pathname + location.search} />
               <select name="store" defaultValue={store?.code ?? ''} className="rounded border px-2 py-1">
                 {/* 本部専用 → エリアごと（本部の店舗一覧の並び順） */}
@@ -71,7 +75,7 @@ export default function AdminLayout() {
               <button type="submit" className="rounded border px-2 py-1">切替</button>
             </form>
           )}
-          <nav className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+          <nav className={`ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] ${navOpen ? 'max-sm:ml-0 max-sm:w-full max-sm:gap-x-4 max-sm:gap-y-2 max-sm:py-1 max-sm:text-sm' : 'max-sm:hidden'}`}>
             {acct ? (<>
               <Link to="/admin/acct" className="hover:underline">窓口集計（全店）</Link>
               <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>
