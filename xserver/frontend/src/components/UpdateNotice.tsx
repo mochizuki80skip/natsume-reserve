@@ -7,7 +7,8 @@ import { APP_VERSION } from '@/version';
 import { CHANGELOG, LATEST_CHANGE_ID, type Audience, type ChangeEntry } from '@/changelog';
 
 const SEEN_KEY = 'natsume.seenChangeId';
-const forRole = (role: string) => (c: ChangeEntry) => role === 'hq' || c.audience.includes('店舗' as Audience);
+/** 誰に出すか：本部・管轄MG＝すべて、経理＝経理に関係するもの、店舗＝店舗の運営に関係するもの */
+export const forRole = (role: string) => (c: ChangeEntry) => role === 'hq' || role === 'mg' || c.audience.includes((role === 'acct' ? '経理' : '店舗') as Audience);
 
 export function ChangeList({ list }: { list: ChangeEntry[] }) {
   return (

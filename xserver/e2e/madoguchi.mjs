@@ -169,7 +169,7 @@ ok('この月の入れ替わり（11/30 に終了）', s2.changes.some((c) => c.
 ok('店舗アカウントは見られない', (await api(sp, 'GET', '/api/admin/staffing'))[0] === 403);
 ok('本部は全店', (await api(hq, 'GET', '/api/admin/staffing?month=2026-11'))[1].rows.length === 2);
 await mg.goto(`${B}/admin/staffing?month=2026-11`); await mg.waitForSelector('table[aria-label="人員の過不足"]');
-ok('画面：足りない店舗は赤', (await mg.locator('td.bg-red-500').count()) === 1 && (await mg.textContent('main')).includes('-1 人'));
+ok('画面：足りない店舗は赤', (await mg.locator('table[aria-label="人員の過不足"] td.bg-red-500').count()) === 1 && (await mg.textContent('main')).includes('-1 人'));
 await mg.screenshot({ path: O + 'staffing.png' });
 // 本部でアカウントを止めると、すぐ使えなくなる
 const accs = (await api(hq, 'GET', '/api/admin/hq/accounts'))[1].accounts;

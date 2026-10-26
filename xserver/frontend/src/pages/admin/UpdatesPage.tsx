@@ -1,12 +1,12 @@
 // 更新のお知らせ（これまでの変更内容）/admin/updates
 import { CHANGELOG } from '@/changelog';
-import { ChangeList } from '@/components/UpdateNotice';
+import { ChangeList, forRole } from '@/components/UpdateNotice';
 import { APP_VERSION } from '@/version';
 import { useAdmin } from './Layout';
 
 export default function UpdatesPage() {
   const { me } = useAdmin();
-  const list = CHANGELOG.filter((c) => me.session.role === 'hq' || c.audience.includes('店舗'));
+  const list = CHANGELOG.filter(forRole(me.session.role));
   return (
     <div className="max-w-3xl">
       <h1 className="mb-1 text-xl font-bold">更新のお知らせ</h1>

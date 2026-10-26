@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { STAFF_PALETTE } from '@/lib/cellColor';
 
-interface Member { id: string; name: string; role: string; active: boolean; startDate?: string | null; endDate?: string | null; joinType?: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string }
+interface Member { id: string; name: string; role: string; active: boolean; startDate?: string | null; endDate?: string | null; joinType?: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string; isHead?: boolean; endReason?: string | null; leaveStart?: string | null; leaveEnd?: string | null }
 
 export default function StaffList({ members, maxTherapists, maxReception, onRefresh }: { members: Member[]; maxTherapists: number; maxReception: number; onRefresh: () => void }) {
   const [name, setName] = useState('');
@@ -44,6 +44,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
       <button type="button" onClick={() => confirm(`${m.name} を削除しますか？シフトも消えます。`) && call('DELETE', { id: m.id })} className="rounded border border-red-300 px-2 py-1 text-xs text-red-700">削除</button>
       {m.role === 'THERAPIST' && (
         <span className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-1 text-xs text-slate-700">
+          <label className="flex items-center gap-1 font-bold"><input type="checkbox" checked={!!m.isHead} onChange={(e) => call('PUT', { id: m.id, isHead: e.target.checked })} aria-label={`${m.name} 院長`} />院長<span className="font-normal text-slate-400">（1 店舗に 1 人）</span></label>
           <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canFirst} onChange={(e) => call('PUT', { id: m.id, canFirst: e.target.checked })} />初回（初診・新自）を担当する<span className="text-slate-400">（WEB の新規の人数に数える）</span></label>
           <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canRevisit} onChange={(e) => call('PUT', { id: m.id, canRevisit: e.target.checked })} />再来を担当する<span className="text-slate-400">（WEB の再来の人数に数える）</span></label>
           {(m.canFirst || m.canRevisit) && (
@@ -63,6 +64,20 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
         〜
         <input type="date" defaultValue={m.endDate ?? ''} onBlur={(e) => e.target.value !== (m.endDate ?? '') && call('PUT', { id: m.id, endDate: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 所属終了日`} />
         <span className="text-slate-400">（空欄＝制限なし）</span>
+        {m.endDate && (
+          <select value={m.endReason ?? ''} onChange={(e) => call('PUT', { id: m.id, endReason: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 終わる理由`}>
+            <option value="">終わる理由</option>
+            <option value="RETIRE">退職</option>
+            <option value="TRANSFER">異動</option>
+          </select>
+        )}
+      </span>
+      <span className="flex basis-full flex-wrap items-center gap-1 pl-1 text-xs text-slate-600">
+        休職の期間
+        <input type="date" defaultValue={m.leaveStart ?? ''} onBlur={(e) => e.target.value !== (m.leaveStart ?? '') && call('PUT', { id: m.id, leaveStart: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 休職の開始日`} />
+        〜
+        <input type="date" defaultValue={m.leaveEnd ?? ''} onBlur={(e) => e.target.value !== (m.leaveEnd ?? '') && call('PUT', { id: m.id, leaveEnd: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 休職の終わり`} />
+        <span className="text-slate-400">（休職するときだけ。終わりは復職の前日、未定なら空欄）</span>
       </span>
     </div>
   );
@@ -70,7 +85,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
     <div>
       <div className="mb-1 text-xs text-slate-500">{label}（{list.filter((m) => m.active).length}／最大 {max} 名）</div>
       {list.length === 0 ? <p className="text-xs text-slate-400">未登録{label === '施術者' ? '（既定の施術者数を使用中）' : ''}</p> : (
-        <div>{list.map((m) => <Row key={`${m.id}:${m.startDate}:${m.endDate}`} m={m} />)}</div>
+        <div>{list.map((m) => <Row key={`${m.id}:${m.startDate}:${m.endDate}:${m.leaveStart}:${m.leaveEnd}`} m={m} />)}</div>
       )}
     </div>
   );
@@ -107,6 +122,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
         新入社員は入社日を「所属開始日」にして登録します（前もって登録しても、開始日までは枠に数えません）。
         異動は、元の店舗で「終了日」（例：20日）を入れ、新しい店舗で「開始日」（例：21日）を入れて登録します。
         区分を選ぶと、開始日から1か月間シフト表に「新人」「異動」の印が出ます。
+        終了日を入れたら「退職」「異動」を選んでください。院長・終わる理由・休職の期間は、本部・MG の「人員の過不足」に出ます（休職の期間中は人数に数えません）。
         「初回を担当する」「再来を担当する」にチェックした施術者には予約表の色が付き、その人が初回を担当した患者様の 2・3・6・12回目のセルがその色になります。
       </p>
     </section>

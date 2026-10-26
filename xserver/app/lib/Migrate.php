@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 31;
+    private const VERSION = 32;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -233,6 +233,10 @@ final class Migrate
             if ($ver < 31 && self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'pageCity')) {
                 // 店舗えらびページ：見出しの地域（空なら住所の市・町）と、並び順（空なら本部の店舗一覧の順）
                 $pdo->exec('ALTER TABLE `store` ADD COLUMN `pageCity` VARCHAR(30) NULL, ADD COLUMN `pageOrder` INT NULL');
+            }
+            if ($ver < 32 && self::hasTable($pdo, 'staff_member') && !self::hasColumn($pdo, 'staff_member', 'isHead')) {
+                // 院長（1 店舗に 1 人）・所属が終わる理由（退職／異動）・休職の期間（人員の過不足に出す）
+                $pdo->exec('ALTER TABLE `staff_member` ADD COLUMN `isHead` TINYINT(1) NOT NULL DEFAULT 0, ADD COLUMN `endReason` VARCHAR(10) NULL, ADD COLUMN `leaveStart` CHAR(10) NULL, ADD COLUMN `leaveEnd` CHAR(10) NULL');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
