@@ -92,6 +92,7 @@ export default function AdminLayout() {
               <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
               <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
               <Link to="/admin/madoguchi" className="hover:underline">窓口集計</Link>
+              <Link to="/admin/report" className="hover:underline">日報</Link>
               <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
               {me.session.role === 'mg' && (
                 <DropMenu label={`MG（${me.session.area}）`}>

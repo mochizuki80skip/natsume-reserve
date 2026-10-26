@@ -275,6 +275,17 @@ export const GUIDE: GuideArticle[] = [
     related: ['karte', 'visit', 'cardno'], words: '離反 フォロー 離反率 来院 未予約 連絡 2週間',
   },
   {
+    id: 'report', cat: 'そのほかの画面', title: '日報（印刷・PDF）',
+    lead: '今までのスプレッドシートの日報と同じものを、A4 1 枚で出す画面です。数字の多くは予約表・窓口集計・シフトから自動で入ります。',
+    steps: [
+      { text: '上のメニューの「**日報**」を開き、日付を選びます（前日・翌日・今日のボタンでも変えられます）。' },
+      { text: '**水色**の欄は自動で入ります（来院数は来院チェックした人を数えます。入金額は窓口集計の入力から）。**黄色**の欄だけ、押して入力します（時間外は「1:05」のように）。' },
+      { text: '「**印刷・PDF**」を押し、印刷の画面で「PDF に保存」を選ぶと PDF になります。いつもの宛先へメールで送ってください。' },
+    ],
+    tips: ['今月の時間外・口コミの合計、現在の平均（今月の来院数 ÷ 稼働日数）、目標達成率は自動で計算します。', '目標は本部・MG が「窓口集計（全店）」の画面で月ごとに入れます。項目は本部が「本部（店舗・設定）」で変えられます。', '来院チェックが付いていない人は来院数に入りません。日報の前に来院チェックを確かめてください。'],
+    related: ['visit', 'madoguchi'], words: '日報 印刷 PDF 時間外 口コミ 目標 平均',
+  },
+  {
     id: 'madoguchi', cat: 'そのほかの画面', title: '窓口集計（月間窓口表・物販内訳・返戻）',
     lead: '今までのスプレッドシートの「月間窓口表」「物販内訳表」「返戻」と同じものを、日ごとに入れる画面です。経理は月ごとに全店を確認します。',
     steps: [
@@ -324,6 +335,7 @@ export const GUIDE: GuideArticle[] = [
 export const GUIDE_FOR_SCREEN: { prefix: string; label: string; ids: string[] }[] = [
   { prefix: '/admin/day', label: '予約表', ids: ['grid-basic', 'phone', 'kind-menu', 'drag', 'change', 'visit', 'find', 'undo'] },
   { prefix: '/admin/shifts', label: 'シフト表', ids: ['shifts', 'capacity'] },
+  { prefix: '/admin/report', label: '日報', ids: ['report', 'visit', 'madoguchi'] },
   { prefix: '/admin/reservations', label: '予約・来院ログ', ids: ['log', 'web'] },
   { prefix: '/admin/karte/summary', label: '新患・再来集計', ids: ['summary', 'karte'] },
   { prefix: '/admin/karte', label: '新患継続率', ids: ['karte', 'visit'] },

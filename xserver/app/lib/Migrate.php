@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 33;
+    private const VERSION = 34;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -243,12 +243,45 @@ final class Migrate
                 $pdo->exec(self::KIND_BLOCK_DDL);
                 if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'maxActiveBookings')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `maxActiveBookings` INT NULL DEFAULT 4, ADD COLUMN `bookDaysAhead` INT NULL DEFAULT 14');
             }
+            if ($ver < 34) {
+                // 日報：本部が決める項目・店舗の手入力・月ごとの目標
+                foreach ([self::REPORT_ITEM_DDL, self::REPORT_VALUE_DDL, self::REPORT_TARGET_DDL] as $ddl) $pdo->exec($ddl);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const REPORT_ITEM_DDL = "CREATE TABLE IF NOT EXISTS `report_item` (
+  `id` VARCHAR(40) NOT NULL,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  `section` VARCHAR(60) NOT NULL DEFAULT '',
+  `kind` VARCHAR(10) NOT NULL DEFAULT 'value',
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  `source` VARCHAR(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    public const REPORT_VALUE_DDL = "CREATE TABLE IF NOT EXISTS `report_value` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` VARCHAR(10) NOT NULL,
+  `itemId` VARCHAR(40) NOT NULL,
+  `value` VARCHAR(500) NOT NULL DEFAULT '',
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`storeId`, `date`, `itemId`),
+  CONSTRAINT `fk_report_value_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+
+    public const REPORT_TARGET_DDL = "CREATE TABLE IF NOT EXISTS `report_target` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `ym` CHAR(7) NOT NULL,
+  `src` VARCHAR(60) NOT NULL,
+  `value` DECIMAL(14,1) NOT NULL,
+  PRIMARY KEY (`storeId`, `ym`, `src`),
+  CONSTRAINT `fk_report_target_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     public const KIND_BLOCK_DDL = "CREATE TABLE IF NOT EXISTS `kind_block` (
   `id` VARCHAR(32) NOT NULL,

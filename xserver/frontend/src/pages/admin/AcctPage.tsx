@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
 import { useFetch } from '@/lib/api';
 import { halfNum } from '@/lib/format';
+import ReportTargets from '@/components/ReportTargets';
 import { useAdmin } from './Layout';
 
 interface Row {
@@ -170,6 +171,7 @@ export default function AcctPage() {
         </table>
       </div>
       <p className="mt-1 text-[11px] text-slate-500">売上＝窓口合計＋保険請求＋自賠責請求（日々の入力）。前月比＝前月の売上と比べた割合。自賠責の「速報」は自賠請求に登録した金額です。「開く」でその店舗の窓口表・物販内訳・返戻を見られます（見るだけ）。{data.canTarget && (isMg ? '売上目標は管轄の店舗だけ入れられます。' : '売上目標は本部が店舗ごと・月ごとに入れます。')}</p>
+      {(me.session.role === 'hq' || isMg) && <ReportTargets month={ym} />}
     </div>
   );
 }

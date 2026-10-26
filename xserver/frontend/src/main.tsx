@@ -37,6 +37,7 @@ import GuidePage from './pages/admin/GuidePage';
 import MadoguchiPage from './pages/admin/MadoguchiPage';
 import AcctPage from './pages/admin/AcctPage';
 import StaffingPage from './pages/admin/StaffingPage';
+import ReportPage from './pages/admin/ReportPage';
 import ChurnPage from './pages/admin/ChurnPage';
 
 createRoot(document.getElementById('root')!).render(
@@ -71,6 +72,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="madoguchi" element={<MadoguchiPage />} />
           <Route path="acct" element={<AcctPage />} />
           <Route path="staffing" element={<StaffingPage />} />
+          <Route path="report" element={<ReportPage />} />
           <Route path="churn" element={<ChurnPage />} />
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />

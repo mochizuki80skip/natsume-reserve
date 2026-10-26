@@ -12,6 +12,7 @@ require_once __DIR__ . '/handlers/accounts.php';
 require_once __DIR__ . '/handlers/madoguchi.php';
 require_once __DIR__ . '/handlers/churn.php';
 require_once __DIR__ . '/handlers/closure.php';
+require_once __DIR__ . '/handlers/report.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -122,6 +123,13 @@ function route_table(): array
         // 臨時休業をまとめて入れる（本部・管轄MG）と、店舗への通知
         ['POST', '#^/api/admin/kind-blocks$#', 'adm_kind_block_post'],
         ['DELETE', '#^/api/admin/kind-blocks$#', 'adm_kind_block_delete'],
+        // 日報
+        ['GET', '#^/api/admin/report$#', 'report_get'],
+        ['PUT', '#^/api/admin/report/value$#', 'report_value_put'],
+        ['GET', '#^/api/admin/hq/report-items$#', 'hq_report_items_get'],
+        ['PUT', '#^/api/admin/hq/report-items$#', 'hq_report_items_put'],
+        ['GET', '#^/api/admin/report/targets$#', 'report_targets_get'],
+        ['PUT', '#^/api/admin/report/targets$#', 'report_target_put'],
         ['GET', '#^/api/admin/closures$#', 'closure_get'],
         ['PUT', '#^/api/admin/closures$#', 'closure_put'],
         ['GET', '#^/api/admin/closures/notices$#', 'closure_notices'],

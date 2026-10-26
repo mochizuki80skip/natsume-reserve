@@ -5,6 +5,7 @@ import StoresPageEditor, { type ListingStore } from '@/components/StoresPageEdit
 import ReferralEditor from '@/components/ReferralEditor';
 import PrivacyEditor from '@/components/PrivacyEditor';
 import GoodsEditor from '@/components/GoodsEditor';
+import ReportItemsEditor from '@/components/ReportItemsEditor';
 import ClosureBulkEditor from '@/components/ClosureBulkEditor';
 import { useAdmin } from './Layout';
 
@@ -29,6 +30,7 @@ export default function HqPage() {
       <ReferralEditor pageOpen={!!data.storesPageOpen} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} kind="media" />
       <GoodsEditor />
+      <ReportItemsEditor />
       <PrivacyEditor />
     </>
   );

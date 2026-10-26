@@ -142,6 +142,36 @@ CREATE TABLE IF NOT EXISTS `slot_block` (
   CONSTRAINT `fk_slot_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 日報：本部が決める項目（並び・まとまり・種類・名前・どこから取るか）、店舗の手入力（date は日付か、月の分は YYYY-MM）、月ごとの目標
+CREATE TABLE IF NOT EXISTS `report_item` (
+  `id` VARCHAR(40) NOT NULL,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  `section` VARCHAR(60) NOT NULL DEFAULT '',
+  `kind` VARCHAR(10) NOT NULL DEFAULT 'value',
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  `source` VARCHAR(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `report_value` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` VARCHAR(10) NOT NULL,
+  `itemId` VARCHAR(40) NOT NULL,
+  `value` VARCHAR(500) NOT NULL DEFAULT '',
+  `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`storeId`, `date`, `itemId`),
+  CONSTRAINT `fk_report_value_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `report_target` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `ym` CHAR(7) NOT NULL,
+  `src` VARCHAR(60) NOT NULL,
+  `value` DECIMAL(14,1) NOT NULL,
+  PRIMARY KEY (`storeId`, `ym`, `src`),
+  CONSTRAINT `fk_report_target_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 新規・再来だけを止める時間帯（通院中・新自は取れる。WEB だけ）
 CREATE TABLE IF NOT EXISTS `kind_block` (
   `id` VARCHAR(32) NOT NULL,
