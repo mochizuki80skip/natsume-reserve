@@ -18,7 +18,7 @@ try {
   // version.json の一番新しい日の（店舗向けの）お知らせが出て、古い日のお知らせは出ない
   const notes = JSON.parse(original).notes;
   const newest = notes[0].date;
-  const want = notes.filter((n) => n.date === newest && n.audience.includes('店舗')).map((n) => n.title);
+  const want = notes.filter((n) => n.date === newest && n.audience.includes('店舗')).map((n) => n.title).slice(0, 6); // 画面には 6 件まで
   const old = notes.find((n) => n.date !== newest && n.audience.includes('店舗'))?.title ?? '（なし）';
   ok('初めては一番新しい日のお知らせが出る', want.every((x) => t.includes(x)) && !t.includes(old), `${want.join('／')} ／ 出ないはず：${old}`);
   ok('店舗には本部向けのお知らせを出さない', !t.includes('紹介カードの QR の案内ページ'));

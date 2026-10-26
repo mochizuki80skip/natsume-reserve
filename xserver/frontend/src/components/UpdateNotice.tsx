@@ -82,6 +82,7 @@ export function WhatsNew({ role }: { role: string }) {
       <div role="dialog" aria-label="更新のお知らせ" className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-xl">
         <h2 className="mb-3 text-lg font-bold">更新のお知らせ</h2>
         <ChangeList list={list.slice(0, 6)} />
+        {list.length > 6 && <p className="mt-2 text-xs text-slate-500">ほか {list.length - 6} 件は「これまでのお知らせ」で見られます。</p>}
         <div className="mt-4 flex items-center justify-between gap-2">
           <Link to="/admin/updates" onClick={close} className="text-sm text-brand underline">これまでのお知らせ</Link>
           <button type="button" onClick={close} className="rounded bg-brand px-4 py-1.5 text-sm font-bold text-white">確認しました</button>
