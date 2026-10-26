@@ -672,7 +672,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
 
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
-      <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
+      <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 max-sm:static max-sm:mx-0 flex flex-wrap items-center gap-2 border-b bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, -1)}`)}>‹ 前日</button>
         <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1" aria-label="日付を選ぶ" />
         <button type="button" className="rounded border bg-white px-3 py-1" onClick={() => navigate(`/admin/day/${addDays(data.date, 1)}`)}>翌日 ›</button>
@@ -845,7 +845,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
             </div>
           );
           return (
-            <div style={{ top: navH }} className="no-print sticky z-10 mb-1 flex flex-col gap-1 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
+            <div style={{ top: navH }} className="no-print sticky z-10 mb-1 flex flex-col gap-1 rounded border max-sm:static bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur" role="group" aria-label="予約のメニュー">
             <div className="flex min-h-[30px] flex-wrap items-center gap-1.5">
               <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">メニュー</span>
               {multi ? (
@@ -908,15 +908,16 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                 if (hi > lo && lo < n) groups.push({ span: Math.min(hi, n) - lo, label: cap.am > cap.pm ? '午前のみ表示' : '午後のみ表示', cls: 'bg-amber-50 text-amber-800' });
                 if (hi < n) groups.push({ span: n - hi, label: '予約サイトに非表示（管理側のみ入力可）', cls: 'bg-slate-100 text-slate-500' });
                 return (
-                  <tr className="text-[11px]">
+                  <tr className="text-[11px] max-sm:text-[9px]">
                     <th className="border bg-slate-50" />
-                    {groups.map((g, i) => <th key={i} colSpan={g.span} className={`border px-1 py-0.5 font-normal ${g.cls}`}>{g.label}</th>)}
+                    {groups.map((g, i) => <th key={i} colSpan={g.span} className={`border px-1 py-0.5 font-normal ${g.cls}`}><span className="max-sm:hidden">{g.label}</span><span className="sm:hidden">{g.label.startsWith('予約サイトに表示') ? 'WEBに表示' : g.label.startsWith('予約サイトに非表示') ? 'WEBに非表示' : g.label}</span></th>)}
                   </tr>
                 );
               })()}
               <tr className="bg-slate-100">
-                <th className="w-16 border px-1 py-1">時間</th>
-                {cols.map((b) => <th key={b} className={`border px-1 py-1 ${b > Math.max(cap.am, cap.pm) ? 'bg-slate-100 text-slate-500' : ''}`}>ベッド{b}</th>)}
+                <th className="w-16 border px-1 py-1 max-sm:w-8 max-sm:text-[9px]">時間</th>
+                {/* スマホでは「ベッド」を外して番号だけ（8 ベッドまで画面の幅に収める） */}
+                {cols.map((b) => <th key={b} className={`border px-1 py-1 max-sm:px-0 max-sm:text-[10px] ${b > Math.max(cap.am, cap.pm) ? 'bg-slate-100 text-slate-500' : ''}`}><span className="max-sm:hidden">ベッド</span>{b}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -926,7 +927,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                 const blk = (data.blocks ?? []).filter((b) => t >= b.start && t < b.end);
                 return (
                   <tr key={t} className={isPmStart ? 'border-t-4 border-t-slate-300' : ''}>
-                    <td className={`whitespace-nowrap border px-1 text-center font-mono ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
+                    <td className={`whitespace-nowrap border px-1 text-center font-mono max-sm:px-0 max-sm:text-[9px] ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
                       title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockBedsText(b.beds, cols)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
                       {blk.length > 0 && <span className="no-print mr-0.5 text-[10px]">🔒</span>}{minToHm(t)}
                     </td>
@@ -951,14 +952,14 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                         <td key={b} data-cell={k} className={`grid-cell border p-0 ${dragFrom === k ? 'opacity-40' : ''} ${dragOver === k && dragFrom && dragOver !== dragFrom ? (text.trim() && !(dragFrom && isOwnTwo(dragFrom, k)) ? 'outline-dashed outline-2 -outline-offset-2 outline-red-500' : 'outline-dashed outline-2 -outline-offset-2 outline-sky-600 !bg-sky-100') : ''} ${ranged ? 'bg-indigo-100' : bg} ${color?.dark && !ranged ? 'dark-cell' : ''} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''} ${st === 'visited' ? 'shadow-[inset_4px_0_0_#15803d]' : ''}`}
                           style={color && !ranged ? { background: color.bg } : undefined}
                           title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
-                          <div className={`relative flex items-center ${hasName ? 'pr-4' : ''}`}>
+                          <div className={`relative flex items-center ${hasName ? 'pr-4 max-sm:pr-2' : ''}`}>
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={() => toggleVisit(t, b)} aria-label={visited.has(k) ? '来院チェックを外す' : '来院チェック'}
-                                className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
+                                className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] max-sm:absolute max-sm:left-px max-sm:top-[3px] max-sm:z-[1] max-sm:ml-0 max-sm:h-2.5 max-sm:w-2.5 max-sm:text-[7px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
                             )}
-                            {web && hasName && <span className="ml-0.5 flex-none rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700" title="WEB予約">WEB</span>}
+                            {web && hasName && <span className="ml-0.5 flex-none rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700 max-sm:hidden" title="WEB予約">WEB</span>}
                             {cellMenus.length > 0 && (
-                              <span className="ml-0.5 flex flex-none gap-px" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
+                              <span className="ml-0.5 flex flex-none gap-px max-sm:hidden" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
                                 {cellMenus.map((m) => <i key={m} className="min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m, menuOptions)}</i>)}
                               </span>
                             )}
@@ -1003,12 +1004,14 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                               placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
                               className={`min-w-0 flex-1 ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
-                            {hasName && st === 'pending' && <span className="no-print pointer-events-none flex-none rounded bg-yellow-600 px-1 text-[10px] leading-4 text-white">未チェック</span>}
-                            {staffName && <span className="ml-0.5 flex-none rounded-full border border-brand bg-white px-1.5 text-[10px] font-bold leading-4 text-brand-dark" title={`担当：${staffName}`}>{staffName}</span>}
-                            {needCheck && <span className="no-print ml-0.5 flex-none rounded bg-amber-500 px-1 text-[10px] font-bold leading-4 text-white" title="同じ名前の初回の患者様が複数いるため、担当を自動で付けられませんでした">担当を確認</span>}
+                            {/* スマホ：入力欄は 1 行で切れるので、氏名は 2 行に折り返して見せる（入力中は消える）。（再）（初診）などの印はセルの色で分かるので外す */}
+                            {text && <span aria-hidden className={`cell-label ${hasName ? 'with-check' : ''}`}>{hasName ? text.replace(/[（(][^（()）]*[）)]\s*$/, '') || text : text}</span>}
+                            {hasName && st === 'pending' && <span className="no-print pointer-events-none flex-none rounded bg-yellow-600 max-sm:hidden px-1 text-[10px] leading-4 text-white">未チェック</span>}
+                            {staffName && <span className="ml-0.5 flex-none rounded-full border border-brand max-sm:hidden bg-white px-1.5 text-[10px] font-bold leading-4 text-brand-dark" title={`担当：${staffName}`}>{staffName}</span>}
+                            {needCheck && <span className="no-print ml-0.5 flex-none rounded bg-amber-500 max-sm:hidden px-1 text-[10px] font-bold leading-4 text-white" title="同じ名前の初回の患者様が複数いるため、担当を自動で付けられませんでした">担当を確認</span>}
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); setMenu(menu === k ? null : k); }} aria-label="メニュー"
-                                className="no-print absolute right-0 top-0 h-full w-4 text-xs text-slate-400 hover:text-slate-700">⋯</button>
+                                className="no-print absolute right-0 top-0 h-full w-4 text-xs text-slate-400 hover:text-slate-700 max-sm:w-2 max-sm:text-[8px]">⋯</button>
                             )}
                             {numHint?.k === k && (
                               <div className={`no-print absolute left-0 top-full z-30 whitespace-nowrap rounded border px-2 py-0.5 text-xs shadow ${numHint.name ? 'border-brand bg-white text-slate-800' : 'border-amber-400 bg-amber-50 text-amber-900'}`} role="status">

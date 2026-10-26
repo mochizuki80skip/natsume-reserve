@@ -13,6 +13,21 @@ body { @apply bg-slate-50 text-slate-800; }
 /* 回数（2回目など）の濃い色のセルは文字を白に（入力中は読みやすいよう黒） */
 .grid-cell.dark-cell input:not(:focus) { color: #fff; font-weight: 700; }
 .grid-cell.dark-cell input::placeholder { color: #e2e8f0; }
+/* スマホ：8 ベッドまで画面の幅に収める（セルの高さはそのまま、文字を小さく） */
+.grid-cell .cell-label { display: none; }
+@media (max-width: 639px) {
+  #grid { table-layout: fixed; }
+  .grid-cell input { @apply px-px text-[9px] leading-tight; min-height: 26px; }
+  .grid-cell input:not(:focus) { color: transparent !important; }
+  .grid-cell .cell-label {
+    position: absolute; inset: 0 0 auto 0; max-height: 24px; padding: 2px 7px 0 1px; pointer-events: none;
+    font-size: 9px; line-height: 11px; word-break: break-all; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .grid-cell .cell-label.with-check { text-indent: 11px; }
+  .grid-cell.dark-cell .cell-label { color: #fff; font-weight: 700; }
+  .grid-cell:focus-within .cell-label { display: none; }
+}
 
  /* 顧客サイト 週間一覧 */
 .wk-head { position: sticky; top: 0; z-index: 5; background: #f8fafc; padding-bottom: 6px; }
