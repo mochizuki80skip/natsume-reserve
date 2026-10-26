@@ -10,8 +10,13 @@ function adm_login(): never
     $b = Http::body();
     $code = trim((string)($b['code'] ?? ''));
     $password = (string)($b['password'] ?? '');
+    // アカウントごとにも、間違えた回数を制限する（接続元を変えながらの総当たりを防ぐ。正しくログインした回数は数えない）
+    $acctKey = 'login-fail:' . mb_strtolower(mb_substr($code, 0, 40));
+    if (RateLimit::blocked($acctKey, 10)) Http::error('パスワードを何度も間違えたため、しばらく（10 分ほど）ログインできません', 429);
     $acc = Db::one('SELECT a.*, s.active AS storeActive, s.hqOnly AS storeHqOnly FROM admin_account a LEFT JOIN store s ON s.id = a.storeId WHERE a.code = ?', [$code]);
-    $ok = $acc && password_verify($password, $acc['passwordHash']);
+    // 無いコードでも同じだけ時間をかける（コードがあるかどうかを時間で見分けられないように）
+    $ok = password_verify($password, $acc['passwordHash'] ?? '$2y$10$dEC3I38/6tr2s7SJZDa8Ou36BOv.fG9AphRnKh9Rz8pQaYXR7ZH9G') && $acc;
+    if (!$ok) RateLimit::hit($acctKey, 10 * 60);
     if (!$ok || ($acc['role'] === 'store' && !(int)$acc['storeActive']) || !(int)($acc['active'] ?? 1)) Http::error('店舗コード（ID）またはパスワードが違います', 401);
     // 本部専用の店舗は、店舗のアカウントではログインできない（本部のアカウントで切り替えて使う）
     if ($acc['role'] === 'store' && (int)($acc['storeHqOnly'] ?? 0)) Http::error('この店舗は本部専用です。本部のアカウントでログインしてください', 403);
@@ -22,6 +27,7 @@ function adm_login(): never
 
 function adm_logout(): never
 {
+    Http::requireSameOrigin();
     $s = Auth::session();
     Auth::clearSessionCookie();
     $to = ($s && $s['role'] === 'store') ? '/admin/login/' . rawurlencode($s['code']) : '/admin/login';
@@ -31,6 +37,7 @@ function adm_logout(): never
 /** 本部の店舗切替（フォーム POST） */
 function adm_switch(): never
 {
+    Http::requireSameOrigin();
     $s = Auth::requireSession();
     if ($s['role'] !== 'hq' && $s['role'] !== 'mg') Http::error('forbidden', 403);
     $code = (string)($_POST['store'] ?? '');
@@ -52,6 +59,8 @@ function adm_me(): never
     $mine = $s['role'] === 'mg' ? array_column(Auth::mgStores(), 'code') : [];
     $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'area' => $r['area'] ?? '', 'hqOnly' => (bool)($r['hqOnly'] ?? 0), 'jibaiOnly' => (bool)($r['jibaiOnly'] ?? 0), 'mine' => $s['role'] !== 'mg' || in_array($r['code'], $mine, true)], $list);
     Http::json([
+        // 本部にだけ出す注意（config.php の SESSION_SECRET が見本のままだと、ログインを偽造されるおそれがある）
+        'warnings' => $s['role'] === 'hq' && stripos(Config::str('SESSION_SECRET'), 'change-me') !== false ? ['config.php の SESSION_SECRET が見本の値のままです。長いランダムな文字に変えてください（変えると全員ログインし直しになります）。'] : [],
         'session' => ['code' => $s['code'], 'role' => $s['role'], 'name' => $s['role'] !== 'store' ? (Auth::account()['name'] ?? '') : '', 'canManage' => $s['role'] === 'hq' && (int)(Auth::account()['canManage'] ?? 0) === 1, 'area' => $s['role'] === 'mg' ? (string)(Auth::account()['area'] ?? '') : ''],
         'store' => $store ? ['id' => $store['id'], 'code' => $store['code'], 'name' => $store['name'], 'active' => (bool)$store['active'], 'jibaiOnly' => (bool)($store['jibaiOnly'] ?? 0), 'readOnly' => !Auth::canEditStore($s, $store)] : null,
         'stores' => $stores,
@@ -627,7 +636,8 @@ function adm_reservations_export(): never
         echo $bytes;
         exit;
     }
-    $esc = fn($v) => preg_match('/[",\r\n]/', (string)$v) ? '"' . str_replace('"', '""', (string)$v) . '"' : (string)$v;
+    // Excel で開いたときに数式として動かないよう、= + - @ などで始まる値の頭に ' を付ける（氏名は患者様が入力するため）
+    $esc = function ($v) { $v = (string)$v; if ($v !== '' && strpbrk($v[0], "=+-@\t\r") !== false) $v = "'" . $v; return preg_match('/[",\r\n]/', $v) ? '"' . str_replace('"', '""', $v) . '"' : $v; };
     $lines = [implode(',', array_map($esc, $header))];
     foreach ($rows as $r) $lines[] = implode(',', array_map($esc, $r));
     header('Content-Type: text/csv; charset=utf-8');
@@ -910,15 +920,18 @@ function adm_store_put(): never
 /** 自分のパスワード変更 */
 function adm_store_patch(): never
 {
-    $ctx = Auth::context();
+    $s = Auth::requireSession(); // 経理・管轄外の店舗を見ている管轄MG も自分のパスワードは変えられる
     Http::requireJson();
     $b = Http::body();
     $current = (string)($b['current'] ?? '');
     $next = (string)($b['next'] ?? '');
     if (strlen($next) < 8) Http::error('8文字以上にしてください', 400);
-    $acc = Db::one('SELECT * FROM admin_account WHERE id = ?', [$ctx['session']['accountId']]);
+    $acc = Db::one('SELECT * FROM admin_account WHERE id = ?', [$s['accountId']]);
     if (!$acc || !password_verify($current, $acc['passwordHash'])) Http::error('現在のパスワードが違います', 400);
     Db::exec('UPDATE admin_account SET passwordHash = ? WHERE id = ?', [password_hash($next, PASSWORD_BCRYPT), $acc['id']]);
+    // ほかのパソコン・スマホのログインは無効にして、この画面だけ新しいログインにする
+    Auth::revoke('id = ?', [$acc['id']]);
+    Auth::setSessionCookie(['accountId' => $s['accountId'], 'role' => $s['role'], 'storeId' => $s['storeId'], 'code' => $s['code']]);
     Http::json(['ok' => true]);
 }
 

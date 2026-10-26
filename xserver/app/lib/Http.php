@@ -55,11 +55,27 @@ final class Http
         return strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
     }
 
+    /** 接続元の IP（回数制限に使う）。X-Forwarded-For は送る側が自由に書けるので使わない */
     public static function clientIp(): string
     {
-        $xf = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '';
-        if ($xf !== '') return trim(explode(',', $xf)[0]);
         return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    }
+
+    /** Cookie の Secure：本番（APP_ENV=production）は必ず付ける */
+    public static function secureCookie(): bool
+    {
+        return Config::str('APP_ENV') === 'production' || self::isHttps();
+    }
+
+    /** フォーム POST（店舗切替・ログアウト）：別のサイトから送られたものは受け付けない */
+    public static function requireSameOrigin(): void
+    {
+        $o = $_SERVER['HTTP_ORIGIN'] ?? ($_SERVER['HTTP_REFERER'] ?? '');
+        if ($o === '') return; // Origin も Referer も付かない古いブラウザ・設定は通す（SameSite=Lax で守る）
+        $host = parse_url($o, PHP_URL_HOST);
+        if (!is_string($host) || strcasecmp($host, (string)($_SERVER['HTTP_HOST'] ?? '')) !== 0 && strcasecmp($host . ':' . (string)parse_url($o, PHP_URL_PORT), (string)($_SERVER['HTTP_HOST'] ?? '')) !== 0) {
+            throw new HttpError(403, 'forbidden');
+        }
     }
 
     public static function isHttps(): bool

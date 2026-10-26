@@ -214,6 +214,7 @@ function hq_stores_put(): never
         $password = (string)($b['password'] ?? '');
         if (strlen($password) < 8) Http::error('パスワードは8文字以上', 400);
         Db::exec('UPDATE admin_account SET passwordHash = ? WHERE storeId = ? AND role = ?', [password_hash($password, PASSWORD_BCRYPT), $store['id'], 'store']);
+        Auth::revoke('storeId = ? AND role = ?', [$store['id'], 'store']); // 今ログインしている画面も使えなくする
     } else {
         Http::error('bad request', 400);
     }
@@ -223,12 +224,13 @@ function hq_stores_put(): never
 /** 全店状況：指定日の全店舗の予約・来院・WEB・内訳・キャンセル */
 function hq_overview(): never
 {
-    Auth::requireViewAll(); // 管轄MG・経理も見られる（見るだけ）
+    $s = Auth::requireViewAll();
+    if ($s['role'] === 'acct') throw new HttpError(403, 'forbidden'); // 管轄MG は見るだけ。経理は使わない
     $today = Time::nowJst()['date'];
     $date = Http::query('date');
     if (!$date || !Time::isValidDate($date)) $date = $today;
     $setting = Settings::global();
-    $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder('active = 1', [], false));
+    $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder($s['role'] === 'hq' ? 'active = 1' : 'active = 1 AND hqOnly = 0', [], false));
     $rows = [];
     $sum = ['rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0, 'cancel' => 0, 'noshow' => 0];
     foreach ($stores as $store) {

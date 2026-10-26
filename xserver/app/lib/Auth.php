@@ -7,6 +7,7 @@ final class Auth
     public const SESSION_COOKIE = 'bk_session';
     public const STORE_COOKIE = 'bk_store'; // 本部アカウントが表示中の店舗コード
     private const MAX_AGE = 12 * 60 * 60;
+    private const MAX_LIFETIME = 30 * 86400; // 使っていても、ログインから 30 日たったらログインし直す
 
     private static ?array $session = null;
     private static bool $sessionLoaded = false;
@@ -40,7 +41,9 @@ final class Auth
         if (!is_array($j) || !isset($j['accountId'], $j['role'], $j['exp'])) return null;
         if ($j['exp'] < time()) return null;
         if (!in_array($j['role'], ['store', 'hq', 'mg', 'acct'], true)) return null;
-        return ['accountId' => (string)$j['accountId'], 'role' => $j['role'], 'storeId' => isset($j['storeId']) ? (string)$j['storeId'] : null, 'code' => (string)($j['code'] ?? ''), 'exp' => (int)$j['exp']];
+        $iat = (int)($j['iat'] ?? ((int)$j['exp'] - self::MAX_AGE));
+        if ($iat + self::MAX_LIFETIME < time()) return null;
+        return ['accountId' => (string)$j['accountId'], 'role' => $j['role'], 'storeId' => isset($j['storeId']) ? (string)$j['storeId'] : null, 'code' => (string)($j['code'] ?? ''), 'exp' => (int)$j['exp'], 'iat' => $iat, 'sv' => (int)($j['sv'] ?? 0)];
     }
 
     public static function session(): ?array
@@ -51,21 +54,24 @@ final class Auth
         return self::$session = ($t !== '' ? self::verify($t) : null);
     }
 
+    /** ログイン時：アカウントの sessVer（パスワードを変えたら増える）を入れて発行する */
     public static function setSessionCookie(array $s): void
     {
+        $s += ['iat' => time()];
+        if (!isset($s['sv'])) $s['sv'] = (int)(Db::one('SELECT sessVer FROM admin_account WHERE id = ?', [$s['accountId']])['sessVer'] ?? 0);
         setcookie(self::SESSION_COOKIE, self::sign($s), [
-            'expires' => time() + self::MAX_AGE, 'path' => '/', 'httponly' => true, 'secure' => Http::isHttps(), 'samesite' => 'Lax',
+            'expires' => time() + self::MAX_AGE, 'path' => '/', 'httponly' => true, 'secure' => Http::secureCookie(), 'samesite' => 'Lax',
         ]);
     }
 
     public static function clearSessionCookie(): void
     {
-        setcookie(self::SESSION_COOKIE, '', ['expires' => time() - 3600, 'path' => '/', 'httponly' => true, 'secure' => Http::isHttps(), 'samesite' => 'Lax']);
+        setcookie(self::SESSION_COOKIE, '', ['expires' => time() - 3600, 'path' => '/', 'httponly' => true, 'secure' => Http::secureCookie(), 'samesite' => 'Lax']);
     }
 
     public static function setStoreCookie(string $code): void
     {
-        setcookie(self::STORE_COOKIE, $code, ['expires' => time() + 30 * 86400, 'path' => '/', 'httponly' => true, 'secure' => Http::isHttps(), 'samesite' => 'Lax']);
+        setcookie(self::STORE_COOKIE, $code, ['expires' => time() + 30 * 86400, 'path' => '/', 'httponly' => true, 'secure' => Http::secureCookie(), 'samesite' => 'Lax']);
     }
 
     /** ログイン必須（API 用：未ログインは 401） */
@@ -73,13 +79,32 @@ final class Auth
     {
         $s = self::session();
         if (!$s) throw new HttpError(401, 'unauthorized');
-        // 本部・管轄MG・経理のアカウントは毎回、停止されていないか確かめる（停止したら次の操作から使えなくする）
+        // 毎回、アカウントが使えるか確かめる：停止・種類の変更・パスワードの変更（sessVer が増える）・店舗の停止で、次の操作から使えなくする
+        if (!self::alive($s)) throw new HttpError(401, 'unauthorized');
         if ($s['role'] !== 'store' && !self::account()) throw new HttpError(401, 'unauthorized');
-        // 使っている間はログインを延長する（最後の延長から 1 時間たったら有効期限を 12 時間先に延ばす）
+        // 使っている間はログインを延長する（最後の延長から 1 時間たったら有効期限を 12 時間先に延ばす。ログインした時刻は変えない）
         if (($s['exp'] ?? 0) - time() < self::MAX_AGE - 3600 && !headers_sent()) {
-            self::setSessionCookie(['accountId' => $s['accountId'], 'role' => $s['role'], 'storeId' => $s['storeId'], 'code' => $s['code']]);
+            self::setSessionCookie(['accountId' => $s['accountId'], 'role' => $s['role'], 'storeId' => $s['storeId'], 'code' => $s['code'], 'iat' => $s['iat'], 'sv' => $s['sv']]);
         }
         return $s;
+    }
+
+    private static ?bool $alive = null;
+
+    /** セッションのアカウントが今も使えるか（店舗のアカウントは店舗が稼働中か、どのアカウントもパスワードを変えていないか） */
+    private static function alive(array $s): bool
+    {
+        if (self::$alive !== null) return self::$alive;
+        $a = Db::one('SELECT a.active, a.role, a.storeId, a.sessVer, s.active AS storeActive FROM admin_account a LEFT JOIN store s ON s.id = a.storeId WHERE a.id = ?', [$s['accountId']]);
+        $ok = $a && (int)$a['active'] === 1 && (int)$a['sessVer'] === (int)($s['sv'] ?? 0)
+            && ($s['role'] !== 'store' || ($a['role'] === 'store' && (string)$a['storeId'] === (string)$s['storeId'] && (int)$a['storeActive'] === 1));
+        return self::$alive = $ok;
+    }
+
+    /** パスワードを変えた・停止したときに、そのアカウントのログインをすべて無効にする */
+    public static function revoke(string $where, array $params): void
+    {
+        Db::exec("UPDATE admin_account SET sessVer = sessVer + 1 WHERE $where", $params);
     }
 
     /** ログイン中の本部・管轄MG・経理のアカウント（停止中・存在しないときは null） */
@@ -137,6 +162,8 @@ final class Auth
     /** そのアカウントが見られる店舗（本部・経理・管轄MG＝全店、店舗＝自店舗） */
     public static function canOpenStore(array $session, array $store): bool
     {
+        // 本部専用の店舗は本部だけ（経理・管轄MG には見せない）
+        if ((int)($store['hqOnly'] ?? 0) && $session['role'] !== 'hq') return false;
         return in_array($session['role'], ['hq', 'acct', 'mg'], true) || $store['id'] === $session['storeId'];
     }
 

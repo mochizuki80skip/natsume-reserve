@@ -123,6 +123,7 @@ export default function AdminLayout() {
       {/* 管轄MG が管轄外の店舗を開いているとき */}
       {store?.readOnly && me.session.role === 'mg' && <p className="no-print border-b border-amber-300 bg-amber-100 px-3 py-1 text-center text-sm font-bold text-amber-900">「{store.name}」は管轄外の店舗なので見るだけです（入力・変更はできません）</p>}
       {store && <WebNotifier key={store.id} />}
+      {(me.warnings ?? []).map((w) => <p key={w} className="no-print border-b border-red-300 bg-red-100 px-3 py-1 text-center text-sm font-bold text-red-900" role="alert">{w}</p>)}
       {me.session.role === 'store' && <ClosureNotices />}
       <main className={`mx-auto ${wide ? 'max-w-none px-4 py-3' : 'max-w-6xl px-4 py-4 max-sm:px-1.5'}`}>
         <Outlet context={{ me, refreshMe: reload } satisfies AdminContext} />

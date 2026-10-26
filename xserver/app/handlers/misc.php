@@ -23,7 +23,7 @@ function cron_cleanup(): never
     $secret = Config::str('CRON_SECRET');
     $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
     $token = Http::query('token', '');
-    if ($secret === '' || !(hash_equals("Bearer $secret", $auth) || hash_equals($secret, $token))) Http::error('unauthorized', 401);
+    if (!Config::strongSecret($secret) || !(hash_equals("Bearer $secret", $auth) || hash_equals($secret, $token))) Http::error('unauthorized', 401);
     Http::json(cleanup_run());
 }
 
@@ -33,7 +33,7 @@ function install_page(): never
     $secret = Config::str('INSTALL_TOKEN');
     $token = Http::query('token', '');
     header('Content-Type: text/html; charset=utf-8');
-    if ($secret === '' || !hash_equals($secret, $token)) {
+    if (!Config::strongSecret($secret) || !hash_equals($secret, $token)) {
         http_response_code(403);
         echo '<!doctype html><meta charset="utf-8"><title>初期設定</title><p style="font-family:sans-serif">config.php の INSTALL_TOKEN を URL に付けてください（例：/install?token=...）。設定済みなら INSTALL_TOKEN を空にすると、このページは無効になります。</p>';
         exit;

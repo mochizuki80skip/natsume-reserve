@@ -81,11 +81,15 @@ function hq_accounts_put(): never
     }
     if (array_key_exists('canManage', $b) && $a['role'] !== 'hq' && Http::bool($b, 'canManage')) Http::error('発行・停止の権限は本部アカウントだけに付けられます', 400);
     if (array_key_exists('password', $b)) {
+        // 管理者アカウント（HQ）のパスワードは本人しか変えられない（乗っ取りを防ぐ）
+        if ($a['code'] === OWNER_CODE && $me['code'] !== OWNER_CODE) Http::error('管理者アカウント（HQ）のパスワードは、HQ 本人しか変えられません', 403);
         $pw = (string)$b['password'];
         if (strlen($pw) < 8) Http::error('パスワードは 8 文字以上にしてください', 400);
         $set[] = 'passwordHash = ?'; $params[] = password_hash($pw, PASSWORD_BCRYPT);
     }
     if ($set) Db::exec('UPDATE admin_account SET ' . implode(', ', $set) . ' WHERE id = ?', array_merge($params, [$a['id']]));
+    // パスワードの再設定・停止：そのアカウントで今ログインしている画面も使えなくする
+    if (array_key_exists('password', $b) || (array_key_exists('active', $b) && !Http::bool($b, 'active'))) Auth::revoke('id = ?', [$a['id']]);
     Http::json(['ok' => true]);
 }
 

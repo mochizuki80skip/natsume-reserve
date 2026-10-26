@@ -21,4 +21,20 @@ final class RateLimit
             return true; // テーブルが無いなどの場合は制限しない
         }
     }
+
+    /** 数えずに、すでに limit 回に達しているかだけを見る（失敗したときだけ hit で数える使い方） */
+    public static function blocked(string $key, int $limit): bool
+    {
+        try {
+            $row = Db::one('SELECT cnt, resetAt FROM rate_limit WHERE k = ?', [$key]);
+            return $row && (int)$row['resetAt'] >= time() && (int)$row['cnt'] >= $limit;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    public static function hit(string $key, int $windowSec): void
+    {
+        self::allow($key, PHP_INT_MAX, $windowSec);
+    }
 }

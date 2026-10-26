@@ -81,7 +81,8 @@ function pub_reserve(array $p): never
             $same = Db::all('SELECT name, time FROM reservation WHERE storeId = ? AND date = ? AND phone = ? AND status = ?', [$store['id'], $date, $phone, 'BOOKED']);
             foreach ($same as $r) {
                 if (Text::isSameName($r['name'], $name)) {
-                    throw new HttpError(409, '同じお名前・電話番号でのご予約が ' . Time::formatDateJa($date, false) . ' ' . Time::minToHm((int)$r['time']) . '〜 にすでに入っています。変更はお電話（' . $store['phone'] . '）へお願いします。');
+                    // 予約の時刻は出さない（名前と電話番号だけで、ほかの人の予約の時刻を調べられないように）
+                    throw new HttpError(409, '同じお名前・電話番号でのご予約が ' . Time::formatDateJa($date, false) . ' にすでに入っています。ご予約の確認・変更はお電話（' . $store['phone'] . '）へお願いします。');
                 }
             }
             $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
@@ -120,7 +121,9 @@ function pub_reserve(array $p): never
     Db::exec('UPDATE reservation SET smsStatus = ? WHERE id = ?', [$smsStatus, $result['id']]);
     if (!empty($store['notifyPhone'])) {
         $to = Text::normalizeJpPhone($store['notifyPhone']);
-        if ($to) Sms::send($to, '【WEB予約】' . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . ' ' . PublicApi::KIND_JA[$kind] . " {$name} 様");
+        // 氏名に URL を書かれても、店舗の携帯にリンクとして届かないようにする
+        $safeName = preg_replace('#(https?://|www\.)\S*#i', '', $name) ?? '';
+        if ($to) Sms::send($to, '【WEB予約】' . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . ' ' . PublicApi::KIND_JA[$kind] . " {$safeName} 様");
     }
     Http::json(['ok' => true, 'id' => $result['id'], 'token' => $result['token'], 'date' => $date, 'time' => $time, 'smsStatus' => $smsStatus]);
 }

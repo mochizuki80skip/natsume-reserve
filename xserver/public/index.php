@@ -7,6 +7,8 @@ header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: SAMEORIGIN');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Robots-Tag: noindex, nofollow');
+// ほかのサイトの中に埋め込ませない・プラグインを動かさない・<base> を書き換えさせない
+header("Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'");
 
 // プログラム本体（app フォルダ）を探す。同じフォルダの app を最優先にする。
 // サブドメインの場合、1 つ上は WordPress などの public_html なので、そこにある別の app を読まないよう
@@ -27,6 +29,9 @@ require $appDir . '/routes.php';
 // 正式な URL（config.php の APP_URL）以外から開かれたら、正式な URL へ転送する。
 // 例：WordPress 側の https://hachimaru-80skip.com/yoyaku.hachimaru-80skip.com/ から開かれた場合
 $canonical = rtrim(Config::str('APP_URL'), '/');
+// https で開かれたら、次からは https だけを使うようブラウザに伝える（HSTS）。
+// http → https の転送はサーバー側（Xserver の「常時SSL化」）に任せる（ここで転送すると、SSL の受け方によっては転送が止まらなくなるため）
+if (Http::isHttps()) header('Strict-Transport-Security: max-age=31536000');
 if ($canonical !== '') {
     $want = parse_url($canonical, PHP_URL_HOST);
     $host = strtolower(explode(':', $_SERVER['HTTP_HOST'] ?? '')[0]);

@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 29;
+    private const VERSION = 30;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -225,6 +225,10 @@ final class Migrate
             if ($ver < 29 && self::hasTable($pdo, 'day_status') && !self::hasColumn($pdo, 'day_status', 'closedBy')) {
                 // 本部・管轄MG がまとめて入れた臨時休業（closedBy）と、店舗が「確認しました」を押したか（closedAck）
                 $pdo->exec('ALTER TABLE `day_status` ADD COLUMN `closedBy` VARCHAR(60) NULL, ADD COLUMN `closedAck` TINYINT(1) NOT NULL DEFAULT 1');
+            }
+            if ($ver < 30 && self::hasTable($pdo, 'admin_account') && !self::hasColumn($pdo, 'admin_account', 'sessVer')) {
+                // パスワードの変更・停止で、ログイン中の画面も使えなくする（ログインの Cookie に入れて毎回くらべる）
+                $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `sessVer` INT NOT NULL DEFAULT 0');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

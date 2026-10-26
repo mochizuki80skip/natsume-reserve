@@ -26,4 +26,10 @@ final class Config
     {
         return (string)(self::get()[$k] ?? '');
     }
+
+    /** 合言葉（CRON_SECRET・INSTALL_TOKEN）として使える値か：空・短すぎる・見本のまま（change-me）は使えない */
+    public static function strongSecret(string $v): bool
+    {
+        return strlen($v) >= 8 && stripos($v, 'change-me') === false;
+    }
 }
