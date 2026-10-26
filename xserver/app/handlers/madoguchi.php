@@ -206,7 +206,7 @@ function mado_export(): never
 // ---------- 経理・本部・管轄MG の一覧 ----------
 function acct_stores(array $s): array
 {
-    return Settings::storesInOrder('hqOnly = 0', [], false); // 本部・経理・管轄MG とも全店（管轄MG が直せるのは管轄の店舗だけ）
+    return Settings::storesInOrder('1 = 1', [], false); // 本部・経理・管轄MG とも全店（本部専用の店舗も。管轄MG が直せるのは管轄の店舗だけ）
 }
 
 function acct_mado_get(): never

@@ -230,7 +230,7 @@ function hq_overview(): never
     $date = Http::query('date');
     if (!$date || !Time::isValidDate($date)) $date = $today;
     $setting = Settings::global();
-    $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder($s['role'] === 'hq' ? 'active = 1' : 'active = 1 AND hqOnly = 0', [], false));
+    $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder('active = 1', [], false));
     $rows = [];
     $sum = ['rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0, 'cancel' => 0, 'noshow' => 0];
     foreach ($stores as $store) {

@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 // セキュリティ関連のヘッダー（.htaccess では指定できないサーバーがあるため PHP で付ける）
 header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: SAMEORIGIN');
 header('Referrer-Policy: strict-origin-when-cross-origin');
 header('X-Robots-Tag: noindex, nofollow');
-// ほかのサイトの中に埋め込ませない・プラグインを動かさない・<base> を書き換えさせない
-header("Content-Security-Policy: frame-ancestors 'self'; object-src 'none'; base-uri 'self'");
 
 // プログラム本体（app フォルダ）を探す。同じフォルダの app を最優先にする。
 // サブドメインの場合、1 つ上は WordPress などの public_html なので、そこにある別の app を読まないよう
@@ -25,6 +22,19 @@ if ($appDir === null) {
 }
 require $appDir . '/bootstrap.php';
 require $appDir . '/routes.php';
+
+// 埋め込み（iframe）：管理画面は自分のサイトの中だけ。患者様のページ（予約・店舗えらび）は、自社のホームページ
+// （APP_URL の 1 つ上のドメインとそのサブドメイン。例：hachimaru-80skip.com）にも載せられる。プラグインと <base> の書き換えは禁止
+$frame = "'self'";
+$path = (string)parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+$appHost = (string)parse_url(Config::str('APP_URL'), PHP_URL_HOST);
+if (!preg_match('#^/(admin|api/admin|api/cron|install)#', $path) && substr_count($appHost, '.') >= 2) {
+    $parent = substr($appHost, strpos($appHost, '.') + 1);
+    $frame .= " https://$parent https://*.$parent";
+} else {
+    header('X-Frame-Options: SAMEORIGIN');
+}
+header("Content-Security-Policy: frame-ancestors $frame; object-src 'none'; base-uri 'self'");
 
 // 正式な URL（config.php の APP_URL）以外から開かれたら、正式な URL へ転送する。
 // 例：WordPress 側の https://hachimaru-80skip.com/yoyaku.hachimaru-80skip.com/ から開かれた場合

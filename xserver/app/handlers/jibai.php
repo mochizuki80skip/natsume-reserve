@@ -173,11 +173,11 @@ function jibai_verify(): never
 /** 本部：指定月の店舗別合計と全社合計 */
 function hq_jibai(): never
 {
-    $s = Auth::requireViewAll(); // 経理・管轄MG も見られる（経理確認は今までどおり本部）。本部専用の店舗は本部だけ
+    Auth::requireViewAll(); // 経理・管轄MG も見られる（経理確認は今までどおり本部）
     Jibai::ensureTables();
     $ym = Http::query('ym', '');
     if (!Jibai::isValidYm($ym)) $ym = Jibai::currentYm();
-    $stores = Db::all('SELECT id, code, name, active FROM store WHERE active = 1' . ($s['role'] === 'hq' ? '' : ' AND hqOnly = 0') . ' ORDER BY code ASC');
+    $stores = Db::all('SELECT id, code, name, active FROM store WHERE active = 1 ORDER BY code ASC');
     // 合計は請求月（請求書に印字された月。未設定なら登録した画面の月）で集計する
     $agg = [];
     foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, SUM(CASE WHEN verifiedAmount IS NULL THEN 0 ELSE 1 END) AS vn, COALESCE(SUM(verifiedAmount), 0) AS vtotal, SUM(CASE WHEN source = ? THEN 1 ELSE 0 END) AS ocr, SUM(CASE WHEN ym <> ? THEN 1 ELSE 0 END) AS late, COALESCE(SUM(CASE WHEN ym <> ? THEN amount ELSE 0 END), 0) AS lateTotal FROM jibai_claim WHERE COALESCE(invoiceYm, ym) = ? GROUP BY storeId', ['OCR', $ym, $ym, $ym]) as $r) {

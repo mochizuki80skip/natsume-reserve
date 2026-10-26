@@ -45,14 +45,11 @@ await call(hq, 'PUT', '/api/admin/hq/areas', { areas: [{ name: '見本エリア'
 await call(hq, 'POST', '/api/admin/hq/accounts', { code: 'mg1', name: '見本 MG', password: 'mgpass123', role: 'mg', area: '見本エリア' });
 await call(hq, 'PUT', '/api/admin/hq/stores', { code: 'S002', action: 'update', hqOnly: true });
 const acct = (await login('keiri1', 'keiripass1')).cookie, mg = (await login('mg1', 'mgpass123')).cookie;
-ok('経理は本部専用の店舗の窓口集計を見られない', (await call(acct, 'GET', '/api/admin/madoguchi?store=S002')).status >= 403);
-ok('管轄MG も本部専用の店舗の窓口集計を見られない', (await call(mg, 'GET', '/api/admin/madoguchi?store=S002')).status >= 403);
-ok('本部は見られる', (await call(hq, 'GET', '/api/admin/madoguchi?store=S002')).status === 200);
+ok('経理も本部専用の店舗の窓口集計を見られる', (await call(acct, 'GET', '/api/admin/madoguchi?store=S002')).status === 200);
+ok('管轄MG も本部専用の店舗の窓口集計を見られる（見るだけ）', (await call(mg, 'GET', '/api/admin/madoguchi?store=S002')).status === 200);
+const al = JSON.parse((await call(acct, 'GET', '/api/admin/acct/madoguchi')).text);
+ok('窓口集計（全店）の一覧に本部専用の店舗も出る', JSON.stringify(al).includes('S002'));
 ok('経理は全店状況を使えない', (await call(acct, 'GET', '/api/admin/hq/overview')).status === 403);
-const ov = JSON.parse((await call(mg, 'GET', '/api/admin/hq/overview')).text);
-ok('管轄MG の全店状況に本部専用の店舗は出ない', !ov.rows.some((r) => r.code === 'S002'));
-const jb = JSON.parse((await call(mg, 'GET', '/api/admin/hq/jibai')).text);
-ok('管轄MG の自賠集計に本部専用の店舗は出ない', !JSON.stringify(jb).includes('S002'));
 await call(hq, 'PUT', '/api/admin/hq/stores', { code: 'S002', action: 'update', hqOnly: false });
 ok('経理も自分のパスワードは変えられる', (await call(acct, 'PATCH', '/api/admin/store', { current: 'keiripass1', next: 'keiripass2' })).status === 200);
 // 管理者（HQ）のパスワードは HQ 本人だけ
@@ -82,3 +79,5 @@ ok('CSV では = で始まる氏名の頭に \' を付ける', csv.includes(`"'=
 const home = await fetch(`${B}/s/S001`);
 ok('画面に CSP（埋め込み禁止など）', (home.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'self'"));
 ok('合言葉が見本のままの cron は動かない', (await fetch(`${B}/api/cron/cleanup?token=change-me`)).status === 401);
+const adm = await fetch(`${B}/admin/login`);
+ok('管理画面はほかのサイトに埋め込めない', adm.headers.get('x-frame-options') === 'SAMEORIGIN' && (adm.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'self';"));

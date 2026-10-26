@@ -162,8 +162,6 @@ final class Auth
     /** そのアカウントが見られる店舗（本部・経理・管轄MG＝全店、店舗＝自店舗） */
     public static function canOpenStore(array $session, array $store): bool
     {
-        // 本部専用の店舗は本部だけ（経理・管轄MG には見せない）
-        if ((int)($store['hqOnly'] ?? 0) && $session['role'] !== 'hq') return false;
         return in_array($session['role'], ['hq', 'acct', 'mg'], true) || $store['id'] === $session['storeId'];
     }
 
