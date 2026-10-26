@@ -61,7 +61,7 @@ export default function StoreSettingsForm({ store, globalHours, slotMinutes, can
           <tbody>
             {([
               ['beds', 'ベッド数', '予約表の列数', 1, 20],
-              ['defaultActiveBeds', '既定の施術者数', 'シフト未入力の日に顧客へ見せる枠数', 0, 20],
+              ['defaultActiveBeds', 'WEB解放ベッド数', 'シフト未入力の日に顧客へ見せる枠数（WEB で予約を受けるベッドの数）', 0, 20],
               ['publishDaysAhead', '公開する日数', '今日から何日先まで顧客が予約できるか', 0, 365],
               ['maxTherapists', '施術者の最大人数', 'スタッフ登録・シフト表の上限', 1, 20],
               ['maxReception', '受付の最大人数', 'スタッフ登録・シフト表の上限', 0, 20],

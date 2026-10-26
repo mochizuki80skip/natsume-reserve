@@ -84,7 +84,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
   const List = ({ list, label, max }: { list: Member[]; label: string; max: number }) => (
     <div>
       <div className="mb-1 text-xs text-slate-500">{label}（{list.filter((m) => m.active).length}／最大 {max} 名）</div>
-      {list.length === 0 ? <p className="text-xs text-slate-400">未登録{label === '施術者' ? '（既定の施術者数を使用中）' : ''}</p> : (
+      {list.length === 0 ? <p className="text-xs text-slate-400">未登録{label === '施術者' ? '（WEB解放ベッド数を使用中）' : ''}</p> : (
         <div>{list.map((m) => <Row key={`${m.id}:${m.startDate}:${m.endDate}:${m.leaveStart}:${m.leaveEnd}`} m={m} />)}</div>
       )}
     </div>
