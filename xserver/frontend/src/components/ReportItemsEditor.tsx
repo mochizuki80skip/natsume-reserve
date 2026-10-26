@@ -29,7 +29,7 @@ export default function ReportItemsEditor() {
   return (
     <section className="mt-6 rounded border bg-white p-4 text-sm" aria-label="日報の項目">
       <h2 className="font-bold">日報の項目（全店共通）</h2>
-      <p className="mt-1 text-xs text-slate-600">店舗の「日報」に出す項目です。上から順に、同じ「まとまり」が続く項目を 1 つの枠にまとめます。「どこから取るか」で自動の数字を選ぶと毎日自動で入り、「店舗で入力」にすると店舗が日報の画面で入れます。「目標・実績・差分」の項目と「目標：…」の項目の目標は、窓口集計（全店）の画面で月ごとに入れます。</p>
+      <p className="mt-1 text-xs text-slate-600">店舗の「日報」に出す項目です。日報は今のスプレッドシートと同じ形で、初めからある項目は決まった場所に出ます（名前と「どこから取るか」は変えられます）。足した項目は、日報の下の「追加の項目」にこの表の順で出ます。「どこから取るか」で自動の数字を選ぶと毎日自動で入り、「店舗で入力」にすると店舗が日報の画面で入れます。「目標・実績・差分」の項目と「目標：…」の項目の目標は、窓口集計（全店）の画面で月ごとに入れます。</p>
       {msg && <p className={`mt-2 rounded px-3 py-1 ${msg.ok ? 'bg-brand-light' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[760px]">
