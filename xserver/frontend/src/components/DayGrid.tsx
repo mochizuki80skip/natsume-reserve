@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import DatePicker from './DatePicker';
 import type { DayData } from '@/lib/types';
 import { WEEKDAY_JA, addDays, formatDateJa, minToHm, nowJst, weekdayOf } from '@/lib/time';
 import { isPatientText } from '@/lib/availability';
@@ -18,11 +19,9 @@ import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
 import { dropHonorific } from '@/lib/nameText';
 import PhoneBookingDialog, { type PhoneKind } from './PhoneBookingDialog';
 import FindDialog from './FindDialog';
-import BlockSuggestions from './BlockSuggestions';
-import { useAdmin } from '@/pages/admin/Layout';
 import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, staffColorMap } from '@/lib/cellColor';
 
-interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
+interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void; onEdited?: () => void }
 
 const key = (time: number, bed: number) => `${time}:${bed}`;
 const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
@@ -30,8 +29,11 @@ const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交
 type CellChange = { k: string; before: string; after: string };
 type MoveStep = { move: { fromTime: number; fromBed: number; toTime: number; toBed: number; twoSlots: boolean; name: string; logId: string | null } };
 
-export default function DayGrid({ data, published, today, onRefresh }: Props) {
+export default function DayGrid({ data, published, today, onRefresh, onEdited }: Props) {
   const navigate = useNavigate();
+  // 前日・翌日は URL の日付から数える（読み込み中に続けて押しても、押した回数だけ進む）
+  const { date: urlDate } = useParams();
+  const baseDate = urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate) ? urlDate : data.date;
   const [cells, setCells] = useState<Map<string, string>>(() => new Map(data.cells.map((c) => [key(c.time, c.bed), c.text])));
   const [visited, setVisited] = useState<Set<string>>(() => new Set(data.cells.filter((c) => c.visited).map((c) => key(c.time, c.bed))));
   // 予約ごとのメニュー（矯正・2回目 など）と、メニューを付ける対象として選んでいるセル
@@ -660,11 +662,9 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   // 予約表の上は最小限に：メニュー別の人数・枠数とブロックは、ボタンで開いたときだけ出す（開いた状態はこのパソコンに覚える）。色の見かたはいつも出す
   // スマホ：公開・臨時休業・枠数・凡例などは「その日の設定」に畳む
   const [mobSet, setMobSet] = useState(false);
-  // 新規・再来ブロックの提案：予約・担当・メニューが変わるたびに数を増やして、提案を確かめる
-  const { me } = useAdmin();
-  const [suggestVer, setSuggestVer] = useState(0);
+  // 新規・再来ブロックの提案：予約・担当・メニューが変わるたびに知らせる（提案はページの上で確かめる）
   const firstRender = useRef(true);
-  useEffect(() => { if (firstRender.current) { firstRender.current = false; return; } setSuggestVer((v) => v + 1); }, [cells, staffMap, menus]);
+  useEffect(() => { if (firstRender.current) { firstRender.current = false; return; } onEdited?.(); }, [cells, staffMap, menus]); // eslint-disable-line react-hooks/exhaustive-deps
   const [panels, setPanels] = useState<{ menu: boolean; cap: boolean }>(() => {
     try { const j = JSON.parse(localStorage.getItem('natsume.dayPanels') ?? '{}'); return { menu: !!j.menu, cap: !!j.cap }; } catch { return { menu: false, cap: false }; }
   });
@@ -682,10 +682,10 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
       <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b max-sm:mx-0 max-sm:mb-1 max-sm:flex-nowrap max-sm:gap-1 max-sm:px-0.5 max-sm:py-1 max-sm:text-sm bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
-        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(data.date, -1)}`)} title="前日">‹<span className="max-sm:hidden"> 前日</span></button>
-        <input type="date" value={data.date} onChange={(e) => e.target.value && navigate(`/admin/day/${e.target.value}`)} className="rounded border px-2 py-1 max-sm:min-w-0 max-sm:flex-1 max-sm:px-1" aria-label="日付を選ぶ" />
+        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(baseDate, -1)}`)} title="前日">‹<span className="max-sm:hidden"> 前日</span></button>
+        <DatePicker value={data.date} today={today} onSelect={(d) => navigate(`/admin/day/${d}`)} className="w-full rounded border bg-white px-2 py-1 tabular-nums max-sm:px-1" />
         <span className="font-bold sm:hidden">（{WEEKDAY_JA[weekdayOf(data.date)]}）</span>
-        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(data.date, 1)}`)} title="翌日"><span className="max-sm:hidden">翌日 </span>›</button>
+        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(baseDate, 1)}`)} title="翌日"><span className="max-sm:hidden">翌日 </span>›</button>
         <h1 className="whitespace-nowrap text-base font-bold text-slate-800 max-sm:hidden">{formatDateJa(data.date)}</h1>
         <button type="button" className={`rounded px-4 py-1 font-bold max-sm:whitespace-nowrap max-sm:px-2 ${data.date === today ? 'border border-brand bg-brand-light text-brand-dark' : 'bg-brand text-white'}`} onClick={() => navigate(`/admin/day/${today}`)} aria-current={data.date === today ? 'date' : undefined}>本日</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={undo} disabled={historyLen === 0} className="rounded border bg-white px-3 py-1 disabled:opacity-40 max-sm:whitespace-nowrap max-sm:px-2" title="この画面で入力・削除・貼り付けしたものを 1 つずつ戻します（Ctrl+Z）">↶<span className="max-sm:hidden"> 元に戻す</span>{historyLen ? `（${historyLen}）` : ''}</button>
@@ -697,7 +697,6 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white max-sm:hidden">印刷／PDF</a>
       </div>
 
-      <BlockSuggestions store={me.store?.code ?? ''} date={data.date} version={suggestVer} canEdit={!me.store?.readOnly && me.session.role !== 'acct'} onChanged={onRefresh} />
       {/* スマホ：人数は 1 行にまとめ、そのほかは「その日の設定」に畳む */}
       <div className="no-print mb-1 flex flex-wrap gap-x-2.5 gap-y-0.5 px-0.5 text-[11px] sm:hidden" aria-label="この日の人数">
         <span>予約 <b className="text-[13px]">{counts.rAm + counts.rPm}</b>（午前{counts.rAm}・午後{counts.rPm}）</span>
