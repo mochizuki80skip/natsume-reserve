@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS `staff_member` (
   `canRevisit` TINYINT(1) NOT NULL DEFAULT 0, -- 再来を担当する
   `color` VARCHAR(10) NOT NULL DEFAULT '',    -- 予約表の色（空＝自動）
   `isHead` TINYINT(1) NOT NULL DEFAULT 0,     -- 院長（1 店舗に 1 人）
-  `endReason` VARCHAR(10) NULL,               -- 所属が終わる理由：RETIRE=退職 / TRANSFER=異動
+  `endReason` VARCHAR(10) NULL,               -- 使っていない（所属が終わる理由。入れないことになった）
   `leaveStart` CHAR(10) NULL,                 -- 休職の開始日
   `leaveEnd` CHAR(10) NULL,                   -- 休職の終わり（復職の予定日の前日まで。空なら未定）
   PRIMARY KEY (`id`),

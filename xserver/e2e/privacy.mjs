@@ -41,7 +41,7 @@ const pt = await cp.textContent('main');
 ok('公開ページ（見出し・共同利用・窓口）', pt.includes('5. グループでの共同利用') && pt.includes('054-207-7327') && !pt.includes('【'), pt.slice(0, 80));
 await cp.screenshot({ path: O + 'privacy-page.png', fullPage: true });
 await cp.goto(`${B}/s/S001`); await cp.waitForSelector('table.wk tbody tr', { timeout: 15000 });
-ok('予約ページの下にリンク', await cp.locator('footer').getByRole('link', { name: 'プライバシーポリシー' }).isVisible());
+ok('予約ページの下にリンク', await cp.locator('footer').getByRole('link', { name: 'プライバシーポリシー' }).waitFor({ timeout: 8000 }).then(() => true, () => false));
 
 // 4) 媒体：作る → 店舗えらびページから予約 → 新患継続率のきっかけ・内訳
 ok('媒体はきっかけが必要', (await api(hp, 'PUT', '/api/admin/hq/referrals', { name: '見本インスタ', kind: 'media' }))[0] === 400);

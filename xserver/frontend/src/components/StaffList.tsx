@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { STAFF_PALETTE } from '@/lib/cellColor';
 
-interface Member { id: string; name: string; role: string; active: boolean; startDate?: string | null; endDate?: string | null; joinType?: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string; isHead?: boolean; endReason?: string | null; leaveStart?: string | null; leaveEnd?: string | null }
+interface Member { id: string; name: string; role: string; active: boolean; startDate?: string | null; endDate?: string | null; joinType?: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string; isHead?: boolean; leaveStart?: string | null; leaveEnd?: string | null }
 
 export default function StaffList({ members, maxTherapists, maxReception, onRefresh }: { members: Member[]; maxTherapists: number; maxReception: number; onRefresh: () => void }) {
   const [name, setName] = useState('');
@@ -64,13 +64,6 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
         〜
         <input type="date" defaultValue={m.endDate ?? ''} onBlur={(e) => e.target.value !== (m.endDate ?? '') && call('PUT', { id: m.id, endDate: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 所属終了日`} />
         <span className="text-slate-400">（空欄＝制限なし）</span>
-        {m.endDate && (
-          <select value={m.endReason ?? ''} onChange={(e) => call('PUT', { id: m.id, endReason: e.target.value })} className="rounded border px-1 py-0.5" aria-label={`${m.name} 終わる理由`}>
-            <option value="">終わる理由</option>
-            <option value="RETIRE">退職</option>
-            <option value="TRANSFER">異動</option>
-          </select>
-        )}
       </span>
       <span className="flex basis-full flex-wrap items-center gap-1 pl-1 text-xs text-slate-600">
         休職の期間
@@ -122,7 +115,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
         新入社員は入社日を「所属開始日」にして登録します（前もって登録しても、開始日までは枠に数えません）。
         異動は、元の店舗で「終了日」（例：20日）を入れ、新しい店舗で「開始日」（例：21日）を入れて登録します。
         区分を選ぶと、開始日から1か月間シフト表に「新人」「異動」の印が出ます。
-        終了日を入れたら「退職」「異動」を選んでください。院長・終わる理由・休職の期間は、本部・MG の「人員の過不足」に出ます（休職の期間中は人数に数えません）。
+        院長・所属期間・休職の期間は、本部・MG の「人員の過不足」に出ます（休職の期間中は人数に数えません）。
         「初回を担当する」「再来を担当する」にチェックした施術者には予約表の色が付き、その人が初回を担当した患者様の 2・3・6・12回目のセルがその色になります。
       </p>
     </section>

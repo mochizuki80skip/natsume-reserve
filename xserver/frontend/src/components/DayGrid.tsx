@@ -34,6 +34,11 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   // 前日・翌日は URL の日付から数える（読み込み中に続けて押しても、押した回数だけ進む）
   const { date: urlDate } = useParams();
   const baseDate = urlDate && /^\d{4}-\d{2}-\d{2}$/.test(urlDate) ? urlDate : data.date;
+  // 続けて押したとき、画面が追いつく前の押しでも抜けないよう、押した瞬間のアドレス（URL）の日付から数える
+  const stepDay = (n: number) => {
+    const m = /\/admin\/day\/(\d{4}-\d{2}-\d{2})/.exec(window.location.pathname);
+    navigate(`/admin/day/${addDays(m ? m[1] : baseDate, n)}`);
+  };
   const [cells, setCells] = useState<Map<string, string>>(() => new Map(data.cells.map((c) => [key(c.time, c.bed), c.text])));
   const [visited, setVisited] = useState<Set<string>>(() => new Set(data.cells.filter((c) => c.visited).map((c) => key(c.time, c.bed))));
   // 予約ごとのメニュー（矯正・2回目 など）と、メニューを付ける対象として選んでいるセル
@@ -682,10 +687,10 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
       <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b max-sm:mx-0 max-sm:mb-1 max-sm:flex-nowrap max-sm:gap-1 max-sm:px-0.5 max-sm:py-1 max-sm:text-sm bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
-        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(baseDate, -1)}`)} title="前日">‹<span className="max-sm:hidden"> 前日</span></button>
+        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => stepDay(-1)} title="前日">‹<span className="max-sm:hidden"> 前日</span></button>
         <DatePicker value={data.date} today={today} onSelect={(d) => navigate(`/admin/day/${d}`)} className="w-full rounded border bg-white px-2 py-1 tabular-nums max-sm:px-1" />
         <span className="font-bold sm:hidden">（{WEEKDAY_JA[weekdayOf(data.date)]}）</span>
-        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => navigate(`/admin/day/${addDays(baseDate, 1)}`)} title="翌日"><span className="max-sm:hidden">翌日 </span>›</button>
+        <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => stepDay(1)} title="翌日"><span className="max-sm:hidden">翌日 </span>›</button>
         <h1 className="whitespace-nowrap text-base font-bold text-slate-800 max-sm:hidden">{formatDateJa(data.date)}</h1>
         <button type="button" className={`rounded px-4 py-1 font-bold max-sm:whitespace-nowrap max-sm:px-2 ${data.date === today ? 'border border-brand bg-brand-light text-brand-dark' : 'bg-brand text-white'}`} onClick={() => navigate(`/admin/day/${today}`)} aria-current={data.date === today ? 'date' : undefined}>本日</button>
         <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={undo} disabled={historyLen === 0} className="rounded border bg-white px-3 py-1 disabled:opacity-40 max-sm:whitespace-nowrap max-sm:px-2" title="この画面で入力・削除・貼り付けしたものを 1 つずつ戻します（Ctrl+Z）">↶<span className="max-sm:hidden"> 元に戻す</span>{historyLen ? `（${historyLen}）` : ''}</button>

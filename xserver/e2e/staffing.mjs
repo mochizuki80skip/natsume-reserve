@@ -22,13 +22,13 @@ const add = async (name, role, extra = {}) => { const m = (await api(st, 'POST',
 const a = await add('見本 院長', 'THERAPIST'), b = await add('見本 退職', 'THERAPIST'), c = await add('見本 休職', 'THERAPIST'), d = await add('見本 受付', 'RECEPTION', { joinType: 'NEW', startDate: '2026-11-10' }), e = await add('見本 二番', 'THERAPIST');
 await api(st, 'PUT', '/api/admin/staff-members', { id: e, isHead: true });
 await api(st, 'PUT', '/api/admin/staff-members', { id: a, isHead: true }); // 院長は 1 人：二番のチェックは外れる
-await api(st, 'PUT', '/api/admin/staff-members', { id: b, endDate: '2026-11-20', endReason: 'RETIRE' });
+await api(st, 'PUT', '/api/admin/staff-members', { id: b, endDate: '2026-11-20' });
 await api(st, 'PUT', '/api/admin/staff-members', { id: c, leaveStart: '2026-11-05', leaveEnd: '2026-11-30' });
 ok('休職の終わりが開始より前はだめ', (await api(st, 'PUT', '/api/admin/staff-members', { id: c, leaveEnd: '2026-11-01' }))[0] === 400);
 const ms = (await api(st, 'GET', '/api/admin/settings'))[1].members;
 ok('院長は 1 店舗に 1 人', ms.filter((m) => m.isHead).map((m) => m.name).join() === '見本 院長', JSON.stringify(ms.map((m) => [m.name, m.isHead])));
 await st.goto(`${B}/admin/settings`); await st.waitForSelector('text=スタッフ・シフト');
-ok('店舗設定に院長・休職の期間', await st.getByLabel('見本 院長 院長').isChecked() && (await st.getByLabel('見本 休職 休職の開始日').inputValue()) === '2026-11-05' && (await st.getByLabel('見本 退職 終わる理由').inputValue()) === 'RETIRE');
+ok('店舗設定に院長・休職の期間', await st.getByLabel('見本 院長 院長').isChecked() && (await st.getByLabel('見本 休職 休職の開始日').inputValue()) === '2026-11-05' && (await st.getByLabel('見本 退職 終わる理由').count()) === 0);
 
 const hq = await login('', process.env.HQ_PASSWORD ?? 'hq-pass', 'HQ');
 await api(hq, 'PUT', '/api/admin/hq/areas', { areas: [{ name: '静岡エリア', stores: ['S001'] }, { name: '東部エリア', stores: ['S002'] }] });
@@ -39,7 +39,7 @@ const s1 = sf.rows.find((r) => r.code === 'S001');
 const names = s1.people.therapist.map((p) => p.name);
 ok('氏名：院長が先頭', names[0] === '見本 院長' && s1.people.therapist[0].head, JSON.stringify(names));
 const note = (n) => s1.people.therapist.concat(s1.people.reception).find((p) => p.name === n)?.notes.map((x) => x.kind).join();
-ok('退職・休職・入社の印', note('見本 退職') === 'retire' && note('見本 休職') === 'leave' && note('見本 受付') === 'join', [note('見本 退職'), note('見本 休職'), note('見本 受付')].join('/'));
+ok('退職・休職・入社の印', note('見本 退職') === 'end' && note('見本 休職') === 'leave' && note('見本 受付') === 'join', [note('見本 退職'), note('見本 休職'), note('見本 受付')].join('/'));
 ok('休職の期間中は数えない（いちばん少ない日：院長・二番の 2 人＋退職は 20 日まで）', s1.therapist.min === 2 && s1.therapist.start === 4, JSON.stringify(s1.therapist));
 
 await hq.goto(`${B}/admin/staffing?month=2026-11`); await hq.waitForSelector('table[aria-label="人員の過不足"]');
@@ -47,7 +47,7 @@ ok('開いたときは全体', (await hq.getByRole('tab', { name: '全体' }).ge
 ok('全体：上にエリアごとのまとめ', await hq.getByLabel('静岡エリアのまとめ').isVisible() && await hq.getByLabel('東部エリアのまとめ').isVisible() && await hq.getByLabel('全体のまとめ').isVisible());
 ok('まとめに足りない店舗', (await hq.getByLabel('静岡エリアのまとめ').textContent()).includes('足りない店舗：サンプル本店'));
 const nm = await hq.getByLabel('サンプル本店 施術者の氏名').textContent();
-ok('氏名と院長・退職・休職の表示', nm.includes('見本 院長院長') && nm.includes('11/20 退職') && nm.includes('休職 11/5〜11/30'), nm);
+ok('氏名と院長・退職・休職の表示', nm.includes('見本 院長院長') && nm.includes('11/20 まで') && nm.includes('休職 11/5〜11/30'), nm);
 ok('受付の入社の表示', (await hq.getByLabel('サンプル本店 受付の氏名').textContent()).includes('11/10〜 入社'));
 await hq.screenshot({ path: O + 'staffing-all.png', fullPage: true });
 await hq.getByRole('tab', { name: 'エリア別' }).click(); await hq.waitForTimeout(300);

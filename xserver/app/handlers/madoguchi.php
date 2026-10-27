@@ -342,7 +342,7 @@ function staffing_get(): never
     // 休職中（休職の期間に入っている日）は数えない
     $onLeave = fn(array $m, string $d) => $m['leaveStart'] && $d >= $m['leaveStart'] && (!$m['leaveEnd'] || $d <= $m['leaveEnd']);
     foreach (acct_stores($s) as $st) {
-        $members = Db::all('SELECT name, role, active, startDate, endDate, joinType, isHead, endReason, leaveStart, leaveEnd FROM staff_member WHERE storeId = ? ORDER BY isHead DESC, sortOrder ASC', [$st['id']]);
+        $members = Db::all('SELECT name, role, active, startDate, endDate, joinType, isHead, leaveStart, leaveEnd FROM staff_member WHERE storeId = ? ORDER BY isHead DESC, sortOrder ASC', [$st['id']]);
         $out = ['code' => $st['code'], 'name' => $st['name'], 'area' => $st['area'] ?? '', 'canEdit' => Auth::canEditStore($s, $st), 'changes' => [], 'paused' => [], 'people' => ['therapist' => [], 'reception' => []]];
         foreach (['THERAPIST' => 'therapist', 'RECEPTION' => 'reception'] as $role => $k) {
             $act = array_filter($members, fn($m) => $m['role'] === $role && (int)$m['active'] === 1);
@@ -352,7 +352,7 @@ function staffing_get(): never
                 if (($m['startDate'] && $m['startDate'] > $last) || ($m['endDate'] && $m['endDate'] < $first)) continue;
                 $notes = [];
                 if ($m['startDate'] && $m['startDate'] >= $first) $notes[] = ['kind' => $m['joinType'] === 'TRANSFER' ? 'transferIn' : 'join', 'date' => $m['startDate']];
-                if ($m['endDate'] && $m['endDate'] <= $last) $notes[] = ['kind' => $m['endReason'] === 'TRANSFER' ? 'transferOut' : ($m['endReason'] === 'RETIRE' ? 'retire' : 'end'), 'date' => $m['endDate']];
+                if ($m['endDate'] && $m['endDate'] <= $last) $notes[] = ['kind' => 'end', 'date' => $m['endDate']]; // 終わる理由（退職・異動）は入れない
                 if ($m['leaveStart'] && $m['leaveStart'] <= $last && (!$m['leaveEnd'] || $m['leaveEnd'] >= $first)) $notes[] = ['kind' => 'leave', 'date' => $m['leaveStart'], 'until' => $m['leaveEnd']];
                 $out['people'][$k][] = ['name' => $m['name'], 'head' => (bool)$m['isHead'], 'notes' => $notes];
             }
@@ -363,7 +363,7 @@ function staffing_get(): never
             $out[$k] = ['std' => $std === null ? null : (int)$std, 'start' => $count($first), 'end' => $count($last), 'min' => $min];
             foreach ($act as $m) {
                 if ($m['startDate'] && $m['startDate'] >= $first && $m['startDate'] <= $last) $out['changes'][] = ['name' => $m['name'], 'role' => $k, 'in' => true, 'date' => $m['startDate'], 'joinType' => $m['joinType']];
-                if ($m['endDate'] && $m['endDate'] >= $first && $m['endDate'] <= $last) $out['changes'][] = ['name' => $m['name'], 'role' => $k, 'in' => false, 'date' => $m['endDate'], 'joinType' => null, 'endReason' => $m['endReason']];
+                if ($m['endDate'] && $m['endDate'] >= $first && $m['endDate'] <= $last) $out['changes'][] = ['name' => $m['name'], 'role' => $k, 'in' => false, 'date' => $m['endDate'], 'joinType' => null];
             }
             foreach ($members as $m) if ($m['role'] === $role && (int)$m['active'] === 0 && Settings::inPeriod($m, $last)) $out['paused'][] = ['name' => $m['name'], 'role' => $k];
         }

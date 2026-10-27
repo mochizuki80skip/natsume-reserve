@@ -6,7 +6,7 @@ import { halfNum } from '@/lib/format';
 
 type Role = 'therapist' | 'reception';
 interface Count { std: number | null; start: number; end: number; min: number }
-interface Note { kind: 'join' | 'transferIn' | 'retire' | 'transferOut' | 'end' | 'leave'; date: string; until?: string | null }
+interface Note { kind: 'join' | 'transferIn' | 'end' | 'leave'; date: string; until?: string | null }
 interface Person { name: string; head: boolean; notes: Note[] }
 interface Row {
   code: string; name: string; area: string; canEdit: boolean; therapist: Count; reception: Count;
@@ -17,10 +17,10 @@ const ROLE = { therapist: '施術者', reception: '受付' } as const;
 const shiftYm = (ym: string, d: number) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1 + d, 1)).toISOString().slice(0, 7);
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 const NOTE = (n: Note) => ({
-  join: `${md(n.date)}〜 入社`, transferIn: `${md(n.date)}〜 異動で来る`, retire: `${md(n.date)} 退職`, transferOut: `${md(n.date)} 異動`, end: `${md(n.date)} まで`,
+  join: `${md(n.date)}〜 入社`, transferIn: `${md(n.date)}〜 異動で来る`, end: `${md(n.date)} まで`,
   leave: `休職 ${md(n.date)}〜${n.until ? md(n.until) : ''}`,
 }[n.kind]);
-const NOTE_TONE: Record<Note['kind'], string> = { join: 'text-green-800', transferIn: 'text-green-800', retire: 'text-red-700', transferOut: 'text-red-700', end: 'text-red-700', leave: 'text-amber-800' };
+const NOTE_TONE: Record<Note['kind'], string> = { join: 'text-green-800', transferIn: 'text-green-800', end: 'text-red-700', leave: 'text-amber-800' };
 
 /** 過不足：月の中でいちばん少ない日の人数 − 基準 */
 const diffOf = (c: Count) => (c.std === null ? null : c.min - c.std);
@@ -165,7 +165,7 @@ export default function StaffingPage() {
       </div>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
         在籍・氏名＝店舗設定の「スタッフ・シフト」に登録されている人（所属期間の中にいる人。休職の期間中・停止中は数えません）。過不足＝月の中でいちばん人が少ない日の人数 − 人員基準（月の途中で異動・退職・休職する人がいても、ひと月を通していられるかを見ます）。エリア・全体の在籍は、各店舗のいちばん少ない日の人数の合計です。
-        <span className="ml-1 inline-block rounded bg-red-500 px-1 text-white">赤</span>＝足りない（採用・異動が必要）、<span className="rounded bg-green-100 px-1 text-green-800">緑</span>＝ちょうど、<span className="rounded bg-blue-100 px-1 text-blue-800">青</span>＝多い。人員基準は本部と管轄MG（管轄の店舗だけ）が入れられます。院長・退職／異動・休職の期間は、店舗設定のスタッフで入れます。
+        <span className="ml-1 inline-block rounded bg-red-500 px-1 text-white">赤</span>＝足りない（採用・異動が必要）、<span className="rounded bg-green-100 px-1 text-green-800">緑</span>＝ちょうど、<span className="rounded bg-blue-100 px-1 text-blue-800">青</span>＝多い。人員基準は本部と管轄MG（管轄の店舗だけ）が入れられます。院長・所属期間・休職の期間は、店舗設定のスタッフで入れます。
       </p>
     </div>
   );

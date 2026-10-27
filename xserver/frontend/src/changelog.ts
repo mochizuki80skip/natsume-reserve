@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 75, date: '2026-10-27', title: 'スタッフの「終わる理由」を無くしました', audience: ['店舗', '本部'],
+    items: ['店舗設定のスタッフで、所属の終了日のあとに選んでいた「退職」「異動」を無くしました。人員の過不足では「○/○ まで」と出ます。休職の期間はそのまま使えます。'],
+  },
+  {
     id: 74, date: '2026-10-27', title: '予約表の日付カレンダー・翌日の連打', audience: ['店舗', '本部'],
     items: [
       '予約表の日付のカレンダーで、月を送っても（‹ ›）移動しないようにしました。日を押したときだけ、その日の予約表へ移動します（「今日」ボタン・「閉じる」もあります）。',

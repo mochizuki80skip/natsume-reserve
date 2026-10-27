@@ -893,11 +893,6 @@ function adm_staff_put(): never
         if ($on) Db::exec('UPDATE staff_member SET isHead = 0 WHERE storeId = ?', [$sid]); // 院長は 1 店舗に 1 人
         $set[] = 'isHead = ?'; $params[] = $on ? 1 : 0;
     }
-    if (array_key_exists('endReason', $b)) {
-        $r = (string)($b['endReason'] ?? '');
-        if (!in_array($r, ['', 'RETIRE', 'TRANSFER'], true)) Http::error('bad request', 400);
-        $set[] = 'endReason = ?'; $params[] = $r === '' ? null : $r;
-    }
     if (array_key_exists('leaveStart', $b) || array_key_exists('leaveEnd', $b)) {
         $d = function (string $k) use ($b, $m): ?string {
             if (!array_key_exists($k, $b)) return $m[$k] ?? null;
@@ -960,7 +955,7 @@ function adm_settings_get(): never
     $ctx = Auth::context();
     $store = $ctx['store'];
     $setting = Settings::global();
-    $members = Db::all('SELECT id, name, role, active, startDate, endDate, joinType, canFirst, canRevisit, color, isHead, endReason, leaveStart, leaveEnd FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$store['id']]);
+    $members = Db::all('SELECT id, name, role, active, startDate, endDate, joinType, canFirst, canRevisit, color, isHead, leaveStart, leaveEnd FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC', [$store['id']]);
     Http::json([
         'store' => [
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
@@ -974,7 +969,7 @@ function adm_settings_get(): never
         'smsEnabled' => Sms::enabled(),
         'members' => array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'role' => $m['role'], 'active' => (bool)$m['active'], 'startDate' => $m['startDate'], 'endDate' => $m['endDate'], 'joinType' => $m['joinType'],
             'canFirst' => (bool)$m['canFirst'], 'canRevisit' => (bool)$m['canRevisit'], 'color' => (string)$m['color'],
-            'isHead' => (bool)$m['isHead'], 'endReason' => $m['endReason'], 'leaveStart' => $m['leaveStart'], 'leaveEnd' => $m['leaveEnd']], $members),
+            'isHead' => (bool)$m['isHead'], 'leaveStart' => $m['leaveStart'], 'leaveEnd' => $m['leaveEnd']], $members),
     ]);
 }
 

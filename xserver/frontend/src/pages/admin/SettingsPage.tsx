@@ -11,7 +11,7 @@ import { useAdmin } from './Layout';
 interface Resp {
   store: { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; maxActiveBookings?: number | null; bookDaysAhead?: number | null; notifyPhone: string; hoursOverride: string };
   globalHours: string; slotMinutes?: number; canChangePassword: boolean; smsEnabled: boolean;
-  members: { id: string; name: string; role: string; active: boolean; startDate: string | null; endDate: string | null; joinType: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string; isHead?: boolean; endReason?: string | null; leaveStart?: string | null; leaveEnd?: string | null }[];
+  members: { id: string; name: string; role: string; active: boolean; startDate: string | null; endDate: string | null; joinType: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string; isHead?: boolean; leaveStart?: string | null; leaveEnd?: string | null }[];
 }
 
 export default function SettingsPage() {
@@ -45,7 +45,7 @@ function StoreSettings() {
       {/* 画面が広いときは 2 列（左：店舗設定、右：スタッフ・シフト）、半面では 1 列 */}
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
         <StoreSettingsForm store={data.store} globalHours={data.globalHours} slotMinutes={data.slotMinutes ?? 15} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
-        <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}:${m.canFirst}:${m.canRevisit}:${m.color}:${m.isHead}:${m.endReason}:${m.leaveStart}:${m.leaveEnd}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
+        <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}:${m.canFirst}:${m.canRevisit}:${m.color}:${m.isHead}:${m.leaveStart}:${m.leaveEnd}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
         <section className="rounded-lg border bg-white p-4 text-sm xl:col-span-2" aria-label="この店舗の URL・QR コード">
           <h2 className="mb-1 font-bold">この店舗の URL・QR コード</h2>
           <p className="mb-2 text-xs text-slate-500">「QR 画像を保存」で PNG 画像として保存できます（印刷物・掲示用）。店舗コードを変えると URL も変わるので、そのときは作り直してください。</p>
