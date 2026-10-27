@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS `global_setting` (
   `hours` LONGTEXT NOT NULL,
   `storesPageOpen` TINYINT(1) NOT NULL DEFAULT 0, -- 店舗えらびページを公開する（それまでは「準備中」）
   `consultLineUrl` VARCHAR(300) NOT NULL DEFAULT '', -- 交通事故の相談 LINE の URL（店舗えらび・予約ページのバナー。空＝出さない）
+  `lineToken` VARCHAR(400) NOT NULL DEFAULT '',      -- 新自の通知を送る LINE 公式アカウントのチャネルアクセストークン（画面には出さない）
+  `lineSecret` VARCHAR(100) NOT NULL DEFAULT '',     -- 同じくチャネルシークレット（Webhook の署名の確認）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -395,6 +397,22 @@ CREATE TABLE IF NOT EXISTS `jibai_notify` (
   `label` VARCHAR(30) NOT NULL DEFAULT '',
   `sortOrder` INT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 新自の通知を受ける LINE（個人・グループ）。本部が出した 6 桁の番号を公式アカウントに送ると targetId が入る
+CREATE TABLE IF NOT EXISTS `line_target` (
+  `id` VARCHAR(32) NOT NULL,
+  `area` VARCHAR(30) NOT NULL DEFAULT '',
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  `kind` VARCHAR(10) NOT NULL DEFAULT '',
+  `targetId` VARCHAR(64) NULL,
+  `code` CHAR(6) NULL,
+  `codeExpires` DATETIME NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `line_target_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 本部の集計のエリア（storeCodes は店舗コードをカンマ区切り）

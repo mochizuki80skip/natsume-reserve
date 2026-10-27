@@ -116,25 +116,33 @@ final class Karte
         return (int)(Db::one("SELECT COUNT(*) AS n FROM karte WHERE storeId = ? AND kind = 'ACCIDENT' AND (accidentDate IS NULL OR accidentNote = '')", [$storeId])['n'] ?? 0);
     }
 
-    /** 新自の通知の送り先：全店の分（エリア空）と、その店舗のエリアの分 */
-    public static function notifyRecipients(array $store): array
+    /** 店舗の入っているエリアの名前 */
+    public static function areasOf(array $store): array
     {
         $areas = [];
         foreach (Db::all('SELECT name, storeCodes FROM area') as $a) if (in_array($store['code'], explode(',', (string)$a['storeCodes']), true)) $areas[] = $a['name'];
+        return $areas;
+    }
+
+    /** 新自の通知のメールの送り先：全店の分（エリア空）と、その店舗のエリアの分 */
+    public static function notifyRecipients(array $store): array
+    {
+        $areas = self::areasOf($store);
         $out = [];
         foreach (Db::all('SELECT area, email FROM jibai_notify ORDER BY sortOrder ASC') as $r) if ($r['area'] === '' || in_array($r['area'], $areas, true)) $out[] = $r['email'];
         return $out;
     }
 
-    /** 新自が来院したことをメールで知らせる（患者様の氏名は書かない）。一度送った行は送らない */
+    /** 新自が来院したことをメール・LINE で知らせる（患者様の氏名は書かない）。一度送った行は送らない */
     public static function notifyAccident(array $store, string $karteId): void
     {
         try {
             $r = Db::one('SELECT date, srcTime, staff, trig, notifiedAt FROM karte WHERE id = ?', [$karteId]);
             if (!$r || $r['notifiedAt'] !== null) return;
             $to = self::notifyRecipients($store);
+            $lines = Line::targetsFor(self::areasOf($store));
             Db::exec('UPDATE karte SET notifiedAt = NOW() WHERE id = ?', [$karteId]);
-            if (!$to) return;
+            if (!$to && !$lines) return;
             // 来院チェックを外して付け直すと行が作り直されるので、同じ予約（日・時刻・ベッド）は 3 日のあいだ 1 回だけ送る
             $src = Db::one('SELECT srcTime, srcBed FROM karte WHERE id = ?', [$karteId]);
             if (!RateLimit::allow('accnotify:' . $store['id'] . ':' . $r['date'] . ':' . ($src['srcTime'] ?? '') . ':' . ($src['srcBed'] ?? ''), 1, 3 * 86400)) return;
@@ -150,7 +158,13 @@ final class Karte
                 . "\n事故日・事故内容は、店舗の「新患継続率」の下の「新自（交通事故）」で入れてください。\n"
                 . ($url !== '' ? "{$url}/admin/karte\n" : '')
                 . "\n※このメールは送信専用です。";
-            Mail::send($to, "【新自】{$store['name']} {$md} 交通事故の初診がありました", $body);
+            if ($to) Mail::send($to, "【新自】{$store['name']} {$md} 交通事故の初診がありました", $body);
+            if ($lines) {
+                $text = "【新自】{$store['name']}\n{$md}（{$wd}）{$time} 交通事故の初診がありました。"
+                    . ($r['staff'] !== '' ? "\n担当：{$r['staff']}" : '') . ($r['trig'] !== '' ? "\nきっかけ：{$r['trig']}" : '')
+                    . "\n事故日・事故内容は新患継続率の下で入れてください。" . ($url !== '' ? "\n{$url}/admin/karte" : '');
+                foreach ($lines as $t) Line::push($t, $text);
+            }
         } catch (Throwable $e) {
             error_log('[notifyAccident] ' . $e->getMessage());
         }

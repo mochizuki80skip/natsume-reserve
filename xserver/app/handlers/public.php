@@ -248,3 +248,32 @@ function pub_privacy(): never
     if (!$r || !(int)$r['published']) Http::json(['published' => false]);
     Http::json(['published' => true, 'body' => $r['body'], 'updatedAt' => $r['updatedAt']]);
 }
+
+/**
+ * LINE 公式アカウントの Webhook（LINE のサーバーから届く。署名で本物か確かめる）
+ * ・本部の画面で出した 6 桁の番号がトークに送られたら、その個人・グループを新自の通知の送り先に登録して返事をする
+ * ・ブロック（unfollow）・グループから退出（leave）されたら、その送り先を止める
+ */
+function line_webhook(): never
+{
+    $raw = file_get_contents('php://input') ?: '';
+    if (!Line::verify($raw, (string)($_SERVER['HTTP_X_LINE_SIGNATURE'] ?? ''))) Http::error('forbidden', 403);
+    $j = json_decode($raw, true);
+    foreach (is_array($j['events'] ?? null) ? $j['events'] : [] as $ev) {
+        $src = is_array($ev['source'] ?? null) ? $ev['source'] : [];
+        $kind = (string)($src['type'] ?? '');
+        $id = (string)($kind === 'group' ? ($src['groupId'] ?? '') : ($kind === 'room' ? ($src['roomId'] ?? '') : ($src['userId'] ?? '')));
+        if ($id === '' || strlen($id) > 64) continue;
+        $type = (string)($ev['type'] ?? '');
+        if ($type === 'unfollow' || $type === 'leave') { Db::exec('UPDATE line_target SET active = 0 WHERE targetId = ?', [$id]); continue; }
+        if ($type !== 'message' || ($ev['message']['type'] ?? '') !== 'text') continue;
+        $text = preg_replace('/\s+/u', '', mb_convert_kana((string)($ev['message']['text'] ?? ''), 'n'));
+        if (!preg_match('/^\d{6}$/', (string)$text)) continue; // ふつうのトークには返事をしない
+        $reply = (string)($ev['replyToken'] ?? '');
+        $t = Db::one('SELECT id, label FROM line_target WHERE code = ? AND codeExpires > NOW()', [$text]);
+        if (!$t) { if ($reply !== '') Line::reply($reply, 'その番号は見つかりませんでした。本部の画面で番号を出し直してください（番号は 24 時間で使えなくなります）。'); continue; }
+        Db::exec("UPDATE line_target SET targetId = ?, kind = ?, code = NULL, codeExpires = NULL, active = 1 WHERE id = ?", [$id, $kind === 'user' ? 'user' : 'group', $t['id']]);
+        if ($reply !== '') Line::reply($reply, "登録しました（{$t['label']}）。新自（交通事故）の患者様が来院したときに、ここへお知らせが届きます。");
+    }
+    Http::json(['ok' => true]);
+}

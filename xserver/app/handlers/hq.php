@@ -348,3 +348,85 @@ function hq_consult_line_put(): never
     Db::exec('UPDATE global_setting SET consultLineUrl = ? WHERE id = 1', [$url]);
     Http::json(['ok' => true]);
 }
+
+/** LINE 公式アカウント（新自の通知）：合言葉が入っているか・送り先・今月の通数（合言葉そのものは返さない） */
+function hq_line_get(): never
+{
+    Auth::requireHq();
+    $base = rtrim(Config::str('APP_URL'), '/');
+    if ($base === '') $base = (Http::isHttps() ? 'https://' : 'http://') . ($_SERVER['HTTP_HOST'] ?? '');
+    Http::json([
+        'hasToken' => Line::token() !== '', 'hasSecret' => Line::secret() !== '',
+        'webhookUrl' => $base . '/api/line/webhook',
+        'targets' => array_map(fn($r) => [
+            'id' => $r['id'], 'area' => $r['area'], 'label' => $r['label'], 'kind' => $r['kind'], 'linked' => $r['targetId'] !== null, 'active' => (bool)$r['active'],
+            'code' => $r['targetId'] === null ? $r['code'] : null, 'codeExpires' => $r['targetId'] === null ? $r['codeExpires'] : null,
+        ], Db::all('SELECT * FROM line_target ORDER BY sortOrder ASC, createdAt ASC')),
+        'areas' => array_column(Db::all('SELECT name FROM area ORDER BY sortOrder ASC, name ASC'), 'name'),
+        'quota' => Line::quota(),
+    ]);
+}
+
+/** 合言葉を入れる（{ token?, secret? }。空の文字は「消す」） */
+function hq_line_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    Settings::global();
+    foreach (['token' => ['lineToken', 400], 'secret' => ['lineSecret', 100]] as $k => [$col, $max]) {
+        if (!array_key_exists($k, $b)) continue;
+        $v = trim((string)$b[$k]);
+        if (strlen($v) > $max || ($v !== '' && !preg_match('#^[A-Za-z0-9+/=._-]+$#', $v))) Http::error($k === 'token' ? 'チャネルアクセストークンが正しくありません' : 'チャネルシークレットが正しくありません', 400);
+        Db::exec("UPDATE global_setting SET `$col` = ? WHERE id = 1", [$v]);
+    }
+    Http::json(['ok' => true]);
+}
+
+/** 送り先を足す（{ area, label }）：6 桁の番号を出す。24 時間のうちに公式アカウントへ送ってもらうと登録される */
+function hq_line_target_post(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    $area = (string)($b['area'] ?? '');
+    if ($area !== '' && !in_array($area, array_column(Db::all('SELECT name FROM area'), 'name'), true)) Http::error('エリアを選び直してください', 400);
+    $label = mb_substr(trim((string)($b['label'] ?? '')), 0, 30);
+    if ($label === '') Http::error('名前を入れてください（例：静岡エリアMG）', 400);
+    if ((int)Db::one('SELECT COUNT(*) AS n FROM line_target')['n'] >= 50) Http::error('送り先は 50 までです', 400);
+    do { $code = sprintf('%06d', random_int(0, 999999)); } while (Db::one('SELECT id FROM line_target WHERE code = ?', [$code]));
+    $id = Db::newId();
+    Db::exec('INSERT INTO line_target (id, area, label, code, codeExpires, sortOrder) VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR), (SELECT n FROM (SELECT COUNT(*) AS n FROM line_target) t))', [$id, $area, $label, $code]);
+    Http::json(['ok' => true, 'id' => $id, 'code' => $code]);
+}
+
+/** 送り先を消す（{ id }）・止める／再開（{ id, active }）・番号を出し直す（{ id, newCode: true }） */
+function hq_line_target_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    $r = Db::one('SELECT * FROM line_target WHERE id = ?', [(string)($b['id'] ?? '')]);
+    if (!$r) Http::error('not found', 404);
+    if (!empty($b['delete'])) { Db::exec('DELETE FROM line_target WHERE id = ?', [$r['id']]); Http::json(['ok' => true]); }
+    if (array_key_exists('active', $b)) Db::exec('UPDATE line_target SET active = ? WHERE id = ?', [Http::bool($b, 'active') ? 1 : 0, $r['id']]);
+    if (!empty($b['newCode'])) {
+        do { $code = sprintf('%06d', random_int(0, 999999)); } while (Db::one('SELECT id FROM line_target WHERE code = ?', [$code]));
+        Db::exec('UPDATE line_target SET code = ?, codeExpires = DATE_ADD(NOW(), INTERVAL 24 HOUR), targetId = NULL, kind = \'\' WHERE id = ?', [$code, $r['id']]);
+        Http::json(['ok' => true, 'code' => $code]);
+    }
+    Http::json(['ok' => true]);
+}
+
+/** 登録済みの LINE 全部に試しの通知を送る */
+function hq_line_test(): never
+{
+    Auth::requireHq();
+    Http::requireSameOrigin();
+    if (Line::token() === '') Http::error('チャネルアクセストークンを先に入れてください', 400);
+    $to = array_column(Db::all('SELECT targetId FROM line_target WHERE active = 1 AND targetId IS NOT NULL'), 'targetId');
+    if (!$to) Http::error('登録の済んだ送り先がありません', 400);
+    $n = 0;
+    foreach (array_unique($to) as $t) if (Line::push($t, "【試し】新自の通知の試しです。\nこれが届いていれば、新自が来院したときにここへお知らせが届きます。")) $n++;
+    Http::json(['ok' => true, 'sent' => $n, 'total' => count(array_unique($to))]);
+}

@@ -1,6 +1,7 @@
 // 本部：新自（交通事故）が来院したときの通知メールの送り先と、交通事故の相談 LINE の URL
 import { useEffect, useState } from 'react';
 import { useFetch } from '@/lib/api';
+import LineNotifyEditor from './LineNotifyEditor';
 
 interface Row { area: string; email: string; label: string }
 interface Resp { rows: (Row & { id: string })[]; areas: string[]; consultLineUrl: string; mailFrom: string }
@@ -26,7 +27,7 @@ export default function JibaiNotifyEditor() {
       <h2 className="font-bold">新自（交通事故）の通知・相談LINE</h2>
       {msg && <p className={`mt-2 rounded px-3 py-1 ${msg.ok ? 'bg-brand-light' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
 
-      <h3 className="mt-3 font-bold">新自が来院したときのメール</h3>
+      <h3 className="mt-3 font-bold">新自が来院したときのメール（使わないときは空のまま）</h3>
       <p className="mt-1 text-xs text-slate-600">予約表で新自（初自）の方に来院チェックを付けると、ここの送り先へメールで知らせます（店舗・初診日・時間・担当・きっかけ。患者様の氏名は書きません）。「エリア」を選ぶとそのエリアの店舗の分だけ、「全店」は全店の分が届きます。メールは料金がかかりません。送り主は {data.mailFrom} です。</p>
       <table className="mt-2 w-full max-w-3xl">
         <thead><tr className="text-left text-xs text-slate-500"><th>エリア</th><th>メールアドレス</th><th>名前（メモ）</th><th /></tr></thead>
@@ -52,6 +53,8 @@ export default function JibaiNotifyEditor() {
         {dirty && <span className="text-xs text-amber-700">保存していない変更があります</span>}
         <button type="button" onClick={() => call('POST', '/api/admin/hq/jibai-notify/test')} disabled={dirty || data.rows.length === 0} className="ml-auto rounded border px-3 py-1 text-xs disabled:opacity-40">試しのメールを送る</button>
       </div>
+
+      <LineNotifyEditor />
 
       <h3 className="mt-5 font-bold">交通事故の相談LINE（バナー）</h3>
       <p className="mt-1 text-xs text-slate-600">入れると、店舗えらびのページの上と、各店舗の予約ページのいちばん下に「交通事故のご相談はLINEで」のバナーが出ます。タップするとこの URL（LINE の友だち追加など）が開きます。空にするとバナーは出ません（全店共通）。</p>

@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 36;
+    private const VERSION = 37;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -258,12 +258,32 @@ final class Migrate
                 if (self::hasTable($pdo, 'global_setting') && !self::hasColumn($pdo, 'global_setting', 'consultLineUrl')) $pdo->exec("ALTER TABLE `global_setting` ADD COLUMN `consultLineUrl` VARCHAR(300) NOT NULL DEFAULT ''");
                 $pdo->exec(self::JIBAI_NOTIFY_DDL);
             }
+            if ($ver < 37) {
+                // 新自の通知を LINE 公式アカウントで送る：合言葉（本部が入れる）と送り先（6 桁の番号で登録）
+                if (self::hasTable($pdo, 'global_setting') && !self::hasColumn($pdo, 'global_setting', 'lineToken')) $pdo->exec("ALTER TABLE `global_setting` ADD COLUMN `lineToken` VARCHAR(400) NOT NULL DEFAULT '', ADD COLUMN `lineSecret` VARCHAR(100) NOT NULL DEFAULT ''");
+                $pdo->exec(self::LINE_TARGET_DDL);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const LINE_TARGET_DDL = "CREATE TABLE IF NOT EXISTS `line_target` (
+  `id` VARCHAR(32) NOT NULL,
+  `area` VARCHAR(30) NOT NULL DEFAULT '',
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  `kind` VARCHAR(10) NOT NULL DEFAULT '',
+  `targetId` VARCHAR(64) NULL,
+  `code` CHAR(6) NULL,
+  `codeExpires` DATETIME NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `line_target_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     public const JIBAI_NOTIFY_DDL = "CREATE TABLE IF NOT EXISTS `jibai_notify` (
   `id` VARCHAR(32) NOT NULL,

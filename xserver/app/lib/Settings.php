@@ -24,6 +24,8 @@ final class Settings
         $r['closeOnHolidays'] = (bool)$r['closeOnHolidays'];
         $r['storesPageOpen'] = (bool)($r['storesPageOpen'] ?? false);
         $r['consultLineUrl'] = (string)($r['consultLineUrl'] ?? '');
+        $r['lineToken'] = (string)($r['lineToken'] ?? '');
+        $r['lineSecret'] = (string)($r['lineSecret'] ?? '');
         $r['hours'] = is_string($r['hours']) ? json_decode($r['hours'], true) : $r['hours'];
         return $r;
     }
