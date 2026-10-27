@@ -77,3 +77,6 @@ body { @apply bg-slate-50 text-slate-800; }
   main { max-width: none !important; }
   table, tr, td, th { page-break-inside: avoid; }
 }
+
+/* 患者様のページ：iPhone は文字が 16px より小さい入力欄を押すと画面を拡大して戻さないので、入力欄の文字は 16px 以上にする */
+.pub input:not([type='checkbox']):not([type='radio']), .pub select, .pub textarea { font-size: max(16px, 1em); }

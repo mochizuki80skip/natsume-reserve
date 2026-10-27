@@ -94,7 +94,7 @@ export default function Stores() {
     : [...areas.map((a) => ({ name: a, stores: list.filter((s) => cityOfStore(s) === a) })), { name: areas.length ? 'そのほか' : '', stores: list.filter((s) => !cityOfStore(s)) }].filter((g) => g.stores.length);
 
   return (
-    <main className="mx-auto min-h-screen max-w-md bg-sky-50/40 pb-10">
+    <main className="pub mx-auto min-h-screen max-w-md bg-sky-50/40 pb-10">
       {preview && <p className="bg-amber-100 px-3 py-1.5 text-center text-xs font-bold text-amber-900">本部の確認用の表示です（「公開する」にするまで患者様には「準備中」と出ます）</p>}
       <div className="bg-white"><Logo /></div>
       <div className="px-4 py-4 text-white" style={{ background: SKY }}>

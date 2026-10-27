@@ -82,7 +82,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
   );
 
   return (
-    <main className="mx-auto max-w-lg px-3 pb-6 pt-4">
+    <main className="pub mx-auto max-w-lg px-3 pb-6 pt-4">
       <header className="mb-3">
         <div className="flex items-start justify-between gap-2">
           <h1 className="text-lg font-bold">{store.name}　WEB予約</h1>

@@ -36,7 +36,7 @@ export default function MyReservations() {
   }
   const label = { BOOKED: 'ご予約中', PAST: '終わった予約', CANCELLED: 'キャンセル済み', ENDED: '' } as const;
   return (
-    <main className="mx-auto max-w-lg px-3 pb-8 pt-4">
+    <main className="pub mx-auto max-w-lg px-3 pb-8 pt-4">
       <h1 className="text-lg font-bold">ご予約の確認</h1>
       <p className="mt-1 text-xs text-slate-600">このスマホ（ブラウザ）で WEB 予約したご予約です。お電話・窓口でのご予約は出ません。</p>
       {items === null ? <p className="mt-6 text-sm text-slate-500">読み込み中…</p> : items.length === 0 ? (
