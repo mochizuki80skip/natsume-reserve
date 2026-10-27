@@ -7,7 +7,7 @@ export interface CancelRow { id: string; time: number; bed: number; name: string
 export interface SlotBlock { id: string; start: number; end: number; beds: number[]; label: string }
 /** 新規・再来を止める時間帯（WEB の初診・再来だけ止める） */
 export interface KindBlock { id: string; start: number; end: number; label: string; kinds?: 'N' | 'R' | 'NR'; auto?: boolean }
-export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[]; firstAm?: number | null; firstPm?: number | null; revisitAm?: number | null; revisitPm?: number | null; eitherAm?: number | null; eitherPm?: number | null; limitNew?: number | null; limitRevisit?: number | null }
+export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[]; firstAm?: number | null; firstPm?: number | null; revisitAm?: number | null; revisitPm?: number | null; eitherAm?: number | null; eitherPm?: number | null }
 
 export interface DayData {
   date: string;

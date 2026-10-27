@@ -27,9 +27,6 @@ final class DayData
         $reception = array_values(array_filter($members, fn($m) => $m['role'] === 'RECEPTION'));
         $allTherapists = array_values(array_filter($allMembers, fn($m) => $m['role'] === 'THERAPIST'));
         $cap = Settings::capacityFromShifts($store, $allTherapists, $statusByStaff, $day ? ['capacityAm' => $day['capacityAm'], 'capacityPm' => $day['capacityPm']] : null, $date, $helpIn);
-        // 店舗設定の新規・再来の同時対応数（予約表の「WEB の同時上限」に、シフトの人数と小さいほうを出す）
-        $cap['limitNew'] = ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'];
-        $cap['limitRevisit'] = ($store['maxRevisitConcurrent'] ?? null) === null ? null : (int)$store['maxRevisitConcurrent'];
         // 担当に選べる施術者：その日に出勤している人を先に、ほかの在籍の施術者を後ろに
         $working = array_values(array_unique(array_merge($cap['namesAm'], $cap['namesPm'])));
         $others = array_values(array_filter(array_map(fn($m) => $m['name'], array_filter($members, fn($m) => $m['role'] === 'THERAPIST')), fn($n) => !in_array($n, $working, true)));

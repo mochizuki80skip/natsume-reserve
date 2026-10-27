@@ -13,6 +13,7 @@ final class Settings
         // 新規の同時対応数：null＝制限なし、0＝WEB では受けない
         $r['maxNewConcurrent'] = ($r['maxNewConcurrent'] ?? null) === null ? null : (int)$r['maxNewConcurrent'];
         $r['maxRevisitConcurrent'] = ($r['maxRevisitConcurrent'] ?? null) === null ? null : (int)$r['maxRevisitConcurrent'];
+        foreach (['newAdjust', 'revisitAdjust', 'totalAdjust'] as $k) $r[$k] = (int)($r[$k] ?? 0);
         $r['active'] = (bool)$r['active'];
         $r['hoursOverride'] = is_string($r['hoursOverride'] ?? null) ? json_decode($r['hoursOverride'], true) : null;
         return $r;
@@ -227,13 +228,21 @@ final class Settings
         }
         $am = $override['capacityAm'] ?? $autoAm;
         $pm = $override['capacityPm'] ?? $autoPm;
-        return [
-            'am' => min((int)$am, $beds), 'pm' => min((int)$pm, $beds), 'autoAm' => $autoAm, 'autoPm' => $autoPm, 'namesAm' => $namesAm, 'namesPm' => $namesPm,
-            // シフトから決まる WEB の新規・再来の同時上限（null＝チェックを使っていないので上限なし）
+        // シフトから決まる WEB の新規・再来の同時上限（null＝チェックを使っていないので上限なし）。
+        // 新規と再来を合わせた上限（1 人が 1 人の患者様を受ける：初回か再来を担当できる人数。両方のチェックを使っている店舗だけ）
+        $raw = [
             'firstAm' => $useFirst ? $firstAm : null, 'firstPm' => $useFirst ? $firstPm : null,
             'revisitAm' => $useRevisit ? $revisitAm : null, 'revisitPm' => $useRevisit ? $revisitPm : null,
-            // 新規と再来を合わせた上限（1 人が 1 人の患者様を受ける：初回か再来を担当できる人数。両方のチェックを使っている店舗だけ）
             'eitherAm' => $useFirst && $useRevisit ? $eitherAm : null, 'eitherPm' => $useFirst && $useRevisit ? $eitherPm : null,
+        ];
+        // 店舗設定の調整（人数からの足し引き。0 より少なくはしない）
+        $adj = fn(?int $v, string $k): ?int => $v === null ? null : max(0, $v + (int)($store[$k] ?? 0));
+        return [
+            'am' => min((int)$am, $beds), 'pm' => min((int)$pm, $beds), 'autoAm' => $autoAm, 'autoPm' => $autoPm, 'namesAm' => $namesAm, 'namesPm' => $namesPm,
+            'firstAm' => $adj($raw['firstAm'], 'newAdjust'), 'firstPm' => $adj($raw['firstPm'], 'newAdjust'),
+            'revisitAm' => $adj($raw['revisitAm'], 'revisitAdjust'), 'revisitPm' => $adj($raw['revisitPm'], 'revisitAdjust'),
+            'eitherAm' => $adj($raw['eitherAm'], 'totalAdjust'), 'eitherPm' => $adj($raw['eitherPm'], 'totalAdjust'),
+            'raw' => $raw,
         ];
     }
 

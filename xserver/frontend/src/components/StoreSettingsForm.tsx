@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import HoursEditor from './HoursEditor';
+import WebConcurrentEditor, { type CapAll, type CapRaw } from './WebConcurrentEditor';
 
-interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; maxActiveBookings?: number | null; bookDaysAhead?: number | null; notifyPhone: string; hoursOverride: string }
-interface Props { store: StoreForm; globalHours: string; slotMinutes: number; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void }
+interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; maxActiveBookings?: number | null; newAdjust?: number; revisitAdjust?: number; totalAdjust?: number; bookDaysAhead?: number | null; notifyPhone: string; hoursOverride: string }
+interface Props { store: StoreForm; globalHours: string; slotMinutes: number; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void; capToday?: CapRaw; capAll?: CapAll }
 
 function UrlRow({ label, path }: { label: string; path: string }) {
   const url = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
@@ -15,7 +16,7 @@ function UrlRow({ label, path }: { label: string; path: string }) {
   );
 }
 
-export default function StoreSettingsForm({ store, globalHours, slotMinutes, canChangePassword, smsEnabled, onRefresh }: Props) {
+export default function StoreSettingsForm({ capToday, capAll, store, globalHours, slotMinutes, canChangePassword, smsEnabled, onRefresh }: Props) {
   const [f, setF] = useState(store);
   const [hoursErr, setHoursErr] = useState('');
   const [hoursKey, setHoursKey] = useState(0);
@@ -73,8 +74,6 @@ export default function StoreSettingsForm({ store, globalHours, slotMinutes, can
               </tr>
             ))}
             {([
-              ['maxNewConcurrent', '新規の同時対応数', '人まで', '同じ時間に WEB で受ける新規（初診・新自）の人数。空欄＝シフトの「初回を担当する」人数まで、0＝新規は WEB で受けない（電話マークにして電話へ案内）。シフトの人数より少なくしたいときに入れます', 0, 20],
-              ['maxRevisitConcurrent', '再来の同時対応数', '人まで', '同じ時間に WEB で受ける再来（1ヶ月以上ご来院の無い方）の人数。空欄＝シフトの「再来を担当する」人数まで、0＝再来は WEB で受けない', 0, 20],
               ['maxActiveBookings', '1 人が持てる WEB 予約', '件まで', '同じ患者様（電話番号と氏名が同じ）が WEB で持てる、まだ来ていない予約の件数（この店舗だけ）。空欄＝制限なし', 1, 50],
               ['bookDaysAhead', 'WEB で予約できる日数', '日先まで', '今日から何日先まで WEB で予約できるか。それより先は、予約ページで見られますが電話マーク（お電話で受付）になります。空欄＝公開する日数まで', 0, 365],
             ] as const).map(([k, label, unit, help, min, max]) => (
@@ -87,7 +86,8 @@ export default function StoreSettingsForm({ store, globalHours, slotMinutes, can
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-slate-500">WEB で同じ時間に受ける新規・再来は、その時間のシフトに入っているスタッフで決まります（1 人が 1 人の患者様を受ける）：新規は「初回を担当する」人数まで、再来は「再来を担当する」人数まで、新規と再来を合わせて「初回か再来を担当する」人数まで（スタッフ・シフトのチェック）。上の「新規の同時対応数」「再来の同時対応数」を入れると、それより少ない人数に抑えられます（例：初回〇再来〇が 2 人・再来〇が 1 人なら、新規と再来を合わせて 3 人まで。新規の同時対応数を 1 にすると、新規は 1 人まで）。顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
+        <p className="text-xs text-slate-500">WEB で同じ時間に受ける新規・再来は、その時間のシフトに入っているスタッフで決まります（1 人が 1 人の患者様を受ける）：新規は「初回を担当する」人数まで、再来は「再来を担当する」人数まで、新規と再来を合わせて「初回か再来を担当する」人数まで（スタッフ・シフトのチェック）。下の「WEB で同時に受ける人数」で、その人数より多く・少なくできます。顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
+        {capToday && capAll && <WebConcurrentEditor value={{ newAdjust: f.newAdjust ?? 0, revisitAdjust: f.revisitAdjust ?? 0, totalAdjust: f.totalAdjust ?? 0 }} onChange={(v) => setF({ ...f, ...v })} capToday={capToday} capAll={capAll} />}
         {smsEnabled && <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>}
         <div className="rounded border p-3">
           <h3 className="mb-2 font-bold">この店舗の営業時間</h3>

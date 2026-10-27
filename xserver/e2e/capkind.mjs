@@ -41,22 +41,40 @@ ok('合計 3 人で、通院中も×', (await st('RETURN', 540)) === 'closed');
 await put([{ time: 630, bed: 1, text: '再来 四（再来）' }, { time: 630, bed: 2, text: '再来 五（再来）' }]);
 ok('再来 2 人なら、再来はまだ取れる', (await st('REVISIT', 630)) !== 'closed');
 ok('再来 2 人なら、新規もまだ取れる', (await st('NEW', 630)) !== 'closed');
-// 店舗設定の「再来の同時対応数」：シフトの人数（3）より少なくできる
+// 店舗設定「WEB で同時に受ける人数」：シフトの人数からの足し引き
 const s0 = (await api('GET', '/api/admin/settings'))[1].store;
-const sv = await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxRevisitConcurrent: 2 });
+const adj = (a) => api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, newAdjust: 0, revisitAdjust: 0, totalAdjust: 0, ...a });
+const sv = await adj({ revisitAdjust: -1 });
 ok('店舗設定を保存できる', sv[0] === 200, JSON.stringify(sv));
-ok('再来の同時対応数 2：再来 2 人で再来は×', (await st('REVISIT', 630)) === 'closed');
-ok('再来の同時対応数 2 でも、新規はまだ取れる（合計 2／3）', (await st('NEW', 630)) !== 'closed');
-ok('予約表の WEB の同時上限も 2', (await api('GET', `/api/admin/day?date=${D}`))[1].data.capacity.limitRevisit === 2);
-await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxRevisitConcurrent: null });
-ok('空欄に戻すと、シフトの人数（3）まで', (await st('REVISIT', 630)) !== 'closed');
-// 店舗設定の「新規の同時対応数」1：11:00 に新規 1 人 → 新規は×、再来は取れる
-await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxNewConcurrent: 1 });
-await put([{ time: 660, bed: 1, text: '新規 七（初診）' }, { time: 675, bed: 1, text: '上記初診対応' }]);
-ok('新規の同時対応数 1：新規 1 人で新規は×', (await st('NEW', 660)) === 'closed');
-ok('新規の同時対応数 1 でも、再来は取れる', (await st('REVISIT', 660)) !== 'closed');
-await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxNewConcurrent: null });
-ok('空欄に戻すと、新規は 2 人まで', (await st('NEW', 660)) !== 'closed');
+ok('再来 －1：再来 2 人で再来は×', (await st('REVISIT', 630)) === 'closed');
+ok('再来 －1 でも、新規はまだ取れる（合計 2／3）', (await st('NEW', 630)) !== 'closed');
+ok('予約表の WEB の同時上限も再来 2', (await api('GET', `/api/admin/day?date=${D}`))[1].data.capacity.revisitAm === 2);
+await adj({});
+ok('±0 に戻すと、シフトの人数（3）まで', (await st('REVISIT', 630)) !== 'closed');
+// 11:00 に新規 2 人：ふだん（新規 2 まで）は×、新規 ＋1 なら 3 人まで取れる、合わせて －1 なら（合計 2）×
+await put([{ time: 660, bed: 1, text: '新規 七（初診）' }, { time: 675, bed: 1, text: '上記初診対応' }, { time: 660, bed: 2, text: '新規 八（初診）' }, { time: 675, bed: 2, text: '上記初診対応' }]);
+ok('±0：新規 2 人で新規は×', (await st('NEW', 660)) === 'closed');
+await adj({ newAdjust: 1 });
+ok('新規 ＋1：3 人目の新規も取れる', (await st('NEW', 660)) !== 'closed');
+const set1 = (await api('GET', '/api/admin/settings'))[1];
+ok('店舗設定に今日のシフト・全員出勤の人数（足し引き前）', set1.capAll.first === 2 && set1.capAll.revisit === 3 && set1.capAll.either === 3 && set1.store.newAdjust === 1, JSON.stringify([set1.capAll, set1.capToday]));
+await adj({ newAdjust: 1, totalAdjust: -1 });
+ok('新規 ＋1・合わせて －1：合計 2 人で×', (await st('NEW', 660)) === 'closed' && (await st('REVISIT', 660)) === 'closed');
+await adj({});
+// 店舗設定の画面：＋－で足し引きすると、今日のシフト・全員出勤の人数と組み合わせの例がその場で変わる
+await p.goto(`${B}/admin/settings`); await p.waitForTimeout(1000);
+const g = p.getByRole('group', { name: 'WEB で同時に受ける人数' });
+const t0 = await g.textContent();
+ok('はじめは ±0：新規 2・再来 3・合わせて 3（全員出勤）', t0.includes('全員出勤の日なら：新規 2 人・再来 3 人・合わせて 3 人'), t0.slice(0, 300));
+await g.getByRole('button', { name: '新規を 1 人増やす' }).click();
+await g.getByRole('button', { name: '合わせてを 1 人増やす' }).click();
+const t1 = await g.textContent();
+ok('新規 ＋1・合わせて ＋1：合わせては枠数（3）まで、注意も出る', t1.includes('全員出勤の日なら：新規 3 人・再来 3 人・合わせて 3 人') && t1.includes('枠数') && (await g.getByLabel('新規の調整').textContent()) === '＋1' && (await g.getByRole('table', { name: '組み合わせの例' }).locator('tbody tr').count()) === 4, t1.slice(0, 500));
+await p.screenshot({ path: new URL('./', import.meta.url).pathname + 'out-concurrent.png', fullPage: true });
+await p.getByRole('button', { name: '保存', exact: true }).first().click().catch(() => {}); await p.waitForTimeout(800);
+const s2 = (await api('GET', '/api/admin/settings'))[1].store;
+ok('保存すると足し引きが残る', s2.newAdjust === 1 && s2.totalAdjust === 1, JSON.stringify(s2));
+await adj({});
 
 // 午後：室塚が午後休み → 新規は午後 1 人まで（ともふさだけ）
 await api('PUT', '/api/admin/shifts', { staffId: id('室塚'), date: D, status: 'PM_OFF' });

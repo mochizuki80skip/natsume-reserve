@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS `store` (
   `bookDaysAhead` INT NULL DEFAULT 14,    -- WEB で予約できるのは今日から何日先まで（公開する日数より先は電話。空＝公開する日数まで）
   `pageCity` VARCHAR(30) NULL,   -- 店舗えらびページの見出しの地域（空なら住所の市・町）
   `pageOrder` INT NULL,          -- 店舗えらびページの並び順（空なら本部の店舗一覧の順）
+  `newAdjust` INT NOT NULL DEFAULT 0,       -- WEB で同時に受ける新規：シフトの「初回を担当する」人数からの足し引き
+  `revisitAdjust` INT NOT NULL DEFAULT 0,   -- 同じく再来：「再来を担当する」人数からの足し引き
+  `totalAdjust` INT NOT NULL DEFAULT 0,     -- 同じく新規＋再来の合計：「初回か再来を担当する」人数からの足し引き
   PRIMARY KEY (`id`),
   UNIQUE KEY `store_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

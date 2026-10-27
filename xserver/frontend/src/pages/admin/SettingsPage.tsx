@@ -9,6 +9,7 @@ import { StoreUrlCards } from '@/components/UrlQrCard';
 import { useAdmin } from './Layout';
 
 interface Resp {
+  capToday?: import('@/components/WebConcurrentEditor').CapRaw; capAll?: import('@/components/WebConcurrentEditor').CapAll;
   store: { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; maxActiveBookings?: number | null; bookDaysAhead?: number | null; notifyPhone: string; hoursOverride: string };
   globalHours: string; slotMinutes?: number; canChangePassword: boolean; smsEnabled: boolean;
   members: { id: string; name: string; role: string; active: boolean; startDate: string | null; endDate: string | null; joinType: string | null; canFirst?: boolean; canRevisit?: boolean; color?: string; isHead?: boolean; leaveStart?: string | null; leaveEnd?: string | null }[];
@@ -44,7 +45,7 @@ function StoreSettings() {
     <div>
       {/* 画面が広いときは 2 列（左：店舗設定、右：スタッフ・シフト）、半面では 1 列 */}
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
-        <StoreSettingsForm store={data.store} globalHours={data.globalHours} slotMinutes={data.slotMinutes ?? 15} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
+        <StoreSettingsForm capToday={data.capToday} capAll={data.capAll} store={data.store} globalHours={data.globalHours} slotMinutes={data.slotMinutes ?? 15} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
         <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}:${m.canFirst}:${m.canRevisit}:${m.color}:${m.isHead}:${m.leaveStart}:${m.leaveEnd}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
         <section className="rounded-lg border bg-white p-4 text-sm xl:col-span-2" aria-label="この店舗の URL・QR コード">
           <h2 className="mb-1 font-bold">この店舗の URL・QR コード</h2>
