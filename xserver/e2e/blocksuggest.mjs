@@ -62,5 +62,19 @@ ok('止めないのときは新規が取れる', (await st('NEW')) !== 'closed')
 // 手で入れる「新規だけ止める」
 await api('POST', '/api/admin/kind-blocks', { date: D, start: 660, end: 690, kinds: 'R', label: '見本' });
 ok('再来だけ止める（手で入れる）', (await st('REVISIT', 660)) === 'closed' && (await st('NEW', 660)) !== 'closed');
+// 過ぎた時間は提案しない：今日の過ぎた時間に同じ形（見本 一 が 2 人・担当なしの初診）を入れても出ない
+{ const r0 = (await api('GET', '/api/admin/block-suggestions?date=2000-01-01'))[1];
+  const today = r0.today, now = r0.now;
+  const T = [540, 555, 570, 585, 600, 615, 630, 645, 660, 675, 690, 705].filter((t) => t + 15 <= now).at(-1);
+  if (T === undefined) ok('今日の過ぎた時間は提案しない（朝早いので確かめられない）', true);
+  else {
+    await api('PUT', '/api/admin/days', { date: today, capacityAm: 5 });
+    await api('PUT', '/api/admin/cells', { date: today, cells: [{ time: T, bed: 1, text: '過去 甲' }, { time: T, bed: 2, text: '過去 乙' }, { time: T, bed: 3, text: '過去 丙（初診）' }] });
+    await api('PUT', '/api/admin/cell-staff', { date: today, staff: '見本 一', cells: [{ time: T, bed: 1 }, { time: T, bed: 2 }] });
+    const sug = (await api('GET', `/api/admin/block-suggestions?date=${today}`))[1].suggestions;
+    ok('今日の過ぎた時間は提案しない', sug.every((x) => x.start >= now - 14), JSON.stringify({ T, now, sug }));
+  }
+  ok('過ぎた日は提案しない', (await api('GET', '/api/admin/block-suggestions?date=2026-01-05'))[1].suggestions.length === 0);
+}
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();

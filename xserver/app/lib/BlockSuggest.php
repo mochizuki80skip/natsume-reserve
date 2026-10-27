@@ -18,6 +18,9 @@ final class BlockSuggest
     public static function needed(array $store, array $setting, string $date): array
     {
         $out = ['N' => [], 'R' => []];
+        // 過ぎた日・今日の過ぎた時間は提案しない（もう WEB で予約は入らない）
+        $now = Time::nowJst();
+        if ($date < $now['date']) return $out;
         $sid = $store['id'];
         $members = array_values(array_filter(Db::all("SELECT id, name, startDate, endDate, leaveStart, leaveEnd, canFirst, canRevisit FROM staff_member WHERE storeId = ? AND role = 'THERAPIST' AND active = 1", [$sid]),
             fn($m) => Settings::inPeriod($m, $date) && !($m['leaveStart'] && $date >= $m['leaveStart'] && (!$m['leaveEnd'] || $date <= $m['leaveEnd']))));
@@ -46,6 +49,7 @@ final class BlockSuggest
             }
         }
         foreach (Hours::slotTimes($sessions, $slot) as $t) {
+            if ($date === $now['date'] && $t < $now['minutes']) continue;
             $am = Hours::isAm($sessions, $t);
             $on = array_values(array_filter($members, fn($m) => $am ? Settings::worksAm($shift[$m['id']] ?? null) : Settings::worksPm($shift[$m['id']] ?? null)));
             $first = array_values(array_filter($on, fn($m) => (int)$m['canFirst']));
@@ -89,13 +93,16 @@ final class BlockSuggest
         $need = self::needed($store, $setting, $date);
         $slot = (int)$setting['slotMinutes'];
         $blocks = Db::all('SELECT id, startTime, endTime, kinds, auto FROM kind_block WHERE storeId = ? AND date = ?', [$sid, $date]);
+        // 過ぎた時間は見直さない（承認したブロックはそのまま残す）
+        $now = Time::nowJst();
+        $past = fn(int $t): bool => $date < $now['date'] || ($date === $now['date'] && $t < $now['minutes']);
         foreach (['N', 'R'] as $k) {
             $want = array_flip($need[$k]);
             // 自動ブロック：まだ当てはまる時間だけ残す（つながった時間ごとに作り直す）
             foreach ($blocks as $b) {
                 if (!(int)$b['auto'] || $b['kinds'] !== $k) continue;
                 $keep = [];
-                for ($t = (int)$b['startTime']; $t < (int)$b['endTime']; $t += $slot) if (isset($want[$t])) $keep[] = $t;
+                for ($t = (int)$b['startTime']; $t < (int)$b['endTime']; $t += $slot) if (isset($want[$t]) || $past($t)) $keep[] = $t;
                 if (count($keep) === intdiv((int)$b['endTime'] - (int)$b['startTime'], $slot)) continue;
                 Db::exec('DELETE FROM kind_block WHERE id = ?', [$b['id']]);
                 foreach (self::ranges($keep, $slot) as [$s, $e]) Db::exec('INSERT INTO kind_block (id, storeId, date, startTime, endTime, label, kinds, auto) VALUES (?, ?, ?, ?, ?, ?, ?, 1)', [Db::newId(), $sid, $date, $s, $e, '提案から', $k]);

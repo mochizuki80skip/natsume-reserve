@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 81, date: '2026-10-27', title: 'ブロックの提案：過ぎた時間には出さない', audience: ['店舗', '本部'],
+    items: ['新規・再来ブロックの提案が、今日のもう過ぎた時間（担当が重なっていた時間）にも出ていたのを直しました。過ぎた日・過ぎた時間には提案を出しません（承認済みのブロックはそのまま残ります）。'],
+  },
+  {
     id: 80, date: '2026-10-27', title: '新患継続率から行を削除／新自の通知のリンク', audience: ['店舗', '本部'],
     items: [
       '新患継続率で、予約表から自動で入った行も「✕」で削除できるようにしました。削除すると予約表の来院チェックも外れます（もう一度チェックを付けると行ができます）。',
