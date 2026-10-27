@@ -12,7 +12,8 @@ const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 await p.goto(B + '/admin/login/S001'); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
 const api = (m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
-const D = '2026-10-27';
+const D = (() => { const d = new Date(); d.setDate(d.getDate() + 3); for (;;) { const s = d.toISOString().slice(0, 10); if ([1, 2, 3, 5].includes(d.getDay()) && !['2026-11-03', '2026-11-23', '2027-01-01'].includes(s)) return s; d.setDate(d.getDate() + 1); } })() // 3 日後以降の平日（木・日・祝を除く）;
+
 const st = async (kind, time) => (await api('GET', `/api/public/S001/slots?date=${D}&kind=${kind}`))[1].slots.find((s) => s.time === time)?.status;
 const put = (cells) => api('PUT', '/api/admin/cells', { date: D, cells });
 

@@ -71,7 +71,7 @@ await api(hp, 'PUT', '/api/admin/hq/referrals', { id: ref.id, name: NAME2 });
 const k2 = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.id === k.id);
 ok('名前を変えると内訳もそろう', k2.trigDetail === NAME2, k2.trigDetail);
 await api(hp, 'PUT', '/api/admin/hq/referrals', { id: ref.id, active: false });
-const r2 = await api(cp, 'POST', '/api/public/S001/reserve', { kind: 'NEW', date: '2026-10-27', time: 600, name: `止め 次郎${sfx}`, phone: '070' + String(Date.now()).slice(-8), ref: ref.code });
+const r2 = await api(cp, 'POST', '/api/public/S001/reserve', { kind: 'NEW', date: (() => { const d = new Date(); d.setDate(d.getDate() + 3); for (;;) { const s = d.toISOString().slice(0, 10); if ([1, 2, 3, 5].includes(d.getDay()) && !['2026-11-03', '2026-11-23', '2027-01-01'].includes(s)) return s; d.setDate(d.getDate() + 1); } })(), time: 600, name: `止め 次郎${sfx}`, phone: '070' + String(Date.now()).slice(-8), ref: ref.code });
 const res2 = (await api(sp, 'GET', '/api/admin/reservations?status=all'))[1].rows.find((r) => r.name.startsWith(`止め 次郎${sfx}`));
 ok('止めた QR から予約しても紹介元は付かない', r2[0] === 200 && (await api(hp, 'GET', '/api/admin/hq/referrals'))[1].rows.find((r) => r.code === ref.code).reservations === 1, JSON.stringify(r2[1]).slice(0, 80) + ' ' + !!res2);
 await api(hp, 'PUT', '/api/admin/hq/stores-page', { open: false });
