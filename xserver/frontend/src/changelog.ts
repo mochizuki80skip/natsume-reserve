@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 82, date: '2026-10-27', title: '自賠請求の説明の文言', audience: ['店舗', '本部'],
+    items: ['自賠請求のページの説明から「Ctrl + V で貼り付け」の表記を外しました（スクショは「スクショを選ぶ」かドラッグ＆ドロップで入れます）。'],
+  },
+  {
     id: 81, date: '2026-10-27', title: 'ブロックの提案：過ぎた時間には出さない', audience: ['店舗', '本部'],
     items: ['新規・再来ブロックの提案が、今日のもう過ぎた時間（担当が重なっていた時間）にも出ていたのを直しました。過ぎた日・過ぎた時間には提案を出しません（承認済みのブロックはそのまま残ります）。'],
   },

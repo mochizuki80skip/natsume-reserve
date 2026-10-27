@@ -294,7 +294,7 @@ export default function JibaiPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => fileInput.current?.click()} className="rounded bg-brand px-4 py-1.5 font-bold text-white">スクショを選ぶ</button>
             <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => { addFiles(Array.from(e.target.files ?? []).map((f) => ({ file: f, name: f.name }))); e.target.value = ''; }} />
-            <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、ここにドラッグ＆ドロップするか、Win + Shift + S で撮ったスクショを <b>Ctrl + V</b> で貼り付けてください。複数枚まとめて可。</span>
+            <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、ここにドラッグ＆ドロップするか、「スクショを選ぶ」で選んでください。複数枚まとめて可。</span>
           </div>
           <JibaiSizeGuide />
           {(progress || queueLeft > 0) && <OcrProgressBar message={progress ?? '読み取り待ち…'} pct={pct} total={batchView.total} done={batchView.done} msPer={batchView.msPer} queueLeft={queueLeft} />}
