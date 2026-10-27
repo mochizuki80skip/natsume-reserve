@@ -92,6 +92,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/hq/jibai-notify$#', 'hq_jibai_notify_put'],
         ['POST', '#^/api/admin/hq/jibai-notify/test$#', 'hq_jibai_notify_test'],
         ['PUT', '#^/api/admin/hq/consult-line$#', 'hq_consult_line_put'],
+        ['PUT', '#^/api/admin/hq/notify-name$#', 'hq_notify_name_put'],
         ['GET', '#^/api/admin/hq/line$#', 'hq_line_get'],
         ['PUT', '#^/api/admin/hq/line$#', 'hq_line_put'],
         ['POST', '#^/api/admin/hq/line/targets$#', 'hq_line_target_post'],

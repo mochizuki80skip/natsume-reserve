@@ -66,7 +66,27 @@ fs.rmSync(LOG, { force: true });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '見本 太郎（初自）' }] });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: true });
 const sent = logs().filter((x) => x.line);
-ok('新自の来院で、その店舗のエリアの LINE だけに届く（氏名は書かない）', sent.length === 1 && sent[0].line === 'Uaaaa' && sent[0].text.includes('【新自】サンプル本店') && !sent[0].text.includes('見本'), JSON.stringify(sent));
+ok('新自の来院で、その店舗のエリアの LINE だけに届く（名字だけ）', sent.length === 1 && sent[0].line === 'Uaaaa' && sent[0].text.includes('【新自】サンプル本店') && sent[0].text.includes('患者様：見本 様') && !sent[0].text.includes('太郎'), JSON.stringify(sent));
+
+// 患者様の出し方を変える（カルテNo が入っていればカルテNo も）
+const kid = (await api(st, 'GET', `/api/admin/karte?month=${today.slice(0, 7)}`))[1].rows.find((r) => r.kind === 'ACCIDENT').id;
+await api(st, 'PATCH', '/api/admin/karte', { id: kid, patch: { karteNo: '1201' } });
+const who = async (mode) => {
+  await api(hq, 'PUT', '/api/admin/hq/notify-name', { mode });
+  return st.evaluate(async () => '');
+};
+ok('出し方：おかしな値は保存できない', (await api(hq, 'PUT', '/api/admin/hq/notify-name', { mode: 'all' }))[0] === 400);
+await who('full');
+fs.rmSync(LOG, { force: true });
+await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 720, bed: 4, text: '例示 一郎（初自）' }] });
+await api(st, 'PUT', '/api/admin/visit', { date: today, time: 720, bed: 4, visited: true });
+ok('出し方：氏名＋カルテNo（カルテNo がまだ無いときは氏名だけ）', logs().filter((x) => x.line)[0]?.text.includes('患者様：例示 一郎 様'), JSON.stringify(logs()));
+await who('none');
+fs.rmSync(LOG, { force: true });
+await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 720, bed: 5, text: '仮名 次郎（初自）' }] });
+await api(st, 'PUT', '/api/admin/visit', { date: today, time: 720, bed: 5, visited: true });
+ok('出し方：出さない', logs().filter((x) => x.line).length === 1 && !logs().filter((x) => x.line)[0].text.includes('患者様'), JSON.stringify(logs()));
+await who('surname');
 
 // ブロックされたら止める・止めた送り先には送らない
 await hook([{ type: 'unfollow', source: { type: 'user', userId: 'Uaaaa' } }]);

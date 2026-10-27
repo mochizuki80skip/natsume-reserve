@@ -133,11 +133,23 @@ final class Karte
         return $out;
     }
 
+    /** 通知に出す患者様：本部の設定（none＝出さない／karte＝カルテNo／surname＝名字＋カルテNo／full＝氏名＋カルテNo）。カルテNo は入っているときだけ */
+    public static function notifyWho(string $name, string $karteNo): string
+    {
+        $mode = (string)(Settings::global()['notifyName'] ?? 'surname');
+        if ($mode === 'none') return '';
+        $no = trim($karteNo) !== '' ? 'カルテNo ' . trim($karteNo) : '';
+        $name = trim($name);
+        $shown = $mode === 'full' ? $name : ($mode === 'surname' ? (preg_split('/[\s　]+/u', $name)[0] ?? '') : '');
+        $parts = array_filter([$shown !== '' ? $shown . ' 様' : '', $no !== '' ? ($shown !== '' ? "（{$no}）" : $no) : '']);
+        return implode('', $parts);
+    }
+
     /** 新自が来院したことをメール・LINE で知らせる（患者様の氏名は書かない）。一度送った行は送らない */
     public static function notifyAccident(array $store, string $karteId): void
     {
         try {
-            $r = Db::one('SELECT date, srcTime, staff, trig, notifiedAt FROM karte WHERE id = ?', [$karteId]);
+            $r = Db::one('SELECT date, srcTime, staff, trig, name, karteNo, notifiedAt FROM karte WHERE id = ?', [$karteId]);
             if (!$r || $r['notifiedAt'] !== null) return;
             $to = self::notifyRecipients($store);
             $lines = Line::targetsFor(self::areasOf($store));
@@ -150,8 +162,10 @@ final class Karte
             $md = (int)substr($r['date'], 5, 2) . '/' . (int)substr($r['date'], 8, 2);
             $time = $r['srcTime'] !== null ? ' ' . Time::minToHm((int)$r['srcTime']) : '';
             $url = rtrim(Config::str('APP_URL'), '/');
+            $who = self::notifyWho((string)$r['name'], (string)$r['karteNo']);
             $body = "交通事故（新自）の患者様が来院しました。\n\n"
                 . "店舗：{$store['name']}\n"
+                . ($who !== '' ? "患者様：{$who}\n" : '')
                 . "初診日：{$md}（{$wd}）{$time}\n"
                 . ($r['staff'] !== '' ? "担当：{$r['staff']}\n" : '')
                 . ($r['trig'] !== '' ? "きっかけ：{$r['trig']}\n" : '')
@@ -160,7 +174,7 @@ final class Karte
                 . "\n※このメールは送信専用です。";
             if ($to) Mail::send($to, "【新自】{$store['name']} {$md} 交通事故の初診がありました", $body);
             if ($lines) {
-                $text = "【新自】{$store['name']}\n{$md}（{$wd}）{$time} 交通事故の初診がありました。"
+                $text = "【新自】{$store['name']}\n{$md}（{$wd}）{$time} 交通事故の初診がありました。" . ($who !== '' ? "\n患者様：{$who}" : '')
                     . ($r['staff'] !== '' ? "\n担当：{$r['staff']}" : '') . ($r['trig'] !== '' ? "\nきっかけ：{$r['trig']}" : '')
                     . "\n事故日・事故内容は新患継続率の下で入れてください。" . ($url !== '' ? "\n{$url}/admin/karte" : '');
                 foreach ($lines as $t) Line::push($t, $text);

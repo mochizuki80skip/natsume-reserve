@@ -47,7 +47,7 @@ await api(st, 'PUT', '/api/admin/visit', { date: OLD, time: 540, bed: 1, visited
 let m = mails();
 ok('今日の新自の来院でメール 1 通（昔の日は送らない）', m.length === 1, JSON.stringify(m.map((x) => x.subject)));
 ok('送り先は全店の分と、その店舗のエリアの分だけ', m[0] && m[0].to.sort().join() === 'all@example.com,mg-s@example.com', m[0]?.to.join());
-ok('件名・本文（氏名は書かない）', m[0] && m[0].subject.includes('【新自】') && m[0].body.includes('サンプル本店') && !m[0].body.includes('見本') && !m[0].subject.includes('見本'), m[0]?.body);
+ok('件名・本文（患者様は名字だけ。件名には出さない）', m[0] && m[0].subject.includes('【新自】') && m[0].body.includes('サンプル本店') && m[0].body.includes('患者様：見本 様') && !m[0].body.includes('太郎') && !m[0].subject.includes('見本'), m[0]?.body);
 // チェックを外して付け直しても、もう一度は送らない
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 540, bed: 1, visited: false });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 540, bed: 1, visited: true });

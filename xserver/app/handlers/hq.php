@@ -298,6 +298,7 @@ function hq_jibai_notify_get(): never
         'rows' => array_map(fn($r) => ['id' => $r['id'], 'area' => $r['area'], 'email' => $r['email'], 'label' => $r['label']], Db::all('SELECT * FROM jibai_notify ORDER BY sortOrder ASC')),
         'areas' => array_column(Db::all('SELECT name FROM area ORDER BY sortOrder ASC, name ASC'), 'name'),
         'consultLineUrl' => Settings::global()['consultLineUrl'],
+        'notifyName' => Settings::global()['notifyName'],
         'mailFrom' => Mail::from(),
     ]);
 }
@@ -429,4 +430,16 @@ function hq_line_test(): never
     $n = 0;
     foreach (array_unique($to) as $t) if (Line::push($t, "【試し】新自の通知の試しです。\nこれが届いていれば、新自が来院したときにここへお知らせが届きます。")) $n++;
     Http::json(['ok' => true, 'sent' => $n, 'total' => count(array_unique($to))]);
+}
+
+/** 新自の通知に出す患者様（{ mode: none | karte | surname | full }） */
+function hq_notify_name_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $mode = (string)(Http::body()['mode'] ?? '');
+    if (!in_array($mode, ['none', 'karte', 'surname', 'full'], true)) Http::error('bad request', 400);
+    Settings::global();
+    Db::exec('UPDATE global_setting SET notifyName = ? WHERE id = 1', [$mode]);
+    Http::json(['ok' => true]);
 }

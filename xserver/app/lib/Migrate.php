@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 37;
+    private const VERSION = 38;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -262,6 +262,10 @@ final class Migrate
                 // 新自の通知を LINE 公式アカウントで送る：合言葉（本部が入れる）と送り先（6 桁の番号で登録）
                 if (self::hasTable($pdo, 'global_setting') && !self::hasColumn($pdo, 'global_setting', 'lineToken')) $pdo->exec("ALTER TABLE `global_setting` ADD COLUMN `lineToken` VARCHAR(400) NOT NULL DEFAULT '', ADD COLUMN `lineSecret` VARCHAR(100) NOT NULL DEFAULT ''");
                 $pdo->exec(self::LINE_TARGET_DDL);
+            }
+            if ($ver < 38) {
+                // 新自の通知に出す患者様（none／karte／surname＝名字＋カルテNo／full）
+                if (self::hasTable($pdo, 'global_setting') && !self::hasColumn($pdo, 'global_setting', 'notifyName')) $pdo->exec("ALTER TABLE `global_setting` ADD COLUMN `notifyName` VARCHAR(10) NOT NULL DEFAULT 'surname'");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
