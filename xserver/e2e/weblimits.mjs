@@ -32,7 +32,7 @@ ok('新規 2 人のとき、再来はあと 1 人取れる', (await st('REVISIT'
 await put([{ time: 540, bed: 3, text: '見本 再三（再）' }, { time: 555, bed: 3, text: '上記再来対応' }]);
 ok('新規 2＋再来 1＝3 で、再来は×（枠はまだ 1 つ空いている）', (await st('REVISIT', 540)) === 'closed');
 ok('通院中はまだ取れる（枠 4 のうち 3）', (await st('RETURN', 540)) !== 'closed');
-ok('同時対応数の欄は店舗設定から無くなった', !(await (await p.goto(`${B}/admin/settings`), p.textContent('main'))).includes('新規の同時対応数'));
+ok('店舗設定に新規・再来の同時対応数の欄がある', await (async () => { await p.goto(`${B}/admin/settings`); await p.waitForTimeout(800); return (await p.getByLabel('新規の同時対応数').count()) === 1 && (await p.getByLabel('再来の同時対応数').count()) === 1; })());
 
 // ---- 2. 新規・再来を止める時間（初診・再来は×、新自・通院中は取れる）
 await p.goto(`${B}/admin/day/${D}`); await p.waitForSelector('#grid');

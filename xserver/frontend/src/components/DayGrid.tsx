@@ -806,11 +806,17 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                 <span className="text-slate-500">（{data.shiftLabels.filter((x) => x.status !== 'WORK').map((x) => `${x.name}:${shiftLabel[x.status] ?? x.status}`).join('、')}）</span>
               )}
               {data.receptionNames.length > 0 && <span className="ml-3">受付：{data.receptionNames.join('・')}</span>}
-              {(cap.firstAm != null || cap.revisitAm != null) && (
-                <span className="ml-3 font-bold text-slate-700" title="スタッフの「初回を担当する」「再来を担当する」にチェックがあり、この日のシフトに入っている人数。WEB で同じ時間に受ける新規・再来はこの人数まで（1 人が 1 人の患者様を受ける）">
-                  WEB の同時上限：{cap.firstAm != null && <>新規 午前{cap.firstAm}・午後{cap.firstPm}</>}{cap.firstAm != null && cap.revisitAm != null && '／'}{cap.revisitAm != null && <>再来 午前{cap.revisitAm}・午後{cap.revisitPm}</>}{cap.eitherAm != null && <>／合わせて 午前{cap.eitherAm}・午後{cap.eitherPm}</>}
-                </span>
-              )}
+              {(() => {
+                // シフトの人数（初回・再来を担当する）と店舗設定の同時対応数の小さいほう
+                const lo = (a?: number | null, b?: number | null) => (a == null ? b ?? null : b == null ? a : Math.min(a, b));
+                const nA = lo(cap.firstAm, cap.limitNew), nP = lo(cap.firstPm, cap.limitNew), rA = lo(cap.revisitAm, cap.limitRevisit), rP = lo(cap.revisitPm, cap.limitRevisit);
+                if (nA == null && rA == null) return null;
+                return (
+                  <span className="ml-3 font-bold text-slate-700" title="WEB で同じ時間に受ける新規・再来の上限。シフトに入っている「初回を担当する」「再来を担当する」人数と、店舗設定の同時対応数の小さいほう。新規と再来を合わせて、初回か再来を担当できる人数まで（1 人が 1 人の患者様を受ける）">
+                    WEB の同時上限：{nA != null && <>新規 午前{nA}・午後{nP}</>}{nA != null && rA != null && '／'}{rA != null && <>再来 午前{rA}・午後{rP}</>}{cap.eitherAm != null && <>／合わせて 午前{cap.eitherAm}・午後{cap.eitherPm}</>}
+                  </span>
+                );
+              })()}
             </>
           ) : (
             <span>施術者が登録されていないため既定値を使っています。店舗設定でスタッフを登録し、シフト表を入力すると自動計算されます。</span>

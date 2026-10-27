@@ -23,11 +23,11 @@ for (let i = 14; i < 60; i++) {
 const slots = async (kind) => Object.fromEntries((await req('GET', `/api/public/S001/slots?date=${date}&kind=${kind}`))[1].slots.map((s) => [s.time, s.status]));
 const st = (await req('GET', '/api/admin/settings'))[1].store;
 
-// 店舗設定の「新規の同時対応数」は使わない（同時上限はシフトのスタッフの「初回を担当する」人数で決める。weblimits.mjs・capkind.mjs）
-ok('同時対応数を保存しても', (await req('PUT', '/api/admin/store', { ...st, maxNewConcurrent: 1, hoursOverride: null }))[0] === 200);
+// 店舗設定の「新規の同時対応数」：その人数に達した時間の新規は×（スタッフのチェックを使っていない店舗でも効く。capkind.mjs）
+ok('同時対応数を保存', (await req('PUT', '/api/admin/store', { ...st, maxNewConcurrent: 1, hoursOverride: null }))[0] === 200);
 ok('新規を 10:00 に予約', (await req('POST', '/api/public/S001/reserve', { kind: 'NEW', date, time: 600, name: '規則 一', phone: '09011112222' }))[0] === 200);
 let n = await slots('NEW'), r = await slots('RETURN');
-ok('店舗設定の同時対応数は使わない（重なる時間の新規も〇）', n[600] === 'open', JSON.stringify([n[585], n[600]]));
+ok('新規の同時対応数 1：重なる時間の新規は×', n[600] === 'closed', JSON.stringify([n[585], n[600]]));
 ok('通院中の方は影響なし', r[600] === 'open');
 await req('PUT', '/api/admin/store', { ...st, maxNewConcurrent: null, hoursOverride: null });
 

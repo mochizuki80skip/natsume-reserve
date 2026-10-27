@@ -141,13 +141,14 @@ final class PublicApi
             'nowMinutes' => self::nowMinutesFor($date, $now['date'], $now['minutes']),
             'webCutoffMinutes' => $setting['webCutoffMinutes'],
             'phoneCutoffMinutes' => $setting['phoneCutoffMinutes'],
-            // 店舗設定の同時対応数は使わない（シフトのスタッフの人数で決める）
-            'newLimit' => null,
+            // 新規の同時対応数（店舗設定。空欄＝制限なし、0＝WEB では受けない）。シフトの「初回を担当する」人数と小さいほうまで
+            'newLimit' => $store['maxNewConcurrent'] ?? null,
             'newCount' => $newCount,
             'countsAsNew' => $kind === 'NEW' || $kind === 'ACCIDENT',
             // シフトの「初回を担当する」「再来を担当する」にチェックのある人数（午前・午後）。null＝上限なし
             'newCap' => ['am' => $capacity['firstAm'] ?? null, 'pm' => $capacity['firstPm'] ?? null],
-            'revisitLimit' => null,
+            // 再来の同時対応数（店舗設定）。シフトの「再来を担当する」人数と小さいほうまで
+            'revisitLimit' => $store['maxRevisitConcurrent'] ?? null,
             'eitherCap' => ['am' => $capacity['eitherAm'] ?? null, 'pm' => $capacity['eitherPm'] ?? null],
             'revisitCap' => ['am' => $capacity['revisitAm'] ?? null, 'pm' => $capacity['revisitPm'] ?? null],
             'revisitCount' => $revisitCount,

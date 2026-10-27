@@ -41,12 +41,22 @@ ok('合計 3 人で、通院中も×', (await st('RETURN', 540)) === 'closed');
 await put([{ time: 630, bed: 1, text: '再来 四（再来）' }, { time: 630, bed: 2, text: '再来 五（再来）' }]);
 ok('再来 2 人なら、再来はまだ取れる', (await st('REVISIT', 630)) !== 'closed');
 ok('再来 2 人なら、新規もまだ取れる', (await st('NEW', 630)) !== 'closed');
-// 店舗設定の「再来の同時対応数」は使わない（シフトのスタッフの人数で決める）
+// 店舗設定の「再来の同時対応数」：シフトの人数（3）より少なくできる
 const s0 = (await api('GET', '/api/admin/settings'))[1].store;
 const sv = await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxRevisitConcurrent: 2 });
 ok('店舗設定を保存できる', sv[0] === 200, JSON.stringify(sv));
-ok('店舗設定の同時対応数は使わない（再来はまだ取れる）', (await st('REVISIT', 630)) !== 'closed');
+ok('再来の同時対応数 2：再来 2 人で再来は×', (await st('REVISIT', 630)) === 'closed');
+ok('再来の同時対応数 2 でも、新規はまだ取れる（合計 2／3）', (await st('NEW', 630)) !== 'closed');
+ok('予約表の WEB の同時上限も 2', (await api('GET', `/api/admin/day?date=${D}`))[1].data.capacity.limitRevisit === 2);
 await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxRevisitConcurrent: null });
+ok('空欄に戻すと、シフトの人数（3）まで', (await st('REVISIT', 630)) !== 'closed');
+// 店舗設定の「新規の同時対応数」1：11:00 に新規 1 人 → 新規は×、再来は取れる
+await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxNewConcurrent: 1 });
+await put([{ time: 660, bed: 1, text: '新規 七（初診）' }, { time: 675, bed: 1, text: '上記初診対応' }]);
+ok('新規の同時対応数 1：新規 1 人で新規は×', (await st('NEW', 660)) === 'closed');
+ok('新規の同時対応数 1 でも、再来は取れる', (await st('REVISIT', 660)) !== 'closed');
+await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxNewConcurrent: null });
+ok('空欄に戻すと、新規は 2 人まで', (await st('NEW', 660)) !== 'closed');
 
 // 午後：室塚が午後休み → 新規は午後 1 人まで（ともふさだけ）
 await api('PUT', '/api/admin/shifts', { staffId: id('室塚'), date: D, status: 'PM_OFF' });
