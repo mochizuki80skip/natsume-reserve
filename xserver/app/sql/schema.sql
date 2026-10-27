@@ -172,6 +172,18 @@ CREATE TABLE IF NOT EXISTS `report_target` (
   CONSTRAINT `fk_report_target_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 新規・再来ブロックの提案（時刻ごと。open＝まだ決めていない／dismissed＝止めない）
+CREATE TABLE IF NOT EXISTS `block_suggest` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `date` CHAR(10) NOT NULL,
+  `kind` CHAR(1) NOT NULL,
+  `time` INT NOT NULL,
+  `status` VARCHAR(10) NOT NULL DEFAULT 'open',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`storeId`, `date`, `kind`, `time`),
+  CONSTRAINT `fk_block_suggest_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 新規・再来だけを止める時間帯（通院中・新自は取れる。WEB だけ）
 CREATE TABLE IF NOT EXISTS `kind_block` (
   `id` VARCHAR(32) NOT NULL,
@@ -180,6 +192,8 @@ CREATE TABLE IF NOT EXISTS `kind_block` (
   `startTime` INT NOT NULL,
   `endTime` INT NOT NULL,
   `label` VARCHAR(30) NOT NULL DEFAULT '',
+  `kinds` VARCHAR(4) NOT NULL DEFAULT 'NR',   -- 止めるもの：N＝新規（初診）／R＝再来／NR＝両方
+  `auto` TINYINT(1) NOT NULL DEFAULT 0,       -- 1＝提案から承認したもの（当てはまらなくなったら自動で外す）
   PRIMARY KEY (`id`),
   KEY `kind_block_store_date` (`storeId`, `date`),
   CONSTRAINT `fk_kind_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE

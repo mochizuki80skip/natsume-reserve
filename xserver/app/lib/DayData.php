@@ -15,7 +15,7 @@ final class DayData
         $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, c.menus, c.staff, c.phone, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo
             FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date = ? AND c.bed > 0', [$sid, $date]);
         $blocks = Db::all('SELECT id, startTime, endTime, beds, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
-        $kindBlocks = Db::all('SELECT id, startTime, endTime, label FROM kind_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
+        $kindBlocks = Db::all('SELECT id, startTime, endTime, label, kinds, auto FROM kind_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? ORDER BY time ASC, createdAt ASC', [$sid, $date]);
 
         $closed = Settings::closedOf($day);
@@ -63,7 +63,7 @@ final class DayData
             // メニューと物販はセルには同じように付く（色・印・人数はまとめて扱う）。予約表の帯では物販を別の段に出す
             'menuOptions' => array_values(array_unique(array_merge(Karte::options()['menu'] ?? [], Karte::options()['goods'] ?? []))),
             'goodsOptions' => Karte::options()['goods'] ?? [],
-            'kindBlocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'label' => $b['label']], $kindBlocks),
+            'kindBlocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'label' => $b['label'], 'kinds' => (string)$b['kinds'], 'auto' => (bool)(int)$b['auto']], $kindBlocks),
             'blocks' => array_map(fn($b) => ['id' => $b['id'], 'start' => (int)$b['startTime'], 'end' => (int)$b['endTime'], 'beds' => PublicApi::blockBeds((string)$b['beds'], Settings::allBeds($store)), 'label' => $b['label']], $blocks),
             'cancels' => array_map(fn($c) => [
                 'id' => $c['id'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'name' => $c['name'], 'contText' => $c['contText'], 'kind' => $c['kind'],

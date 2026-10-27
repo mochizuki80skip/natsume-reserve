@@ -122,6 +122,8 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/overview$#', 'hq_overview'],
         // 臨時休業をまとめて入れる（本部・管轄MG）と、店舗への通知
         ['POST', '#^/api/admin/kind-blocks$#', 'adm_kind_block_post'],
+        ['GET', '#^/api/admin/block-suggestions$#', 'adm_block_suggest_get'],
+        ['POST', '#^/api/admin/block-suggestions$#', 'adm_block_suggest_post'],
         ['DELETE', '#^/api/admin/kind-blocks$#', 'adm_kind_block_delete'],
         // 日報
         ['GET', '#^/api/admin/report$#', 'report_get'],

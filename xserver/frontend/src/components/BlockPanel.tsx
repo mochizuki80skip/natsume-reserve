@@ -73,7 +73,7 @@ export default function BlockPanel({ date, times, slotMinutes, beds, blocks, kin
 /** 新規・再来を止める時間帯（院長不在など）。WEB の初診・再来だけ × にして、通院中・新自は今までどおり取れる */
 function KindStop({ date, times, slotMinutes, kindBlocks, onRefresh }: { date: string; times: number[]; slotMinutes: number; kindBlocks: KindBlock[]; onRefresh: () => void }) {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ start: times[0] ?? 540, end: (times[0] ?? 540) + slotMinutes * 8, label: '' });
+  const [f, setF] = useState({ start: times[0] ?? 540, end: (times[0] ?? 540) + slotMinutes * 8, label: '', kinds: 'NR' as 'NR' | 'N' | 'R' });
   const [err, setErr] = useState('');
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -93,7 +93,7 @@ function KindStop({ date, times, slotMinutes, kindBlocks, onRefresh }: { date: s
       <span className="text-slate-500">（WEB の初診・再来だけ取れなくする時間。通院中・新自は取れます）</span>
       {kindBlocks.map((b) => (
         <span key={b.id} className="inline-flex items-center gap-1 rounded border border-amber-400 bg-amber-100 px-2 py-0.5 text-amber-900">
-          新再✕ {minToHm(b.start)}〜{minToHm(b.end)} {b.label && <b>{b.label}</b>}
+          {b.kinds === 'N' ? '新規✕' : b.kinds === 'R' ? '再来✕' : '新再✕'} {minToHm(b.start)}〜{minToHm(b.end)} {b.label && <b>{b.label}</b>}{b.auto && <span className="text-[10px]">（自動で外れます）</span>}
           <button type="button" onClick={() => remove(b.id)} className="ml-1 text-amber-700 hover:text-red-700" aria-label="新規・再来を止めるのをやめる">✕</button>
         </span>
       ))}
@@ -105,6 +105,9 @@ function KindStop({ date, times, slotMinutes, kindBlocks, onRefresh }: { date: s
           </select>〜
           <select value={f.end} onChange={(e) => setF({ ...f, end: Number(e.target.value) })} className="rounded border px-1 py-0.5" aria-label="止める終了">
             {times.map((t) => t + slotMinutes).map((t) => <option key={t} value={t}>{minToHm(t)}</option>)}
+          </select>
+          <select value={f.kinds} onChange={(e) => setF({ ...f, kinds: e.target.value as 'NR' | 'N' | 'R' })} className="rounded border px-1 py-0.5" aria-label="止めるもの">
+            <option value="NR">新規・再来</option><option value="N">新規だけ</option><option value="R">再来だけ</option>
           </select>
           <input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} maxLength={30} placeholder="理由（例：院長不在）" className="w-32 rounded border px-1 py-0.5" />
           <button type="submit" className="rounded bg-brand px-2 py-0.5 font-bold text-white">追加</button>

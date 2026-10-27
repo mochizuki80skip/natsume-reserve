@@ -120,7 +120,8 @@ final class PublicApi
         // 新規・再来を止める時間帯（初診・再来の予約だけ。新自・通院中は取れる）
         $kindStop = [];
         if ($kind === 'NEW' || $kind === 'REVISIT') {
-            foreach (Db::all('SELECT startTime, endTime FROM kind_block WHERE storeId = ? AND date = ?', [$store['id'], $date]) as $kb) {
+            foreach (Db::all('SELECT startTime, endTime, kinds FROM kind_block WHERE storeId = ? AND date = ?', [$store['id'], $date]) as $kb) {
+                if (!str_contains((string)$kb['kinds'], $kind === 'NEW' ? 'N' : 'R')) continue; // 新規だけ・再来だけのブロック
                 for ($t = (int)$kb['startTime']; $t < (int)$kb['endTime']; $t += $setting['slotMinutes']) $kindStop[$t] = true;
             }
         }

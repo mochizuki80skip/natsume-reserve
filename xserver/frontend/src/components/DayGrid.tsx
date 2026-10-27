@@ -18,6 +18,8 @@ import { menuColor, menuShort, toggleMenu } from '@/lib/menus';
 import { dropHonorific } from '@/lib/nameText';
 import PhoneBookingDialog, { type PhoneKind } from './PhoneBookingDialog';
 import FindDialog from './FindDialog';
+import BlockSuggestions from './BlockSuggestions';
+import { useAdmin } from '@/pages/admin/Layout';
 import { cellColor, KIND_COLORS, KIND_COLOR_NAMES, MENU_CELL_COLORS, staffColorMap } from '@/lib/cellColor';
 
 interface Props { data: DayData; storeName: string; published: boolean; today: string; onRefresh: () => void }
@@ -658,6 +660,11 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
   // 予約表の上は最小限に：メニュー別の人数・枠数とブロックは、ボタンで開いたときだけ出す（開いた状態はこのパソコンに覚える）。色の見かたはいつも出す
   // スマホ：公開・臨時休業・枠数・凡例などは「その日の設定」に畳む
   const [mobSet, setMobSet] = useState(false);
+  // 新規・再来ブロックの提案：予約・担当・メニューが変わるたびに数を増やして、提案を確かめる
+  const { me } = useAdmin();
+  const [suggestVer, setSuggestVer] = useState(0);
+  const firstRender = useRef(true);
+  useEffect(() => { if (firstRender.current) { firstRender.current = false; return; } setSuggestVer((v) => v + 1); }, [cells, staffMap, menus]);
   const [panels, setPanels] = useState<{ menu: boolean; cap: boolean }>(() => {
     try { const j = JSON.parse(localStorage.getItem('natsume.dayPanels') ?? '{}'); return { menu: !!j.menu, cap: !!j.cap }; } catch { return { menu: false, cap: false }; }
   });
@@ -690,6 +697,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white max-sm:hidden">印刷／PDF</a>
       </div>
 
+      <BlockSuggestions store={me.store?.code ?? ''} date={data.date} version={suggestVer} canEdit={!me.store?.readOnly && me.session.role !== 'acct'} onChanged={onRefresh} />
       {/* スマホ：人数は 1 行にまとめ、そのほかは「その日の設定」に畳む */}
       <div className="no-print mb-1 flex flex-wrap gap-x-2.5 gap-y-0.5 px-0.5 text-[11px] sm:hidden" aria-label="この日の人数">
         <span>予約 <b className="text-[13px]">{counts.rAm + counts.rPm}</b>（午前{counts.rAm}・午後{counts.rPm}）</span>
@@ -948,7 +956,7 @@ export default function DayGrid({ data, published, today, onRefresh }: Props) {
                     <td className={`whitespace-nowrap border px-1 text-center font-mono max-sm:px-0 max-sm:text-[9px] ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
                       title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockBedsText(b.beds, cols)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
                       {blk.length > 0 && <span className="no-print mr-0.5 text-[10px]">🔒</span>}{minToHm(t)}
-                      {kblk && <span className="no-print ml-0.5 rounded bg-amber-400 px-0.5 font-sans text-[9px] font-bold text-white max-sm:hidden" title={`新規・再来を止めています${kblk.label ? `（${kblk.label}）` : ''}`}>新再✕</span>}
+                      {kblk && <span className="no-print ml-0.5 rounded bg-amber-400 px-0.5 font-sans text-[9px] font-bold text-white max-sm:hidden" title={`WEB の${kblk.kinds === 'N' ? '新規' : kblk.kinds === 'R' ? '再来' : '新規・再来'}を止めています${kblk.label ? `（${kblk.label}）` : ''}`}>{kblk.kinds === 'N' ? '新✕' : kblk.kinds === 'R' ? '再✕' : '新再✕'}</span>}
                     </td>
                     {cols.map((b, c) => {
                       const k = key(t, b);

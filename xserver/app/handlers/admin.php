@@ -721,6 +721,46 @@ function adm_block_post(): never
     Http::json(['ok' => true]);
 }
 
+/** ブロックの提案（今日から 14 日先まで。?date= ならその日だけ）。予約表が変わるたびに画面が呼び、新しい提案はお知らせする */
+function adm_block_suggest_get(): never
+{
+    $ctx = Auth::context();
+    $date = Http::query('date');
+    $setting = Settings::global();
+    // 今日の営業時間（閉院後に一覧を出すため）
+    $today = Time::nowJst();
+    $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$ctx['store']['id'], $today['date']]));
+    $sessions = Settings::storeSessions($ctx['store'], $setting, $today['date'], Settings::closedOf($day));
+    Http::json([
+        'suggestions' => BlockSuggest::open($ctx['store'], $setting, $date && Time::isValidDate($date) ? $date : null),
+        'today' => $today['date'], 'now' => $today['minutes'],
+        'closeAt' => $sessions ? max(array_map(fn($s) => (int)$s['lastAdmin'], $sessions)) + (int)$setting['slotMinutes'] : null,
+        'openAt' => $sessions ? min(array_map(fn($s) => (int)$s['start'], $sessions)) : null,
+    ]);
+}
+
+/** 提案を承認（ブロックにする）・止めない（{ date, kind: N|R, start, end, action: approve|dismiss }） */
+function adm_block_suggest_post(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    $kind = (string)($b['kind'] ?? '');
+    $start = Http::int($b, 'start', 0, 1440);
+    $end = Http::int($b, 'end', 0, 1440);
+    $action = (string)($b['action'] ?? '');
+    if (!in_array($kind, ['N', 'R'], true) || $end <= $start || !in_array($action, ['approve', 'dismiss'], true)) Http::error('bad request', 400);
+    $sid = $ctx['store']['id'];
+    if ($action === 'approve') {
+        Db::exec('INSERT INTO kind_block (id, storeId, date, startTime, endTime, label, kinds, auto) VALUES (?, ?, ?, ?, ?, ?, ?, 1)', [Db::newId(), $sid, $date, $start, $end, '提案から', $kind]);
+        Db::exec('DELETE FROM block_suggest WHERE storeId = ? AND date = ? AND kind = ? AND time >= ? AND time < ?', [$sid, $date, $kind, $start, $end]);
+    } else {
+        Db::exec("UPDATE block_suggest SET status = 'dismissed' WHERE storeId = ? AND date = ? AND kind = ? AND time >= ? AND time < ?", [$sid, $date, $kind, $start, $end]);
+    }
+    Http::json(['ok' => true]);
+}
+
 /** 新規・再来を止める時間帯（start〜end。end は含まない）。WEB の初診・再来だけ止め、新自・通院中は取れる */
 function adm_kind_block_post(): never
 {
@@ -735,7 +775,9 @@ function adm_kind_block_post(): never
         Http::error('入力内容を確認してください', 400);
     }
     if ($end <= $start) Http::error('終了時刻は開始時刻より後にしてください', 400);
-    Db::exec('INSERT INTO kind_block (id, storeId, date, startTime, endTime, label) VALUES (?, ?, ?, ?, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, mb_substr(trim((string)($b['label'] ?? '')), 0, 30)]);
+    $kinds = in_array($b['kinds'] ?? 'NR', ['NR', 'N', 'R'], true) ? ($b['kinds'] ?? 'NR') : 'NR';
+    Db::exec('INSERT INTO kind_block (id, storeId, date, startTime, endTime, label, kinds) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, mb_substr(trim((string)($b['label'] ?? '')), 0, 30), $kinds]);
+    BlockSuggest::sync($ctx['store'], Settings::global(), $date);
     Http::json(['ok' => true]);
 }
 
@@ -743,8 +785,10 @@ function adm_kind_block_delete(): never
 {
     $ctx = Auth::context();
     Http::requireJson();
-    $n = Db::exec('DELETE FROM kind_block WHERE id = ? AND storeId = ?', [(string)(Http::body()['id'] ?? ''), $ctx['store']['id']]);
-    if ($n === 0) Http::error('not found', 404);
+    $kb = Db::one('SELECT date FROM kind_block WHERE id = ? AND storeId = ?', [(string)(Http::body()['id'] ?? ''), $ctx['store']['id']]);
+    if (!$kb) Http::error('not found', 404);
+    Db::exec('DELETE FROM kind_block WHERE id = ? AND storeId = ?', [(string)(Http::body()['id'] ?? ''), $ctx['store']['id']]);
+    // 外したブロックが提案の条件に当てはまっていれば、もう一度提案にする（止めないを押したことにはしない）
     Http::json(['ok' => true]);
 }
 
