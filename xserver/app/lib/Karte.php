@@ -22,7 +22,7 @@ final class Karte
     /** 内訳が必要なきっかけ（値＝内訳の選択肢の種類。null は記入のみ） */
     public const DETAIL_FOR = ['紹介他事業' => 'otherBiz', 'キャンペーン' => 'campaign', 'イベント' => null, '業者紹介' => 'partner'];
 
-    public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'nameOk', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits', 'stopped', 'transferred', 'survey'];
+    public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'nameOk', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits', 'stopped', 'transferred', 'survey', 'accidentDate', 'accidentNote'];
 
     /** @return array<string, string[]> */
     public static function options(): array
@@ -96,13 +96,63 @@ final class Karte
             // 元のセルが無い（保持期間を過ぎて自動削除された等）ときは残す
             if (!isset($want[$k]) && isset($exists[$k]) && !(int)$r['edited']) Db::exec('DELETE FROM karte WHERE id = ?', [$r['id']]);
         }
+        $today = Time::nowJst()['date'];
         foreach ($want as $k => $w) {
             if (isset($have[$k])) continue;
+            $newId = Db::newId();
             // きっかけ：紹介元（業者）の QR から → 業者紹介（内訳＝業者名）、媒体の URL から → 媒体に決めたきっかけ（内訳＝媒体名）、紹介カードの QR から → ギフトカード
-            Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)', [
-                Db::newId(), $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr($w['name'], 0, 40),
+            $added = Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)', [
+                $newId, $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr($w['name'], 0, 40),
                 $w['ref'] !== '' && $w['refTrig'] !== '' ? $w['refTrig'] : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' && $w['refTrig'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
+            // 新自が来院（来院チェック）したら、エリアMG・本部が決めた人へメールで知らせる。昔の日のチェックでは送らない
+            if ($added > 0 && $w['kind'] === 'ACCIDENT' && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId);
+        }
+    }
+
+    /** 新自（交通事故）の行で、事故日・事故内容のどちらかが空の数（前の月も含めてすべて） */
+    public static function accidentMissing(string $storeId): int
+    {
+        return (int)(Db::one("SELECT COUNT(*) AS n FROM karte WHERE storeId = ? AND kind = 'ACCIDENT' AND (accidentDate IS NULL OR accidentNote = '')", [$storeId])['n'] ?? 0);
+    }
+
+    /** 新自の通知の送り先：全店の分（エリア空）と、その店舗のエリアの分 */
+    public static function notifyRecipients(array $store): array
+    {
+        $areas = [];
+        foreach (Db::all('SELECT name, storeCodes FROM area') as $a) if (in_array($store['code'], explode(',', (string)$a['storeCodes']), true)) $areas[] = $a['name'];
+        $out = [];
+        foreach (Db::all('SELECT area, email FROM jibai_notify ORDER BY sortOrder ASC') as $r) if ($r['area'] === '' || in_array($r['area'], $areas, true)) $out[] = $r['email'];
+        return $out;
+    }
+
+    /** 新自が来院したことをメールで知らせる（患者様の氏名は書かない）。一度送った行は送らない */
+    public static function notifyAccident(array $store, string $karteId): void
+    {
+        try {
+            $r = Db::one('SELECT date, srcTime, staff, trig, notifiedAt FROM karte WHERE id = ?', [$karteId]);
+            if (!$r || $r['notifiedAt'] !== null) return;
+            $to = self::notifyRecipients($store);
+            Db::exec('UPDATE karte SET notifiedAt = NOW() WHERE id = ?', [$karteId]);
+            if (!$to) return;
+            // 来院チェックを外して付け直すと行が作り直されるので、同じ予約（日・時刻・ベッド）は 3 日のあいだ 1 回だけ送る
+            $src = Db::one('SELECT srcTime, srcBed FROM karte WHERE id = ?', [$karteId]);
+            if (!RateLimit::allow('accnotify:' . $store['id'] . ':' . $r['date'] . ':' . ($src['srcTime'] ?? '') . ':' . ($src['srcBed'] ?? ''), 1, 3 * 86400)) return;
+            $wd = ['日', '月', '火', '水', '木', '金', '土'][(int)date('w', strtotime($r['date'] . ' 12:00:00'))];
+            $md = (int)substr($r['date'], 5, 2) . '/' . (int)substr($r['date'], 8, 2);
+            $time = $r['srcTime'] !== null ? ' ' . Time::minToHm((int)$r['srcTime']) : '';
+            $url = rtrim(Config::str('APP_URL'), '/');
+            $body = "交通事故（新自）の患者様が来院しました。\n\n"
+                . "店舗：{$store['name']}\n"
+                . "初診日：{$md}（{$wd}）{$time}\n"
+                . ($r['staff'] !== '' ? "担当：{$r['staff']}\n" : '')
+                . ($r['trig'] !== '' ? "きっかけ：{$r['trig']}\n" : '')
+                . "\n事故日・事故内容は、店舗の「新患継続率」の下の「新自（交通事故）」で入れてください。\n"
+                . ($url !== '' ? "{$url}/admin/karte\n" : '')
+                . "\n※このメールは送信専用です。";
+            Mail::send($to, "【新自】{$store['name']} {$md} 交通事故の初診がありました", $body);
+        } catch (Throwable $e) {
+            error_log('[notifyAccident] ' . $e->getMessage());
         }
     }
 
@@ -193,6 +243,7 @@ final class Karte
             'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'name' => $r['name'], 'nameOk' => (bool)($r['nameOk'] ?? 0), 'age' => $r['age'] === null ? null : (int)$r['age'], 'sex' => $r['sex'],
             'symptomCat' => $r['symptomCat'], 'symptom' => $r['symptom'], 'staff' => $r['staff'], 'treatment' => $r['treatment'], 'visits' => $visits,
             'stopped' => (bool)($r['stopped'] ?? 0), 'transferred' => (bool)($r['transferred'] ?? 0), 'survey' => (bool)($r['survey'] ?? 0),
+            'accidentDate' => $r['accidentDate'] ?? null, 'accidentNote' => (string)($r['accidentNote'] ?? ''),
         ];
     }
 
@@ -209,6 +260,10 @@ final class Karte
                 case 'kind':
                     if (!in_array($v, self::KINDS, true)) throw new HttpError(400, 'bad request');
                     $set[$k] = $v; break;
+                case 'accidentDate':
+                    if ($v === null || $v === '') { $set[$k] = null; break; }
+                    if (!Time::isValidDate((string)$v)) throw new HttpError(400, '日付が正しくありません');
+                    $set[$k] = (string)$v; break;
                 case 'nameOk':
                 case 'stopped':
                 case 'transferred':
@@ -236,7 +291,7 @@ final class Karte
                     }
                     $set[$k] = json_encode($out, JSON_UNESCAPED_UNICODE); break;
                 default:
-                    $max = ['karteNo' => 20, 'trig' => 30, 'trigDetail' => 60, 'name' => 40, 'symptomCat' => 20, 'symptom' => 100, 'staff' => 30][$k];
+                    $max = ['accidentNote' => 200, 'karteNo' => 20, 'trig' => 30, 'trigDetail' => 60, 'name' => 40, 'symptomCat' => 20, 'symptom' => 100, 'staff' => 30][$k];
                     $set[$k] = mb_substr(trim((string)$v), 0, $max);
             }
         }

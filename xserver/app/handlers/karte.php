@@ -16,6 +16,8 @@ function karte_get(): never
     Http::json([
         'month' => $ym, 'today' => $today, 'storeName' => $store['name'],
         'rows' => array_map([Karte::class, 'rowOut'], $rows),
+        // 新自（交通事故）で事故日・事故内容が空の、ほかの月の行（この月の分は rows にある）
+        'accidentPending' => array_map([Karte::class, 'rowOut'], Db::all("SELECT * FROM karte WHERE storeId = ? AND kind = 'ACCIDENT' AND (accidentDate IS NULL OR accidentNote = '') AND (date < ? OR date > ?) ORDER BY date DESC LIMIT 200", [$store['id'], $dates[0], $dates[count($dates) - 1]])),
         'options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'staff' => $staff,
     ]);
 }

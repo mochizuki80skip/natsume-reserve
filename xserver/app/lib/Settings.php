@@ -23,6 +23,7 @@ final class Settings
         foreach (['slotMinutes', 'newVisitSlots', 'returnVisitSlots', 'webCutoffMinutes', 'phoneCutoffMinutes', 'phoneMarkRemaining', 'adminExtraSlots', 'retentionDays'] as $k) $r[$k] = (int)$r[$k];
         $r['closeOnHolidays'] = (bool)$r['closeOnHolidays'];
         $r['storesPageOpen'] = (bool)($r['storesPageOpen'] ?? false);
+        $r['consultLineUrl'] = (string)($r['consultLineUrl'] ?? '');
         $r['hours'] = is_string($r['hours']) ? json_decode($r['hours'], true) : $r['hours'];
         return $r;
     }

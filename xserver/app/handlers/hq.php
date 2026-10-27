@@ -289,3 +289,62 @@ function hq_privacy_put(): never
         ['privacy', $body, $published ? 1 : 0, Time::nowJstDateTime(), mb_substr($by, 0, 60)]);
     Http::json(['ok' => true]);
 }
+
+/** 新自の通知（メール）の送り先と、交通事故の相談 LINE の URL */
+function hq_jibai_notify_get(): never
+{
+    Auth::requireHq();
+    Http::json([
+        'rows' => array_map(fn($r) => ['id' => $r['id'], 'area' => $r['area'], 'email' => $r['email'], 'label' => $r['label']], Db::all('SELECT * FROM jibai_notify ORDER BY sortOrder ASC')),
+        'areas' => array_column(Db::all('SELECT name FROM area ORDER BY sortOrder ASC, name ASC'), 'name'),
+        'consultLineUrl' => Settings::global()['consultLineUrl'],
+        'mailFrom' => Mail::from(),
+    ]);
+}
+
+/** 送り先をまとめて保存（{ rows: [{ area, email, label }] }） */
+function hq_jibai_notify_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $rows = Http::body()['rows'] ?? null;
+    if (!is_array($rows) || count($rows) > 50) Http::error('bad request', 400);
+    $areas = array_column(Db::all('SELECT name FROM area'), 'name');
+    $clean = [];
+    foreach ($rows as $r) {
+        $email = trim((string)($r['email'] ?? ''));
+        if ($email === '') continue;
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($email) > 200) Http::error("メールアドレスが正しくありません：{$email}", 400);
+        $area = (string)($r['area'] ?? '');
+        if ($area !== '' && !in_array($area, $areas, true)) Http::error('エリアを選び直してください', 400);
+        $clean[] = [$area, $email, mb_substr(trim((string)($r['label'] ?? '')), 0, 30)];
+    }
+    Db::transaction(function () use ($clean) {
+        Db::exec('DELETE FROM jibai_notify');
+        foreach ($clean as $i => [$area, $email, $label]) Db::exec('INSERT INTO jibai_notify (id, area, email, label, sortOrder) VALUES (?, ?, ?, ?, ?)', [Db::newId(), $area, $email, $label, $i]);
+    });
+    Http::json(['ok' => true]);
+}
+
+/** 送り先全員に試しのメールを送る */
+function hq_jibai_notify_test(): never
+{
+    Auth::requireHq();
+    Http::requireSameOrigin();
+    $to = array_column(Db::all('SELECT email FROM jibai_notify'), 'email');
+    if (!$to) Http::error('送り先がありません', 400);
+    $n = Mail::send($to, '【試し】新自の通知メール', "新自（交通事故）の通知メールの試しです。\nこのメールが届いていれば、新自が来院したときにお知らせが届きます。\n\n※このメールは送信専用です。");
+    Http::json(['ok' => true, 'sent' => $n, 'total' => count(array_unique($to))]);
+}
+
+/** 交通事故の相談 LINE の URL（{ url }。空＝バナーを出さない） */
+function hq_consult_line_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $url = trim((string)(Http::body()['url'] ?? ''));
+    if ($url !== '' && (!preg_match('#^https://[^\s<>"]+$#', $url) || strlen($url) > 300)) Http::error('URL は https:// から始まる形で入れてください', 400);
+    Settings::global();
+    Db::exec('UPDATE global_setting SET consultLineUrl = ? WHERE id = 1', [$url]);
+    Http::json(['ok' => true]);
+}

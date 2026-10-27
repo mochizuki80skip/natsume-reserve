@@ -7,6 +7,7 @@ import PrivacyEditor from '@/components/PrivacyEditor';
 import GoodsEditor from '@/components/GoodsEditor';
 import ReportItemsEditor from '@/components/ReportItemsEditor';
 import ClosureBulkEditor from '@/components/ClosureBulkEditor';
+import JibaiNotifyEditor from '@/components/JibaiNotifyEditor';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -29,6 +30,7 @@ export default function HqPage() {
       <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} kind="media" />
+      <JibaiNotifyEditor />
       <GoodsEditor />
       <ReportItemsEditor />
       <PrivacyEditor />

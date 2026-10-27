@@ -66,6 +66,8 @@ function adm_me(): never
         'stores' => $stores,
         'today' => Time::nowJst()['date'],
         'smsEnabled' => Sms::enabled(),
+        // 新自（交通事故）の事故日・事故内容の未入力（メニューの「新患継続率」に赤い数字で出す）
+        'accidentMissing' => $store && !(int)($store['jibaiOnly'] ?? 0) ? Karte::accidentMissing($store['id']) : 0,
     ]);
 }
 

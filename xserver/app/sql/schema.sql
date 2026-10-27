@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS `global_setting` (
   `retentionDays` INT NOT NULL DEFAULT 60,
   `hours` LONGTEXT NOT NULL,
   `storesPageOpen` TINYINT(1) NOT NULL DEFAULT 0, -- 店舗えらびページを公開する（それまでは「準備中」）
+  `consultLineUrl` VARCHAR(300) NOT NULL DEFAULT '', -- 交通事故の相談 LINE の URL（店舗えらび・予約ページのバナー。空＝出さない）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -365,6 +366,9 @@ CREATE TABLE IF NOT EXISTS `karte` (
   `stopped` TINYINT(1) NOT NULL DEFAULT 0,
   `transferred` TINYINT(1) NOT NULL DEFAULT 0,
   `survey` TINYINT(1) NOT NULL DEFAULT 0,
+  `accidentDate` CHAR(10) NULL,                    -- 新自：事故日
+  `accidentNote` VARCHAR(200) NOT NULL DEFAULT '', -- 新自：事故内容
+  `notifiedAt` DATETIME NULL,                      -- 新自の通知（メール）を送った日時
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -381,6 +385,16 @@ CREATE TABLE IF NOT EXISTS `karte_option` (
   `sortOrder` INT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `karte_option_cat` (`category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 新自（交通事故）が来院したときのメールの送り先（area が空＝全店、エリア名＝そのエリアの店舗だけ）
+CREATE TABLE IF NOT EXISTS `jibai_notify` (
+  `id` VARCHAR(32) NOT NULL,
+  `area` VARCHAR(30) NOT NULL DEFAULT '',
+  `email` VARCHAR(200) NOT NULL,
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 本部の集計のエリア（storeCodes は店舗コードをカンマ区切り）

@@ -3,8 +3,9 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import type { Closure } from '@/lib/closure';
 import { useFetch } from '@/lib/api';
 import BookingApp from '@/components/BookingApp';
+import ConsultLineBanner from '@/components/ConsultLineBanner';
 
-interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean; closures?: Closure[] }
+interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean; closures?: Closure[]; consultLineUrl?: string }
 
 export default function Booking() {
   const { code = '' } = useParams();
@@ -19,5 +20,19 @@ export default function Booking() {
       </main>
     );
   }
-  return <BookingApp store={{ code: data.code, name: data.name, phone: data.phone }} smsEnabled={data.smsEnabled} via={params.get('from') === 'card' ? 'card' : undefined} closures={data.closures ?? []} refCode={/^[a-z0-9]{4,16}$/.test(params.get('ref') ?? '') ? params.get('ref')! : undefined} />;
+  const consult = data.consultLineUrl ?? '';
+  return (
+    <>
+      <BookingApp store={{ code: data.code, name: data.name, phone: data.phone }} smsEnabled={data.smsEnabled} via={params.get('from') === 'card' ? 'card' : undefined} closures={data.closures ?? []} refCode={/^[a-z0-9]{4,16}$/.test(params.get('ref') ?? '') ? params.get('ref')! : undefined} />
+      {/* 交通事故の相談 LINE：どの段階（日時・入力・確認・完了）でも画面のいちばん下に出し続ける */}
+      {/^https:\/\//.test(consult) && (
+        <>
+          <div className="h-20" aria-hidden />
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-white/95 px-3 pt-2 backdrop-blur" style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
+            <ConsultLineBanner url={consult} className="mx-auto max-w-lg" />
+          </div>
+        </>
+      )}
+    </>
+  );
 }

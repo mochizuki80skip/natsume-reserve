@@ -6,11 +6,12 @@ import { useFetch } from '@/lib/api';
 import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, parseMd, type DetailFor, type KarteKind, type KarteOptions, type KarteRow, type KarteVisit } from '@/lib/karte';
 import KarteRetention, { type RetRow } from '@/components/KarteRetention';
 import KarteImportDialog from '@/components/KarteImportDialog';
+import AccidentList from '@/components/AccidentList';
 import { nameCheck } from '@/lib/nameText';
 import { halfNum, halfNumInput } from '@/lib/format';
 import { useAdmin } from './Layout';
 
-interface Resp { month: string; today: string; storeName: string; rows: KarteRow[]; options: KarteOptions; detailFor: DetailFor; staff: string[] }
+interface Resp { month: string; today: string; storeName: string; rows: KarteRow[]; accidentPending?: KarteRow[]; options: KarteOptions; detailFor: DetailFor; staff: string[] }
 
 const shiftMonth = (ym: string, n: number) => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7); };
 const KIND_CLASS: Record<KarteKind, string> = { NEW: 'bg-[#e34948] text-white', ACCIDENT: 'bg-[#eda100] text-slate-900', REVISIT: 'bg-[#2a78d6] text-white' };
@@ -164,11 +165,13 @@ function VisitCells({ n, v, base, staff, onChange }: { n: number; v: KarteVisit;
 }
 
 export default function KartePage() {
-  const { me } = useAdmin();
+  const { me, refreshMe } = useAdmin();
   const [sp, setSp] = useSearchParams();
   const month = sp.get('month') ?? '';
   const { data, error, reload } = useFetch<Resp>(`/api/admin/karte?month=${encodeURIComponent(month)}`);
   const [rows, setRows] = useState<KarteRow[]>([]);
+  // 新自で事故日・事故内容が空の、ほかの月の行
+  const [pending, setPending] = useState<KarteRow[]>([]);
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [importOpen, setImportOpen] = useState<false | { text: string }>(false);
   // 画面のどこで Ctrl+V しても、スプレッドシートの行（タブ区切り・複数行）なら取り込みの確認を開く
@@ -188,7 +191,7 @@ export default function KartePage() {
   const vm = data?.month ?? '';
   const fy = vm ? (Number(vm.slice(5, 7)) >= 4 ? Number(vm.slice(0, 4)) : Number(vm.slice(0, 4)) - 1) : 0;
   const fyData = useFetch<{ rows: (RetRow & { store: string })[] }>(period === 'fy' && fy ? `/api/admin/hq/karte?from=${fy}-04-01&to=${fy + 1}-03-31` : null);
-  useEffect(() => { if (data) setRows(data.rows); }, [data]);
+  useEffect(() => { if (data) { setRows(data.rows); setPending(data.accidentPending ?? []); } }, [data]);
   if (!me.store) return <p>店舗が登録されていません。</p>;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
@@ -197,12 +200,16 @@ export default function KartePage() {
   const monthLabel = `${Number(ym.slice(0, 4))}年${Number(ym.slice(5))}月`;
   async function patch(id: string, p: Partial<KarteRow>) {
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)));
+    setPending((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)));
     setState('saving');
     const r = await fetch('/api/admin/karte', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, patch: p }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { setState('error'); alert(j.error ?? '保存できませんでした'); reload(); return; }
     setState('saved');
     setRows((rs) => rs.map((x) => (x.id === id ? j.row : x)));
+    setPending((rs) => rs.map((x) => (x.id === id ? j.row : x)));
+    // 新自の未入力の数（メニューの赤い数字）を新しくする
+    if ('accidentDate' in p || 'accidentNote' in p || 'kind' in p) refreshMe();
   }
   async function addRow() {
     const date = data!.today.startsWith(ym) ? data!.today : `${ym}-01`;
@@ -284,6 +291,7 @@ export default function KartePage() {
           </span>
         )}
       />
+      <AccidentList rows={rows} pending={pending} monthLabel={monthLabel} onPatch={patch} />
     </div>
   );
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 35;
+    private const VERSION = 36;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -252,12 +252,27 @@ final class Migrate
                 if (self::hasTable($pdo, 'kind_block') && !self::hasColumn($pdo, 'kind_block', 'kinds')) $pdo->exec("ALTER TABLE `kind_block` ADD COLUMN `kinds` VARCHAR(4) NOT NULL DEFAULT 'NR', ADD COLUMN `auto` TINYINT(1) NOT NULL DEFAULT 0");
                 $pdo->exec(self::BLOCK_SUGGEST_DDL);
             }
+            if ($ver < 36) {
+                // 新自（交通事故）の事故日・事故内容と通知の済み、相談 LINE の URL（全店共通）、新自の通知の送り先
+                if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'accidentDate')) $pdo->exec("ALTER TABLE `karte` ADD COLUMN `accidentDate` CHAR(10) NULL, ADD COLUMN `accidentNote` VARCHAR(200) NOT NULL DEFAULT '', ADD COLUMN `notifiedAt` DATETIME NULL");
+                if (self::hasTable($pdo, 'global_setting') && !self::hasColumn($pdo, 'global_setting', 'consultLineUrl')) $pdo->exec("ALTER TABLE `global_setting` ADD COLUMN `consultLineUrl` VARCHAR(300) NOT NULL DEFAULT ''");
+                $pdo->exec(self::JIBAI_NOTIFY_DDL);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const JIBAI_NOTIFY_DDL = "CREATE TABLE IF NOT EXISTS `jibai_notify` (
+  `id` VARCHAR(32) NOT NULL,
+  `area` VARCHAR(30) NOT NULL DEFAULT '',
+  `email` VARCHAR(200) NOT NULL,
+  `label` VARCHAR(30) NOT NULL DEFAULT '',
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     public const REPORT_ITEM_DDL = "CREATE TABLE IF NOT EXISTS `report_item` (
   `id` VARCHAR(40) NOT NULL,

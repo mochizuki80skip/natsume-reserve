@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { missingFields, parseMd, retentionOf, type KarteRow } from './karte';
+import { missingFields, parseAccidentDate, parseMd, retentionOf, type KarteRow } from './karte';
 
 const base: KarteRow = { id: 'x', date: '2026-09-28', auto: true, karteNo: '1', kind: 'NEW', trig: 'Google', trigDetail: '', name: '山田', age: 30, sex: '♂', symptomCat: '腰', symptom: '腰部捻挫', staff: '佐藤', treatment: '矯正', visits: [] };
 const det = { 紹介他事業: 'otherBiz', キャンペーン: 'campaign', イベント: null } as const;
@@ -22,5 +22,22 @@ describe('継続', () => {
   it('回ごとの人数', () => {
     const r = retentionOf([{ visits: [{ d: '2026-10-01', s: '', t: '' }, { d: '', s: '', t: '' }] }, { reached: [true, true, false, false, false] }]);
     expect(r).toEqual({ first: 2, reached: [2, 1, 0, 0, 0] });
+  });
+});
+
+describe('parseAccidentDate（事故日）', () => {
+  it('月/日は初診日より前の日になる', () => {
+    expect(parseAccidentDate('9/18', '2026-10-27')).toBe('2026-09-18');
+    expect(parseAccidentDate('0918', '2026-10-27')).toBe('2026-09-18');
+    expect(parseAccidentDate('12/20', '2027-01-05')).toBe('2026-12-20');
+    expect(parseAccidentDate('10/27', '2026-10-27')).toBe('2026-10-27');
+    expect(parseAccidentDate('11/1', '2026-10-27')).toBe('2025-11-01');
+  });
+  it('年つき・全角・空・読めない', () => {
+    expect(parseAccidentDate('2026/7/26', '2026-10-05')).toBe('2026-07-26');
+    expect(parseAccidentDate('２０２６年７月２６日', '2026-10-05')).toBe('2026-07-26');
+    expect(parseAccidentDate('', '2026-10-05')).toBe('');
+    expect(parseAccidentDate('2026/2/30', '2026-10-05')).toBeNull();
+    expect(parseAccidentDate('きのう', '2026-10-05')).toBeNull();
   });
 });

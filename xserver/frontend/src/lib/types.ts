@@ -46,4 +46,6 @@ export interface Me {
   stores: { code: string; name: string; active: boolean; area?: string; hqOnly?: boolean; jibaiOnly?: boolean; mine?: boolean }[];
   today: string;
   smsEnabled: boolean;
+  /** 新自（交通事故）の事故日・事故内容の未入力の数 */
+  accidentMissing?: number;
 }

@@ -2,6 +2,7 @@
 // 全店舗をエリアごとに並べ、住所・地図・今日（休診日は次の営業日）の空いている時間帯を出す。店舗を選ぶと WEB 予約へ。
 // 本部が「公開する」にするまでは「準備中」の案内だけを出す
 import { useEffect, useMemo, useState } from 'react';
+import ConsultLineBanner from '@/components/ConsultLineBanner';
 import { cityOf } from '@/lib/city';
 // 見出しの地域：本部が決めた地域、なければ住所の市・町
 const cityOfStore = (s: { city?: string; address: string }) => s.city || cityOf(s.address);
@@ -14,7 +15,7 @@ import { closureBadge, type Closure } from '@/lib/closure';
 const SKY = '#1eb4ec';
 interface Quiet { date: string; isToday: boolean; closedToday: boolean; am: string | null; pm: string | null }
 interface StoreItem { code: string; name: string; phone: string; address: string; lat: number | null; lng: number | null; area: string; city?: string; quiet: Quiet | null; closures?: Closure[] }
-interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[] }
+interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[]; consultLineUrl?: string }
 
 /** 2 点間の距離（km） */
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -100,6 +101,7 @@ export default function Stores() {
         <h1 className="text-xl font-bold">ご予約の店舗をお選びください</h1>
         <p className="mt-1 text-sm">店舗を選ぶと、その店舗の WEB 予約の画面に進みます。</p>
       </div>
+      <ConsultLineBanner url={data.consultLineUrl ?? ''} className="mx-3 mt-3" />
 
       {data.hours && (
         <section className="mx-3 mt-3 rounded-xl border bg-white px-3 py-2 text-sm" aria-label="営業時間">

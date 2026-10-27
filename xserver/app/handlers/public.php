@@ -14,7 +14,7 @@ function pub_load_store(string $code, bool $allowJibaiOnly = false): array
 function pub_store(array $p): never
 {
     $ctx = pub_load_store($p[1], true);
-    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0), 'closures' => PublicApi::closures($ctx['store'], Time::nowJst()['date'])]);
+    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0), 'closures' => PublicApi::closures($ctx['store'], Time::nowJst()['date']), 'consultLineUrl' => Settings::global()['consultLineUrl']]);
 }
 
 function pub_week(array $p): never
@@ -185,7 +185,7 @@ function pub_stores(): never
             'area' => $areaOf[$st['code']] ?? '', 'city' => (string)($row['pageCity'] ?? ''), 'quiet' => pub_quiet_times($st, $setting, $today), 'closures' => PublicApi::closures($st, $today),
         ];
     }
-    Http::json(['open' => true, 'today' => $today, 'hours' => pub_hours_summary($setting, $today), 'areas' => $areaOrder, 'stores' => $stores]);
+    Http::json(['open' => true, 'today' => $today, 'hours' => pub_hours_summary($setting, $today), 'areas' => $areaOrder, 'stores' => $stores, 'consultLineUrl' => $setting['consultLineUrl']]);
 }
 
 /** 全店共通の営業時間の表示（同じ時間の曜日をまとめる）と休診日 */

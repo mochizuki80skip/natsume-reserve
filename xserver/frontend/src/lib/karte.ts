@@ -6,6 +6,8 @@ export interface KarteRow {
   age: number | null; sex: string; symptomCat: string; symptom: string; staff: string; treatment: string; visits: KarteVisit[];
   /** 予後（中止・転院）・アンケート（チェック欄） */
   stopped?: boolean; transferred?: boolean; survey?: boolean;
+  /** 新自（交通事故）：事故日・事故内容 */
+  accidentDate?: string | null; accidentNote?: string;
 }
 export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[]; partner?: string[] }
 /** 内訳が必要なきっかけ → 内訳の選択肢の種類（null は記入のみ） */
@@ -57,3 +59,20 @@ export function retentionOf(rows: { visits?: KarteVisit[]; reached?: boolean[] }
 }
 export const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
 export const isNewKind = (k: string) => k === 'NEW' || k === 'ACCIDENT';
+
+/** 事故日の入力："9/18" "0918" → 初診日より前の日（初診日より後になるときは前の年）、"2026/9/18" はそのまま。空は ''、読めなければ null */
+export function parseAccidentDate(input: string, firstDate: string): string | null {
+  const s = input.trim().replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)).replace(/[／．\-.年月]/g, '/').replace(/日$/, '');
+  if (!s) return '';
+  const full = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (full) {
+    const dt = new Date(Date.UTC(Number(full[1]), Number(full[2]) - 1, Number(full[3])));
+    return dt.getUTCMonth() === Number(full[2]) - 1 ? dt.toISOString().slice(0, 10) : null;
+  }
+  const iso = parseMd(s, firstDate);
+  if (!iso) return iso;
+  return iso > firstDate ? `${Number(iso.slice(0, 4)) - 1}${iso.slice(4)}` : iso;
+}
+
+/** 新自で、事故日・事故内容のどちらかが空 */
+export const accidentMissing = (r: KarteRow) => r.kind === 'ACCIDENT' && (!r.accidentDate || !(r.accidentNote ?? '').trim());
