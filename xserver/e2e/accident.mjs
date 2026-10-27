@@ -83,10 +83,23 @@ ok('予約ページのいちばん下に出し続ける', (await b2.getAttribute
 await pub.mouse.wheel(0, 1500); await pub.waitForTimeout(400);
 const bb2 = await b2.boundingBox();
 ok('スクロールしても下に出たまま', Math.abs(bb2.y - bb.y) < 2, JSON.stringify(bb2));
+const tel = pub.getByRole('link', { name: /お電話で予約・変更・キャンセル/ });
+const tb = await tel.boundingBox();
+ok('電話（予約・変更・キャンセル）も同じ帯に並ぶ・帯は低い', (await tel.getAttribute('href')).startsWith('tel:') && Math.abs(tb.y - bb.y) < 2 && bb.height <= 44, JSON.stringify([tb, bb]));
+// いちばん下までスクロールしても、ページの電話の欄は帯に隠れない
+await pub.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await pub.waitForTimeout(400);
+const big = await pub.locator('main a[href^="tel:"]').last().boundingBox();
+ok('ページの下の電話の欄が帯に隠れない', big.y + big.height <= tb.y - 4, JSON.stringify([big, tb]));
+// 日時を選ぶと、選んだ日時の帯は下の帯の上に出る（重ならない）
+await pub.evaluate(() => window.scrollTo(0, 0));
+await pub.getByRole('button', { name: /はじめての方/ }).first().click().catch(() => {});
+await pub.locator('table.wk tbody button').first().click(); await pub.waitForTimeout(500);
+const sh = await pub.locator('.wk-sheet').boundingBox();
+ok('選んだ日時の帯は下の帯の上（重ならない）', sh && sh.y + sh.height <= tb.y + 1, JSON.stringify([sh, tb]));
 // URL を消すとバナーは出ない
 await api(hq, 'PUT', '/api/admin/hq/consult-line', { url: '' });
 await pub.goto(`${B}/s/S001`); await pub.waitForTimeout(1200);
-ok('URL を消すとバナーは出ない', (await pub.getByRole('link', { name: /交通事故のご相談はLINEで/ }).count()) === 0);
+ok('URL を消すと LINE は出ない（電話だけ横いっぱい）', (await pub.getByRole('link', { name: /交通事故のご相談はLINEで/ }).count()) === 0 && (await pub.getByRole('link', { name: /お電話で予約・変更・キャンセル/ }).boundingBox()).width > 300);
 await api(hq, 'PUT', '/api/admin/hq/stores-page', { open: false });
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();

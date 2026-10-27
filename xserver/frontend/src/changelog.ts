@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 78, date: '2026-10-27', title: '予約ページの下に「電話」と「相談LINE」の帯', audience: ['店舗', '本部'],
+    items: ['患者様の予約ページのいちばん下に、「📞 予約・変更・キャンセル」（タップで電話）と「交通事故のご相談」（LINE）を並べた低い帯を出し続けるようにしました。日時を選んだときの帯はその上に出て、重なりません。ページの下の電話の欄も隠れません。'],
+  },
+  {
     id: 77, date: '2026-10-27', title: '新自の通知を LINE でも送れるように', audience: ['本部'],
     items: [
       '新自（交通事故）の方に来院チェックを付けたときの通知を、LINE 公式アカウント（無料プラン）から個人・グループのトークに送れるようにしました。',

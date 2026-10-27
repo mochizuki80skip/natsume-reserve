@@ -61,6 +61,8 @@ body { @apply bg-slate-50 text-slate-800; }
 .wk td.sel, .wk td.sel button { background: #1f6f8b !important; color: #fff !important; }
 .wk tr.pmstart td { border-top: 3px solid #dbe3e7; }
 .wk-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: #fff; border-top: 1px solid #dbe3e7; box-shadow: 0 -6px 24px rgba(28,42,48,.12); padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+/* 予約ページの下に固定した帯（電話・相談LINE）があるときは、その上に出す */
+.has-dock .wk-sheet { bottom: var(--dock-h); padding-bottom: 12px; }
 
 /* 日報：画面では A4 の幅、印刷では A4 1 枚 */
 .report-sheet { max-width: 194mm; }
