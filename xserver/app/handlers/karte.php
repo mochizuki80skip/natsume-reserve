@@ -54,9 +54,14 @@ function karte_delete(): never
 {
     $ctx = Auth::context();
     Http::requireJson();
-    $row = Db::one('SELECT id, auto FROM karte WHERE id = ? AND storeId = ?', [(string)(Http::body()['id'] ?? ''), $ctx['store']['id']]);
+    $b = Http::body();
+    $row = Db::one('SELECT id, auto, date, srcTime, srcBed FROM karte WHERE id = ? AND storeId = ?', [(string)($b['id'] ?? ''), $ctx['store']['id']]);
     if (!$row) Http::error('not found', 404);
-    if ((int)$row['auto']) Http::error('予約表から自動で入った行です。予約表の来院チェックを外すと消えます', 400);
+    // 予約表から自動で入った行：予約表の来院チェックも外して消す（チェックしたままだと、また行ができるため）
+    if ((int)$row['auto']) {
+        if (empty($b['uncheck'])) Http::error('予約表から自動で入った行です。予約表の来院チェックも外して消してください', 400);
+        if ($row['srcTime'] !== null && $row['srcBed'] !== null) Db::exec('UPDATE cell SET visited = 0 WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $row['date'], (int)$row['srcTime'], (int)$row['srcBed']]);
+    }
     Db::exec('DELETE FROM karte WHERE id = ?', [$row['id']]);
     Http::json(['ok' => true]);
 }

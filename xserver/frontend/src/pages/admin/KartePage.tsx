@@ -126,7 +126,7 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
         <td key={k} className="border text-center"><input type="checkbox" checked={!!row[k]} onChange={(ev) => p({ [k]: ev.target.checked })} aria-label={l} className="h-3.5 w-3.5 align-middle" /></td>
       ))}
       <td className="border px-0.5 text-center">
-        {!row.auto && <button type="button" onClick={() => onDelete(row.id)} title="この行を削除" className="text-[11px] text-slate-400 hover:text-red-700">✕</button>}
+        <button type="button" onClick={() => onDelete(row.id)} title={row.auto ? 'この行を削除（予約表の来院チェックも外します）' : 'この行を削除'} aria-label={`${row.name || 'この行'} を削除`} className="text-[11px] text-slate-400 hover:text-red-700">✕</button>
       </td>
     </tr>
   );
@@ -218,10 +218,17 @@ export default function KartePage() {
     if (r.ok) setRows((rs) => [...rs, j.row]);
   }
   async function del(id: string) {
-    if (!confirm('この行を削除しますか？')) return;
-    const r = await fetch('/api/admin/karte', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    const row = rows.find((x) => x.id === id) ?? pending.find((x) => x.id === id);
+    if (!row) return;
+    const auto = row.auto;
+    if (!confirm(auto
+      ? `「${row.name || 'この行'}」の行を削除しますか？\n予約表の来院チェックも外れます（${row.date.slice(5).replace('-', '/')} の予約）。\nこの行に入れた内容（カルテNo・症状・事故日など）も消えます。`
+      : 'この行を削除しますか？')) return;
+    const r = await fetch('/api/admin/karte', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, uncheck: auto }) });
     if (!r.ok) { alert((await r.json().catch(() => ({}))).error ?? '削除できませんでした'); return; }
     setRows((rs) => rs.filter((x) => x.id !== id));
+    setPending((rs) => rs.filter((x) => x.id !== id));
+    if (row.kind === 'ACCIDENT') refreshMe();
   }
 
   const count = (k: KarteKind) => rows.filter((r) => r.kind === k).length;
@@ -274,7 +281,7 @@ export default function KartePage() {
       <p className="no-print mt-1 text-[11px] text-slate-500">
         <i className="mr-1 inline-block h-2.5 w-2.5 border bg-slate-100 align-middle" />グレー＝予約表から自動で入る欄（直せます）　
         <i className="mr-1 inline-block h-2.5 w-2.5 border bg-yellow-300 align-middle" />黄色＝未入力　
-        日付は「9/5」や「0905」で入力できます。予約表から入った行は、来院チェックを外すと消えます（手を加えた行は残ります）。
+        日付は「9/5」や「0905」で入力できます。予約表から入った行は、来院チェックを外すと消えます（手を加えた行は残ります）。右の「✕」で削除すると、予約表の来院チェックも外れます。
         <Link to={`/admin/day/${data.today}`} className="ml-2 text-brand underline">予約表へ</Link>
       </p>
       {importOpen && <KarteImportDialog today={data.today} month={ym} initialText={importOpen.text} options={data.options} onClose={() => setImportOpen(false)}

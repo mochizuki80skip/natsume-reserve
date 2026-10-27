@@ -33,14 +33,18 @@ k = await req('GET', `/api/admin/karte?month=${ym}`);
 ok('チェックを外すと手を加えていない行は消え、直した行は残る', k[1].rows.map((r) => r.kind).join() === 'NEW,ACCIDENT', k[1].rows.map((r) => r.name).join());
 const add = await req('POST', '/api/admin/karte', { date: '2026-11-20' });
 ok('行を手で追加・削除', add[0] === 200 && (await req('DELETE', '/api/admin/karte', { id: add[1].row.id }))[0] === 200);
-ok('自動の行は削除できない（来院チェックで管理）', (await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id }))[0] === 400);
+ok('自動の行は、来院チェックも外す指定がないと削除できない', (await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id }))[0] === 400);
+ok('自動の行を削除（予約表の来院チェックも外す）', (await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id, uncheck: true }))[0] === 200);
+{ const d = await req('GET', `/api/admin/day?date=${date}`); const c = (d[1].data?.cells ?? d[1].cells ?? []).find((x) => x.time === 600 && x.bed === 2);
+  const k2 = await req('GET', `/api/admin/karte?month=${ym}`);
+  ok('予約表の来院チェックが外れ、行は作り直されない', c && !c.visited && k2[1].rows.map((r) => r.kind).join() === 'NEW', JSON.stringify([c?.visited, k2[1].rows.map((r) => r.kind)])); }
 const x = await fetch(`${B}/api/admin/karte/export?month=${ym}`, { headers: { cookie } });
 ok('Excel で保存できる', x.status === 200 && (x.headers.get('content-type') ?? '').includes('spreadsheetml'));
 
 cookie = '';
 await req('POST', '/api/admin/login', { code: 'HQ', password: process.env.HQ_PASSWORD ?? 'hqpass123' });
 const h = await req('GET', `/api/admin/hq/karte?from=${ym}-01&to=${ym}-30`);
-ok('本部の集計に出る（氏名は返さない）', h[0] === 200 && h[1].rows.length === 2 && !('name' in h[1].rows[0]) && h[1].rows.find((r) => r.kind === 'NEW')?.reached[0] === true);
+ok('本部の集計に出る（氏名は返さない）', h[0] === 200 && h[1].rows.length === 1 && !('name' in h[1].rows[0]) && h[1].rows.find((r) => r.kind === 'NEW')?.reached[0] === true);
 ok('店舗アカウントは自店舗の集計だけ見られる', await (async () => { const c = cookie; cookie = ''; await req('POST', '/api/admin/login', { code: 'S001', password: 'password' }); const [st, j] = await req('GET', `/api/admin/hq/karte?from=${ym}-01&to=${ym}-30`); const put = (await req('PUT', '/api/admin/hq/karte/options', { category: 'trigger', labels: ['x'] }))[0]; cookie = c; return st === 200 && j.stores.length === 1 && j.stores[0].code === 'S001' && j.rows.every((r) => r.store === 'S001') && j.areas.length === 0 && put === 403; })());
 ok('エリアを保存', (await req('PUT', '/api/admin/hq/areas', { areas: [{ name: 'テストエリア', stores: ['S001', 'NOPE'] }] }))[0] === 200);
 const o = await req('GET', '/api/admin/hq/karte/options');

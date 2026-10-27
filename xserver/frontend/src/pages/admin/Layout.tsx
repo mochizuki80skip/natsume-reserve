@@ -43,6 +43,18 @@ export default function AdminLayout() {
   useEffect(() => {
     if (error && error.status === 401) goLogin();
   }, [error]);
+  // 通知などのリンク（?store=店舗コード）：本部・MG は、その店舗に切り替えてから開く
+  const wantStore = new URLSearchParams(location.search).get('store');
+  const switching = !!(me && wantStore && (me.session.role === 'hq' || me.session.role === 'mg') && me.store?.code !== wantStore && me.stores.some((s) => s.code === wantStore));
+  useEffect(() => {
+    if (!switching || !wantStore) return;
+    const q = new URLSearchParams(location.search); q.delete('store');
+    const back = location.pathname + (q.toString() ? `?${q}` : '');
+    const f = document.createElement('form'); f.method = 'post'; f.action = '/api/admin/switch';
+    for (const [k, v] of [['store', wantStore], ['back', back]]) { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i); }
+    document.body.appendChild(f); f.submit();
+  }, [switching]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (switching) return <div className="p-4 text-sm text-slate-500">店舗を切り替えています…</div>;
   if (loading && !me) return <div className="p-4 text-sm text-slate-500">読み込み中…</div>;
   if (!me) return <div className="p-4 text-sm text-red-700">{error?.status === 401 ? 'ログインしてください' : error?.message ?? '読み込みに失敗しました'}</div>;
   const store = me.store;

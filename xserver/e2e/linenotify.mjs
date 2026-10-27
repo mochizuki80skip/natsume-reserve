@@ -66,7 +66,7 @@ fs.rmSync(LOG, { force: true });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '見本 太郎（初自）' }] });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: true });
 const sent = logs().filter((x) => x.line);
-ok('新自の来院で、その店舗のエリアの LINE だけに届く（名字だけ）', sent.length === 1 && sent[0].line === 'Uaaaa' && sent[0].text.includes('【新自】サンプル本店') && sent[0].text.includes('患者様：見本 様') && !sent[0].text.includes('太郎'), JSON.stringify(sent));
+ok('新自の来院で、その店舗のエリアの LINE だけに届く（名字だけ）', sent.length === 1 && sent[0].line === 'Uaaaa' && sent[0].text.includes('【新自】サンプル本店') && sent[0].text.includes('患者様：見本 様') && !sent[0].text.includes('太郎') && (process.env.APP_URL ? sent[0].text.includes(process.env.APP_URL + '/admin/karte?store=S001') : true), JSON.stringify(sent));
 
 // 患者様の出し方を変える（カルテNo が入っていればカルテNo も）
 const kid = (await api(st, 'GET', `/api/admin/karte?month=${today.slice(0, 7)}`))[1].rows.find((r) => r.kind === 'ACCIDENT').id;
@@ -96,6 +96,14 @@ fs.rmSync(LOG, { force: true });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 660, bed: 3, text: '試験 花子（初自）' }] });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 660, bed: 3, visited: true });
 ok('止めた送り先には送らない', logs().filter((x) => x.line).length === 0);
+
+// 通知のリンク（?store=店舗コード）：本部が押すと、その店舗に切り替わって継続率が開く
+await api(hq, 'GET', '/api/admin/me');
+await hq.goto(`${B}/admin/karte?store=S002`); await hq.waitForURL((u) => !u.search.includes('store='), { timeout: 10000 }).catch(() => {}); await hq.waitForTimeout(1200);
+const meHq = (await api(hq, 'GET', '/api/admin/me'))[1];
+ok('通知のリンクで、その店舗に切り替わって継続率が開く', meHq.store.code === 'S002' && hq.url().endsWith('/admin/karte') && (await hq.getByRole('heading', { name: '新患継続率' }).count()) === 1, hq.url() + ' ' + meHq.store.code);
+await hq.goto(`${B}/admin/karte?store=NOPE`); await hq.waitForTimeout(1000);
+ok('知らない店舗コードでは切り替えない', (await api(hq, 'GET', '/api/admin/me'))[1].store.code === 'S002');
 
 // 本部の画面
 await hq.goto(`${B}/admin/hq`); await hq.waitForTimeout(1000);

@@ -170,13 +170,13 @@ final class Karte
                 . ($r['staff'] !== '' ? "担当：{$r['staff']}\n" : '')
                 . ($r['trig'] !== '' ? "きっかけ：{$r['trig']}\n" : '')
                 . "\n事故日・事故内容は、店舗の「新患継続率」の下の「新自（交通事故）」で入れてください。\n"
-                . ($url !== '' ? "{$url}/admin/karte\n" : '')
+                . ($url !== '' ? "{$url}/admin/karte?store=" . rawurlencode($store['code']) . "\n" : '')
                 . "\n※このメールは送信専用です。";
             if ($to) Mail::send($to, "【新自】{$store['name']} {$md} 交通事故の初診がありました", $body);
             if ($lines) {
                 $text = "【新自】{$store['name']}\n{$md}（{$wd}）{$time} 交通事故の初診がありました。" . ($who !== '' ? "\n患者様：{$who}" : '')
                     . ($r['staff'] !== '' ? "\n担当：{$r['staff']}" : '') . ($r['trig'] !== '' ? "\nきっかけ：{$r['trig']}" : '')
-                    . "\n事故日・事故内容は新患継続率の下で入れてください。" . ($url !== '' ? "\n{$url}/admin/karte" : '');
+                    . "\n事故日・事故内容は新患継続率の下で入れてください。" . ($url !== '' ? "\n{$url}/admin/karte?store=" . rawurlencode($store['code']) : '');
                 foreach ($lines as $t) Line::push($t, $text);
             }
         } catch (Throwable $e) {
