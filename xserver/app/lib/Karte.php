@@ -73,6 +73,26 @@ final class Karte
         return count($parts) >= 2 ? min(20, mb_strlen($parts[0])) : null;
     }
 
+    /** 3 文字以上の名字（よくあるもの。長いものから）。空白も患者一覧も無いときの見当に使う */
+    private const SURNAME3 = ['勅使河原', '長曽我部', '武者小路', '佐々木', '長谷川', '五十嵐', '久保田', '小野寺', '大久保', '宇佐美', '長谷部', '小笠原', '佐久間', '阿久津', '曽我部', '小山田', '大和田', '小松崎', '日比野', '加賀谷', '小田切', '小早川', '二階堂', '伊集院', '東海林', '西園寺', '三田村', '八木橋', '大河内', '小日向', '小野田', '小久保', '小野塚', '大須賀', '十文字', '千代田', '与那嶺', '仲宗根', '我那覇', '喜屋武', '具志堅', '小橋川', '真栄田'];
+
+    /**
+     * 空白も患者一覧も無いときの名字の見当（通知で名字だけを出すため）。
+     * 漢字のあとにかな → 漢字の部分。漢字だけ → よくある 3 文字の名字ならその長さ、2 文字なら全部（名字だけの可能性が高い）、それ以外は 2 文字。
+     * かなだけ・カタカナだけなど見当がつかないときは null
+     */
+    public static function guessSurnameLen(string $name): ?int
+    {
+        $flat = self::karteName($name);
+        $flat = preg_replace('/[（(][^）)]*[）)]/u', '', $flat) ?? $flat;
+        if (preg_match('/^([\x{4E00}-\x{9FFF}々〆ヶ]{1,4})[\x{3041}-\x{3096}\x{30A1}-\x{30FA}ー]/u', $flat, $m)) return mb_strlen($m[1]);
+        if (!preg_match('/^[\x{4E00}-\x{9FFF}々〆ヶ]+$/u', $flat)) return null;
+        $len = mb_strlen($flat);
+        if ($len <= 2) return $len;
+        foreach (self::SURNAME3 as $s3) if (mb_strlen($s3) < $len && str_starts_with($flat, $s3)) return mb_strlen($s3);
+        return 2;
+    }
+
     /** 名字の文字数を、店舗の患者一覧（レセコンの氏名は「姓 名」）から探す。見つからなければ null */
     public static function surnameLenFromCards(string $storeId, string $name): ?int
     {
@@ -164,10 +184,14 @@ final class Karte
         if ($mode === 'none') return '';
         $no = trim($karteNo) !== '' ? 'カルテNo ' . trim($karteNo) : '';
         $name = trim($name);
-        // 名字だけ：名字の文字数が分かるときだけ（予約表で「姓 名」と空白があった・患者一覧にあった）。分からなければ氏名は出さない
+        // 名字：予約表の「姓 名」・患者一覧から分かった文字数。分からなければ氏名の形から見当をつける
         $sur = $surnameLen ?? self::surnameLenOf($name);
         $flat = self::karteName($name);
         $known = $sur !== null && $sur > 0 && $sur < mb_strlen($flat);
+        if ($mode === 'surname' && !$known) {
+            $g = self::guessSurnameLen($flat);
+            if ($g !== null && $g > 0 && $g <= mb_strlen($flat)) return implode('', array_filter([mb_substr($flat, 0, $g) . ' 様', $no !== '' ? "（{$no}）" : '']));
+        }
         // 氏名：名字が分かれば「姓 名」と空白を入れて出す
         $shown = $mode === 'full' ? ($known ? mb_substr($flat, 0, $sur) . ' ' . mb_substr($flat, $sur) : $flat) : ($mode === 'surname' && $known ? mb_substr($flat, 0, $sur) : '');
         $parts = array_filter([$shown !== '' ? $shown . ' 様' : '', $no !== '' ? ($shown !== '' ? "（{$no}）" : $no) : '']);

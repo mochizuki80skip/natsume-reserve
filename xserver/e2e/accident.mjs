@@ -52,11 +52,11 @@ ok('件名・本文（患者様は名字だけ。件名には出さない）', m
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 540, bed: 1, visited: false });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 540, bed: 1, visited: true });
 ok('付け直しても二重に送らない', mails().length === 1);
-// 予約表で姓と名のあいだに空白が無いと、どこまでが名字か分からないので、名字だけの設定では氏名を出さない
+// 予約表で姓と名のあいだに空白が無く、患者一覧にも無いときは、氏名の形から名字の見当をつける（漢字だけなら 2 文字など）
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '見本次郎（初自）' }] });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: true });
 { const m2 = mails(); const b = m2[1]?.body ?? '';
-  ok('空白の無い氏名は、名字だけの設定では出さない', m2.length === 2 && !b.includes('見本') && !b.includes('次郎'), b); }
+  ok('空白も患者一覧も無い氏名は、形から名字の見当をつけて出す（見本次郎 → 見本）', m2.length === 2 && b.includes('患者様：見本 様') && !b.includes('次郎'), b); }
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: false });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '' }] });
 // 空白が無くても、患者一覧（レセコン：「姓 名」）にあれば名字が分かる
