@@ -133,6 +133,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
           {(submitKind === 'RETURN' || submitKind === 'REVISIT') && (
             <label className="mb-3 block text-sm">診察券番号{submitKind === 'RETURN' ? <span className="ml-1 text-red-500">*</span> : <span className="ml-1 text-xs text-slate-500">（分かれば）</span>}
               <input required={submitKind === 'RETURN'} inputMode="numeric" value={form.cardNo} onChange={(e) => setForm({ ...form, cardNo: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" />
+              {submitKind === 'RETURN' && <span className="mt-1 block text-xs text-slate-500">お手元の診察券に書かれている番号をご確認のうえ、入力してください。</span>}
               {submitKind === 'REVISIT' && <span className="mt-1 block text-xs text-slate-500">診察券が手元に無い・番号が分からない場合は空欄のままで大丈夫です。</span>}
             </label>
           )}

@@ -107,11 +107,13 @@ await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
 ok('2 回目はお名前の案内が出る', (await page.textContent('main')).includes('テスト 太郎 様'));
 await page.getByRole('button', { name: /ご通院したことがある方/ }).click();
 await page.getByRole('radio', { name: /現在通院中/ }).click(); await page.waitForTimeout(800);
+ok('通院中を選ぶと「診察券をご用意ください」', ((await page.getByRole('note', { name: '通院中の方へのお願い' }).textContent()) ?? '').includes('診察券をご用意ください'));
 {
   let o = page.locator('td.o button').first();
   for (let i = 0; i < 4 && (await o.count()) === 0; i++) { await page.getByRole('button', { name: '翌週 ›' }).click(); await page.waitForTimeout(800); o = page.locator('td.o button').first(); }
   await o.click();
   await page.getByRole('button', { name: 'この日時で予約へ進む' }).click();
+  ok('通院中は診察券番号が必須で、確認の案内が出る', (await page.locator('label:has-text("診察券番号") input[required]').count()) === 1 && (await page.textContent('form')).includes('お手元の診察券に書かれている番号'));
   ok('2 回目は氏名・電話番号が入っている', (await page.inputValue('input[placeholder*="山田"]')) === 'テスト 太郎' && (await page.inputValue('input[type="tel"]')) === '09012345678');
 }
 

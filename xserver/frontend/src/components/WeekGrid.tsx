@@ -15,7 +15,7 @@ export const KIND_TEXT: Record<Kind, string> = {
 };
 const GROUP_LABEL: Record<Group, { title: string; sub: string; kinds: [Kind, string][] }> = {
   FIRST: { title: 'はじめての方', sub: '', kinds: [['NEW', 'ケガ・痛み・不調など'], ['ACCIDENT', '交通事故による痛み']] },
-  VISITED: { title: 'ご通院したことがある方', sub: '診察券番号をご用意ください', kinds: [['RETURN', '現在通院中'], ['REVISIT', '1ヶ月以上ご来院の無い方']] },
+  VISITED: { title: 'ご通院したことがある方', sub: '', kinds: [['RETURN', '現在通院中'], ['REVISIT', '1ヶ月以上ご来院の無い方']] },
 };
 type SlotStatus = 'open' | 'phone' | 'closed';
 export interface WeekDay { date: string; label: string | null; slots: { time: number; status: SlotStatus }[] }
@@ -123,6 +123,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
             </button>
           ))}
         </div>}
+        {kind === 'RETURN' && <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-[12.5px] font-semibold text-amber-900" role="note" aria-label="通院中の方へのお願い">診察券をご用意ください<span className="block text-[11px] font-normal">次の画面で診察券番号を入力します</span></p>}
         {group && !kind && <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>ご来院の内容をお選びください</p>}
         <p className="mt-2.5 text-[14px] font-bold text-brand-dark">② ご希望の日時を選択してください</p>
         <div className="mt-1 flex items-center justify-between gap-2">
