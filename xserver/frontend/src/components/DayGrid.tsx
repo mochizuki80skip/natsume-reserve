@@ -8,6 +8,7 @@ import { isPatientText } from '@/lib/availability';
 import { isAm } from '@/lib/hours';
 import { planPaste } from '@/lib/paste';
 import { categorizeCell, cellState, isContinuationText, type CellState } from '@/lib/attendance';
+import { findDuplicates } from '@/lib/duplicates';
 import { formatJpPhone } from '@/lib/format';
 import NextDateInput from './NextDateInput';
 import BlockPanel, { blockBedsText } from './BlockPanel';
@@ -225,6 +226,26 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     const first = b[0].k.split(':').map(Number);
     setPasteInfo(`元に戻しました（${b.length} セル：${minToHm(first[0])} ベッド${first[1]} など）`);
   }
+
+  // ---------- 同じ日に同じお名前の予約（重複の注意） ----------
+  // 入力中のセルは、入れ終わる（ほかのセルへ移る）まで数えない。名前を入れたとき・WEB 予約などが入ったときに新しく重なったら知らせる
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const dups = useMemo(() => {
+    const m = new Map(cells);
+    if (editingKey) m.delete(editingKey);
+    return findDuplicates(m);
+  }, [cells, editingKey]);
+  const dupAlerted = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const now = new Set(dups.map((d) => d.key));
+    if (dupAlerted.current === null) { dupAlerted.current = now; return; } // 開いたときにすでにある重複は帯で知らせるだけ
+    const fresh = dups.filter((d) => !dupAlerted.current!.has(d.key));
+    dupAlerted.current = now;
+    if (fresh.length) {
+      const lines = fresh.map((d) => `・${d.name}：${d.places.map((p) => `${minToHm(p.time)} ベッド${p.bed}`).join('／')}`).join('\n');
+      window.alert(`⚠ 同じ日に、同じお名前の予約が 2 か所以上あります。\n${lines}\n\n重複していないか確かめて、対処してください。`);
+    }
+  }, [dups]);
 
   // ---------- 自動更新（30 秒ごと・画面に戻ったとき） ----------
   // 新しく読み込んだ内容を画面に反映する。入力中・直前（15 秒以内）に触ったセルはそのまま（保存時にサーバーが確認する）
@@ -846,6 +867,12 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
           <button type="button" onClick={() => setConflictMsg('')} aria-label="閉じる" className="text-red-500">✕</button>
         </p>
       )}
+      {dups.length > 0 && (
+        <div className="no-print mb-2 rounded border border-amber-400 bg-amber-50 px-3 py-1.5 text-sm text-amber-900" role="alert" aria-label="予約の重複">
+          <b>⚠ 同じお名前の予約が重なっています</b>（確かめて対処してください）：
+          {dups.map((d) => <span key={d.key} className="ml-2 whitespace-nowrap">{d.name}（{d.places.map((p) => `${minToHm(p.time)} ベッド${p.bed}`).join('・')}）</span>)}
+        </div>
+      )}
       {pasteInfo && <p className="no-print mb-2 rounded bg-brand-light px-3 py-1 text-xs text-brand-dark">{pasteInfo}</p>}
       {rows.length === 0 ? (
         <p className="rounded border bg-white p-4 text-sm text-slate-600">この日は休診日（定休日・祝日）のため予約表はありません。営業する場合は、店舗設定の営業時間を確認してください。</p>
@@ -1026,11 +1053,13 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                                 const snap = focusSnap.current;
                                 if (snap && snap.k === k && snap.val !== val) pushHistory([{ k, before: snap.val, after: val }]);
                                 focusSnap.current = null;
+                                setEditingKey(null);
                                 void flush();
                               }}
                               onFocus={(e) => {
                                 e.currentTarget.select(); justFocused.current = true; setSel({ time: t, bed: b });
                                 focusSnap.current = { k, val: e.currentTarget.value };
+                                setEditingKey(k);
                                 if (extending.current) extending.current = false; else { anchor.current = { r, c }; setRange(null); }
                               }}
                               onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}

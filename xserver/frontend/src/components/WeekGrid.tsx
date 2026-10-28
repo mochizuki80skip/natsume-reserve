@@ -61,8 +61,9 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
   useEffect(() => {
     let alive = true;
     setLoading(true); setError('');
-    // 区分が未選択の間は「現在通院中」の空き状況を見せる（選んだあとに、その区分の空き状況で確かめ直す）
-    const q = new URLSearchParams({ kind: kind ?? 'RETURN' });
+    // 区分が未選択の間は、選んでいるグループのいちばん厳しい区分の空き状況を見せる（新規・再来を止めた時間が 〇 に見えないように）。
+    // はじめての方・未選択＝初診、ご通院したことがある方＝1ヶ月以上ぶり（再来）。区分を選んだら、その区分の空き状況で確かめ直す
+    const q = new URLSearchParams({ kind: kind ?? (group === 'VISITED' ? 'REVISIT' : 'NEW') });
     if (weekStart) q.set('start', weekStart);
     fetch(`/api/public/${encodeURIComponent(storeCode)}/week?${q}`)
       .then((r) => r.json())
@@ -70,7 +71,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
       .catch(() => alive && setError('読み込みに失敗しました'))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
-  }, [storeCode, kind, weekStart]);
+  }, [storeCode, kind, group, weekStart]);
 
   useEffect(() => { setSel(null); setNotice(''); }, [weekStart]);
   useEffect(() => { if (kind) setNeedKind(false); }, [kind]);

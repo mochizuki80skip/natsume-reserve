@@ -56,8 +56,12 @@ final class PublicApi
     }
 
     /** WEB で予約できる日数（店舗設定）より先の日か */
-    public static function beyondBookDays(array $store, string $date, string $today): bool
+    /** 来院区分ごとの「WEB で予約できる日数」：既存の方（通院中・1ヶ月以上ぶり）だけに使う。新規（初診・新自）は公開する日数まで（広告で予約が入るように。依頼者の決定 2026-10-28） */
+    public const BOOK_DAYS_KINDS = ['RETURN', 'REVISIT'];
+
+    public static function beyondBookDays(array $store, string $date, string $today, ?string $kind = null): bool
     {
+        if ($kind !== null && !in_array($kind, self::BOOK_DAYS_KINDS, true)) return false;
         $n = $store['bookDaysAhead'] ?? null;
         return $n !== null && $date > Time::addDays($today, (int)$n);
     }
@@ -130,7 +134,7 @@ final class PublicApi
             'slotMinutes' => $setting['slotMinutes'],
             'kindStop' => $kindStop,
             // WEB で予約できる日数より先の日：空いていても電話マーク（電話で受ける）
-            'webFar' => self::beyondBookDays($store, $date, $now['date']),
+            'webFar' => self::beyondBookDays($store, $date, $now['date'], $kind),
             'beds' => Settings::allBeds($store),
             'capacityAm' => $capacity['am'],
             'capacityPm' => $capacity['pm'],

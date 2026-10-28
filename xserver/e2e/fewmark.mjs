@@ -23,7 +23,7 @@ const r1 = await (await fetch(`${B}/api/public/S001/reserve`, { method: 'POST', 
 ok('△ は WEB で予約できる', r1.ok === true, JSON.stringify(r1));
 ok('埋まると ×', (await st(600)) === 'closed');
 const r2 = await fetch(`${B}/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'RETURN', date: D, time: 600, name: '見本 後着', phone: phone(), cardNo: '2' }) });
-ok('タッチの差で埋まったときは案内', r2.status === 409 && ((await r2.json()).error ?? '').includes('タッチの差'));
+ok('手続き中に埋まったときは案内', r2.status === 409 && ((await r2.json()).error ?? '').includes('ご予約の手続き中に'));
 
 // 画面：凡例と △ の表示
 const br = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
@@ -37,6 +37,19 @@ for (let i = 0; i < 3 && (await few.count()) === 0; i++) { await p.getByRole('bu
 ok('週の表に △', (await few.count()) > 0 && (await few.textContent()) === '△');
 await few.click();
 ok('△ を選ぶと予約へ進める', await p.getByRole('button', { name: 'この日時で予約へ進む' }).isVisible());
+// 新規・再来を止めた時間：来院区分を選ぶ前（はじめての方を押しただけ）でも × に見える
+await req('POST', '/api/admin/kind-blocks', { date: D, start: 900, end: 960, kinds: 'NR' });
+await p.goto(`${B}/s/S001`); await p.waitForSelector('table.wk');
+const cellAt = (time) => p.locator(`button[aria-label^="${Number(D.slice(5, 7))}/${Number(D.slice(8))} ${time} "]`);
+for (let i = 0; i < 3 && (await p.getByRole('button', { name: new RegExp(`^${Number(D.slice(5, 7))}/${Number(D.slice(8))} `) }).count()) === 0; i++) { await p.getByRole('button', { name: '翌週 ›' }).click(); await p.waitForTimeout(800); }
+ok('区分を選ぶ前：止めた時間（15:00）は 〇 に見えない', (await cellAt('15:00').count()) === 0);
+await p.getByRole('button', { name: /はじめての方/ }).click(); await p.waitForTimeout(800);
+ok('はじめての方を押しただけでも × のまま', (await cellAt('15:00').count()) === 0);
+await p.getByRole('button', { name: /ご通院したことがある方/ }).click(); await p.getByRole('radio', { name: /現在通院中/ }).click(); await p.waitForTimeout(800);
+ok('現在通院中は取れる（〇）', (await cellAt('15:00').count()) === 1);
+await cellAt('15:00').click();
+await p.getByRole('radio', { name: /1ヶ月以上/ }).click(); await p.waitForTimeout(1000);
+ok('選んだあとで区分を変えて × になったら、選び直しの案内', !(await p.getByRole('button', { name: 'この日時で予約へ進む' }).isVisible()) && (await p.textContent('body')).includes('この内容では予約できません'));
 const pageW = await p.evaluate(() => document.documentElement.scrollWidth);
 ok('スマホで横にはみ出さない', pageW <= 390, String(pageW));
 await br.close();

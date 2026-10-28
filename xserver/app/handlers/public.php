@@ -71,7 +71,7 @@ function pub_reserve(array $p): never
     $today = Time::nowJst()['date'];
     $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
     if (!PublicApi::isPublished($store, $date, $today, $day['published'] ?? null)) Http::error('この日は現在WEB予約を受け付けていません', 409);
-    if (PublicApi::beyondBookDays($store, $date, $today)) Http::error('WEB でのご予約は ' . (int)$store['bookDaysAhead'] . ' 日先までです。この日のご予約はお電話（' . $store['phone'] . '）で承ります', 409);
+    if (PublicApi::beyondBookDays($store, $date, $today, $kind)) Http::error('WEB でのご予約は ' . (int)$store['bookDaysAhead'] . ' 日先までです。この日のご予約はお電話（' . $store['phone'] . '）で承ります', 409);
 
     $lockName = 'reserve:' . $store['id'] . ':' . $date;
     $got = Db::one('SELECT GET_LOCK(?, 10) AS ok', [$lockName]);
@@ -99,7 +99,7 @@ function pub_reserve(array $p): never
             }
             $status = Availability::statusFor($in, $time, Availability::remainingAt($in, $time));
             if ($status !== 'open' && $status !== 'few') {
-                throw new HttpError(409, $status === 'phone' ? 'この時間はお電話でのみ受付しております' : '申し訳ありません。タッチの差でこの時間は埋まりました。別の時間をお選びください');
+                throw new HttpError(409, $status === 'phone' ? 'この時間はお電話でのみ受付しております' : '申し訳ありません。ご予約の手続き中に、この時間はほかの方のご予約で埋まりました。お手数ですが、別の時間をお選びください');
             }
             $bed = $free[0];
             $rid = Db::newId();
