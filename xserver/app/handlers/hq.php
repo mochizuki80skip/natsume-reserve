@@ -241,11 +241,11 @@ function hq_overview(): never
     $setting = Settings::global();
     $stores = array_map([Settings::class, 'storeRow'], Settings::storesInOrder('active = 1', [], false));
     $rows = [];
-    $sum = ['rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0, 'cancel' => 0, 'noshow' => 0];
+    $sum = ['rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0, 'th' => 0, 'cancel' => 0, 'noshow' => 0];
     foreach ($stores as $store) {
         $d = DayData::load($store, $setting, $date);
         $r = ['code' => $store['code'], 'name' => $store['name'], 'closed' => $d['day']['closed'], 'published' => $d['day']['published'],
-            'rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0,
+            'rAm' => 0, 'rPm' => 0, 'vAm' => 0, 'vPm' => 0, 'web' => 0, 'nw' => 0, 're' => 0, 'jb' => 0, 'th' => 0,
             'cancel' => count(array_filter($d['cancels'], fn($c) => $c['kind'] !== 'CHANGE')), 'noshow' => count(array_filter($d['cancels'], fn($c) => $c['kind'] === 'NOSHOW'))];
         foreach ($d['cells'] as $c) {
             if (!Availability::isPatientText($c['text'])) continue;
@@ -257,6 +257,7 @@ function hq_overview(): never
             if ($cat['isNew']) $r['nw']++;
             if ($cat['isRevisit']) $r['re']++;
             if ($cat['isJibai']) $r['jb']++;
+            if ($cat['isThird']) $r['th']++;
         }
         foreach (array_keys($sum) as $k) $sum[$k] += $r[$k];
         $rows[] = $r;

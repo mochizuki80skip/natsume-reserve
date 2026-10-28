@@ -1,20 +1,20 @@
 // 初回カルテ集計の型と計算（純粋関数）
-export type KarteKind = 'NEW' | 'ACCIDENT' | 'REVISIT';
+export type KarteKind = 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT';
 export interface KarteVisit { d: string; s: string; t: string }
 export interface KarteRow {
   id: string; date: string; auto: boolean; karteNo: string; kind: KarteKind; trig: string; trigDetail: string; name: string; surnameLen?: number | null; nameOk?: boolean;
   age: number | null; sex: string; symptomCat: string; symptom: string; staff: string; treatment: string; visits: KarteVisit[];
   /** 予後（中止・転院）・アンケート（チェック欄） */
   stopped?: boolean; transferred?: boolean; survey?: boolean;
-  /** 新自（交通事故）：事故日・事故内容 */
+  /** 新自（交通事故）・新三（第三者行為）：事故日・事故内容 */
   accidentDate?: string | null; accidentNote?: string;
 }
 export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[]; partner?: string[] }
 /** 内訳が必要なきっかけ → 内訳の選択肢の種類（null は記入のみ） */
 export type DetailFor = Record<string, 'otherBiz' | 'campaign' | 'partner' | null>;
 
-export const KIND_LABEL: Record<KarteKind, string> = { NEW: '新患', ACCIDENT: '初自', REVISIT: '再' };
-export const KIND_COLOR: Record<KarteKind, string> = { NEW: '#e34948', ACCIDENT: '#eda100', REVISIT: '#2a78d6' };
+export const KIND_LABEL: Record<KarteKind, string> = { NEW: '新患', ACCIDENT: '初自', THIRD: '新三', REVISIT: '再' };
+export const KIND_COLOR: Record<KarteKind, string> = { NEW: '#e34948', ACCIDENT: '#eda100', THIRD: '#c2410c', REVISIT: '#2a78d6' };
 export const TREATMENTS = ['矯正', 'マッサ'];
 export const VISIT_COUNT = 5;
 
@@ -58,7 +58,9 @@ export function retentionOf(rows: { visits?: KarteVisit[]; reached?: boolean[] }
   return { first: rows.length, reached };
 }
 export const pct = (n: number, d: number) => (d > 0 ? Math.round((n / d) * 100) : 0);
-export const isNewKind = (k: string) => k === 'NEW' || k === 'ACCIDENT';
+export const isNewKind = (k: string) => k === 'NEW' || k === 'ACCIDENT' || k === 'THIRD';
+/** 事故日・事故内容を入れる区分（新自・新三） */
+export const isInjuryKind = (k: string) => k === 'ACCIDENT' || k === 'THIRD';
 
 /** 事故日の入力："9/18" "0918" → 初診日より前の日（初診日より後になるときは前の年）、"2026/9/18" はそのまま。空は ''、読めなければ null */
 export function parseAccidentDate(input: string, firstDate: string): string | null {
@@ -74,5 +76,5 @@ export function parseAccidentDate(input: string, firstDate: string): string | nu
   return iso > firstDate ? `${Number(iso.slice(0, 4)) - 1}${iso.slice(4)}` : iso;
 }
 
-/** 新自で、事故日・事故内容のどちらかが空 */
-export const accidentMissing = (r: KarteRow) => r.kind === 'ACCIDENT' && (!r.accidentDate || !(r.accidentNote ?? '').trim());
+/** 新自・新三で、事故日・事故内容のどちらかが空 */
+export const accidentMissing = (r: KarteRow) => isInjuryKind(r.kind) && (!r.accidentDate || !(r.accidentNote ?? '').trim());

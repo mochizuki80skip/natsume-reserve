@@ -1,6 +1,6 @@
-// 新患継続率の下：新自（交通事故）の一覧。事故日・事故内容を入れる（空は黄色。前の月の未入力も出す）
+// 新患継続率の下：新自（交通事故）・新三（第三者行為）の一覧。事故日・事故内容を入れる（空は黄色。前の月の未入力も出す）
 import { useState } from 'react';
-import { accidentMissing, parseAccidentDate, type KarteRow } from '@/lib/karte';
+import { accidentMissing, isInjuryKind, parseAccidentDate, type KarteRow } from '@/lib/karte';
 import { halfNumInput } from '@/lib/format';
 
 const ymd = (d?: string | null) => (d ? d.replaceAll('-', '/') : '');
@@ -35,6 +35,7 @@ function Rows({ rows, onPatch }: { rows: KarteRow[]; onPatch: (id: string, p: Pa
         return (
           <tr key={r.id} className="align-top">
             <td className="whitespace-nowrap border px-1 py-1 text-center tabular-nums">{ymd(r.date)}</td>
+            <td className="whitespace-nowrap border px-1 py-1 text-center">{r.kind === 'THIRD' ? '新三' : '新自'}</td>
             <td className="whitespace-nowrap border px-1 py-1 text-center">{r.karteNo}</td>
             <td className="whitespace-nowrap border px-1 py-1">{r.name}</td>
             <td className="whitespace-nowrap border px-1 py-1">{r.trig}{r.trigDetail ? `（${r.trigDetail}）` : ''}</td>
@@ -49,29 +50,29 @@ function Rows({ rows, onPatch }: { rows: KarteRow[]; onPatch: (id: string, p: Pa
 }
 
 export default function AccidentList({ rows, pending, monthLabel, onPatch }: { rows: KarteRow[]; pending: KarteRow[]; monthLabel: string; onPatch: (id: string, p: Partial<KarteRow>) => void }) {
-  const mine = rows.filter((r) => r.kind === 'ACCIDENT');
+  const mine = rows.filter((r) => isInjuryKind(r.kind));
   const missing = mine.filter(accidentMissing).length + pending.filter(accidentMissing).length;
   return (
-    <section className="mt-6 rounded border border-slate-300 bg-white p-3 text-sm" aria-label="新自（交通事故）">
+    <section className="mt-6 rounded border border-slate-300 bg-white p-3 text-sm" aria-label="新自・新三（事故）">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="font-bold">新自（交通事故）　{monthLabel}</h2>
+        <h2 className="font-bold">新自（交通事故）・新三（第三者行為）　{monthLabel}</h2>
         <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">{mine.length}件</span>
         {missing > 0
           ? <span className="rounded bg-yellow-300 px-2 py-0.5 text-xs font-bold text-yellow-900" role="status">⚠ 事故日・事故内容の未入力 {missing}件</span>
           : <span className="text-xs text-green-700">未入力はありません</span>}
       </div>
-      <p className="mt-1 text-xs text-slate-500">新・再が「初自」の方です。事故日・事故内容を入れてください（空の欄は黄色。上のメニューの「新患継続率」にも未入力の数が出ます）。事故日は「9/18」「0918」で入れられます。</p>
+      <p className="mt-1 text-xs text-slate-500">新・再が「初自」「新三」の方です。事故日・事故内容を入れてください（空の欄は黄色。上のメニューの「新患継続率」にも未入力の数が出ます）。事故日は「9/18」「0918」で入れられます。</p>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[860px] border-collapse text-[12px]">
           <thead>
             <tr className="bg-[#5b3f8c] text-left text-white">
-              {[['初診日', 84], ['カルテNo', 60], ['氏名', 100], ['きっかけ', 130], ['事故日', 90], ['事故内容', 0], ['担当', 60]].map(([h, w]) => <th key={h} className="whitespace-nowrap border border-[#5b3f8c] px-1 py-1 font-bold" style={w ? { width: w as number } : undefined}>{h}</th>)}
+              {[['初診日', 84], ['区分', 44], ['カルテNo', 60], ['氏名', 100], ['きっかけ', 130], ['事故日', 90], ['事故内容', 0], ['担当', 60]].map(([h, w]) => <th key={h} className="whitespace-nowrap border border-[#5b3f8c] px-1 py-1 font-bold" style={w ? { width: w as number } : undefined}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
             <Rows rows={mine} onPatch={onPatch} />
-            {mine.length === 0 && <tr><td colSpan={7} className="border p-3 text-center text-slate-500">この月の新自はまだありません。</td></tr>}
-            {pending.length > 0 && <tr><td colSpan={7} className="border bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">ほかの月の未入力（{pending.length}件）</td></tr>}
+            {mine.length === 0 && <tr><td colSpan={8} className="border p-3 text-center text-slate-500">この月の新自・新三はまだありません。</td></tr>}
+            {pending.length > 0 && <tr><td colSpan={8} className="border bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">ほかの月の未入力（{pending.length}件）</td></tr>}
             <Rows rows={pending} onPatch={onPatch} />
           </tbody>
         </table>

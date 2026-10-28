@@ -5,7 +5,7 @@
 import { categorizeCell } from './attendance';
 
 export const KIND_COLORS = { NEW: '#fca5a5', REVISIT: '#93c5fd', ACCIDENT: '#fdba74' } as const;
-export const KIND_COLOR_NAMES = { NEW: '初診', REVISIT: '再来', ACCIDENT: '新自・初自（交通事故）' } as const;
+export const KIND_COLOR_NAMES = { NEW: '初診', REVISIT: '再来', ACCIDENT: '新自・初自（交通事故）・新三（第三者行為）' } as const;
 /** 担当の色（初回・再来を担当する施術者に上から順に割り当てる。初診・再来・新自の色と重ならない色） */
 export const STAFF_PALETTE: { name: string; color: string }[] = [
   { name: '緑', color: '#bbf7d0' }, { name: '黄', color: '#fef08a' }, { name: '紫', color: '#e9d5ff' }, { name: '水色', color: '#a5f3fc' },
@@ -24,7 +24,7 @@ export function staffColorMap(list: { name: string; color: string }[] | undefine
 /** 初診・再来・新自のどれか（「上記初診対応」などの 2 枠目は 1 枠目の文字で判定する） */
 export function kindOf(text: string): keyof typeof KIND_COLORS | null {
   const c = categorizeCell(text);
-  return c.isNew ? (c.isJibai ? 'ACCIDENT' : 'NEW') : c.isRevisit ? 'REVISIT' : null;
+  return c.isNew ? (c.isJibai || c.isThird ? 'ACCIDENT' : 'NEW') : c.isRevisit ? 'REVISIT' : null;
 }
 
 /**

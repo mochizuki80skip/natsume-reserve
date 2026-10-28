@@ -11,7 +11,7 @@ final class Report
     public const AUTO = [
         'visit.am' => ['予約表：午前の来院数', 'num'], 'visit.pm' => ['予約表：午後の来院数', 'num'], 'visit.total' => ['予約表：来院数の合計', 'num'],
         'visit.jibai' => ['予約表：自賠の来院数', 'num'], 'visit.self' => ['予約表：自費（メニュー）の来院数', 'num'],
-        'new.new' => ['予約表：初診の人数', 'num'], 'new.revisit' => ['予約表：再来の人数', 'num'], 'new.jibai' => ['予約表：新患（自賠）の人数', 'num'], 'new.total' => ['予約表：初診・再来・新患（自賠）の合計', 'num'],
+        'new.new' => ['予約表：初診の人数', 'num'], 'new.revisit' => ['予約表：再来の人数', 'num'], 'new.jibai' => ['予約表：新患（自賠）の人数', 'num'], 'new.third' => ['予約表：新三（第三者）の人数', 'num'], 'new.total' => ['予約表：初診・再来・新患（自賠）・新三の合計', 'num'],
         'mado.copay' => ['窓口集計：一部負担金', 'yen'], 'mado.third' => ['窓口集計：第三者', 'yen'], 'mado.self' => ['窓口集計：自費', 'yen'], 'mado.acu' => ['窓口集計：鍼', 'yen'],
         'mado.goods' => ['窓口集計：物販', 'yen'], 'mado.colCopay' => ['窓口集計：未収回収 一部負担金', 'yen'], 'mado.colSelf' => ['窓口集計：未収回収 自費', 'yen'],
         'mado.diffCopay' => ['窓口集計：差額 一部負担金', 'yen'], 'mado.diffSelf' => ['窓口集計：差額 自費', 'yen'], 'mado.unknown' => ['窓口集計：不明金', 'yen'],
@@ -19,7 +19,7 @@ final class Report
         'mado.mail' => ['窓口集計：報告メール合計', 'yen'], 'mado.bank' => ['窓口集計：通帳入金額', 'yen'], 'mado.insClaim' => ['窓口集計：保険請求金額', 'yen'], 'mado.jibaiClaim' => ['窓口集計：自賠責請求金額', 'yen'],
         'workdays' => ['稼働日数（今月、今日までの営業日）', 'num'],
         'month.visits' => ['今月の来院数（今日まで）', 'num'], 'month.avg' => ['現在の平均（今月の来院数 ÷ 稼働日数）', 'dec'], 'month.achieve' => ['目標達成率（現在の平均 ÷ 平均来院数目標）', 'pct'],
-        'month.new' => ['今月の初診の人数', 'num'], 'month.revisit' => ['今月の再来の人数', 'num'], 'month.jibaiNew' => ['今月の新患（自賠）の人数', 'num'], 'month.goods' => ['今月の物販（窓口集計）', 'yen'],
+        'month.new' => ['今月の初診の人数', 'num'], 'month.revisit' => ['今月の再来の人数', 'num'], 'month.jibaiNew' => ['今月の新患（自賠）の人数', 'num'], 'month.third' => ['今月の新三（第三者）の人数', 'num'], 'month.goods' => ['今月の物販（窓口集計）', 'yen'],
     ];
     /** 店舗で入力する項目 */
     public const MANUAL = ['manual:num' => ['店舗で入力（数）', 'num'], 'manual:yen' => ['店舗で入力（金額）', 'yen'], 'manual:time' => ['店舗で入力（時間 例 1:05）', 'time'], 'manual:text' => ['店舗で入力（文章・毎日）', 'text'], 'manual:monthtext' => ['店舗で入力（文章・月に 1 回）', 'text']];
@@ -123,22 +123,23 @@ final class Report
             $byDate[$c['date']][] = $c;
         }
         $count = function (array $cells) use ($store, $setting, $date): array {
-            $n = ['am' => 0, 'pm' => 0, 'jibai' => 0, 'self' => 0, 'new' => 0, 'revisit' => 0, 'jibaiNew' => 0];
+            $n = ['am' => 0, 'pm' => 0, 'jibai' => 0, 'self' => 0, 'new' => 0, 'revisit' => 0, 'jibaiNew' => 0, 'third' => 0];
             $sessions = $cells ? Settings::storeSessions($store, $setting, $cells[0]['date']) : [];
             foreach ($cells as $c) {
                 if (Hours::isAm($sessions, (int)$c['time'])) $n['am']++; else $n['pm']++;
                 $cat = Text::categorize($c['text']);
                 if ($cat['isJibai']) $n['jibai']++;
                 if (in_array('自費', DayData::menusOf((string)($c['menus'] ?? '')), true)) $n['self']++;
-                if ($cat['isNew'] && $cat['isJibai']) $n['jibaiNew']++;
+                if ($cat['isThird']) $n['third']++;
+                elseif ($cat['isNew'] && $cat['isJibai']) $n['jibaiNew']++;
                 elseif ($cat['isNew']) $n['new']++;
                 elseif ($cat['isRevisit']) $n['revisit']++;
             }
             return $n;
         };
         $today = $count($byDate[$date] ?? []);
-        $month = ['visits' => 0, 'new' => 0, 'revisit' => 0, 'jibaiNew' => 0];
-        foreach ($byDate as $cells) { $x = $count($cells); $month['visits'] += $x['am'] + $x['pm']; $month['new'] += $x['new']; $month['revisit'] += $x['revisit']; $month['jibaiNew'] += $x['jibaiNew']; }
+        $month = ['visits' => 0, 'new' => 0, 'revisit' => 0, 'jibaiNew' => 0, 'third' => 0];
+        foreach ($byDate as $cells) { $x = $count($cells); $month['visits'] += $x['am'] + $x['pm']; $month['new'] += $x['new']; $month['revisit'] += $x['revisit']; $month['jibaiNew'] += $x['jibaiNew']; $month['third'] += $x['third']; }
         // 稼働日数：今月の今日までで、営業している日（定休日・祝日・臨時休業を除く）
         $closed = [];
         foreach (Db::all('SELECT * FROM day_status WHERE storeId = ? AND date BETWEEN ? AND ?', [$sid, $first, $date]) as $r) $closed[$r['date']] = Settings::closedOf(Settings::dayRow($r));
@@ -153,11 +154,11 @@ final class Report
         $avg = $workdays ? round($month['visits'] / $workdays, 1) : 0.0;
         $auto = [
             'visit.am' => $today['am'], 'visit.pm' => $today['pm'], 'visit.total' => $today['am'] + $today['pm'], 'visit.jibai' => $today['jibai'], 'visit.self' => $today['self'],
-            'new.new' => $today['new'], 'new.revisit' => $today['revisit'], 'new.jibai' => $today['jibaiNew'], 'new.total' => $today['new'] + $today['revisit'] + $today['jibaiNew'],
+            'new.new' => $today['new'], 'new.revisit' => $today['revisit'], 'new.jibai' => $today['jibaiNew'], 'new.third' => $today['third'], 'new.total' => $today['new'] + $today['revisit'] + $today['jibaiNew'] + $today['third'],
             'mado.total' => (int)($mv['copay'] ?? 0) + (int)($mv['third'] ?? 0) + (int)($mv['self'] ?? 0) + (int)($mv['acu'] ?? 0),
             'workdays' => $workdays, 'month.visits' => $month['visits'], 'month.avg' => $avg,
             'month.achieve' => isset($targets['month.avg']) && $targets['month.avg'] > 0 ? round($avg / $targets['month.avg'] * 100) : null,
-            'month.new' => $month['new'], 'month.revisit' => $month['revisit'], 'month.jibaiNew' => $month['jibaiNew'], 'month.goods' => $goodsMonth,
+            'month.new' => $month['new'], 'month.revisit' => $month['revisit'], 'month.jibaiNew' => $month['jibaiNew'], 'month.third' => $month['third'], 'month.goods' => $goodsMonth,
         ];
         foreach (array_keys(Madoguchi::DAY_KEYS) as $k) if (!isset($auto["mado.$k"])) $auto["mado.$k"] = isset($mv[$k]) ? (int)$mv[$k] : null;
 

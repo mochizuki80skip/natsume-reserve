@@ -98,7 +98,7 @@ export default function AdminLayout() {
               <Link to={`/admin/day/${today}`} className="hover:underline">予約表</Link>
               <Link to="/admin/shifts" className="hover:underline">シフト</Link>
               <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
-              <Link to="/admin/karte" className="hover:underline">新患継続率{(me.accidentMissing ?? 0) > 0 && <span className="ml-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 align-[1px] text-[10.5px] font-bold text-white" title="新自（交通事故）の事故日・事故内容の未入力" aria-label={`新自の未入力 ${me.accidentMissing}件`}>{me.accidentMissing}</span>}</Link>
+              <Link to="/admin/karte" className="hover:underline">新患継続率{(me.accidentMissing ?? 0) > 0 && <span className="ml-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 align-[1px] text-[10.5px] font-bold text-white" title="新自・新三の事故日・事故内容の未入力" aria-label={`新自の未入力 ${me.accidentMissing}件`}>{me.accidentMissing}</span>}</Link>
               {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
               <Link to="/admin/churn" className="hover:underline" title="離反者リスト・2週間フォロー">離反</Link>
               <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 final class Karte
 {
-    public const KINDS = ['NEW', 'ACCIDENT', 'REVISIT']; // 新患（初診・初）／初自／再
+    public const KINDS = ['NEW', 'ACCIDENT', 'THIRD', 'REVISIT']; // 新患（初診・初）／初自・新自／新三（新・第三者行為）／再
+    /** 事故日・事故内容を入れて、来院を通知する区分（新自・新三） */
+    public const INJURY_KINDS = ['ACCIDENT', 'THIRD'];
     public const TREATMENTS = ['矯正', 'マッサ'];
     public const VISITS = 5; // 2〜6回目
 
@@ -16,7 +18,7 @@ final class Karte
         'symptom' => ['腰', '肩', '首', '上肢', '前腕', '手', '背中', '股関節', '臀部', '大腿', '膝', '下腿', '足首', '足底', '頭', '自賠', '事故第三者'],
         'revisitAction' => ['LINE', 'DM'],
         // 予約表で予約ごとに選ぶメニューと物販（本部が追加・並べ替え・削除できる）。予約表では 2 段に分けて出す
-        'menu' => ['矯正', '2回目', '3回目', '6回目', '12回目', 'ワンコイン', '自費', 'ワクスキ'],
+        'menu' => ['矯正', '2回目', '3回目', '6回目', '12回目', 'ワンコイン', '自費', 'ワクスキ', '第三者', '自賠'],
         'goods' => ['パイオ', 'テープ', 'プロテイン', 'ODAIJINI', 'サポーター', '湿布', '回答書'],
     ];
     /** 内訳が必要なきっかけ（値＝内訳の選択肢の種類。null は記入のみ） */
@@ -54,6 +56,7 @@ final class Karte
     public static function kindOfText(string $text): ?string
     {
         $c = Text::categorize($text);
+        if ($c['isThird']) return 'THIRD';
         if ($c['isNew']) return ($c['isJibai'] ? 'ACCIDENT' : 'NEW');
         if ($c['isRevisit']) return 'REVISIT';
         return null;
@@ -105,7 +108,8 @@ final class Karte
     public static function nameOfText(string $text): string
     {
         $t = Text::dropHonorific(Text::dropPhone($text));
-        $t = preg_replace('/\s*[（(](初診|初自|初|再|再来|新自)[）)]\s*/u', ' ', $t) ?? $t;
+        $t = preg_replace('/\s*[（(](初診|初自|初|再|再来|新自|新三)[）)]\s*/u', ' ', $t) ?? $t;
+        $t = preg_replace('/(?:^|\s)新三(?=\s|$)/u', ' ', $t) ?? $t;
         $t = preg_replace('/\s*(初診|初自|新自|再来|再診)\s*/u', ' ', $t) ?? $t;
         return trim(preg_replace('/\s+/u', ' ', $t) ?? $t);
     }
@@ -146,17 +150,17 @@ final class Karte
             $sur = self::surnameLenOf($w['name']) ?? self::surnameLenFromCards($store['id'], $w['name']);
             $added = Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, surnameLen, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)', [
                 $newId, $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr(self::karteName($w['name']), 0, 40), $sur,
-                $w['ref'] !== '' && $w['refTrig'] !== '' ? $w['refTrig'] : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' && $w['refTrig'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
+                $w['ref'] !== '' && $w['refTrig'] !== '' ? $w['refTrig'] : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' && $w['refTrig'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : ($w['kind'] === 'THIRD' ? '事故第三者' : ''), mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
             // 新自が来院（来院チェック）したら、エリアMG・本部が決めた人へメールで知らせる。昔の日のチェックでは送らない
-            if ($added > 0 && $w['kind'] === 'ACCIDENT' && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId);
+            if ($added > 0 && in_array($w['kind'], self::INJURY_KINDS, true) && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId);
         }
     }
 
     /** 新自（交通事故）の行で、事故日・事故内容のどちらかが空の数（前の月も含めてすべて） */
     public static function accidentMissing(string $storeId): int
     {
-        return (int)(Db::one("SELECT COUNT(*) AS n FROM karte WHERE storeId = ? AND kind = 'ACCIDENT' AND (accidentDate IS NULL OR accidentNote = '')", [$storeId])['n'] ?? 0);
+        return (int)(Db::one("SELECT COUNT(*) AS n FROM karte WHERE storeId = ? AND kind IN ('ACCIDENT', 'THIRD') AND (accidentDate IS NULL OR accidentNote = '')", [$storeId])['n'] ?? 0);
     }
 
     /** 店舗の入っているエリアの名前 */
@@ -202,7 +206,7 @@ final class Karte
     public static function notifyAccident(array $store, string $karteId): void
     {
         try {
-            $r = Db::one('SELECT date, srcTime, staff, trig, name, surnameLen, karteNo, notifiedAt FROM karte WHERE id = ?', [$karteId]);
+            $r = Db::one('SELECT date, srcTime, kind, staff, trig, name, surnameLen, karteNo, notifiedAt FROM karte WHERE id = ?', [$karteId]);
             if (!$r || $r['notifiedAt'] !== null) return;
             $to = self::notifyRecipients($store);
             $lines = Line::targetsFor(self::areasOf($store));
@@ -216,18 +220,22 @@ final class Karte
             $time = $r['srcTime'] !== null ? ' ' . Time::minToHm((int)$r['srcTime']) : '';
             $url = rtrim(Config::str('APP_URL'), '/');
             $who = self::notifyWho((string)$r['name'], (string)$r['karteNo'], $r['surnameLen'] === null ? null : (int)$r['surnameLen']);
-            $body = "交通事故（新自）の患者様が来院しました。\n\n"
+            // 新自＝交通事故、新三＝第三者行為（交通事故以外で、ほかの人によるケガ）
+            $third = $r['kind'] === 'THIRD';
+            [$tag, $what, $sec] = $third ? ['新三', '第三者行為（新三）', '新自・新三'] : ['新自', '交通事故（新自）', '新自・新三'];
+            $first = $third ? '第三者行為の初診' : '交通事故の初診';
+            $body = "{$what}の患者様が来院しました。\n\n"
                 . "店舗：{$store['name']}\n"
                 . ($who !== '' ? "患者様：{$who}\n" : '')
                 . "初診日：{$md}（{$wd}）{$time}\n"
                 . ($r['staff'] !== '' ? "担当：{$r['staff']}\n" : '')
                 . ($r['trig'] !== '' ? "きっかけ：{$r['trig']}\n" : '')
-                . "\n事故日・事故内容は、店舗の「新患継続率」の下の「新自（交通事故）」で入れてください。\n"
+                . "\n事故日・事故内容は、店舗の「新患継続率」の下の「{$sec}」で入れてください。\n"
                 . ($url !== '' ? "{$url}/admin/karte?store=" . rawurlencode($store['code']) . "\n" : '')
                 . "\n※このメールは送信専用です。";
-            if ($to) Mail::send($to, "【新自】{$store['name']} {$md} 交通事故の初診がありました", $body);
+            if ($to) Mail::send($to, "【{$tag}】{$store['name']} {$md} {$first}がありました", $body);
             if ($lines) {
-                $text = "【新自】{$store['name']}\n{$md}（{$wd}）{$time} 交通事故の初診がありました。" . ($who !== '' ? "\n患者様：{$who}" : '')
+                $text = "【{$tag}】{$store['name']}\n{$md}（{$wd}）{$time} {$first}がありました。" . ($who !== '' ? "\n患者様：{$who}" : '')
                     . ($r['staff'] !== '' ? "\n担当：{$r['staff']}" : '') . ($r['trig'] !== '' ? "\nきっかけ：{$r['trig']}" : '')
                     . "\n事故日・事故内容は新患継続率の下で入れてください。" . ($url !== '' ? "\n{$url}/admin/karte?store=" . rawurlencode($store['code']) : '');
                 foreach ($lines as $t) Line::push($t, $text);

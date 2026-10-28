@@ -273,7 +273,7 @@ function line_webhook(): never
         $t = Db::one('SELECT id, label FROM line_target WHERE code = ? AND codeExpires > NOW()', [$text]);
         if (!$t) { if ($reply !== '') Line::reply($reply, 'その番号は見つかりませんでした。本部の画面で番号を出し直してください（番号は 24 時間で使えなくなります）。'); continue; }
         Db::exec("UPDATE line_target SET targetId = ?, kind = ?, code = NULL, codeExpires = NULL, active = 1 WHERE id = ?", [$id, $kind === 'user' ? 'user' : 'group', $t['id']]);
-        if ($reply !== '') Line::reply($reply, "登録しました（{$t['label']}）。新自（交通事故）の患者様が来院したときに、ここへお知らせが届きます。");
+        if ($reply !== '') Line::reply($reply, "登録しました（{$t['label']}）。新自（交通事故）・新三（第三者行為）の患者様が来院したときに、ここへお知らせが届きます。");
     }
     Http::json(['ok' => true]);
 }

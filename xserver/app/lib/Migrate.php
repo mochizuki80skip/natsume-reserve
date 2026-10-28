@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 41;
+    private const VERSION = 42;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -294,6 +294,18 @@ final class Migrate
                         $x = $r['text'] !== null ? $split((string)$r['text']) : null;
                         $len = ($x && (str_starts_with((string)$r['name'], $x[0]) || str_starts_with($x[0], (string)$r['name']))) ? $x[1] : ($cards[(string)$r['name']] ?? null);
                         if ($len !== null && $len < mb_strlen((string)$r['name'])) $upd->execute([min(20, $len), $r['id']]);
+                    }
+                }
+            }
+            if ($ver < 42) {
+                // 予約表のメニューに「第三者」「自賠」を足す（新三＝新・第三者行為の区分と合わせて）。本部が選択肢を作ってあるときだけ後ろに足す
+                if (self::hasTable($pdo, 'karte_option') && (int)$pdo->query("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'menu'")->fetch()['n'] > 0) {
+                    foreach (['第三者', '自賠'] as $label) {
+                        $q = $pdo->prepare("SELECT COUNT(*) AS n FROM karte_option WHERE category = 'menu' AND label = ?");
+                        $q->execute([$label]);
+                        if ((int)$q->fetch()['n'] > 0) continue;
+                        $at = (int)$pdo->query("SELECT COALESCE(MAX(sortOrder), 0) + 1 AS n FROM karte_option WHERE category = 'menu'")->fetch()['n'];
+                        $pdo->prepare("INSERT INTO karte_option (category, label, sortOrder) VALUES ('menu', ?, ?)")->execute([$label, $at]);
                     }
                 }
             }

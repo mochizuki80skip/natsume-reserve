@@ -14,7 +14,7 @@ import { useAdmin } from './Layout';
 interface Resp { month: string; today: string; storeName: string; rows: KarteRow[]; accidentPending?: KarteRow[]; options: KarteOptions; detailFor: DetailFor; staff: string[] }
 
 const shiftMonth = (ym: string, n: number) => { const [y, m] = ym.split('-').map(Number); return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7); };
-const KIND_CLASS: Record<KarteKind, string> = { NEW: 'bg-[#e34948] text-white', ACCIDENT: 'bg-[#eda100] text-slate-900', REVISIT: 'bg-[#2a78d6] text-white' };
+const KIND_CLASS: Record<KarteKind, string> = { NEW: 'bg-[#e34948] text-white', ACCIDENT: 'bg-[#eda100] text-slate-900', THIRD: 'bg-[#c2410c] text-white', REVISIT: 'bg-[#2a78d6] text-white' };
 const VISIT_HEAD = ['#dbe9f7', '#c9def2', '#b7d3ee', '#a6c8ea', '#8fb8e6'];
 const ERR = 'bg-yellow-300';
 const cellBase = 'h-[24px] w-full bg-transparent px-1 text-center text-[11.5px] outline-none focus:bg-yellow-50';
@@ -106,7 +106,7 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
       </td>
       <td className={`border ${KIND_CLASS[row.kind]}`}>
         <select value={row.kind} onChange={(ev) => p({ kind: ev.target.value as KarteKind })} aria-label="新・再" className={`${cellBase} appearance-none font-bold`}>
-          {(['NEW', 'ACCIDENT', 'REVISIT'] as KarteKind[]).map((k) => <option key={k} value={k} className="bg-white text-slate-900">{KIND_LABEL[k]}</option>)}
+          {(['NEW', 'ACCIDENT', 'THIRD', 'REVISIT'] as KarteKind[]).map((k) => <option key={k} value={k} className="bg-white text-slate-900">{KIND_LABEL[k]}</option>)}
         </select>
       </td>
       <td className={`border ${e('age')}`}><Txt value={row.age === null ? '' : String(row.age)} onSave={(v) => p({ age: v === '' ? null : (v as unknown as number) })} label="年齢" inputMode="numeric" maxLength={3} half /></td>
@@ -228,7 +228,7 @@ export default function KartePage() {
     if (!r.ok) { alert((await r.json().catch(() => ({}))).error ?? '削除できませんでした'); return; }
     setRows((rs) => rs.filter((x) => x.id !== id));
     setPending((rs) => rs.filter((x) => x.id !== id));
-    if (row.kind === 'ACCIDENT') refreshMe();
+    if (row.kind === 'ACCIDENT' || row.kind === 'THIRD') refreshMe();
   }
 
   const count = (k: KarteKind) => rows.filter((r) => r.kind === k).length;
@@ -245,6 +245,7 @@ export default function KartePage() {
         <button type="button" onClick={() => go(1)} className="rounded border bg-white px-2 py-0.5 text-sm">翌月 ›</button>
         <span className="ml-2 rounded bg-red-100 px-2 py-0.5 text-sm font-bold text-red-800">新患 {count('NEW')}</span>
         <span className="rounded bg-amber-100 px-2 py-0.5 text-sm font-bold text-amber-900">初自 {count('ACCIDENT')}</span>
+        <span className="rounded bg-orange-100 px-2 py-0.5 text-sm font-bold text-orange-900">新三 {count('THIRD')}</span>
         <span className="rounded bg-blue-100 px-2 py-0.5 text-sm font-bold text-blue-800">再 {count('REVISIT')}</span>
         <span className="rounded bg-slate-100 px-2 py-0.5 text-sm font-bold">合計 {rows.length}</span>
         {missingRows > 0 && <span className="rounded bg-yellow-200 px-2 py-0.5 text-sm font-bold text-yellow-900">⚠ 未入力 {missingRows}件</span>}

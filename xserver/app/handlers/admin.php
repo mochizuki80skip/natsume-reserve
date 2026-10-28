@@ -202,7 +202,7 @@ function adm_staff_counts(): never
     $dates = Time::datesOfMonth($ym);
     $cells = Db::all('SELECT date, text, menus, staff FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0 AND visited = 1', [$store['id'], $dates[0], $dates[count($dates) - 1]]);
     $out = [];
-    $row = fn() => ['total' => 0, 'new' => 0, 'revisit' => 0, 'jibai' => 0, 'counts' => [], 'firsts' => 0, 'reached2' => 0, 'days' => []];
+    $row = fn() => ['total' => 0, 'new' => 0, 'revisit' => 0, 'jibai' => 0, 'third' => 0, 'counts' => [], 'firsts' => 0, 'reached2' => 0, 'days' => []];
     foreach ($cells as $c) {
         $text = (string)$c['text'];
         if (!Availability::isPatientText($text)) continue;
@@ -211,7 +211,8 @@ function adm_staff_counts(): never
         $out[$s]['total']++;
         $out[$s]['days'][$c['date']] = ($out[$s]['days'][$c['date']] ?? 0) + 1; // 日ごとの人数
         $cat = Text::categorize($text);
-        if ($cat['isNew'] && !$cat['isJibai']) $out[$s]['new']++;
+        if ($cat['isThird']) $out[$s]['third']++;
+        elseif ($cat['isNew'] && !$cat['isJibai']) $out[$s]['new']++;
         if ($cat['isNew'] && $cat['isJibai']) $out[$s]['jibai']++;
         if ($cat['isRevisit']) $out[$s]['revisit']++;
         foreach (DayData::menusOf((string)$c['menus']) as $m) if (preg_match('/^\d+回目$/u', $m)) $out[$s]['counts'][$m] = ($out[$s]['counts'][$m] ?? 0) + 1;

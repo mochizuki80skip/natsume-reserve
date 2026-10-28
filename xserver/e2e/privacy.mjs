@@ -78,7 +78,7 @@ const sp = await br.newPage();
 await sp.goto(B + '/admin/login/S001'); await sp.fill('input[type=password]', 'password'); await sp.click('button[type=submit]'); await sp.waitForURL(/admin\/day/);
 const res = (await api(sp, 'GET', '/api/admin/reservations?status=all'))[1].rows.find((r) => r.name === '見本 媒子');
 await api(sp, 'PUT', '/api/admin/visit', { date: res.date, time: res.time, bed: res.bed, visited: true });
-const k = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.name === '見本 媒子');
+const k = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.name === '見本媒子');
 ok('新患継続率：きっかけ SNS・内訳 見本インスタ', k?.trig === 'SNS' && k?.trigDetail === '見本インスタ', JSON.stringify(k && [k.trig, k.trigDetail]));
 await sp.goto(`${B}/admin/karte?month=${res.date.slice(0, 7)}`); await sp.waitForSelector('text=継続の状況');
 ok('内訳の欄に媒体名が見える', (await sp.getByLabel('内訳').first().inputValue()) === '見本インスタ');
@@ -86,7 +86,7 @@ const m2 = (await api(hp, 'GET', '/api/admin/hq/referrals'))[1].rows.find((r) =>
 ok('媒体の予約数・新患継続率の数', m2.reservations === 1 && m2.kartes === 1, JSON.stringify(m2));
 // きっかけを変えると新患継続率もそろう
 await api(hp, 'PUT', '/api/admin/hq/referrals', { id: m2.id, trig: 'チラシ' });
-const k2 = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.name === '見本 媒子');
+const k2 = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.name === '見本媒子');
 ok('きっかけを変えると行もそろう', k2.trig === 'チラシ' && k2.trigDetail === '見本インスタ');
 ok('ページのエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();

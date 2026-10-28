@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { WEEKDAY_JA, nowJst, weekdayOf } from '@/lib/time';
 
-interface Row { staff: string; total: number; new: number; revisit: number; jibai: number; counts: Record<string, number>; firsts: number; reached2: number; days: Record<string, number> }
+interface Row { staff: string; total: number; new: number; revisit: number; jibai: number; third?: number; counts: Record<string, number>; firsts: number; reached2: number; days: Record<string, number> }
 interface Resp { month: string; dates: string[]; rows: Row[]; partial: boolean }
 
 const shift = (ym: string, n: number) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
@@ -19,8 +19,8 @@ export default function StaffCountsPage() {
   // まとめ（新患・再来・回数・2回目到達率）
   const visitCols = [...new Set(rows.flatMap((r) => Object.keys(r.counts)))].sort((a, b) => parseInt(a) - parseInt(b));
   const rate = (r: Row) => (r.firsts ? `${Math.round((r.reached2 / r.firsts) * 100)}%` : '－');
-  const sumHeader = ['担当', '施術人数（月）', '新患', '再来', '新自', ...visitCols, '初回担当', '2回目到達率'];
-  const sumLine = (r: Row) => [label(r), r.total, r.new, r.revisit, r.jibai, ...visitCols.map((m) => r.counts[m] ?? 0), r.firsts, rate(r)];
+  const sumHeader = ['担当', '施術人数（月）', '新患', '再来', '新自', '新三', ...visitCols, '初回担当', '2回目到達率'];
+  const sumLine = (r: Row) => [label(r), r.total, r.new, r.revisit, r.jibai, r.third ?? 0, ...visitCols.map((m) => r.counts[m] ?? 0), r.firsts, rate(r)];
 
   // 日ごと（施術に入った人数）：縦＝日付、横＝施術者。月の全日を並べ、いちばん上に月の合計
   const dayTotal = (d: string) => rows.reduce((n, r) => n + (r.days[d] ?? 0), 0);
@@ -51,7 +51,7 @@ export default function StaffCountsPage() {
       </div>
       <p className="mb-2 text-xs text-slate-600">
         来院チェック済みの予約を、担当ごとに数えます（担当は予約表のメニューの帯で付けます）。
-        {view === 'daily' ? '日ごとの人数を足したものが「月の合計」です。' : '「2回目到達率」＝その月に初回（初診・再来・新自）を担当した患者様のうち、2回目に来た割合（新患継続率から）。'}
+        {view === 'daily' ? '日ごとの人数を足したものが「月の合計」です。' : '「2回目到達率」＝その月に初回（初診・再来・新自・新三）を担当した患者様のうち、2回目に来た割合（新患継続率から）。'}
       </p>
       {data?.partial && <p className="mb-2 rounded bg-amber-50 px-3 py-1 text-xs text-amber-900">この月は予約表の保存期間を過ぎた日を含むため、残っている日だけの数字です（2回目到達率は新患継続率から出ます）。</p>}
       {error && <p className="text-sm text-red-700">{error.message}</p>}

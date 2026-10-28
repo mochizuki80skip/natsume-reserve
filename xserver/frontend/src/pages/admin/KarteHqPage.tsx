@@ -6,7 +6,7 @@ import { isDropped } from '@/components/KarteRetention';
 import { Donut, SERIES_COLORS, StackedColumns } from '@/components/charts';
 import { useAdmin } from './Layout';
 
-interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean }
+interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean }
 interface Area { id?: string; name: string; stores: string[] }
 interface StoreInfo { code: string; name: string; active?: boolean }
 interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string }
@@ -107,7 +107,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data || !opt || !view) return <p className="text-sm text-slate-500">読み込み中…</p>;
   const { curRows, prevRows, buckets, trigBuckets } = view;
-  const kinds = [['NEW', '新患（初診・初）'], ['ACCIDENT', '初自（自賠）'], ['REVISIT', '再来']] as const;
+  const kinds = [['NEW', '新患（初診・初）'], ['ACCIDENT', '初自（自賠）'], ['THIRD', '新三（第三者）'], ['REVISIT', '再来']] as const;
   const cnt = (list: HqRow[], k?: string) => (k ? list.filter((r) => r.kind === k).length : list.length);
   const diff = (a: number, b: number) => (a - b >= 0 ? `+${a - b}` : `${a - b}`);
   const prevLabel = unit === 'fy' ? '前年度' : unit === 'month' ? '前年' : '前月';

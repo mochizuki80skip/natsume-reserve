@@ -24,7 +24,7 @@ export default function LineNotifyEditor() {
 
   return (
     <div className="mt-5 border-t pt-4" aria-label="LINEの通知">
-      <h3 className="font-bold">新自が来院したときの LINE</h3>
+      <h3 className="font-bold">新自・新三が来院したときの LINE</h3>
       <p className="mt-1 text-xs text-slate-600">LINE 公式アカウント（無料プラン：月 200 通まで）から、登録した個人・グループのトークに知らせます。1 人に 1 回送ると 1 通、グループは人数分を数えます。200 通を超えた月は、その月の残りが送られないだけで料金はかかりません。</p>
       {msg && <p className={`mt-2 rounded px-3 py-1 ${msg.ok ? 'bg-brand-light' : 'bg-red-50 text-red-700'}`}>{msg.text}</p>}
 

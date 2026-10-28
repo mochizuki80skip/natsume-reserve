@@ -17,7 +17,7 @@ function karte_get(): never
         'month' => $ym, 'today' => $today, 'storeName' => $store['name'],
         'rows' => array_map([Karte::class, 'rowOut'], $rows),
         // 新自（交通事故）で事故日・事故内容が空の、ほかの月の行（この月の分は rows にある）
-        'accidentPending' => array_map([Karte::class, 'rowOut'], Db::all("SELECT * FROM karte WHERE storeId = ? AND kind = 'ACCIDENT' AND (accidentDate IS NULL OR accidentNote = '') AND (date < ? OR date > ?) ORDER BY date DESC LIMIT 200", [$store['id'], $dates[0], $dates[count($dates) - 1]])),
+        'accidentPending' => array_map([Karte::class, 'rowOut'], Db::all("SELECT * FROM karte WHERE storeId = ? AND kind IN ('ACCIDENT', 'THIRD') AND (accidentDate IS NULL OR accidentNote = '') AND (date < ? OR date > ?) ORDER BY date DESC LIMIT 200", [$store['id'], $dates[0], $dates[count($dates) - 1]])),
         'options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'staff' => $staff,
     ]);
 }
@@ -240,7 +240,7 @@ function karte_export(): never
     Karte::sync($store, $ym);
     $dates = Time::datesOfMonth($ym);
     $rows = Db::all('SELECT * FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? ORDER BY date ASC, srcTime IS NULL, srcTime ASC, createdAt ASC', [$store['id'], $dates[0], $dates[count($dates) - 1]]);
-    $kindJa = ['NEW' => '新患', 'ACCIDENT' => '初自', 'REVISIT' => '再'];
+    $kindJa = ['NEW' => '新患', 'ACCIDENT' => '初自', 'THIRD' => '新三', 'REVISIT' => '再'];
     $md = fn(string $d) => $d === '' ? '' : (int)substr($d, 5, 2) . '/' . (int)substr($d, 8, 2);
     $header = ['日付', 'カルテNo', 'きっかけ／再来アクション', '内訳', '氏名', '新・再', '年齢', '性別', '症状カテゴリー', '症状', '担当', '施術内容'];
     for ($i = 2; $i <= 6; $i++) array_push($header, "{$i}回目 日付", "{$i}回目 担当", "{$i}回目 施術");

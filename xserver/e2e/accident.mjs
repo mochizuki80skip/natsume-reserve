@@ -73,7 +73,7 @@ await api(st, 'GET', `/api/admin/karte?month=${OLD.slice(0, 7)}`); // 昔の月�
 const me1 = (await api(st, 'GET', '/api/admin/me'))[1];
 ok('未入力の数（前の月も含めて 2 件）', me1.accidentMissing === 2, String(me1.accidentMissing));
 await st.goto(`${B}/admin/karte`); await st.waitForTimeout(1200);
-const sec = st.getByRole('region', { name: '新自（交通事故）' });
+const sec = st.getByRole('region', { name: '新自・新三（事故）' });
 ok('継続率の下に新自の一覧（この月の分＋ほかの月の未入力）', await sec.isVisible() && (await sec.textContent()).includes('見本太郎') && (await sec.textContent()).includes('ほかの月の未入力（1件）') && (await sec.textContent()).includes('未入力 2件'));
 ok('メニューに赤い数字', (await st.getByRole('link', { name: /新患継続率/ }).first().textContent()).includes('2'));
 // 今日の行の事故日・事故内容を入れる（9/18 → 初診日より前の日）

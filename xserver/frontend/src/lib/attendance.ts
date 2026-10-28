@@ -10,22 +10,27 @@ export function isContinuationText(text: string | null | undefined): boolean {
 }
 
 /** 予約表の内訳集計に使う区分。1 つのセルが複数に該当することがある（例：初診かつ自賠） */
-export interface CellCategories { isNew: boolean; isRevisit: boolean; isJibai: boolean }
+export interface CellCategories { isNew: boolean; isRevisit: boolean; isJibai: boolean; isThird: boolean }
 
 /**
  * セルの文字から内訳を判定する（サーバー側 Text::categorize と同じ決まり）。
  * - 初診：「（初診）」「（初自）」「（初）」（半角括弧も可）、または括弧なしの「初診」「初自」を含む
  * - 再来：「（再）」、または括弧なしの「再来」「再診」を含む
  * - 自賠：「初自」「自賠」「事故」を含む（例：山田 自賠、鈴木（事故））
+ * - 新三（新・第三者行為）：「（新三）」、または前後に空白のある「新三」（新三郎さんと区別）。初診にも数える
  * 括弧なしの「初」「再」1文字はお名前（初美など）と区別できないので数えない。2枠目の「上記初診対応」「上記再来対応」は対象外
  */
+export const THIRD_RE = /[（(]新三[）)]|(?:^|\s)新三(?:\s|$)/;
+
 export function categorizeCell(text: string | null | undefined): CellCategories {
   const t = (text ?? '').trim();
-  if (isContinuationText(t)) return { isNew: false, isRevisit: false, isJibai: false };
+  if (isContinuationText(t)) return { isNew: false, isRevisit: false, isJibai: false, isThird: false };
+  const isThird = THIRD_RE.test(t);
   return {
-    isNew: /[（(]初(診|自)?[）)]|初診|初自|新自/.test(t),
+    isNew: isThird || /[（(]初(診|自)?[）)]|初診|初自|新自/.test(t),
     isRevisit: /[（(]再[）)]|再来|再診/.test(t),
-    isJibai: /自賠|事故|初自|新自/.test(t),
+    isJibai: !isThird && /自賠|事故|初自|新自/.test(t),
+    isThird,
   };
 }
 

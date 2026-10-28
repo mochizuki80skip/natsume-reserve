@@ -562,7 +562,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   // 電話で取った予約：氏名と（初診）などをセルに入れ、電話番号はセルとは別に保存する。電話番号だけ直すときにも使う
   async function savePhoneBooking(time: number, bed: number, v: { kind: PhoneKind; name: string; phone: string }, phoneOnly: boolean): Promise<string | null> {
     if (!phoneOnly) {
-      const suffix = { NEW: '（初診）', ACCIDENT: '（新自）', REVISIT: '（再来）', RETURN: '' }[v.kind];
+      const suffix = { NEW: '（初診）', ACCIDENT: '（新自）', THIRD: '（新三）', REVISIT: '（再来）', RETURN: '' }[v.kind];
       const cont = v.kind === 'REVISIT' ? '上記再来対応' : v.kind === 'RETURN' ? null : '上記初診対応';
       const changes = [{ time, bed, text: `${dropHonorific(v.name)}${suffix}` }];
       const t2 = time + data.slotMinutes;
@@ -621,7 +621,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   // ---------- 集計 ----------
   const counts = useMemo(() => {
     // 予約／来院の人数に加えて、内訳（初診＝（初診）（初自）（初）、再来＝（再）、自賠＝（初自）または「自賠」「事故」の手入力）を数える
-    const c = { rAm: 0, rPm: 0, vAm: 0, vPm: 0, nAm: 0, nPm: 0, reAm: 0, rePm: 0, jAm: 0, jPm: 0 };
+    const c = { rAm: 0, rPm: 0, vAm: 0, vPm: 0, nAm: 0, nPm: 0, reAm: 0, rePm: 0, jAm: 0, jPm: 0, tAm: 0, tPm: 0 };
     for (const [k, v] of cells) {
       if (!isPatientText(v)) continue;
       const time = Number(k.split(':')[0]);
@@ -632,6 +632,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
       if (cat.isNew) { if (a) c.nAm++; else c.nPm++; }
       if (cat.isRevisit) { if (a) c.reAm++; else c.rePm++; }
       if (cat.isJibai) { if (a) c.jAm++; else c.jPm++; }
+      if (cat.isThird) { if (a) c.tAm++; else c.tPm++; }
     }
     return c;
   }, [cells, visited, data.sessions]);
@@ -706,7 +707,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
       <div className="no-print mb-1 flex flex-wrap gap-x-2.5 gap-y-0.5 px-0.5 text-[11px] sm:hidden" aria-label="この日の人数">
         <span>予約 <b className="text-[13px]">{counts.rAm + counts.rPm}</b>（午前{counts.rAm}・午後{counts.rPm}）</span>
         <span>来院 <b className="text-[13px] text-green-700">{counts.vAm + counts.vPm}</b></span>
-        <span>初診{counts.nAm + counts.nPm} 再来{counts.reAm + counts.rePm} 自賠{counts.jAm + counts.jPm}</span>
+        <span>初診{counts.nAm + counts.nPm} 再来{counts.reAm + counts.rePm} 自賠{counts.jAm + counts.jPm}{counts.tAm + counts.tPm > 0 ? ` 新三${counts.tAm + counts.tPm}` : ''}</span>
         <span>キャンセル{cancelStat.all}（変更{cancelStat.changed}・未取得{cancelStat.none}）</span>
       </div>
       <button type="button" onClick={() => setMobSet(!mobSet)} aria-expanded={mobSet} className="no-print mb-1 w-full rounded border bg-white px-2 py-1 text-left text-xs text-brand-dark sm:hidden">
@@ -721,12 +722,13 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
             <tr><td className="pr-2 text-slate-500">来院</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vPm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm + counts.vPm}</td></tr>
           </tbody>
         </table>
-        <table className="text-sm" title="内訳。初診＝「（初診）」「（初自）」「（初）」または括弧なしの「初診」「初自」、再来＝「（再）」または括弧なしの「再来」「再診」、自賠＝「初自」「自賠」「事故」を含むセル（手入力可）">
+        <table className="text-sm" title="内訳。初診＝「（初診）」「（初自）」「（初）」または括弧なしの「初診」「初自」、再来＝「（再）」または括弧なしの「再来」「再診」、自賠＝「初自」「自賠」「事故」を含むセル、新三＝「（新三）」のセル（初診にも数える。手入力可）">
           <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
           <tbody>
             <tr><td className="pr-2 text-slate-500">初診</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nPm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm + counts.nPm}</td></tr>
             <tr><td className="pr-2 text-slate-500">再来</td><td className="px-2 text-right font-bold tabular-nums">{counts.reAm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.rePm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.reAm + counts.rePm}</td></tr>
             <tr><td className="pr-2 text-slate-500">自賠</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jPm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm + counts.jPm}</td></tr>
+            <tr><td className="pr-2 text-slate-500">新三</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.tAm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.tPm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.tAm + counts.tPm}</td></tr>
           </tbody>
         </table>
         {menuOptions.length > 0 && panels.menu && (
@@ -906,7 +908,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setPhoneDlg({ time: sel.time, bed: sel.bed })}
                       className="rounded border-2 border-brand bg-white px-2 py-0.5 text-xs font-bold text-brand-dark hover:bg-brand-light">📞 {minToHm(sel.time)} ベッド{sel.bed} に電話予約を入れる</button>
                   )}
-                  <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自・メニュー・物販・担当を付けられます{sel && !sText.trim() ? '。空いたセルでは電話予約（氏名・電話番号）を入れられます' : ''}</span>
+                  <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自・新三・メニュー・物販・担当を付けられます{sel && !sText.trim() ? '。空いたセルでは電話予約（氏名・電話番号）を入れられます' : ''}</span>
                 </>
               )}
             </div>

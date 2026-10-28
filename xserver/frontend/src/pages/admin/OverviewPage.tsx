@@ -5,7 +5,7 @@ import { addDays, formatDateJa } from '@/lib/time';
 import { useAdmin } from './Layout';
 import ClosureBulkEditor from '@/components/ClosureBulkEditor';
 
-interface Row { code: string; name: string; closed: boolean; published: boolean | null; rAm: number; rPm: number; vAm: number; vPm: number; web: number; nw: number; re: number; jb: number; cancel: number; noshow: number }
+interface Row { code: string; name: string; closed: boolean; published: boolean | null; rAm: number; rPm: number; vAm: number; vPm: number; web: number; nw: number; re: number; jb: number; th?: number; cancel: number; noshow: number }
 interface Resp { date: string; today: string; rows: Row[]; sum: Omit<Row, 'code' | 'name' | 'closed' | 'published'>; storeCount: number }
 
 export default function OverviewPage() {
@@ -44,6 +44,7 @@ export default function OverviewPage() {
               <th className="px-2 py-1 text-right" rowSpan={2}>初診</th>
               <th className="px-2 py-1 text-right" rowSpan={2}>再来</th>
               <th className="px-2 py-1 text-right" rowSpan={2}>自賠</th>
+              <th className="px-2 py-1 text-right" rowSpan={2}>新三</th>
               <th className="px-2 py-1 text-right" rowSpan={2}>ｷｬﾝｾﾙ<br /><span className="font-normal">（うち無断）</span></th>
               <th rowSpan={2}></th>
             </tr>
@@ -62,7 +63,7 @@ export default function OverviewPage() {
                   <td className={num}>{r.rAm}</td><td className={num}>{r.rPm}</td><td className={`${num} font-bold`}>{r.rAm + r.rPm}</td>
                   <td className={`${num} text-green-700`}>{r.vAm}</td><td className={`${num} text-green-700`}>{r.vPm}</td><td className={`${num} font-bold text-green-700`}>{r.vAm + r.vPm}</td>
                   <td className={num}>{r.web}</td>
-                  <td className={num}>{r.nw}</td><td className={num}>{r.re}</td><td className={`${num} text-amber-800`}>{r.jb}</td>
+                  <td className={num}>{r.nw}</td><td className={num}>{r.re}</td><td className={`${num} text-amber-800`}>{r.jb}</td><td className={`${num} text-amber-800`}>{r.th ?? 0}</td>
                   <td className={num}>{r.cancel}{r.noshow ? <span className="ml-1 text-xs text-red-700">({r.noshow})</span> : ''}</td>
                   <td className="whitespace-nowrap px-2 py-1">
                     <form action="/api/admin/switch" method="post" className="inline">
@@ -73,7 +74,7 @@ export default function OverviewPage() {
                 </tr>
               );
             })}
-            {rows.length === 0 && <tr><td colSpan={14} className="px-2 py-4 text-center text-slate-500">稼働中の店舗がありません</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={15} className="px-2 py-4 text-center text-slate-500">稼働中の店舗がありません</td></tr>}
           </tbody>
           {rows.length > 0 && (
             <tfoot>
@@ -82,7 +83,7 @@ export default function OverviewPage() {
                 <td className={num}>{sum.rAm}</td><td className={num}>{sum.rPm}</td><td className={num}>{sum.rAm + sum.rPm}</td>
                 <td className={`${num} text-green-700`}>{sum.vAm}</td><td className={`${num} text-green-700`}>{sum.vPm}</td><td className={`${num} text-green-700`}>{sum.vAm + sum.vPm}</td>
                 <td className={num}>{sum.web}</td>
-                <td className={num}>{sum.nw}</td><td className={num}>{sum.re}</td><td className={`${num} text-amber-800`}>{sum.jb}</td>
+                <td className={num}>{sum.nw}</td><td className={num}>{sum.re}</td><td className={`${num} text-amber-800`}>{sum.jb}</td><td className={`${num} text-amber-800`}>{sum.th ?? 0}</td>
                 <td className={num}>{sum.cancel}{sum.noshow ? <span className="ml-1 text-xs text-red-700">({sum.noshow})</span> : ''}</td>
                 <td></td>
               </tr>
@@ -91,7 +92,7 @@ export default function OverviewPage() {
         </table>
       </div>
       {me.session.role === 'mg' && <div className="mt-6"><ClosureBulkEditor /></div>}
-      <p className="mt-2 text-xs text-slate-500">予約・来院は氏名が入ったセルの数（「上記初診対応」などは含まない）。WEB は WEB予約の件数。初診・再来・自賠はセルの文字による内訳。「予約表」を押すとその店舗に切り替えて予約表を開きます。</p>
+      <p className="mt-2 text-xs text-slate-500">予約・来院は氏名が入ったセルの数（「上記初診対応」などは含まない）。WEB は WEB予約の件数。初診・再来・自賠・新三（新・第三者行為）はセルの文字による内訳（新三は初診にも数えます）。「予約表」を押すとその店舗に切り替えて予約表を開きます。</p>
     </div>
   );
 }

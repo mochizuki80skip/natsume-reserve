@@ -101,6 +101,7 @@ export function parseSheetDate(input: string, fy: number): string | null {
 
 export function kindOf(s: string): KarteKind {
   const n = norm(s);
+  if (n.includes('三')) return 'THIRD';
   if (n.includes('自')) return 'ACCIDENT';
   if (n.startsWith('再')) return 'REVISIT';
   return 'NEW';
@@ -116,7 +117,7 @@ export const SHEET_HEAD = ['日付', 'カルテNo', 'きっかけ', '氏名', '�
 
 /** 見出しなしのとき、「新・再」（新患・再来など）が何列目にあるかで並びを決める（5 列目＝スプレッドシート、6 列目＝画面） */
 function headOf(table: string[][]): string[] {
-  const isKind = (s: string | undefined) => /^(新患|新自|初自|初診|再来|再診|新|初|再)$/.test(norm(s ?? ''));
+  const isKind = (s: string | undefined) => /^(新患|新自|新三|初自|初診|再来|再診|新|初|再)$/.test(norm(s ?? ''));
   const at = (k: number) => table.filter((r) => isKind(r[k])).length;
   return at(4) > at(5) ? SHEET_HEAD : SCREEN_HEAD;
 }

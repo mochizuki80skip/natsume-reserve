@@ -45,7 +45,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
       {m.role === 'THERAPIST' && (
         <span className="flex basis-full flex-wrap items-center gap-x-3 gap-y-1 pl-1 text-xs text-slate-700">
           <label className="flex items-center gap-1 font-bold"><input type="checkbox" checked={!!m.isHead} onChange={(e) => call('PUT', { id: m.id, isHead: e.target.checked })} aria-label={`${m.name} 院長`} />院長<span className="font-normal text-slate-400">（1 店舗に 1 人）</span></label>
-          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canFirst} onChange={(e) => call('PUT', { id: m.id, canFirst: e.target.checked })} />初回（初診・新自）を担当する<span className="text-slate-400">（WEB の新規の人数に数える）</span></label>
+          <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canFirst} onChange={(e) => call('PUT', { id: m.id, canFirst: e.target.checked })} />初回（初診・新自・新三）を担当する<span className="text-slate-400">（WEB の新規の人数に数える）</span></label>
           <label className="flex items-center gap-1"><input type="checkbox" checked={!!m.canRevisit} onChange={(e) => call('PUT', { id: m.id, canRevisit: e.target.checked })} />再来を担当する<span className="text-slate-400">（WEB の再来の人数に数える）</span></label>
           {(m.canFirst || m.canRevisit) && (
             <label className="flex items-center gap-1">予約表の色

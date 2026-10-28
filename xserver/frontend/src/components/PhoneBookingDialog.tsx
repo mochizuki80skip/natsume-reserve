@@ -4,10 +4,11 @@
 import { useState } from 'react';
 import { formatDateJa, minToHm } from '@/lib/time';
 
-export type PhoneKind = 'NEW' | 'ACCIDENT' | 'REVISIT' | 'RETURN';
+export type PhoneKind = 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT' | 'RETURN';
 export const PHONE_KINDS: { v: PhoneKind; label: string; help: string }[] = [
   { v: 'NEW', label: 'はじめて（ケガ・痛み・不調）', help: '（初診）を付けて 2 枠' },
   { v: 'ACCIDENT', label: 'はじめて（交通事故）', help: '（新自）を付けて 2 枠' },
+  { v: 'THIRD', label: 'はじめて（第三者行為）', help: '（新三）を付けて 2 枠' },
   { v: 'REVISIT', label: '1ヶ月以上ぶり（再来）', help: '（再来）を付けて 2 枠' },
   { v: 'RETURN', label: '現在通院中', help: '氏名だけ・1 枠' },
 ];

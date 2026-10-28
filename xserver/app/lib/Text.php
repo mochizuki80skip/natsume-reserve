@@ -21,16 +21,21 @@ final class Text
     /**
      * 内訳判定。初診＝「（初診）（初自）（初）」または括弧なしの「初診」「初自」、
      * 再来＝「（再）」または括弧なしの「再来」「再診」、自賠＝「初自」「自賠」「事故」。
+     * 新三（新・第三者行為）＝「（新三）」または前後に空白のある「新三」（新三郎さんなどのお名前と区別するため）。新三は初診にも数える。
      * 括弧なしの「初」「再」1文字はお名前（初美など）と区別できないので数えない。2枠目の「上記初診対応」「上記再来対応」は対象外
      */
+    public const THIRD_RE = '/[（(]新三[）)]|(?:^|\s)新三(?:\s|$)/u';
+
     public static function categorize(?string $text): array
     {
         $t = trim($text ?? '');
-        if (self::isContinuationText($t)) return ['isNew' => false, 'isRevisit' => false, 'isJibai' => false];
+        if (self::isContinuationText($t)) return ['isNew' => false, 'isRevisit' => false, 'isJibai' => false, 'isThird' => false];
+        $third = (bool)preg_match(self::THIRD_RE, $t);
         return [
-            'isNew' => (bool)preg_match('/[（(]初(診|自)?[）)]|初診|初自|新自/u', $t),
+            'isNew' => $third || (bool)preg_match('/[（(]初(診|自)?[）)]|初診|初自|新自/u', $t),
             'isRevisit' => (bool)preg_match('/[（(]再[）)]|再来|再診/u', $t),
-            'isJibai' => (bool)preg_match('/自賠|事故|初自|新自/u', $t),
+            'isJibai' => !$third && (bool)preg_match('/自賠|事故|初自|新自/u', $t),
+            'isThird' => $third,
         ];
     }
 
