@@ -58,7 +58,7 @@ await sp.goto(B + '/admin/login/S001'); await sp.fill('input[type=password]', 'p
 const res = (await api(sp, 'GET', '/api/admin/reservations?status=all'))[1].rows.find((r) => r.name.startsWith(`紹介 太郎${sfx}`));
 ok('予約が入る', !!res, '');
 await api(sp, 'PUT', '/api/admin/visit', { date: res.date, time: res.time, bed: res.bed, visited: true });
-const k = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.name.startsWith(`紹介 太郎${sfx}`));
+const k = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.name.startsWith(`紹介太郎${sfx}`));
 ok('きっかけ「業者紹介」・内訳＝業者名', k?.trig === '業者紹介' && k?.trigDetail === NAME, JSON.stringify(k && { trig: k.trig, d: k.trigDetail }));
 await sp.goto(`${B}/admin/karte?month=${res.date.slice(0, 7)}`); await sp.waitForSelector('text=合計');
 ok('カルテ画面の内訳に業者名', (await sp.locator('select[aria-label="内訳（紹介元）"]').first().inputValue()) === NAME);

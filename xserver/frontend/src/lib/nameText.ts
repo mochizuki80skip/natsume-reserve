@@ -22,7 +22,7 @@ export function nameCheck(name: string): NameCheck | null {
     return { kind: 'kana', label: 'ひらがなのみ', help: 'ひらがなだけの氏名です。漢字がわかれば直してください。このままで正しければ「正しい」を押してください。' };
   }
   if (!/[\s　]/.test(t) && /^[一-鿿々〆ヶ]{1,3}$/u.test(t)) {
-    return { kind: 'surname', label: '名字だけ？', help: '名字だけの可能性があります（スペースがなく 3 文字以内）。下の名前がわかれば足してください。このままで正しければ「正しい」を押してください。' };
+    return { kind: 'surname', label: '名字だけ？', help: '名字だけの可能性があります（漢字 3 文字以内）。下の名前がわかれば足してください。このままで正しければ「正しい」を押してください。' };
   }
   return null;
 }

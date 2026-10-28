@@ -90,7 +90,7 @@ const day = (await api(p, 'GET', `/api/admin/day?date=${open[0]}`))[1].data;
 const c0 = day.cells.find((c) => c.text.includes('カード 経由'));
 await api(p, 'PUT', '/api/admin/visit', { date: open[0], time: c0.time, bed: c0.bed, visited: true });
 const k = (await api(p, 'GET', `/api/admin/karte?month=${open[0].slice(0, 7)}`))[1];
-ok('初回カルテ集計のきっかけに「ギフトカード」', k.rows.some((r) => r.name === 'カード 経由' && r.trig === 'ギフトカード'), JSON.stringify(k.rows.map((r) => [r.name, r.trig])));
+ok('初回カルテ集計のきっかけに「ギフトカード」', k.rows.some((r) => r.name === 'カード経由' && r.trig === 'ギフトカード'), JSON.stringify(k.rows.map((r) => [r.name, r.trig])));
 await api(hq, 'PUT', '/api/admin/hq/stores-page', { open: false });
 console.log('errors', errs, D2);
 await br.close();

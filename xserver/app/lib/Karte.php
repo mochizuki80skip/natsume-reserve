@@ -60,6 +60,12 @@ final class Karte
     }
 
     /** 「山田 太郎（初診）」「山田 太郎 初診」→「山田 太郎」 */
+    /** 新患継続率に入れる氏名：店舗ごとに「姓 名」「姓名」とまちまちなので、空白（全角・半角）を取ってそろえる */
+    public static function karteName(string $name): string
+    {
+        return preg_replace('/[\s\x{3000}]+/u', '', $name) ?? $name;
+    }
+
     public static function nameOfText(string $text): string
     {
         $t = Text::dropHonorific(Text::dropPhone($text));
@@ -102,11 +108,11 @@ final class Karte
             $newId = Db::newId();
             // きっかけ：紹介元（業者）の QR から → 業者紹介（内訳＝業者名）、媒体の URL から → 媒体に決めたきっかけ（内訳＝媒体名）、紹介カードの QR から → ギフトカード
             $added = Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)', [
-                $newId, $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr($w['name'], 0, 40),
+                $newId, $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr(self::karteName($w['name']), 0, 40),
                 $w['ref'] !== '' && $w['refTrig'] !== '' ? $w['refTrig'] : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' && $w['refTrig'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
             // 新自が来院（来院チェック）したら、エリアMG・本部が決めた人へメールで知らせる。昔の日のチェックでは送らない
-            if ($added > 0 && $w['kind'] === 'ACCIDENT' && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId);
+            if ($added > 0 && $w['kind'] === 'ACCIDENT' && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId, $w['name']);
         }
     }
 
@@ -140,13 +146,16 @@ final class Karte
         if ($mode === 'none') return '';
         $no = trim($karteNo) !== '' ? 'カルテNo ' . trim($karteNo) : '';
         $name = trim($name);
-        $shown = $mode === 'full' ? $name : ($mode === 'surname' ? (preg_split('/[\s　]+/u', $name)[0] ?? '') : '');
+        // 名字だけ：「姓 名」と空白があるときだけ。空白が無いとどこまでが名字か分からないので、氏名は出さない
+        $parts0 = preg_split('/[\s　]+/u', $name) ?: [];
+        $shown = $mode === 'full' ? $name : ($mode === 'surname' && count($parts0) >= 2 ? $parts0[0] : '');
         $parts = array_filter([$shown !== '' ? $shown . ' 様' : '', $no !== '' ? ($shown !== '' ? "（{$no}）" : $no) : '']);
         return implode('', $parts);
     }
 
     /** 新自が来院したことをメール・LINE で知らせる（患者様の氏名は書かない）。一度送った行は送らない */
-    public static function notifyAccident(array $store, string $karteId): void
+    /** $cellName：予約表のセルの氏名（空白が残っているので、名字だけを出すときに使う） */
+    public static function notifyAccident(array $store, string $karteId, ?string $cellName = null): void
     {
         try {
             $r = Db::one('SELECT date, srcTime, staff, trig, name, karteNo, notifiedAt FROM karte WHERE id = ?', [$karteId]);
@@ -162,7 +171,7 @@ final class Karte
             $md = (int)substr($r['date'], 5, 2) . '/' . (int)substr($r['date'], 8, 2);
             $time = $r['srcTime'] !== null ? ' ' . Time::minToHm((int)$r['srcTime']) : '';
             $url = rtrim(Config::str('APP_URL'), '/');
-            $who = self::notifyWho((string)$r['name'], (string)$r['karteNo']);
+            $who = self::notifyWho($cellName ?? (string)$r['name'], (string)$r['karteNo']);
             $body = "交通事故（新自）の患者様が来院しました。\n\n"
                 . "店舗：{$store['name']}\n"
                 . ($who !== '' ? "患者様：{$who}\n" : '')
@@ -210,7 +219,7 @@ final class Karte
      */
     public static function firstVisitOf(array $store, string $text, string $date): array
     {
-        $name = self::nameOfText($text);
+        $name = self::karteName(self::nameOfText($text));
         if ($name === '') return ['row' => null, 'ambiguous' => false];
         $rows = Db::all('SELECT id, date, staff, visits, edited FROM karte WHERE storeId = ? AND name = ? AND date < ? ORDER BY date DESC LIMIT 5', [$store['id'], $name, $date]);
         if (!$rows) return ['row' => null, 'ambiguous' => false];
@@ -320,7 +329,7 @@ final class Karte
                     $set[$k] = json_encode($out, JSON_UNESCAPED_UNICODE); break;
                 default:
                     $max = ['accidentNote' => 200, 'karteNo' => 20, 'trig' => 30, 'trigDetail' => 60, 'name' => 40, 'symptomCat' => 20, 'symptom' => 100, 'staff' => 30][$k];
-                    $set[$k] = mb_substr(trim((string)$v), 0, $max);
+                    $set[$k] = mb_substr($k === 'name' ? self::karteName((string)$v) : trim((string)$v), 0, $max);
             }
         }
         // 氏名を直したら、確認済みの印は外す（直した氏名をもう一度見る）

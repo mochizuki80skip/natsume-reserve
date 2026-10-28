@@ -49,16 +49,16 @@ await dlg.getByRole('button', { name: '4 件を取り込む' }).click();
 await p.waitForURL(/month=2026-04/);
 await p.waitForTimeout(800);
 const apr = (await api('GET', '/api/admin/karte?month=2026-04'))[1].rows;
-const a = apr.find((r) => r.name === '見本 一郎');
+const a = apr.find((r) => r.name === '見本一郎');
 ok('4 月の行が入る', apr.length === 2 && a && a.karteNo === '1203' && a.age === 45 && a.treatment === '矯正' && a.visits[0].d === '2026-04-06' && a.visits[1].d === '2026-04-10' && !a.auto, JSON.stringify(a));
-ok('再の人', apr.find((r) => r.name === '見本 花子')?.kind === 'REVISIT');
+ok('再の人', apr.find((r) => r.name === '見本花子')?.kind === 'REVISIT');
 const oct = (await api('GET', '/api/admin/karte?month=2026-10'))[1].rows;
-const s = oct.filter((r) => r.name === '見本 三郎');
+const s = oct.filter((r) => r.name === '見本三郎');
 ok('自動の行を上書き（重ねて入れない）', s.length === 1 && s[0].auto && s[0].karteNo === '1500' && s[0].symptom === 'ぎっくり腰' && s[0].visits[0].d === '2026-10-05', JSON.stringify(s));
 
 // 3) もう一度：空の欄は今のまま・回の日付だけ足す
 const [st, j] = await api('POST', '/api/admin/karte/import', { rows: [{ date: '2026-04-03', name: '見本 一郎', karteNo: '', age: null, visits: [{ d: '', s: '', t: '' }, { d: '', s: '', t: '' }, { d: '2026-04-20', s: '見本A', t: '矯正' }, { d: '', s: '', t: '' }, { d: '', s: '', t: '' }] }] });
-const a2 = (await api('GET', '/api/admin/karte?month=2026-04'))[1].rows.find((r) => r.name === '見本 一郎');
+const a2 = (await api('GET', '/api/admin/karte?month=2026-04'))[1].rows.find((r) => r.name === '見本一郎');
 ok('上書き：空の欄は残す・4回目を足す', st === 200 && j.counts.update === 1 && a2.karteNo === '1203' && a2.age === 45 && a2.visits[0].d === '2026-04-06' && a2.visits[2].d === '2026-04-20', JSON.stringify(a2.visits));
 ok('日付・氏名がない行はエラー', (await api('POST', '/api/admin/karte/import', { rows: [{ name: 'x' }], dryRun: true }))[1].counts.error === 1);
 
@@ -71,7 +71,7 @@ await dlg2.getByRole('table', { name: '取り込みの確認' }).waitFor();
 ok('Ctrl+V で確認が開く（見出しなし）', /新しく入る 2 件・上書き 0 件/.test(await dlg2.textContent()));
 await dlg2.getByRole('button', { name: '2 件を取り込む' }).click(); await p.waitForTimeout(1000);
 const jun = (await api('GET', '/api/admin/karte?month=2026-06'))[1].rows;
-ok('6 月に入る', jun.length === 2 && jun.find((r) => r.name === '見本 六郎')?.visits[0].d === '2026-06-15', JSON.stringify(jun.map((r) => [r.date, r.name])));
+ok('6 月に入る', jun.length === 2 && jun.find((r) => r.name === '見本六郎')?.visits[0].d === '2026-06-15', JSON.stringify(jun.map((r) => [r.date, r.name])));
 // セル 1 つの貼り付けは、今までどおり入力欄に入る
 await p.evaluate(() => { const dt = new DataTransfer(); dt.setData('text/plain', '見本'); document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); });
 await p.waitForTimeout(300);
@@ -91,7 +91,7 @@ const dlg3 = p.getByRole('form', { name: 'スプレッドシートから貼り�
 await dlg3.getByRole('table', { name: '取り込みの確認' }).waitFor();
 await dlg3.getByRole('button', { name: '1 件を取り込む' }).click(); await p.waitForTimeout(1000);
 j6 = (await api('GET', '/api/admin/karte?month=2026-06'))[1].rows;
-const six = j6.find((r) => r.name === '見本 六郎');
+const six = j6.find((r) => r.name === '見本六郎');
 ok('貼り付けで中止・転院・アンケート（上書き）', six.stopped === true && six.transferred === false && six.survey === false && six.karteNo === '1400' && six.trigDetail === '', JSON.stringify(six));
 const xr = await p.evaluate(async () => (await fetch('/api/admin/karte/export?month=2026-06')).status);
 ok('Excel で保存できる', xr === 200);

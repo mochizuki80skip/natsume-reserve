@@ -39,7 +39,7 @@ ok('矯正は黄緑の斜線', (await cell('11:00', 2).getAttribute('style') ?? 
 await p.screenshot({ path: O + 'staff-grid.png', clip: { x: 0, y: 300, width: 1400, height: 520 } });
 // 初回カルテ集計に担当が入る
 const k = (await api('GET', `/api/admin/karte?month=${D1.slice(0, 7)}`))[1];
-const kt = k.rows.find((r) => r.name === '担当 太郎');
+const kt = k.rows.find((r) => r.name === '担当太郎');
 ok('初回カルテ集計に担当が自動で入る', kt?.staff === '望月', JSON.stringify(k.rows.map((r) => [r.name, r.staff])));
 // 2 回目：メニュー「2回目」を付けると担当が自動で入り、来院チェックで初回カルテ集計の 2 回目に日付が入る
 await api('PUT', '/api/admin/cells', { date: D2, cells: [{ time: 540, bed: 1, text: '担当 太郎' }] });
@@ -51,7 +51,7 @@ ok('2回目は初回担当（望月）の色', (await cell('9:00', 1).getAttribu
 ok('回数は数字の印', (await cell('9:00', 1).getByLabel(/^メニュー：/).textContent()) === '2');
 ok('凡例に担当の色', (await p.textContent('body')).includes('望月（2・3・6・12回目）'));
 await cell('9:00', 1).getByLabel('来院チェック').click(); await p.waitForTimeout(800);
-const k2 = (await api('GET', `/api/admin/karte?month=${D1.slice(0, 7)}`))[1].rows.find((r) => r.name === '担当 太郎');
+const k2 = (await api('GET', `/api/admin/karte?month=${D1.slice(0, 7)}`))[1].rows.find((r) => r.name === '担当太郎');
 ok('初回カルテ集計の 2 回目に日付と担当が入る', k2?.visits?.[0]?.d === D2 && k2.visits[0].s === '望月', JSON.stringify(k2?.visits?.[0]));
 await p.screenshot({ path: O + 'staff-auto.png', clip: { x: 0, y: 300, width: 1400, height: 300 } });
 // 担当数

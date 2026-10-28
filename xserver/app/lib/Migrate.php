@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 39;
+    private const VERSION = 40;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -270,6 +270,10 @@ final class Migrate
             if ($ver < 39) {
                 // WEB で同時に受ける人数の調整（シフトの担当できる人数からの足し引き。新規・再来・合わせて）
                 if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'newAdjust')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `newAdjust` INT NOT NULL DEFAULT 0, ADD COLUMN `revisitAdjust` INT NOT NULL DEFAULT 0, ADD COLUMN `totalAdjust` INT NOT NULL DEFAULT 0');
+            }
+            if ($ver < 40) {
+                // 新患継続率の氏名は空白を取ってそろえる（店舗ごとに「姓 名」「姓名」とまちまちだったため）
+                if (self::hasTable($pdo, 'karte')) $pdo->exec("UPDATE `karte` SET `name` = REPLACE(REPLACE(`name`, ' ', ''), '　', '') WHERE `name` LIKE '% %' OR `name` LIKE '%　%'");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

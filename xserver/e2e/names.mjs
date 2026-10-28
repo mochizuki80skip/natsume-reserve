@@ -11,7 +11,7 @@ const errs = []; p.on('pageerror', (e) => errs.push(e.message));
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 await p.goto(B + '/admin/login/S001'); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
 const api = (m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
-const D = '2026-10-28';
+const D = (() => { const d = new Date(); d.setDate(d.getDate() + 3); for (;;) { const s = d.toISOString().slice(0, 10); if ([1, 2, 3, 5].includes(d.getDay()) && !['2026-11-03', '2026-11-23', '2027-01-01'].includes(s)) return s; d.setDate(d.getDate() + 1); } })(); // 3 日後以降の平日（木・日・祝を除く。今日の過ぎた時間だと WEB 予約できないため）
 const day = async () => (await api('GET', `/api/admin/day?date=${D}`))[1].data;
 const textAt = (d, t, b) => d.cells.find((x) => x.time === t && x.bed === b)?.text ?? '';
 
@@ -32,9 +32,9 @@ ok('WEB予約の「様」も外す', wb[0] === 200 && d.cells.some((c) => c.text
 const names = ['佐藤（初診）', 'やまだ はなこ（初診）', 'ジョン スミス（初診）', '鈴木 一郎（初診）', '電話 太郎 090-1234-5678（初診）'];
 await api('PUT', '/api/admin/cells', { date: D, cells: names.map((n, i) => ({ time: 900 + i * 15, bed: 2, text: n })) });
 for (let i = 0; i < names.length; i++) await api('PUT', '/api/admin/visit', { date: D, time: 900 + i * 15, bed: 2, visited: true });
-await p.goto(`${B}/admin/karte?month=2026-10`); await p.waitForSelector('text=氏名の確認');
-const kr = (await api('GET', '/api/admin/karte?month=2026-10'))[1].rows;
-ok('セルに書いた電話番号は氏名に入れない', kr.some((r) => r.name === '電話 太郎') && !kr.some((r) => /\d{3}/.test(r.name)), JSON.stringify(kr.map((r) => r.name)));
+await p.goto(`${B}/admin/karte?month=${D.slice(0, 7)}`); await p.waitForSelector('text=氏名の確認');
+const kr = (await api('GET', `/api/admin/karte?month=${D.slice(0, 7)}`))[1].rows;
+ok('セルに書いた電話番号は氏名に入れない', kr.some((r) => r.name === '電話太郎') && !kr.some((r) => /\d{3}/.test(r.name)), JSON.stringify(kr.map((r) => r.name)));
 ok('上に件数', (await p.getByText(/氏名の確認 \d+件/).textContent()).includes('3件'), await p.getByText(/氏名の確認 \d+件/).textContent());
 ok('名字だけ？', await p.getByRole('button', { name: '名字だけ？' }).isVisible());
 ok('ひらがなのみ', await p.getByRole('button', { name: 'ひらがなのみ' }).isVisible());

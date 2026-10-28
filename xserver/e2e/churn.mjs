@@ -24,7 +24,7 @@ await visit(`${prevYm}-05`, 540, 1, '見本 四郎（初診）');
 await visit(`${prevYm}-10`, 600, 1, '見本 一郎');
 await visit(`${prevYm}-20`, 600, 2, '見本 二郎');
 await visit(`${ym}-15`, 600, 2, '見本 二郎');
-const k = (await api('GET', `/api/admin/karte?month=${prevYm}`))[1].rows.find((r) => r.name === '見本 四郎');
+const k = (await api('GET', `/api/admin/karte?month=${prevYm}`))[1].rows.find((r) => r.name === '見本四郎');
 await api('PATCH', '/api/admin/karte', { id: k.id, patch: { karteNo: '1500', age: '50', sex: '♂', symptomCat: '腰', symptom: '腰痛', treatment: '矯正', stopped: true } });
 // 2 週間フォロー：14 日前に来院（五郎は予約なし、六子は先の予約あり）
 const d14 = add(today, -14);

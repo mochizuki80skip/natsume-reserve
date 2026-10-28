@@ -19,12 +19,12 @@ for (const [t, b] of [[540, 1], [600, 2], [660, 3], [720, 1]]) await req('PUT', 
 k = await req('GET', `/api/admin/karte?month=${ym}`);
 const rows = k[1].rows;
 ok('来院チェックした初診・初自・再だけ自動で入る', rows.length === 3, rows.map((r) => r.name).join(','));
-ok('区分と氏名（印を外す）', rows[0].kind === 'NEW' && rows[0].name === '山田 太郎' && rows[1].kind === 'ACCIDENT' && rows[2].kind === 'REVISIT');
+ok('区分と氏名（印と空白を外す）', rows[0].kind === 'NEW' && rows[0].name === '山田太郎' && rows[1].kind === 'ACCIDENT' && rows[2].kind === 'REVISIT');
 ok('初自は症状カテゴリーに自賠', rows[1].symptomCat === '自賠');
 ok('選択肢がそろっている', k[1].options.trigger.length === 21 && k[1].options.trigger.includes('業者紹介') && k[1].options.otherBiz.length === 33 && k[1].options.symptom.length === 17 && k[1].options.revisitAction.join() === 'LINE,DM');
 const visits = [{ d: '2026-11-18', s: '山本', t: '矯正' }, ...Array(4).fill({ d: '', s: '', t: '' })];
 const p = await req('PATCH', '/api/admin/karte', { id: rows[0].id, patch: { name: '山田 太郎（漢字）', age: '45', sex: '♂', trig: '紹介他事業', trigDetail: 'East-one三島', visits } });
-ok('入力を保存', p[0] === 200 && p[1].row.age === 45 && p[1].row.visits[0].d === '2026-11-18');
+ok('入力を保存（氏名の空白は取る）', p[0] === 200 && p[1].row.name === '山田太郎（漢字）' && p[1].row.age === 45 && p[1].row.visits[0].d === '2026-11-18');
 ok('年齢がおかしいと保存しない', (await req('PATCH', '/api/admin/karte', { id: rows[0].id, patch: { age: 'abc' } }))[0] === 400);
 ok('施術内容は矯正／マッサだけ', (await req('PATCH', '/api/admin/karte', { id: rows[0].id, patch: { treatment: 'マッサージ' } }))[0] === 400);
 await req('PUT', '/api/admin/visit', { date, time: 540, bed: 1, visited: false });

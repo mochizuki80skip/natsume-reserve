@@ -52,6 +52,13 @@ ok('件名・本文（患者様は名字だけ。件名には出さない）', m
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 540, bed: 1, visited: false });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 540, bed: 1, visited: true });
 ok('付け直しても二重に送らない', mails().length === 1);
+// 予約表で姓と名のあいだに空白が無いと、どこまでが名字か分からないので、名字だけの設定では氏名を出さない
+await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '見本次郎（初自）' }] });
+await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: true });
+{ const m2 = mails(); const b = m2[1]?.body ?? '';
+  ok('空白の無い氏名は、名字だけの設定では出さない', m2.length === 2 && !b.includes('見本') && !b.includes('次郎'), b); }
+await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: false });
+await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '' }] });
 
 // 未入力の数（前の月も含めて）
 await api(st, 'GET', `/api/admin/karte?month=${OLD.slice(0, 7)}`); // 昔の月の行を作る
@@ -59,16 +66,16 @@ const me1 = (await api(st, 'GET', '/api/admin/me'))[1];
 ok('未入力の数（前の月も含めて 2 件）', me1.accidentMissing === 2, String(me1.accidentMissing));
 await st.goto(`${B}/admin/karte`); await st.waitForTimeout(1200);
 const sec = st.getByRole('region', { name: '新自（交通事故）' });
-ok('継続率の下に新自の一覧（この月の分＋ほかの月の未入力）', await sec.isVisible() && (await sec.textContent()).includes('見本 太郎') && (await sec.textContent()).includes('ほかの月の未入力（1件）') && (await sec.textContent()).includes('未入力 2件'));
+ok('継続率の下に新自の一覧（この月の分＋ほかの月の未入力）', await sec.isVisible() && (await sec.textContent()).includes('見本太郎') && (await sec.textContent()).includes('ほかの月の未入力（1件）') && (await sec.textContent()).includes('未入力 2件'));
 ok('メニューに赤い数字', (await st.getByRole('link', { name: /新患継続率/ }).first().textContent()).includes('2'));
 // 今日の行の事故日・事故内容を入れる（9/18 → 初診日より前の日）
-const row = sec.locator('tr', { hasText: '見本 太郎' });
+const row = sec.locator('tr', { hasText: '見本太郎' });
 await row.getByLabel('事故日').fill('9/18'); await row.getByLabel('事故日').press('Enter'); await st.waitForTimeout(500);
 await row.getByLabel('事故内容').fill('信号待ちで停車中に後ろから追突された'); await row.getByLabel('事故内容').blur(); await st.waitForTimeout(1200);
 const k = (await api(st, 'GET', `/api/admin/karte?month=${today.slice(0, 7)}`))[1].rows.find((r) => r.kind === 'ACCIDENT');
 ok('事故日・事故内容が保存される（事故日は初診日より前の日）', k.accidentDate === `${Number(today.slice(5, 7)) >= 9 ? today.slice(0, 4) : Number(today.slice(0, 4)) - 1}-09-18` && k.accidentNote === '信号待ちで停車中に後ろから追突された', JSON.stringify([k.accidentDate, k.accidentNote]));
 ok('未入力が 1 件に減り、メニューの数字も変わる', (await sec.textContent()).includes('未入力 1件') && (await st.getByRole('link', { name: /新患継続率/ }).first().textContent()).includes('1'));
-ok('ほかの月の行もここで入れられる', await sec.locator('tr', { hasText: '試験 花子' }).getByLabel('事故内容').isVisible());
+ok('ほかの月の行もここで入れられる', await sec.locator('tr', { hasText: '試験花子' }).getByLabel('事故内容').isVisible());
 
 // 患者様のページ：店舗えらびの上・予約ページのいちばん下（どの段階でも）
 const pub = await (await br.newContext({ viewport: { width: 390, height: 844 }, isMobile: true })).newPage();
