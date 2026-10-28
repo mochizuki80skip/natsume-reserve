@@ -1230,3 +1230,15 @@ function adm_find_get(): never
     Http::json(['rows' => $rows, 'names' => $names, 'today' => $today]);
 }
 
+
+/** 店舗設定：本部が作った、この店舗の媒体別の WEB 予約の URL（見る・保存するだけ。追加・変更は本部） */
+function adm_media_urls(): never
+{
+    $ctx = Auth::context();
+    $code = $ctx['store']['code'];
+    $out = [];
+    foreach (Db::all("SELECT code, name, trig, stores FROM referral WHERE kind = 'media' AND active = 1 ORDER BY createdAt ASC, name ASC") as $r) {
+        if (in_array($code, array_filter(explode(',', (string)$r['stores'])), true)) $out[] = ['code' => $r['code'], 'name' => $r['name'], 'trig' => $r['trig']];
+    }
+    Http::json(['rows' => $out]);
+}

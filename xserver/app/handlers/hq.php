@@ -39,8 +39,44 @@ function hq_referrals_get(): never
 {
     Auth::requireHq();
     // 新患継続率の数：紹介元は「業者紹介」、媒体は決めたきっかけで、内訳が名前の行
-    $rows = Db::all("SELECT f.id, f.code, f.name, f.active, f.kind, f.trig, f.createdAt, (SELECT COUNT(*) FROM reservation r WHERE r.refCode = f.code) AS reservations, (SELECT COUNT(*) FROM karte k WHERE k.trig = IF(f.kind = 'media', f.trig, ?) AND k.trigDetail = f.name) AS kartes FROM referral f ORDER BY f.createdAt ASC, f.name ASC", ['業者紹介']);
-    Http::json(['rows' => array_map(fn($r) => ['id' => $r['id'], 'code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'createdAt' => $r['createdAt'], 'reservations' => (int)$r['reservations'], 'kartes' => (int)$r['kartes']], $rows)]);
+    $rows = Db::all("SELECT f.id, f.code, f.name, f.active, f.kind, f.trig, f.stores, f.createdAt, (SELECT COUNT(*) FROM reservation r WHERE r.refCode = f.code) AS reservations, (SELECT COUNT(*) FROM karte k WHERE k.trig = IF(f.kind = 'media', f.trig, ?) AND k.trigDetail = f.name) AS kartes FROM referral f ORDER BY f.createdAt ASC, f.name ASC", ['業者紹介']);
+    // 媒体の店舗ごとの WEB 予約の数（店舗の予約ページへ直接の URL・QR と、店舗えらびページから選んだ分の両方）
+    $byStore = [];
+    foreach (Db::all('SELECT r.refCode, s.code, COUNT(*) AS n FROM reservation r JOIN store s ON s.id = r.storeId WHERE r.refCode IS NOT NULL GROUP BY r.refCode, s.code') as $x) $byStore[$x['refCode']][$x['code']] = (int)$x['n'];
+    Http::json(['rows' => array_map(fn($r) => ['id' => $r['id'], 'code' => $r['code'], 'name' => $r['name'], 'active' => (bool)$r['active'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'createdAt' => $r['createdAt'], 'reservations' => (int)$r['reservations'], 'kartes' => (int)$r['kartes'],
+        'stores' => referral_stores($r['stores'] ?? null), 'byStore' => (object)($byStore[$r['code']] ?? [])], $rows),
+        'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'area' => $s['area']], Settings::storesInOrder('active = 1 AND hqOnly = 0', [], false))]);
+}
+
+/** 媒体の「使う店舗」（店舗コードの一覧。NULL・空＝店舗ごとの URL・QR はまだ作っていない） */
+function referral_stores(?string $csv): array
+{
+    return array_values(array_filter(explode(',', (string)$csv), fn($c) => $c !== ''));
+}
+
+/** 媒体の店舗ごとの WEB 予約の URL（店舗の予約ページ＋媒体の印） */
+function referral_store_url(string $storeCode, string $refCode): string
+{
+    $base = rtrim(Config::str('APP_URL'), '/');
+    if ($base === '') $base = (Http::isHttps() ? 'https://' : 'http://') . (string)($_SERVER['HTTP_HOST'] ?? '');
+    return $base . '/s/' . rawurlencode($storeCode) . '?ref=' . rawurlencode($refCode);
+}
+
+/** 媒体ごと・店舗ごとの WEB 予約の URL の一覧（Excel） */
+function hq_referrals_export(): never
+{
+    Auth::requireHq();
+    $names = array_column(Db::all('SELECT code, name FROM store'), 'name', 'code');
+    $rows = [];
+    foreach (Db::all("SELECT * FROM referral WHERE kind = 'media' AND active = 1 ORDER BY createdAt ASC, name ASC") as $r) {
+        foreach (referral_stores($r['stores'] ?? null) as $c) if (isset($names[$c])) $rows[] = [$r['name'], $r['trig'], $c, $names[$c], referral_store_url($c, $r['code'])];
+    }
+    $bytes = Xlsx::build('媒体別URL', '媒体別・店舗別 WEB予約 URL　（出力 ' . Time::nowJst()['date'] . '）', ['媒体', '入るきっかけ', '店舗コード', '店舗', 'URL'], $rows);
+    header('Cache-Control: no-store');
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header("Content-Disposition: attachment; filename=\"media_urls.xlsx\"; filename*=UTF-8''" . rawurlencode('媒体別URL_' . Time::nowJst()['date']) . '.xlsx');
+    echo $bytes;
+    exit;
 }
 
 /** 紹介元・媒体の追加（{ name, kind?, trig? }）・名前やきっかけの変更・止める／再開（{ id, name?, trig?, active? }） */
@@ -88,6 +124,13 @@ function hq_referrals_put(): never
         });
     }
     if (array_key_exists('active', $b)) Db::exec('UPDATE referral SET active = ? WHERE id = ?', [Http::bool($b, 'active') ? 1 : 0, $id]);
+    // 媒体を使う店舗（その店舗の予約ページへ直接の URL・QR ができる）。ある店舗のコードだけ残す
+    if (array_key_exists('stores', $b)) {
+        if ($row['kind'] !== 'media' || !is_array($b['stores']) || count($b['stores']) > 500) Http::error('bad request', 400);
+        $valid = array_column(Db::all('SELECT code FROM store'), 'code');
+        $pick = array_values(array_unique(array_filter(array_map('strval', $b['stores']), fn($c) => in_array($c, $valid, true))));
+        Db::exec('UPDATE referral SET stores = ? WHERE id = ?', [$pick ? implode(',', $pick) : null, $id]);
+    }
     Http::json(['ok' => true]);
 }
 

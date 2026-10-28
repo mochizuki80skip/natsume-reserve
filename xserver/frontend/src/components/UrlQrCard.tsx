@@ -1,6 +1,7 @@
 // URL を文字・QR コードで出し、コピーと QR 画像の保存（PNG）ができるカード（店舗設定・本部の店舗一覧で使う）
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { useFetch } from '@/lib/api';
 
 /**
  * QR コードの画像（PNG）を blob: の URL で作る。data: の URL だと、ブラウザによっては「保存」したときのファイル名が
@@ -47,6 +48,25 @@ export function StoreUrlCards({ code, name }: { code: string; name: string }) {
     <div className="grid gap-2 md:grid-cols-2">
       <UrlQrCard label="顧客URL（WEB 予約）" help="患者様が WEB 予約するページ。ポスター・名刺・LINE などに" url={`${origin}/s/${code}`} fileName={`QR_${name}_顧客URL`} />
       <UrlQrCard label="管理URL（店舗のログイン）" help="スタッフが予約表を開くページ。スタッフ用のタブレットなどに" url={`${origin}/admin/login/${code}`} fileName={`QR_${name}_管理URL`} />
+    </div>
+  );
+}
+
+/** 店舗設定：ギフトカードと、本部が作った媒体別の URL・QR（見る・保存するだけ。追加・変更は本部） */
+export function StoreMediaCards({ code, name }: { code: string; name: string }) {
+  const origin = typeof location !== 'undefined' ? location.origin : '';
+  const { data } = useFetch<{ rows: { code: string; name: string; trig: string }[] }>('/api/admin/media-urls');
+  return (
+    <div className="space-y-2" role="region" aria-label="媒体別の URL・QR">
+      <h3 className="text-sm font-bold">媒体別の URL・QR（新患継続率のきっかけが自動で入ります）</h3>
+      <p className="text-xs text-slate-500">ここから WEB 予約した初診の方は、新患継続率のきっかけ・内訳が自動で入ります。媒体の追加・変更は本部が行います。</p>
+      <div className="grid gap-2 md:grid-cols-2">
+        <UrlQrCard label="ギフトカード（紹介カード）" help="きっかけ「ギフトカード」で入ります（店舗えらびページが開きます）" url={`${origin}/stores?from=card`} fileName={`QR_${name}_ギフトカード`} />
+        {(data?.rows ?? []).map((m) => (
+          <UrlQrCard key={m.code} label={`媒体：${m.name}`} help={`きっかけ「${m.trig}」・内訳「${m.name}」で入ります（この店舗の予約ページが開きます）`} url={`${origin}/s/${encodeURIComponent(code)}?ref=${m.code}`} fileName={`QR_${name}_${m.name}`} />
+        ))}
+      </div>
+      {data && data.rows.length === 0 && <p className="text-xs text-slate-400">本部が作った媒体はまだありません。</p>}
     </div>
   );
 }

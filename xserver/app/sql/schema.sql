@@ -315,6 +315,7 @@ CREATE TABLE IF NOT EXISTS `referral` (
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `kind` VARCHAR(10) NOT NULL DEFAULT 'partner',
   `trig` VARCHAR(30) NOT NULL DEFAULT '',
+  `stores` TEXT NULL, -- 媒体を使う店舗（店舗コードを , で区切る）。その店舗の予約ページへ直接の URL・QR ができる
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `referral_code` (`code`)

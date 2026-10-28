@@ -5,7 +5,7 @@ import StoreSettingsForm from '@/components/StoreSettingsForm';
 import StaffList from '@/components/StaffList';
 import PatientImport from '@/components/PatientImport';
 import SpecialDaysEditor from '@/components/SpecialDaysEditor';
-import { StoreUrlCards } from '@/components/UrlQrCard';
+import { StoreMediaCards, StoreUrlCards } from '@/components/UrlQrCard';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -51,6 +51,7 @@ function StoreSettings() {
           <h2 className="mb-1 font-bold">この店舗の URL・QR コード</h2>
           <p className="mb-2 text-xs text-slate-500">「QR 画像を保存」で PNG 画像として保存できます（印刷物・掲示用）。店舗コードを変えると URL も変わるので、そのときは作り直してください。</p>
           <StoreUrlCards code={data.store.code} name={data.store.name} />
+          <div className="mt-3"><StoreMediaCards code={data.store.code} name={data.store.name} /></div>
         </section>
         <SpecialDaysEditor />
         <PatientImport />

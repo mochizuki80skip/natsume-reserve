@@ -106,6 +106,8 @@ function route_table(): array
         ['DELETE', '#^/api/admin/special-days$#', 'adm_special_days_delete'],
         ['GET', '#^/api/admin/hq/referrals$#', 'hq_referrals_get'],
         ['PUT', '#^/api/admin/hq/referrals$#', 'hq_referrals_put'],
+        ['GET', '#^/api/admin/hq/referrals/export$#', 'hq_referrals_export'],
+        ['GET', '#^/api/admin/media-urls$#', 'adm_media_urls'],
         ['GET', '#^/api/admin/madoguchi$#', 'mado_get'],
         ['PUT', '#^/api/admin/madoguchi/day$#', 'mado_day_put'],
         ['PUT', '#^/api/admin/madoguchi/month$#', 'mado_month_put'],

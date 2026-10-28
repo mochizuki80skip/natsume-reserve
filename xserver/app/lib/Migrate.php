@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 43;
+    private const VERSION = 44;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -312,6 +312,10 @@ final class Migrate
             if ($ver < 43) {
                 // 新自・新三の通知の患者様は「予約表のとおりの氏名＋カルテNo」に（依頼者の決定 2026-10-28）。本部の画面でほかの出し方に戻せる
                 if (self::hasTable($pdo, 'global_setting') && self::hasColumn($pdo, 'global_setting', 'notifyName')) $pdo->exec("UPDATE `global_setting` SET `notifyName` = 'full' WHERE `notifyName` = 'surname'");
+            }
+            if ($ver < 44) {
+                // 媒体を使う店舗（店舗ごとの予約ページへ直接の URL・QR）
+                if (self::hasTable($pdo, 'referral') && !self::hasColumn($pdo, 'referral', 'stores')) $pdo->exec('ALTER TABLE `referral` ADD COLUMN `stores` TEXT NULL AFTER `trig`');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

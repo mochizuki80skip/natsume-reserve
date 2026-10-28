@@ -119,6 +119,7 @@ LINE の準備の細かい手順は、依頼者向けの資料「新自の通知
 | `smoke.mjs` | 予約・予約表・キャンセルなど全体の一通り |
 | `capkind.mjs` / `weblimits.mjs` / `rules.mjs` | WEB で取れる人数・新規／再来の上限・ブロック |
 | `blocksuggest.mjs` | 新規・再来ブロックの提案 |
+| `mediastore.mjs` | 媒体ごと×店舗ごとの URL・QR（まとめて保存・店舗設定・新患継続率のきっかけ） |
 | `karte.mjs` / `accident.mjs` / `shinsan.mjs` | 新患継続率・新自／新三の事故日／事故内容・通知・新三の区分 |
 | `linenotify.mjs` | LINE の登録・送信・署名の確認 |
 | `security.mjs` | ログインの制限・権限・別サイトからの送信 |
