@@ -62,7 +62,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
     let alive = true;
     setLoading(true); setError('');
     // 区分が未選択の間は、選んでいるグループのいちばん厳しい区分の空き状況を見せる（新規・再来を止めた時間が 〇 に見えないように）。
-    // はじめての方・未選択＝初診、ご通院したことがある方＝1ヶ月以上ぶり（再来）。区分を選んだら、その区分の空き状況で確かめ直す
+    // はじめての方・未選択＝初診。ご通院したことがある方は、押したときに「現在通院中」を選んだ状態にする（1ヶ月以上ぶりはボタンで切り替え）
     const q = new URLSearchParams({ kind: kind ?? (group === 'VISITED' ? 'REVISIT' : 'NEW') });
     if (weekStart) q.set('start', weekStart);
     fetch(`/api/public/${encodeURIComponent(storeCode)}/week?${q}`)
@@ -112,7 +112,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
         <p className={`mb-1 text-[14px] font-bold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>① どちらかを選択してください</p>
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="来院区分">
           {(['FIRST', 'VISITED'] as Group[]).map((g) => (
-            <button key={g} type="button" aria-pressed={group === g} onClick={() => { if (group === g) return; setGroup(g); onKindChange(null); }}
+            <button key={g} type="button" aria-pressed={group === g} onClick={() => { if (group === g) return; setGroup(g); onKindChange(g === 'VISITED' ? 'RETURN' : null); }}
               className={`rounded-lg border-2 border-brand px-1.5 ${group ? 'py-2 text-[12.5px]' : 'py-4 text-[15px]'} font-semibold leading-tight ${group === g ? 'bg-brand text-white' : 'bg-white text-brand-dark'}`}>
               {GROUP_LABEL[g].title}
               {GROUP_LABEL[g].sub && <span className="block text-[10.5px] font-normal opacity-85">{GROUP_LABEL[g].sub}</span>}

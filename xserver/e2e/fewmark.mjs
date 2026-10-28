@@ -45,7 +45,8 @@ for (let i = 0; i < 3 && (await p.getByRole('button', { name: new RegExp(`^${Num
 ok('区分を選ぶ前：止めた時間（15:00）は 〇 に見えない', (await cellAt('15:00').count()) === 0);
 await p.getByRole('button', { name: /はじめての方/ }).click(); await p.waitForTimeout(800);
 ok('はじめての方を押しただけでも × のまま', (await cellAt('15:00').count()) === 0);
-await p.getByRole('button', { name: /ご通院したことがある方/ }).click(); await p.getByRole('radio', { name: /現在通院中/ }).click(); await p.waitForTimeout(800);
+await p.getByRole('button', { name: /ご通院したことがある方/ }).click(); await p.waitForTimeout(800);
+ok('ご通院したことがある方を押すと、現在通院中を選んだ状態になる', (await p.getByRole('radio', { name: /現在通院中/ }).getAttribute('aria-checked')) === 'true');
 ok('現在通院中は取れる（〇）', (await cellAt('15:00').count()) === 1);
 await cellAt('15:00').click();
 await p.getByRole('radio', { name: /1ヶ月以上/ }).click(); await p.waitForTimeout(1000);
