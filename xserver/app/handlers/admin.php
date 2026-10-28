@@ -887,7 +887,18 @@ function adm_staff_put(): never
     $set = [];
     $params = [];
     if (isset($b['name'])) { $n = trim((string)$b['name']); if ($n === '' || mb_strlen($n) > 30) Http::error('bad request', 400); $set[] = 'name = ?'; $params[] = $n; }
-    if (isset($b['role'])) { if (!in_array($b['role'], ['THERAPIST', 'RECEPTION'], true)) Http::error('bad request', 400); $set[] = 'role = ?'; $params[] = $b['role']; }
+    if (isset($b['role'])) {
+        if (!in_array($b['role'], ['THERAPIST', 'RECEPTION'], true)) Http::error('bad request', 400);
+        if ($b['role'] !== $m['role']) {
+            // 登録後に施術者 ⇄ 受付を変える。変えた先の人数の上限を確かめ、受付にしたら施術者だけのチェック（院長・初回・再来・色）は外す
+            $store = $ctx['store'];
+            $max = $b['role'] === 'THERAPIST' ? (int)$store['maxTherapists'] : (int)$store['maxReception'];
+            $count = (int)Db::one('SELECT COUNT(*) AS n FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 AND (endDate IS NULL OR endDate >= ?)', [$sid, $b['role'], Time::nowJst()['date']])['n'];
+            if ((int)$m['active'] === 1 && $count >= $max) Http::error(($b['role'] === 'THERAPIST' ? '施術者' : '受付') . "は最大 {$max} 名です（店舗設定で変更できます）", 400);
+            $set[] = 'role = ?'; $params[] = $b['role'];
+            if ($b['role'] === 'RECEPTION') array_push($set, 'canFirst = 0', 'canRevisit = 0', 'isHead = 0', "color = ''");
+        }
+    }
     if (array_key_exists('active', $b)) { $set[] = 'active = ?'; $params[] = Http::bool($b, 'active') ? 1 : 0; }
     if (array_key_exists('canFirst', $b)) { $set[] = 'canFirst = ?'; $params[] = Http::bool($b, 'canFirst') ? 1 : 0; }
     if (array_key_exists('canRevisit', $b)) { $set[] = 'canRevisit = ?'; $params[] = Http::bool($b, 'canRevisit') ? 1 : 0; }

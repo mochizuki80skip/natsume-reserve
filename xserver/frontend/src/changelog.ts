@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 93, date: '2026-10-28', title: 'スタッフの「施術者」「受付」を登録後に変更', audience: ['店舗', '本部'],
+    items: ['店舗設定の「スタッフ・シフト」で、登録したあとでも施術者 ⇄ 受付を変えられるようにしました（名前の右の「施術者／受付」）。シフトはそのまま残ります。受付に変えると、院長・初回／再来を担当する・予約表の色のチェックは外れます。変えた先の人数の上限（店舗設定）を超えるときは変えられません。'],
+  },
+  {
     id: 92, date: '2026-10-28', title: '媒体ごと・店舗ごとの WEB 予約 URL・QR', audience: ['店舗', '本部'],
     items: [
       '本部：媒体（Instagram・チラシなど）ごとに「使う店舗」を選ぶと、その店舗の予約ページへ直接の URL・QR ができます。「QR をまとめて保存（zip）」で全部の QR 画像（店舗名_媒体名.png）を、「URL の一覧を Excel で保存」で URL の一覧を保存できます。店舗ごとの WEB 予約の数も出ます。',

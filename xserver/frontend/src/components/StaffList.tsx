@@ -35,6 +35,14 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
         <button type="button" onClick={() => call('PUT', { id: m.id, move: 'up' })} className="rounded border px-2 py-1" title="上へ">↑</button>
         <button type="button" onClick={() => call('PUT', { id: m.id, move: 'down' })} className="ml-1 rounded border px-2 py-1" title="下へ">↓</button>
       </span>
+      <select value={m.role} onChange={(e) => {
+        const to = e.target.value;
+        const msg = to === 'RECEPTION' ? `${m.name} を「受付」に変えますか？\n院長・初回／再来を担当する・予約表の色のチェックは外れます（シフトはそのまま残ります）。` : `${m.name} を「施術者」に変えますか？（シフトはそのまま残ります）`;
+        if (confirm(msg)) call('PUT', { id: m.id, role: to }); else e.target.value = m.role;
+      }} className="rounded border px-1 py-1 text-xs" title="登録したあとでも、施術者と受付を変えられます" aria-label={`${m.name} 施術者・受付`}>
+        <option value="THERAPIST">施術者</option>
+        <option value="RECEPTION">受付</option>
+      </select>
       <select value={m.joinType ?? ''} onChange={(e) => call('PUT', { id: m.id, joinType: e.target.value })} className="rounded border px-1 py-1 text-xs" title="新入社員・異動（開始日から1か月、シフト表に印を出します）" aria-label={`${m.name} 区分`}>
         <option value="">区分なし</option>
         <option value="NEW">新入社員</option>
