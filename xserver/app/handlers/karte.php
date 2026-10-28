@@ -57,13 +57,33 @@ function karte_delete(): never
     $b = Http::body();
     $row = Db::one('SELECT id, auto, date, srcTime, srcBed FROM karte WHERE id = ? AND storeId = ?', [(string)($b['id'] ?? ''), $ctx['store']['id']]);
     if (!$row) Http::error('not found', 404);
-    // 予約表から自動で入った行：予約表の来院チェックも外して消す（チェックしたままだと、また行ができるため）
+    $sid = $ctx['store']['id'];
+    $removed = false;
+    // 予約表から自動で入った行：予約表の予約（2 枠目も）も一緒に消す（残すと、来院チェックからまた行ができるため）
     if ((int)$row['auto']) {
-        if (empty($b['uncheck'])) Http::error('予約表から自動で入った行です。予約表の来院チェックも外して消してください', 400);
-        if ($row['srcTime'] !== null && $row['srcBed'] !== null) Db::exec('UPDATE cell SET visited = 0 WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $row['date'], (int)$row['srcTime'], (int)$row['srcBed']]);
+        if (empty($b['uncheck'])) Http::error('予約表から自動で入った行です。予約表の予約も一緒に消してください', 400);
+        if ($row['srcTime'] !== null && $row['srcBed'] !== null) {
+            $time = (int)$row['srcTime'];
+            $bed = (int)$row['srcBed'];
+            $cell = Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $row['date'], $time, $bed]);
+            if ($cell && trim((string)$cell['text']) !== '') {
+                $step = Settings::global()['slotMinutes'];
+                $next = Text::isTwoSlotName($cell['text']) ? Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $row['date'], $time + $step, $bed]) : null;
+                $cont = ($next && Text::isContinuationText($next['text'])) ? $next : null;
+                $by = (string)($ctx['session']['code'] ?? '');
+                Db::transaction(function () use ($sid, $row, $time, $bed, $cell, $cont, $by) {
+                    // 予約表の「消した入力を元に戻す」から戻せるように記録する
+                    Db::exec('INSERT INTO cell_log (id, storeId, date, time, bed, `before`, `after`, byCode, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $row['date'], $time, $bed, trim((string)$cell['text']), '', $by, Time::nowJstDateTime()]);
+                    Db::exec('DELETE FROM cell WHERE id = ?', [$cell['id']]);
+                    if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
+                    if ($cell['reservationId']) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $cell['reservationId']]);
+                });
+                $removed = true;
+            }
+        }
     }
     Db::exec('DELETE FROM karte WHERE id = ?', [$row['id']]);
-    Http::json(['ok' => true]);
+    Http::json(['ok' => true, 'removedCell' => $removed]);
 }
 
 /**

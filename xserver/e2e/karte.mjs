@@ -33,11 +33,16 @@ k = await req('GET', `/api/admin/karte?month=${ym}`);
 ok('チェックを外すと手を加えていない行は消え、直した行は残る', k[1].rows.map((r) => r.kind).join() === 'NEW,ACCIDENT', k[1].rows.map((r) => r.name).join());
 const add = await req('POST', '/api/admin/karte', { date: '2026-11-20' });
 ok('行を手で追加・削除', add[0] === 200 && (await req('DELETE', '/api/admin/karte', { id: add[1].row.id }))[0] === 200);
-ok('自動の行は、来院チェックも外す指定がないと削除できない', (await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id }))[0] === 400);
-ok('自動の行を削除（予約表の来院チェックも外す）', (await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id, uncheck: true }))[0] === 200);
-{ const d = await req('GET', `/api/admin/day?date=${date}`); const c = (d[1].data?.cells ?? d[1].cells ?? []).find((x) => x.time === 600 && x.bed === 2);
+await put(615, 2, '上記初診対応');
+ok('自動の行は、予約表も消す指定がないと削除できない', (await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id }))[0] === 400);
+{ const del = await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id, uncheck: true });
+  ok('自動の行を削除（予約表の予約も消す）', del[0] === 200 && del[1].removedCell === true); }
+{ const d = await req('GET', `/api/admin/day?date=${date}`); const cells = d[1].data?.cells ?? d[1].cells ?? [];
+  const c = cells.find((x) => x.time === 600 && x.bed === 2); const c2 = cells.find((x) => x.time === 615 && x.bed === 2);
   const k2 = await req('GET', `/api/admin/karte?month=${ym}`);
-  ok('予約表の来院チェックが外れ、行は作り直されない', c && !c.visited && k2[1].rows.map((r) => r.kind).join() === 'NEW', JSON.stringify([c?.visited, k2[1].rows.map((r) => r.kind)])); }
+  ok('予約表の予約（2 枠目も）が消え、行は作り直されない', !c && !c2 && k2[1].rows.map((r) => r.kind).join() === 'NEW', JSON.stringify([c, c2, k2[1].rows.map((r) => r.kind)]));
+  const log = await req('GET', `/api/admin/cell-log?date=${date}`);
+  ok('消した予約は「元に戻す」の履歴に残る', JSON.stringify(log[1]).includes('鈴木 花子（初自）')); }
 const x = await fetch(`${B}/api/admin/karte/export?month=${ym}`, { headers: { cookie } });
 ok('Excel で保存できる', x.status === 200 && (x.headers.get('content-type') ?? '').includes('spreadsheetml'));
 
