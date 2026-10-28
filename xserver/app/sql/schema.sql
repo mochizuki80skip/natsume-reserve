@@ -362,6 +362,7 @@ CREATE TABLE IF NOT EXISTS `karte` (
   `trigDetail` VARCHAR(60) NOT NULL DEFAULT '',
   `name` VARCHAR(40) NOT NULL DEFAULT '',
   `nameOk` TINYINT(1) NOT NULL DEFAULT 0,
+  `surnameLen` TINYINT NULL, -- 名字の文字数（氏名は空白なしで持つ。予約表の「姓 名」や患者一覧から。分からなければ NULL）
   `age` INT NULL,
   `sex` VARCHAR(2) NOT NULL DEFAULT '',
   `symptomCat` VARCHAR(20) NOT NULL DEFAULT '',

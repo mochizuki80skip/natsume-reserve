@@ -11,7 +11,8 @@ export function dropHonorific(text: string): string {
 export type NameCheck = { kind: 'surname' | 'kana' | 'foreign'; label: string; help: string };
 
 /** 初回カルテの氏名で、確認したほうがよいもの（名字だけ・ひらがなだけ・カタカナだけ）。問題なければ null */
-export function nameCheck(name: string): NameCheck | null {
+// surnameLen：名字の文字数（予約表で「姓 名」と空白があった・患者一覧にあったとき）。分かっていて名前より短ければ「名字だけ」ではない
+export function nameCheck(name: string, surnameLen?: number | null): NameCheck | null {
   const t = name.trim();
   if (!t) return null;
   const flat = t.replace(/[\s　]/g, '');
@@ -21,7 +22,8 @@ export function nameCheck(name: string): NameCheck | null {
   if (/^[぀-ゟ゠-ヿー]+$/u.test(flat)) {
     return { kind: 'kana', label: 'ひらがなのみ', help: 'ひらがなだけの氏名です。漢字がわかれば直してください。このままで正しければ「正しい」を押してください。' };
   }
-  if (!/[\s　]/.test(t) && /^[一-鿿々〆ヶ]{1,3}$/u.test(t)) {
+  const knownSplit = surnameLen != null && surnameLen > 0 && surnameLen < flat.length;
+  if (!knownSplit && !/[\s　]/.test(t) && /^[一-鿿々〆ヶ]{1,3}$/u.test(t)) {
     return { kind: 'surname', label: '名字だけ？', help: '名字だけの可能性があります（漢字 3 文字以内）。下の名前がわかれば足してください。このままで正しければ「正しい」を押してください。' };
   }
   return null;

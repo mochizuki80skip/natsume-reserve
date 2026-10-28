@@ -42,6 +42,8 @@ function karte_patch(): never
     $row = Db::one('SELECT id FROM karte WHERE id = ? AND storeId = ?', [(string)($b['id'] ?? ''), $ctx['store']['id']]);
     if (!$row) Http::error('not found', 404);
     $set = Karte::cleanPatch(is_array($b['patch'] ?? null) ? $b['patch'] : []);
+    // 空白なしで入れた氏名は、患者一覧から名字の文字数を探す
+    if (array_key_exists('surnameLen', $set) && $set['surnameLen'] === null) $set['surnameLen'] = Karte::surnameLenFromCards($ctx['store']['id'], (string)$set['name']);
     if ($set) {
         $cols = implode(', ', array_map(fn($k) => "`$k` = ?", array_keys($set)));
         Db::exec("UPDATE karte SET $cols, edited = 1 WHERE id = ?", array_merge(array_values($set), [$row['id']]));
@@ -113,6 +115,7 @@ function karte_import(): never
                 unset($set['nameOk']);
                 if (($set['date'] ?? '') === '') throw new HttpError(400, '日付がありません');
                 if (($set['name'] ?? '') === '') throw new HttpError(400, '氏名がありません');
+                if ($set['surnameLen'] === null) $set['surnameLen'] = Karte::surnameLenFromCards($sid, (string)$set['name']);
                 $visits = is_array($r['visits'] ?? null) ? Karte::cleanPatch(['visits' => $r['visits']])['visits'] : null;
             } catch (HttpError $e) {
                 $result[] = ['status' => 'error', 'error' => $e->getMessage()]; $n['error']++; continue;

@@ -21,6 +21,10 @@ describe('初回カルテの氏名の確認', () => {
     expect(nameCheck('長谷川')?.kind).toBe('surname');
     expect(nameCheck('佐藤 太郎')).toBeNull();
     expect(nameCheck('佐藤太郎')).toBeNull();
+    // 氏名は空白なしで持つ：予約表で「林 一郎」とあった（名字 1 文字）なら名字だけではない
+    expect(nameCheck('林一郎')?.kind).toBe('surname');
+    expect(nameCheck('林一郎', 1)).toBeNull();
+    expect(nameCheck('佐藤', 2)?.kind).toBe('surname');
   });
   it('ひらがなだけ', () => {
     expect(nameCheck('やまだ はなこ')?.kind).toBe('kana');

@@ -66,6 +66,22 @@ final class Karte
         return preg_replace('/[\s\x{3000}]+/u', '', $name) ?? $name;
     }
 
+    /** 「姓 名」と空白があるときの名字の文字数（空白が無い・1 語だけなら null） */
+    public static function surnameLenOf(string $name): ?int
+    {
+        $parts = preg_split('/[\s\x{3000}]+/u', trim($name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return count($parts) >= 2 ? min(20, mb_strlen($parts[0])) : null;
+    }
+
+    /** 名字の文字数を、店舗の患者一覧（レセコンの氏名は「姓 名」）から探す。見つからなければ null */
+    public static function surnameLenFromCards(string $storeId, string $name): ?int
+    {
+        $flat = self::karteName($name);
+        if ($flat === '') return null;
+        $r = Db::one("SELECT name FROM patient_card WHERE storeId = ? AND REPLACE(REPLACE(name, ' ', ''), '　', '') = ? AND (name LIKE '% %' OR name LIKE '%　%') LIMIT 1", [$storeId, $flat]);
+        return $r ? self::surnameLenOf((string)$r['name']) : null;
+    }
+
     public static function nameOfText(string $text): string
     {
         $t = Text::dropHonorific(Text::dropPhone($text));
@@ -107,12 +123,13 @@ final class Karte
             if (isset($have[$k])) continue;
             $newId = Db::newId();
             // きっかけ：紹介元（業者）の QR から → 業者紹介（内訳＝業者名）、媒体の URL から → 媒体に決めたきっかけ（内訳＝媒体名）、紹介カードの QR から → ギフトカード
-            $added = Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)', [
-                $newId, $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr(self::karteName($w['name']), 0, 40),
+            $sur = self::surnameLenOf($w['name']) ?? self::surnameLenFromCards($store['id'], $w['name']);
+            $added = Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, surnameLen, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                $newId, $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr(self::karteName($w['name']), 0, 40), $sur,
                 $w['ref'] !== '' && $w['refTrig'] !== '' ? $w['refTrig'] : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' && $w['refTrig'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : '', mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
             // 新自が来院（来院チェック）したら、エリアMG・本部が決めた人へメールで知らせる。昔の日のチェックでは送らない
-            if ($added > 0 && $w['kind'] === 'ACCIDENT' && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId, $w['name']);
+            if ($added > 0 && $w['kind'] === 'ACCIDENT' && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId);
         }
     }
 
@@ -140,25 +157,28 @@ final class Karte
     }
 
     /** 通知に出す患者様：本部の設定（none＝出さない／karte＝カルテNo／surname＝名字＋カルテNo／full＝氏名＋カルテNo）。カルテNo は入っているときだけ */
-    public static function notifyWho(string $name, string $karteNo): string
+    /** $surnameLen：名字の文字数（氏名は空白なしで持つので、ここで名字を切り出す。分からなければ null） */
+    public static function notifyWho(string $name, string $karteNo, ?int $surnameLen = null): string
     {
         $mode = (string)(Settings::global()['notifyName'] ?? 'surname');
         if ($mode === 'none') return '';
         $no = trim($karteNo) !== '' ? 'カルテNo ' . trim($karteNo) : '';
         $name = trim($name);
-        // 名字だけ：「姓 名」と空白があるときだけ。空白が無いとどこまでが名字か分からないので、氏名は出さない
-        $parts0 = preg_split('/[\s　]+/u', $name) ?: [];
-        $shown = $mode === 'full' ? $name : ($mode === 'surname' && count($parts0) >= 2 ? $parts0[0] : '');
+        // 名字だけ：名字の文字数が分かるときだけ（予約表で「姓 名」と空白があった・患者一覧にあった）。分からなければ氏名は出さない
+        $sur = $surnameLen ?? self::surnameLenOf($name);
+        $flat = self::karteName($name);
+        $known = $sur !== null && $sur > 0 && $sur < mb_strlen($flat);
+        // 氏名：名字が分かれば「姓 名」と空白を入れて出す
+        $shown = $mode === 'full' ? ($known ? mb_substr($flat, 0, $sur) . ' ' . mb_substr($flat, $sur) : $flat) : ($mode === 'surname' && $known ? mb_substr($flat, 0, $sur) : '');
         $parts = array_filter([$shown !== '' ? $shown . ' 様' : '', $no !== '' ? ($shown !== '' ? "（{$no}）" : $no) : '']);
         return implode('', $parts);
     }
 
     /** 新自が来院したことをメール・LINE で知らせる（患者様の氏名は書かない）。一度送った行は送らない */
-    /** $cellName：予約表のセルの氏名（空白が残っているので、名字だけを出すときに使う） */
-    public static function notifyAccident(array $store, string $karteId, ?string $cellName = null): void
+    public static function notifyAccident(array $store, string $karteId): void
     {
         try {
-            $r = Db::one('SELECT date, srcTime, staff, trig, name, karteNo, notifiedAt FROM karte WHERE id = ?', [$karteId]);
+            $r = Db::one('SELECT date, srcTime, staff, trig, name, surnameLen, karteNo, notifiedAt FROM karte WHERE id = ?', [$karteId]);
             if (!$r || $r['notifiedAt'] !== null) return;
             $to = self::notifyRecipients($store);
             $lines = Line::targetsFor(self::areasOf($store));
@@ -171,7 +191,7 @@ final class Karte
             $md = (int)substr($r['date'], 5, 2) . '/' . (int)substr($r['date'], 8, 2);
             $time = $r['srcTime'] !== null ? ' ' . Time::minToHm((int)$r['srcTime']) : '';
             $url = rtrim(Config::str('APP_URL'), '/');
-            $who = self::notifyWho($cellName ?? (string)$r['name'], (string)$r['karteNo']);
+            $who = self::notifyWho((string)$r['name'], (string)$r['karteNo'], $r['surnameLen'] === null ? null : (int)$r['surnameLen']);
             $body = "交通事故（新自）の患者様が来院しました。\n\n"
                 . "店舗：{$store['name']}\n"
                 . ($who !== '' ? "患者様：{$who}\n" : '')
@@ -277,7 +297,7 @@ final class Karte
         for ($i = 0; $i < self::VISITS; $i++) $visits[] = ['d' => (string)($v[$i]['d'] ?? ''), 's' => (string)($v[$i]['s'] ?? ''), 't' => (string)($v[$i]['t'] ?? '')];
         return [
             'id' => $r['id'], 'date' => $r['date'], 'auto' => (bool)$r['auto'], 'karteNo' => $r['karteNo'], 'kind' => $r['kind'],
-            'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'name' => $r['name'], 'nameOk' => (bool)($r['nameOk'] ?? 0), 'age' => $r['age'] === null ? null : (int)$r['age'], 'sex' => $r['sex'],
+            'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'name' => $r['name'], 'surnameLen' => isset($r['surnameLen']) ? (int)$r['surnameLen'] : null, 'nameOk' => (bool)($r['nameOk'] ?? 0), 'age' => $r['age'] === null ? null : (int)$r['age'], 'sex' => $r['sex'],
             'symptomCat' => $r['symptomCat'], 'symptom' => $r['symptom'], 'staff' => $r['staff'], 'treatment' => $r['treatment'], 'visits' => $visits,
             'stopped' => (bool)($r['stopped'] ?? 0), 'transferred' => (bool)($r['transferred'] ?? 0), 'survey' => (bool)($r['survey'] ?? 0),
             'accidentDate' => $r['accidentDate'] ?? null, 'accidentNote' => (string)($r['accidentNote'] ?? ''),
@@ -330,6 +350,7 @@ final class Karte
                 default:
                     $max = ['accidentNote' => 200, 'karteNo' => 20, 'trig' => 30, 'trigDetail' => 60, 'name' => 40, 'symptomCat' => 20, 'symptom' => 100, 'staff' => 30][$k];
                     $set[$k] = mb_substr($k === 'name' ? self::karteName((string)$v) : trim((string)$v), 0, $max);
+                    if ($k === 'name') $set['surnameLen'] = self::surnameLenOf((string)$v);
             }
         }
         // 氏名を直したら、確認済みの印は外す（直した氏名をもう一度見る）

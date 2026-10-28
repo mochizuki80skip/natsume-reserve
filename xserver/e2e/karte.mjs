@@ -25,6 +25,7 @@ ok('選択肢がそろっている', k[1].options.trigger.length === 21 && k[1].
 const visits = [{ d: '2026-11-18', s: '山本', t: '矯正' }, ...Array(4).fill({ d: '', s: '', t: '' })];
 const p = await req('PATCH', '/api/admin/karte', { id: rows[0].id, patch: { name: '山田 太郎（漢字）', age: '45', sex: '♂', trig: '紹介他事業', trigDetail: 'East-one三島', visits } });
 ok('入力を保存（氏名の空白は取る）', p[0] === 200 && p[1].row.name === '山田太郎（漢字）' && p[1].row.age === 45 && p[1].row.visits[0].d === '2026-11-18');
+ok('予約表の「姓 名」から名字の文字数を覚える', rows[0].surnameLen === 2, String(rows[0].surnameLen));
 ok('年齢がおかしいと保存しない', (await req('PATCH', '/api/admin/karte', { id: rows[0].id, patch: { age: 'abc' } }))[0] === 400);
 ok('施術内容は矯正／マッサだけ', (await req('PATCH', '/api/admin/karte', { id: rows[0].id, patch: { treatment: 'マッサージ' } }))[0] === 400);
 await req('PUT', '/api/admin/visit', { date, time: 540, bed: 1, visited: false });
@@ -32,6 +33,8 @@ await req('PUT', '/api/admin/visit', { date, time: 660, bed: 3, visited: false }
 k = await req('GET', `/api/admin/karte?month=${ym}`);
 ok('チェックを外すと手を加えていない行は消え、直した行は残る', k[1].rows.map((r) => r.kind).join() === 'NEW,ACCIDENT', k[1].rows.map((r) => r.name).join());
 const add = await req('POST', '/api/admin/karte', { date: '2026-11-20' });
+{ const a = await req('PATCH', '/api/admin/karte', { id: add[1].row.id, patch: { name: '林一郎' } }); const b = await req('PATCH', '/api/admin/karte', { id: add[1].row.id, patch: { name: '林 一郎' } });
+  ok('手で入れた氏名：空白なしなら名字は分からない、「姓 名」なら覚える', a[1].row.surnameLen === null && b[1].row.name === '林一郎' && b[1].row.surnameLen === 1, JSON.stringify([a[1].row.surnameLen, b[1].row.surnameLen])); }
 ok('行を手で追加・削除', add[0] === 200 && (await req('DELETE', '/api/admin/karte', { id: add[1].row.id }))[0] === 200);
 await put(615, 2, '上記初診対応');
 ok('自動の行は、予約表も消す指定がないと削除できない', (await req('DELETE', '/api/admin/karte', { id: k[1].rows[1].id }))[0] === 400);

@@ -135,7 +135,7 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
 /** 名字だけ・ひらがなだけ・カタカナだけ（外国の方？）の氏名に出す確認の印。「正しい」を押すと消える */
 function NameFlag({ row, onOk }: { row: KarteRow; onOk: () => void }) {
   const [open, setOpen] = useState(false);
-  const chk = row.nameOk ? null : nameCheck(row.name);
+  const chk = row.nameOk ? null : nameCheck(row.name, row.surnameLen);
   if (!chk) return null;
   const cls = chk.kind === 'foreign' ? 'border-violet-500 bg-violet-100 text-violet-800' : 'border-amber-500 bg-amber-100 text-amber-900';
   return (
@@ -233,7 +233,7 @@ export default function KartePage() {
 
   const count = (k: KarteKind) => rows.filter((r) => r.kind === k).length;
   const missingRows = rows.filter((r) => missingFields(r, data.detailFor).size > 0).length;
-  const nameRows = rows.filter((r) => !r.nameOk && nameCheck(r.name)).length;
+  const nameRows = rows.filter((r) => !r.nameOk && nameCheck(r.name, r.surnameLen)).length;
   const go = (n: number) => setSp({ month: shiftMonth(ym, n) });
 
   return (

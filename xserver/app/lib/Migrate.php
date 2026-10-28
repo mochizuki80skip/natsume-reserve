@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 40;
+    private const VERSION = 41;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -274,6 +274,28 @@ final class Migrate
             if ($ver < 40) {
                 // 新患継続率の氏名は空白を取ってそろえる（店舗ごとに「姓 名」「姓名」とまちまちだったため）
                 if (self::hasTable($pdo, 'karte')) $pdo->exec("UPDATE `karte` SET `name` = REPLACE(REPLACE(`name`, ' ', ''), '　', '') WHERE `name` LIKE '% %' OR `name` LIKE '%　%'");
+            }
+            if ($ver < 41) {
+                // 名字の文字数（氏名は空白なしで持つので、名字だけの通知・「名字だけ？」の確認に使う）。
+                // 今ある行は、元の予約表のセル（「姓 名」と空白があれば）と患者一覧から入れる
+                if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'surnameLen')) {
+                    $pdo->exec('ALTER TABLE `karte` ADD COLUMN `surnameLen` TINYINT NULL AFTER `nameOk`');
+                    $split = function (string $s): ?array {
+                        $s = preg_replace('/[（(][^）)]*[）)]/u', ' ', $s) ?? $s;
+                        $s = preg_replace('/(初診|初自|新自|再来|再診)|様/u', ' ', $s) ?? $s;
+                        $p = preg_split('/[\s\x{3000}]+/u', trim($s), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                        return count($p) >= 2 ? [implode('', $p), mb_strlen($p[0])] : null;
+                    };
+                    $upd = $pdo->prepare('UPDATE karte SET surnameLen = ? WHERE id = ?');
+                    $rows = $pdo->query("SELECT k.id, k.name, c.text FROM karte k LEFT JOIN cell c ON c.storeId = k.storeId AND c.date = k.date AND c.time = k.srcTime AND c.bed = k.srcBed WHERE k.name <> ''")->fetchAll(PDO::FETCH_ASSOC);
+                    $cards = [];
+                    if (self::hasTable($pdo, 'patient_card')) foreach ($pdo->query("SELECT name FROM patient_card WHERE name LIKE '% %' OR name LIKE '%　%'")->fetchAll(PDO::FETCH_COLUMN) as $n) { $x = $split((string)$n); if ($x) $cards[$x[0]] = $x[1]; }
+                    foreach ($rows as $r) {
+                        $x = $r['text'] !== null ? $split((string)$r['text']) : null;
+                        $len = ($x && (str_starts_with((string)$r['name'], $x[0]) || str_starts_with($x[0], (string)$r['name']))) ? $x[1] : ($cards[(string)$r['name']] ?? null);
+                        if ($len !== null && $len < mb_strlen((string)$r['name'])) $upd->execute([min(20, $len), $r['id']]);
+                    }
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

@@ -59,6 +59,14 @@ await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visit
   ok('空白の無い氏名は、名字だけの設定では出さない', m2.length === 2 && !b.includes('見本') && !b.includes('次郎'), b); }
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: false });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '' }] });
+// 空白が無くても、患者一覧（レセコン：「姓 名」）にあれば名字が分かる
+await api(st, 'POST', '/api/admin/patients', { rows: [{ no: '9001', name: '試験 三郎', kana: 'シケン サブロウ' }] });
+await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 630, bed: 3, text: '試験三郎（初自）' }] });
+await api(st, 'PUT', '/api/admin/visit', { date: today, time: 630, bed: 3, visited: true });
+{ const m3 = mails(); const b = m3[2]?.body ?? '';
+  ok('空白が無くても患者一覧にあれば名字だけ出す', m3.length === 3 && b.includes('患者様：試験 様') && !b.includes('三郎'), b); }
+await api(st, 'PUT', '/api/admin/visit', { date: today, time: 630, bed: 3, visited: false });
+await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 630, bed: 3, text: '' }] });
 
 // 未入力の数（前の月も含めて）
 await api(st, 'GET', `/api/admin/karte?month=${OLD.slice(0, 7)}`); // 昔の月の行を作る
