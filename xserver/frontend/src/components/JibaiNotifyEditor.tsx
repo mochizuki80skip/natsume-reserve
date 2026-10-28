@@ -5,7 +5,7 @@ import LineNotifyEditor from './LineNotifyEditor';
 
 interface Row { area: string; email: string; label: string }
 interface Resp { rows: (Row & { id: string })[]; areas: string[]; consultLineUrl: string; notifyName: string; mailFrom: string }
-const NAME_MODES = [['surname', '名字＋カルテNo（例：見本 様（カルテNo 1201））'], ['karte', 'カルテNo だけ'], ['full', '氏名＋カルテNo'], ['none', '出さない']] as const;
+const NAME_MODES = [['surname', '名字＋カルテNo（例：見本 様（カルテNo 1201））'], ['karte', 'カルテNo だけ'], ['full', '氏名（予約表のとおり）＋カルテNo（例：見本 太郎 様（カルテNo 1201））'], ['none', '出さない']] as const;
 
 export default function JibaiNotifyEditor() {
   const { data, reload } = useFetch<Resp>('/api/admin/hq/jibai-notify');

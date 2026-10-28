@@ -27,7 +27,7 @@ final class Settings
         $r['consultLineUrl'] = (string)($r['consultLineUrl'] ?? '');
         $r['lineToken'] = (string)($r['lineToken'] ?? '');
         $r['lineSecret'] = (string)($r['lineSecret'] ?? '');
-        $r['notifyName'] = in_array($r['notifyName'] ?? '', ['none', 'karte', 'surname', 'full'], true) ? $r['notifyName'] : 'surname';
+        $r['notifyName'] = in_array($r['notifyName'] ?? '', ['none', 'karte', 'surname', 'full'], true) ? $r['notifyName'] : 'full';
         $r['hours'] = is_string($r['hours']) ? json_decode($r['hours'], true) : $r['hours'];
         return $r;
     }

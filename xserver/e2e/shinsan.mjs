@@ -60,7 +60,7 @@ await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 3, visit
 const k = (await api(st, 'GET', `/api/admin/karte?month=${today.slice(0, 7)}`))[1].rows.find((r) => r.name === '試験三郎');
 ok('新患継続率に区分「新三」で入る（症状区分は事故第三者）', k?.kind === 'THIRD' && k?.symptomCat === '事故第三者', JSON.stringify(k && [k.kind, k.symptomCat]));
 const m = mails();
-ok('来院チェックで通知メール（【新三】第三者行為の初診・名字だけ）', m.length === 1 && m[0].subject.includes('【新三】') && m[0].subject.includes('第三者行為の初診') && m[0].body.includes('患者様：試験 様') && !m[0].body.includes('三郎'), JSON.stringify(m.map((x) => x.subject)));
+ok('来院チェックで通知メール（【新三】第三者行為の初診・予約表のとおりの氏名）', m.length === 1 && m[0].subject.includes('【新三】') && m[0].subject.includes('第三者行為の初診') && m[0].body.includes('患者様：試験 三郎 様') && !m[0].subject.includes('三郎'), JSON.stringify(m.map((x) => x.subject)));
 ok('事故日・事故内容の未入力に数える', (await api(st, 'GET', '/api/admin/me'))[1].accidentMissing >= 1);
 await st.goto(`${B}/admin/karte`); await st.waitForTimeout(1200);
 const sec = st.getByRole('region', { name: '新自・新三（事故）' });

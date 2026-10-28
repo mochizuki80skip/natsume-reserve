@@ -66,7 +66,7 @@ fs.rmSync(LOG, { force: true });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 600, bed: 2, text: '見本 太郎（初自）' }] });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 600, bed: 2, visited: true });
 const sent = logs().filter((x) => x.line);
-ok('新自の来院で、その店舗のエリアの LINE だけに届く（名字だけ）', sent.length === 1 && sent[0].line === 'Uaaaa' && sent[0].text.includes('【新自】サンプル本店') && sent[0].text.includes('患者様：見本 様') && !sent[0].text.includes('太郎') && (process.env.APP_URL ? sent[0].text.includes(process.env.APP_URL + '/admin/karte?store=S001') : true), JSON.stringify(sent));
+ok('新自の来院で、その店舗のエリアの LINE だけに届く（はじめは予約表のとおりの氏名）', sent.length === 1 && sent[0].line === 'Uaaaa' && sent[0].text.includes('【新自】サンプル本店') && sent[0].text.includes('患者様：見本 太郎 様') && (process.env.APP_URL ? sent[0].text.includes(process.env.APP_URL + '/admin/karte?store=S001') : true), JSON.stringify(sent));
 
 // 患者様の出し方を変える（カルテNo が入っていればカルテNo も）
 const kid = (await api(st, 'GET', `/api/admin/karte?month=${today.slice(0, 7)}`))[1].rows.find((r) => r.kind === 'ACCIDENT').id;
@@ -81,6 +81,10 @@ fs.rmSync(LOG, { force: true });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 720, bed: 4, text: '例示 一郎（初自）' }] });
 await api(st, 'PUT', '/api/admin/visit', { date: today, time: 720, bed: 4, visited: true });
 ok('出し方：氏名＋カルテNo（カルテNo がまだ無いときは氏名だけ）', logs().filter((x) => x.line)[0]?.text.includes('患者様：例示 一郎 様'), JSON.stringify(logs()));
+fs.rmSync(LOG, { force: true });
+await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 735, bed: 5, text: '例示二郎（初自）' }] });
+await api(st, 'PUT', '/api/admin/visit', { date: today, time: 735, bed: 5, visited: true });
+ok('出し方：氏名は予約表のとおり（空白なしなら空白なしのまま）', logs().filter((x) => x.line)[0]?.text.includes('患者様：例示二郎 様'), JSON.stringify(logs()));
 await who('none');
 fs.rmSync(LOG, { force: true });
 await api(st, 'PUT', '/api/admin/cells', { date: today, cells: [{ time: 720, bed: 5, text: '仮名 次郎（初自）' }] });

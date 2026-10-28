@@ -22,6 +22,8 @@ const api = (p, m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fe
 const mails = () => { try { return fs.readFileSync(LOG, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
 
 const hq = await login('', process.env.HQ_PASSWORD ?? 'hq-pass', 'HQ');
+// このテストは「名字＋カルテNo」の出し方で確かめる（はじめは予約表のとおりの氏名。linenotify.mjs）
+await api(hq, 'PUT', '/api/admin/hq/notify-name', { mode: 'surname' });
 await api(hq, 'PUT', '/api/admin/hq/areas', { areas: [{ name: '静岡エリア', stores: ['S001'] }, { name: '東部エリア', stores: ['S002'] }] });
 ok('正しくないメールアドレスは保存できない', (await api(hq, 'PUT', '/api/admin/hq/jibai-notify', { rows: [{ area: '', email: 'nope', label: '' }] }))[0] === 400);
 ok('送り先を保存', (await api(hq, 'PUT', '/api/admin/hq/jibai-notify', { rows: [{ area: '', email: 'all@example.com', label: '本部' }, { area: '静岡エリア', email: 'mg-s@example.com', label: '静岡MG' }, { area: '東部エリア', email: 'mg-t@example.com', label: '東部MG' }] }))[0] === 200);

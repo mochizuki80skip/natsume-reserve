@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `global_setting` (
   `consultLineUrl` VARCHAR(300) NOT NULL DEFAULT '', -- 交通事故の相談 LINE の URL（店舗えらび・予約ページのバナー。空＝出さない）
   `lineToken` VARCHAR(400) NOT NULL DEFAULT '',      -- 新自の通知を送る LINE 公式アカウントのチャネルアクセストークン（画面には出さない）
   `lineSecret` VARCHAR(100) NOT NULL DEFAULT '',     -- 同じくチャネルシークレット（Webhook の署名の確認）
-  `notifyName` VARCHAR(10) NOT NULL DEFAULT 'surname', -- 新自の通知に出す患者様：none／karte（カルテNo）／surname（名字＋カルテNo）／full（氏名＋カルテNo）
+  `notifyName` VARCHAR(10) NOT NULL DEFAULT 'full', -- 新自・新三の通知に出す患者様：none／karte（カルテNo）／surname（名字＋カルテNo）／full（予約表のとおりの氏名＋カルテNo）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

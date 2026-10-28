@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 42;
+    private const VERSION = 43;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -308,6 +308,10 @@ final class Migrate
                         $pdo->prepare("INSERT INTO karte_option (category, label, sortOrder) VALUES ('menu', ?, ?)")->execute([$label, $at]);
                     }
                 }
+            }
+            if ($ver < 43) {
+                // 新自・新三の通知の患者様は「予約表のとおりの氏名＋カルテNo」に（依頼者の決定 2026-10-28）。本部の画面でほかの出し方に戻せる
+                if (self::hasTable($pdo, 'global_setting') && self::hasColumn($pdo, 'global_setting', 'notifyName')) $pdo->exec("UPDATE `global_setting` SET `notifyName` = 'full' WHERE `notifyName` = 'surname'");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

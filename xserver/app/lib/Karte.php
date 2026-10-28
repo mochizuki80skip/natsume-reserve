@@ -153,7 +153,7 @@ final class Karte
                 $w['ref'] !== '' && $w['refTrig'] !== '' ? $w['refTrig'] : ($w['card'] ? 'ギフトカード' : ''), $w['ref'] !== '' && $w['refTrig'] !== '' ? mb_substr($w['ref'], 0, 60) : '', $w['kind'] === 'ACCIDENT' ? '自賠' : ($w['kind'] === 'THIRD' ? '事故第三者' : ''), mb_substr($w['staff'], 0, 30), self::emptyVisits(),
             ]);
             // 新自が来院（来院チェック）したら、エリアMG・本部が決めた人へメールで知らせる。昔の日のチェックでは送らない
-            if ($added > 0 && in_array($w['kind'], self::INJURY_KINDS, true) && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId);
+            if ($added > 0 && in_array($w['kind'], self::INJURY_KINDS, true) && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId, $w['name']);
         }
     }
 
@@ -182,9 +182,9 @@ final class Karte
 
     /** 通知に出す患者様：本部の設定（none＝出さない／karte＝カルテNo／surname＝名字＋カルテNo／full＝氏名＋カルテNo）。カルテNo は入っているときだけ */
     /** $surnameLen：名字の文字数（氏名は空白なしで持つので、ここで名字を切り出す。分からなければ null） */
-    public static function notifyWho(string $name, string $karteNo, ?int $surnameLen = null): string
+    public static function notifyWho(string $name, string $karteNo, ?int $surnameLen = null, ?string $cellName = null): string
     {
-        $mode = (string)(Settings::global()['notifyName'] ?? 'surname');
+        $mode = (string)(Settings::global()['notifyName'] ?? 'full');
         if ($mode === 'none') return '';
         $no = trim($karteNo) !== '' ? 'カルテNo ' . trim($karteNo) : '';
         $name = trim($name);
@@ -196,14 +196,16 @@ final class Karte
             $g = self::guessSurnameLen($flat);
             if ($g !== null && $g > 0 && $g <= mb_strlen($flat)) return implode('', array_filter([mb_substr($flat, 0, $g) . ' 様', $no !== '' ? "（{$no}）" : '']));
         }
-        // 氏名：名字が分かれば「姓 名」と空白を入れて出す
-        $shown = $mode === 'full' ? ($known ? mb_substr($flat, 0, $sur) . ' ' . mb_substr($flat, $sur) : $flat) : ($mode === 'surname' && $known ? mb_substr($flat, 0, $sur) : '');
+        // 氏名：予約表に書いたとおり（空白のある・なしもそのまま）。予約表の文字が無いときは、名字が分かれば「姓 名」と空白を入れて出す
+        $cell = trim((string)$cellName);
+        $shown = $mode === 'full' && $cell !== '' ? $cell : ($mode === 'full' ? ($known ? mb_substr($flat, 0, $sur) . ' ' . mb_substr($flat, $sur) : $flat) : ($mode === 'surname' && $known ? mb_substr($flat, 0, $sur) : ''));
         $parts = array_filter([$shown !== '' ? $shown . ' 様' : '', $no !== '' ? ($shown !== '' ? "（{$no}）" : $no) : '']);
         return implode('', $parts);
     }
 
     /** 新自が来院したことをメール・LINE で知らせる（患者様の氏名は書かない）。一度送った行は送らない */
-    public static function notifyAccident(array $store, string $karteId): void
+    /** $cellName：予約表に書いたとおりの氏名（「氏名」の設定で、空白もそのまま出す） */
+    public static function notifyAccident(array $store, string $karteId, ?string $cellName = null): void
     {
         try {
             $r = Db::one('SELECT date, srcTime, kind, staff, trig, name, surnameLen, karteNo, notifiedAt FROM karte WHERE id = ?', [$karteId]);
@@ -219,7 +221,7 @@ final class Karte
             $md = (int)substr($r['date'], 5, 2) . '/' . (int)substr($r['date'], 8, 2);
             $time = $r['srcTime'] !== null ? ' ' . Time::minToHm((int)$r['srcTime']) : '';
             $url = rtrim(Config::str('APP_URL'), '/');
-            $who = self::notifyWho((string)$r['name'], (string)$r['karteNo'], $r['surnameLen'] === null ? null : (int)$r['surnameLen']);
+            $who = self::notifyWho((string)$r['name'], (string)$r['karteNo'], $r['surnameLen'] === null ? null : (int)$r['surnameLen'], $cellName);
             // 新自＝交通事故、新三＝第三者行為（交通事故以外で、ほかの人によるケガ）
             $third = $r['kind'] === 'THIRD';
             [$tag, $what, $sec] = $third ? ['新三', '第三者行為（新三）', '新自・新三'] : ['新自', '交通事故（新自）', '新自・新三'];
