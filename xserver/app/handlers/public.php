@@ -98,8 +98,8 @@ function pub_reserve(array $p): never
                 throw new HttpError(409, 'はじめての方のご予約はお電話（' . $store['phone'] . '）で承っております');
             }
             $status = Availability::statusFor($in, $time, Availability::remainingAt($in, $time));
-            if ($status !== 'open') {
-                throw new HttpError(409, $status === 'phone' ? 'この時間はお電話でのみ受付しております' : 'この時間は空きがなくなりました。別の時間をお選びください');
+            if ($status !== 'open' && $status !== 'few') {
+                throw new HttpError(409, $status === 'phone' ? 'この時間はお電話でのみ受付しております' : '申し訳ありません。タッチの差でこの時間は埋まりました。別の時間をお選びください');
             }
             $bed = $free[0];
             $rid = Db::newId();
@@ -228,7 +228,7 @@ function pub_quiet_times(array $store, array $setting, string $today): ?array
             $any = true;
             $h = intdiv($s['time'], 60);
             $p = Hours::isAm($in['sessions'], $s['time']) ? 'AM' : 'PM';
-            $byHour[$p][$h] = ($byHour[$p][$h] ?? 0) + ($s['status'] === 'open' ? $s['remaining'] : 0);
+            $byHour[$p][$h] = ($byHour[$p][$h] ?? 0) + ($s['status'] === 'open' || $s['status'] === 'few' ? $s['remaining'] : 0);
         }
         if (!$any) continue; // 今日の受付が終わっていたら次の営業日
         $best = function (array $hours): ?string {

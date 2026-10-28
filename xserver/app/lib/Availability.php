@@ -103,7 +103,7 @@ final class Availability
         return max(0, min($free, $byCapacity));
     }
 
-    /** 'open' | 'phone' | 'closed' */
+    /** 'open'（〇）| 'few'（△：残りわずか。WEB で予約できる）| 'phone'（📞：直前・WEB で予約できる日数より先）| 'closed'（×） */
     public static function statusFor(array $in, int $time, int $remaining): string
     {
         if ($in['nowMinutes'] !== null) {
@@ -113,7 +113,7 @@ final class Availability
             if ($lead <= $in['webCutoffMinutes']) return 'phone'; // 開始 30 分前（ちょうどを含む）からは電話マーク
         }
         if ($remaining <= 0) return 'closed';
-        if ($remaining <= $in['phoneMarkRemaining']) return 'phone';
+        if ($remaining <= $in['phoneMarkRemaining']) return 'few';
         return 'open';
     }
 

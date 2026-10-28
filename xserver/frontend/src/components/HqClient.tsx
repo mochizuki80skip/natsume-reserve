@@ -140,7 +140,7 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
           <label>枠の刻み（分）<input type="number" min={5} max={60} value={s.slotMinutes} onChange={num('slotMinutes')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>初回に必要な枠数<input type="number" min={1} max={8} value={s.newVisitSlots} onChange={num('newVisitSlots')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>通院中に必要な枠数<input type="number" min={1} max={8} value={s.returnVisitSlots} onChange={num('returnVisitSlots')} className="mt-1 w-full rounded border px-2 py-1" /></label>
-          <label>電話マークにする残り枠数<input type="number" min={0} max={20} value={s.phoneMarkRemaining} onChange={num('phoneMarkRemaining')} className="mt-1 w-full rounded border px-2 py-1" /></label>
+          <label>△（残りわずか）にする残り枠数<input type="number" min={0} max={20} value={s.phoneMarkRemaining} onChange={num('phoneMarkRemaining')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>WEB予約の締切（開始N分前）<input type="number" min={0} max={1440} value={s.webCutoffMinutes} onChange={num('webCutoffMinutes')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>電話受付の締切（開始N分前）<input type="number" min={0} max={1440} value={s.phoneCutoffMinutes} onChange={num('phoneCutoffMinutes')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label>管理側の追加枠数（受付終了後の行）<input type="number" min={0} max={8} value={s.adminExtraSlots} onChange={num('adminExtraSlots')} className="mt-1 w-full rounded border px-2 py-1" /></label>

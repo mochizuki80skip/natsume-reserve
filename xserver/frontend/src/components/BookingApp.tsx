@@ -168,6 +168,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
             <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">電話番号</dt><dd className="font-bold tabular-nums">{formatJpPhone(form.phone) || form.phone}</dd></div>
           </dl>
           <PrivacyNote />
+          {sel.status === 'few' && <p className="mt-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="note" aria-label="残り1枠の案内">この時間は<b>残り1枠</b>です。タッチの差でほかの方の予約が先に入ることがあります。取れたかどうかは、次の画面でお知らせします。</p>}
           <button type="button" onClick={submit} disabled={loading} className="mt-4 w-full rounded-lg bg-brand px-4 py-3 text-base font-bold text-white disabled:opacity-50">
             {loading ? '送信中…' : 'この内容で予約する'}
           </button>
@@ -181,7 +182,8 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
 
       {step === 4 && done && (
         <section className="rounded-lg border border-brand bg-white p-5">
-          <h2 className="text-lg font-bold text-brand-dark">ご予約が確定しました</h2>
+          <h2 className="text-lg font-bold text-brand-dark">✓ ご予約が確定しました</h2>
+          <p className="mt-1 text-sm text-slate-600">このお時間でご予約をお取りしました。</p>
           <p className="mt-3 text-base">{formatDateJa(done.date)} {minToHm(done.time)}〜</p>
           <p className="mt-1 text-sm text-slate-600">{store.name}</p>
           {done.smsStatus === 'SENT'

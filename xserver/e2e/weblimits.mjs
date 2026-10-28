@@ -58,9 +58,12 @@ ok('やめると初診も取れる', (await st('NEW', 615)) !== 'closed');
 const s0 = (await api('GET', '/api/admin/settings'))[1].store;
 ok('既定：4 件・14 日', s0.maxActiveBookings === 4 && s0.bookDaysAhead === 14, JSON.stringify([s0.maxActiveBookings, s0.bookDaysAhead]));
 await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, maxActiveBookings: 2 });
-const week = (await (await fetch(`${B}/api/public/S001/week?start=${D}&kind=RETURN`)).json()).days.filter((d) => d.label === null && d.slots.some((x) => x.status === 'open'));
+// 2 週分（夕方は今日の枠が終わっているため、1 週だけだと足りないことがある）
+const wk = async (start) => (await (await fetch(`${B}/api/public/S001/week?start=${start}&kind=RETURN`)).json()).days;
+const D7 = (() => { const d = new Date(D + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 7); return d.toISOString().slice(0, 10); })();
+const week = [...await wk(D), ...await wk(D7)].filter((d) => d.label === null && d.slots.some((x) => x.status === 'open' || x.status === 'few'));
 const reserve = (date, time, name = '見本 予約') => fetch(`${B}/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'RETURN', date, time, name, phone: '09011112222', cardNo: '123' }) }).then(async (r) => [r.status, (await r.json()).error ?? '']);
-const slot = (d) => d.slots.find((x) => x.status === 'open').time;
+const slot = (d) => d.slots.find((x) => x.status === 'open' || x.status === 'few').time;
 const r1 = await reserve(week[0].date, slot(week[0])), r2 = await reserve(week[1].date, slot(week[1]));
 const r3 = await reserve(week[2].date, slot(week[2]));
 ok('2 件までは取れる', r1[0] === 200 && r2[0] === 200, JSON.stringify([r1, r2]));

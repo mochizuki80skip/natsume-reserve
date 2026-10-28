@@ -1,7 +1,7 @@
 // Instagram ストーリーズ用（1080×1920）の「本日の空き状況」画像を描く（純粋な描画処理。データ取得は呼び出し側）
 import { minToHm } from '@/lib/time';
 
-export type SlotStatus = 'open' | 'phone' | 'closed';
+export type SlotStatus = 'open' | 'few' | 'phone' | 'closed';
 export interface StorySlot { time: number; period: 'AM' | 'PM'; newStatus: SlotStatus; returnStatus: SlotStatus }
 export interface StoryInput {
   storeName: string;
@@ -31,8 +31,8 @@ const C = {
 
 /** 記号：〇 どなたでも／△ ご通院中の方のみ（30分枠は不可）／📞 お電話で／× 空きなし */
 export function symbolFor(s: StorySlot): { mark: string; color: string } {
-  if (s.newStatus === 'open') return { mark: '〇', color: C.open };
-  if (s.returnStatus === 'open') return { mark: '△', color: C.ret };
+  if (s.newStatus === 'open' || s.newStatus === 'few') return { mark: '〇', color: C.open };
+  if (s.returnStatus === 'open' || s.returnStatus === 'few') return { mark: '△', color: C.ret };
   if (s.newStatus === 'phone' || s.returnStatus === 'phone') return { mark: '📞', color: C.phone };
   return { mark: '×', color: C.none };
 }

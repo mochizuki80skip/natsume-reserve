@@ -17,7 +17,9 @@ const GROUP_LABEL: Record<Group, { title: string; sub: string; kinds: [Kind, str
   FIRST: { title: 'はじめての方', sub: '', kinds: [['NEW', 'ケガ・痛み・不調など'], ['ACCIDENT', '交通事故による痛み']] },
   VISITED: { title: 'ご通院したことがある方', sub: '', kinds: [['RETURN', '現在通院中'], ['REVISIT', '1ヶ月以上ご来院の無い方']] },
 };
-type SlotStatus = 'open' | 'phone' | 'closed';
+type SlotStatus = 'open' | 'few' | 'phone' | 'closed';
+/** WEB で予約へ進める（〇・△） */
+const bookable = (s: SlotStatus) => s === 'open' || s === 'few';
 export interface WeekDay { date: string; label: string | null; slots: { time: number; status: SlotStatus }[] }
 export interface WeekData { today: string; weekStart: string; publishDaysAhead: number; days: WeekDay[] }
 export interface Selection { date: string; time: number; status: SlotStatus }
@@ -138,7 +140,8 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
         </div>
         <div className="wk-legend" aria-label="記号の意味">
           <span><span className="o">〇</span> WEB予約できます</span>
-          <span><span className="p">📞</span> 残りわずか・直前はお電話で</span>
+          <span><span className="f">△</span> 残り1枠（WEB予約可）</span>
+          <span><span className="p">📞</span> 直前・急患はお電話で</span>
           <span><span className="x">×</span> 空きなし・受付終了</span>
           <span><span className="sw" /> 定休日・祝日</span>
         </div>
@@ -179,11 +182,11 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
           <div className="mx-auto flex max-w-lg items-center gap-3">
             <div className="min-w-0 flex-1">
               <b className="block text-base">{md(sel.date)}（{WEEKDAY_JA[weekdayOf(sel.date)]}）{minToHm(sel.time)}〜</b>
-              <span className={`text-xs ${sel.status === 'open' && !kind ? 'font-bold text-red-600' : 'text-slate-500'}`}>{sel.status !== 'open' ? '残りわずか／直前のためお電話でご予約ください' : kind ? KIND_TEXT[kind] : '上で来院区分を選ぶと予約へ進めます'}</span>
+              <span className={`text-xs ${bookable(sel.status) && !kind ? 'font-bold text-red-600' : 'text-slate-500'}`}>{!bookable(sel.status) ? '直前のためお電話でご予約ください' : kind ? `${KIND_TEXT[kind]}${sel.status === 'few' ? '（残り1枠）' : ''}` : '上で来院区分を選ぶと予約へ進めます'}</span>
             </div>
-            {sel.status === 'open' && !kind
+            {bookable(sel.status) && !kind
               ? <button type="button" onClick={() => { setNeedKind(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="whitespace-nowrap rounded-lg border-2 border-brand bg-white px-4 py-3 text-sm font-bold text-brand">来院区分を選ぶ</button>
-              : sel.status === 'open'
+              : bookable(sel.status)
               ? <button type="button" onClick={() => onProceed(sel)} className="whitespace-nowrap rounded-lg bg-brand px-4 py-3 text-sm font-bold text-white">この日時で予約へ進む</button>
               : <a href={phoneHref} className="whitespace-nowrap rounded-lg bg-amber-700 px-4 py-3 text-sm font-bold text-white">📞 {phone}</a>}
             <button type="button" onClick={() => setSel(null)} aria-label="閉じる" className="px-1 text-xl text-slate-500">×</button>
@@ -209,9 +212,9 @@ function RowGroup({ t, ri, isPmStart, days, amRows, pmRows, statusMap, sel, onPi
     if (st === 'closed') return <td key={d.date} className="slot x">×</td>;
     const isSel = sel && sel.date === d.date && sel.time === t;
     return (
-      <td key={d.date} className={`slot ${st === 'open' ? 'o' : 'p'} ${isSel ? 'sel' : ''}`}>
-        <button type="button" onClick={() => onPick(d.date, t, st)} aria-label={`${md(d.date)} ${minToHm(t)} ${st === 'open' ? '予約できます' : 'お電話でご予約ください'}`}>
-          {st === 'open' ? '〇' : '📞'}
+      <td key={d.date} className={`slot ${st === 'open' ? 'o' : st === 'few' ? 'f' : 'p'} ${isSel ? 'sel' : ''}`}>
+        <button type="button" onClick={() => onPick(d.date, t, st)} aria-label={`${md(d.date)} ${minToHm(t)} ${st === 'open' ? '予約できます' : st === 'few' ? '残り1枠・予約できます' : 'お電話でご予約ください'}`}>
+          {st === 'open' ? '〇' : st === 'few' ? '△' : '📞'}
         </button>
       </td>
     );

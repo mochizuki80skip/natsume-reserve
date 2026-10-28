@@ -40,7 +40,7 @@ ok('新規はブロックにかかる直前も×', n[645] === 'closed' && n[630]
 ok('ベッド1だけ止める', (await req('POST', '/api/admin/blocks', { date, start: 1020, end: 1080, beds: [1] }))[0] === 200);
 ok('1 台止めると残り 2（〇のまま）', (await slots('RETURN'))[1020] === 'open');
 ok('ベッド2も止める', (await req('POST', '/api/admin/blocks', { date, start: 1020, end: 1080, beds: [2] }))[0] === 200);
-ok('2 台止めると残り 1（電話マーク）', (await slots('RETURN'))[1020] === 'phone');
+ok('2 台止めると残り 1（△：WEB で予約できる）', (await slots('RETURN'))[1020] === 'few');
 ok('見せていないベッド6を止めても枠は減らない', (await req('POST', '/api/admin/blocks', { date, start: 1110, end: 1140, beds: [6] }))[0] === 200 && (await slots('RETURN'))[1110] === 'open');
 ok('ベッド未選択は不可', (await req('POST', '/api/admin/blocks', { date, start: 900, end: 960, beds: [] }))[0] === 400);
 ok('開始＞終了は不可', (await req('POST', '/api/admin/blocks', { date, start: 960, end: 900, beds: [1] }))[0] === 400);

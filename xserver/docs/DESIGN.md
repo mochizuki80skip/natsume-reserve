@@ -286,7 +286,7 @@ xserver/
 
 ### 7-7. 表示（`Availability::statusFor`）
 - 今日：開始まで `phoneCutoffMinutes` 未満 → ×。`webCutoffMinutes`（既定 30 分）以内 → 電話。
-- 残り 0 → ×、残り `phoneMarkRemaining`（既定 1）以下 → 電話、それ以外 → ○。過去 → ×。
+- 残り 0 → ×、残り `phoneMarkRemaining`（既定 1）以下 → △（`few`。WEB で予約できる）、それ以外 → ○。過去 → ×。
 
 ### 7-8. 予約の受け付け（`pub_reserve`）
 - チェック：区分・名前（「様」を除く、40 文字まで）・日本の電話番号・通院中は診察券番号が必須・紹介コード。
