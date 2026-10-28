@@ -3,6 +3,8 @@
 Vercel を使わずに、Xserver のレンタルサーバー（スタンダードプラン）で動かすための版です。
 サーバー側は PHP と MySQL、画面は React（ビルド済みの静的ファイル）で動きます。機能・画面・URL は Vercel 版と同じです。
 
+資料：設計書 `docs/DESIGN.md`／別の事業体へ展開する手順 `docs/CUSTOMIZE.md`／運用 `docs/OPERATIONS.md`／作業の決まり `CLAUDE.md`／作業手順（スキル）`.claude/skills/`
+
 ```
 xserver/
 ├─ app/        PHP 本体（Web から直接は見えない場所に置く）
