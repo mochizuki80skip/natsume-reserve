@@ -28,12 +28,13 @@ interface Props {
   onKindChange: (k: Kind | null) => void;
   onProceed: (sel: Selection) => void;
   phone: string;
+  cardRemembered?: boolean; // この端末に診察券番号を覚えている（通院中の案内の文言を変える）
 }
 
 
 function md(date: string) { return `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`; }
 
-export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, phone }: Props) {
+export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, phone, cardRemembered = false }: Props) {
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const [data, setData] = useState<WeekData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -123,7 +124,9 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
             </button>
           ))}
         </div>}
-        {kind === 'RETURN' && <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-[12.5px] font-semibold text-amber-900" role="note" aria-label="通院中の方へのお願い">診察券をご用意ください<span className="block text-[11px] font-normal">次の画面で診察券番号を入力します</span></p>}
+        {kind === 'RETURN' && <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-[12.5px] font-semibold text-amber-900" role="note" aria-label="通院中の方へのお願い">{cardRemembered
+          ? <>診察券番号は前回の番号が入ります<span className="block text-[11px] font-normal">念のため番号をご確認ください</span></>
+          : <>診察券をご用意ください<span className="block text-[11px] font-normal">次の画面で診察券番号を入力します</span></>}</p>}
         {group && !kind && <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>ご来院の内容をお選びください</p>}
         <p className="mt-2.5 text-[14px] font-bold text-brand-dark">② ご希望の日時を選択してください</p>
         <div className="mt-1 flex items-center justify-between gap-2">

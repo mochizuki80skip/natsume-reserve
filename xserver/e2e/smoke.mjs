@@ -116,6 +116,20 @@ ok('通院中を選ぶと「診察券をご用意ください」', ((await page.
   ok('通院中は診察券番号が必須で、確認の案内が出る', (await page.locator('label:has-text("診察券番号") input[required]').count()) === 1 && (await page.textContent('form')).includes('お手元の診察券に書かれている番号'));
   ok('2 回目は氏名・電話番号が入っている', (await page.inputValue('input[placeholder*="山田"]')) === 'テスト 太郎' && (await page.inputValue('input[type="tel"]')) === '09012345678');
 }
+// 診察券番号を覚えているスマホでは、通院中の案内を「前回の番号が入ります」に変える
+{
+  const url = page.url();
+  await page.evaluate(() => { const m = JSON.parse(localStorage.getItem('natsume.patient') ?? '{}'); localStorage.setItem('natsume.patient', JSON.stringify({ ...m, cardNo: '3842' })); });
+  await page.goto(url); await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+  await page.getByRole('button', { name: /ご通院したことがある方/ }).click();
+  await page.getByRole('radio', { name: /現在通院中/ }).click(); await page.waitForTimeout(500);
+  const t = (await page.getByRole('note', { name: '通院中の方へのお願い' }).textContent()) ?? '';
+  ok('番号を覚えているスマホでは「前回の番号が入ります」', t.includes('前回の番号が入ります') && !t.includes('ご用意ください'), t);
+  await page.getByRole('button', { name: /別の方/ }).click(); await page.waitForTimeout(300);
+  await page.getByRole('button', { name: /ご通院したことがある方/ }).click().catch(() => {});
+  await page.getByRole('radio', { name: /現在通院中/ }).click(); await page.waitForTimeout(300);
+  ok('「別の方の予約」では「診察券をご用意ください」', ((await page.getByRole('note', { name: '通院中の方へのお願い' }).textContent()) ?? '').includes('ご用意ください'));
+}
 
 // 同じ枠が 2 枠使われたか（初回=30分）は管理画面で確認する
 // --- 管理画面

@@ -115,7 +115,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
             </div>
           )}
           {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-          <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone}
+          <WeekGrid key={gridKey} storeCode={store.code} kind={kind} onKindChange={setKind} phone={store.phone} cardRemembered={!!(memory && useMemory && memory.cardNo)}
             onProceed={(s) => {
               setSel(s); setStep(2); setError('');
               // 前回の内容を入力欄に入れる（空欄のときだけ）
