@@ -235,7 +235,7 @@ xserver/
 
 ### 7-1. 公開（`PublicApi::isPublished`）
 - `day_status.published` が 1 / 0 ならそれに従う。空なら「今日 〜 今日 + `publishDaysAhead`（既定 30 日）」を公開。
-- 既存の方（RETURN・REVISIT）は「今日 + `bookDaysAhead`（既定 14 日）」より先は、空きがあっても「お電話で」。はじめての方（NEW・ACCIDENT）は公開する日数まで WEB で取れる（`PublicApi::BOOK_DAYS_KINDS`）。
+- 現在通院中（RETURN）は「今日 + `bookDaysAhead`（既定 14 日）」より先は、空きがあっても「お電話で」。初診・新自・1ヶ月以上ぶり（NEW・ACCIDENT・REVISIT）は公開する日数まで WEB で取れる（`PublicApi::BOOK_DAYS_KINDS`）。
 
 ### 7-2. 営業時間（`Settings::storeSessions`）
 1. 1 日休業 → 枠なし。午前休・午後休はその半分を消す（12:00 より前に始まる時間帯が午前）。

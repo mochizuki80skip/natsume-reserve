@@ -81,7 +81,7 @@ ok('14 日より先の予約は断る（電話の案内）', rf[0] === 409 && rf
 const fn = (await (await fetch(`${B}/api/public/S001/week?start=${far.toISOString().slice(0, 10)}&kind=NEW`)).json()).days.find((d) => d.date === fd.date);
 ok('はじめての方は 14 日より先も WEB で取れる（〇・△）', fn && fn.slots.some((x) => x.status === 'open' || x.status === 'few'), JSON.stringify(fn?.slots.slice(0, 3)));
 const fr = (await (await fetch(`${B}/api/public/S001/week?start=${far.toISOString().slice(0, 10)}&kind=REVISIT`)).json()).days.find((d) => d.date === fd.date);
-ok('1ヶ月以上ぶりの方は 14 日より先は電話マーク', fr && fr.slots.every((x) => x.status !== 'open' && x.status !== 'few'));
+ok('1ヶ月以上ぶりの方も新規と同じく 14 日より先も WEB で取れる', fr && fr.slots.some((x) => x.status === 'open' || x.status === 'few'));
 const rn = await fetch(`${B}/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'NEW', date: fd.date, time: fn.slots.find((x) => x.status === 'open' || x.status === 'few').time, name: '見本 広告', phone: '09033334444' }) });
 ok('はじめての方は 14 日より先も予約できる', rn.status === 200, String(rn.status));
 await api('PUT', '/api/admin/store', { ...s0, hoursOverride: s0.hoursOverride || null, bookDaysAhead: null, maxActiveBookings: null });

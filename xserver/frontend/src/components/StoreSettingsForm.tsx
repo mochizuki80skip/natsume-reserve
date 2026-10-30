@@ -75,7 +75,7 @@ export default function StoreSettingsForm({ capToday, capAll, store, globalHours
             ))}
             {([
               ['maxActiveBookings', '1 人が持てる WEB 予約', '件まで', '同じ患者様（電話番号と氏名が同じ）が WEB で持てる、まだ来ていない予約の件数（この店舗だけ）。空欄＝制限なし', 1, 50],
-              ['bookDaysAhead', 'WEB で予約できる日数', '日先まで', '既存の方（現在通院中・1ヶ月以上ぶり）が今日から何日先まで WEB で予約できるか。それより先は、予約ページで見られますが電話マーク（お電話で受付）になります。はじめての方（新規・新自）は公開する日数まで WEB で予約できます。空欄＝公開する日数まで', 0, 365],
+              ['bookDaysAhead', 'WEB で予約できる日数', '日先まで', '現在通院中の方が今日から何日先まで WEB で予約できるか。それより先は、予約ページで見られますが電話マーク（お電話で受付）になります。はじめての方（初診・新自）と 1ヶ月以上ぶりの方は、公開する日数まで WEB で予約できます。空欄＝公開する日数まで', 0, 365],
             ] as const).map(([k, label, unit, help, min, max]) => (
               <tr key={k} className="border-t">
                 <td className="w-40 whitespace-nowrap py-1.5 pr-3 font-medium">{label}</td>

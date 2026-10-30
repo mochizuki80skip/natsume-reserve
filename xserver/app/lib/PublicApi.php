@@ -56,8 +56,8 @@ final class PublicApi
     }
 
     /** WEB で予約できる日数（店舗設定）より先の日か */
-    /** 来院区分ごとの「WEB で予約できる日数」：既存の方（通院中・1ヶ月以上ぶり）だけに使う。新規（初診・新自）は公開する日数まで（広告で予約が入るように。依頼者の決定 2026-10-28） */
-    public const BOOK_DAYS_KINDS = ['RETURN', 'REVISIT'];
+    /** 「WEB で予約できる日数」は現在通院中の方だけに使う。初診・新自・1ヶ月以上ぶりは公開する日数まで（広告で予約が入るように。依頼者の決定 2026-10-28・10-30） */
+    public const BOOK_DAYS_KINDS = ['RETURN'];
 
     public static function beyondBookDays(array $store, string $date, string $today, ?string $kind = null): bool
     {
