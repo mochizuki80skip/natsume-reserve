@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 44;
+    private const VERSION = 45;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -316,6 +316,10 @@ final class Migrate
             if ($ver < 44) {
                 // 媒体を使う店舗（店舗ごとの予約ページへ直接の URL・QR）
                 if (self::hasTable($pdo, 'referral') && !self::hasColumn($pdo, 'referral', 'stores')) $pdo->exec('ALTER TABLE `referral` ADD COLUMN `stores` TEXT NULL AFTER `trig`');
+            }
+            if ($ver < 45) {
+                // ストーリー画像のテーマ（空＝おまかせ：店舗コードから決める）
+                if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'storyTheme')) $pdo->exec("ALTER TABLE `store` ADD COLUMN `storyTheme` VARCHAR(20) NOT NULL DEFAULT ''");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

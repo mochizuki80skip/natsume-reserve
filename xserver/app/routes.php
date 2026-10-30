@@ -107,6 +107,8 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/referrals$#', 'hq_referrals_get'],
         ['PUT', '#^/api/admin/hq/referrals$#', 'hq_referrals_put'],
         ['GET', '#^/api/admin/hq/referrals/export$#', 'hq_referrals_export'],
+        ['GET', '#^/api/admin/story-theme$#', 'adm_story_theme_get'],
+        ['PUT', '#^/api/admin/story-theme$#', 'adm_story_theme_put'],
         ['GET', '#^/api/admin/special-bulk$#', 'hq_special_bulk_get'],
         ['PUT', '#^/api/admin/special-bulk$#', 'hq_special_bulk_put'],
         ['DELETE', '#^/api/admin/special-bulk$#', 'hq_special_bulk_delete'],

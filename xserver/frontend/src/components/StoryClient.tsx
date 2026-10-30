@@ -1,7 +1,7 @@
 // 本日の空き状況をストーリーズ用画像にして、共有（Instagram）または保存する画面
 import { useEffect, useRef, useState } from 'react';
 import { formatDateJa, minToHm, nowJst } from '@/lib/time';
-import { drawStory, type SlotStatus, type StorySlot } from './StoryCanvas';
+import { STORY_THEMES, autoThemeId, drawStory, themeOf, type SlotStatus, type StorySlot } from './StoryCanvas';
 
 interface Props { store: { code: string; name: string; phone: string }; date: string }
 interface SlotsResp { date: string; published: boolean; slots: { time: number; status: SlotStatus; period: 'AM' | 'PM' }[] }
@@ -12,8 +12,18 @@ export default function StoryClient({ store, date }: Props) {
   const [msg, setMsg] = useState('');
   const [canShare, setCanShare] = useState(false);
   const [tick, setTick] = useState(0);
+  // テーマ（空＝おまかせ：店舗ごとに違う色）。店舗ごとに覚える
+  const [theme, setTheme] = useState<string | null>(null);
+  useEffect(() => {
+    fetch('/api/admin/story-theme').then((r) => r.json()).then((j) => setTheme(j.theme ?? '')).catch(() => setTheme(''));
+  }, [store.code]);
+  async function chooseTheme(id: string) {
+    setTheme(id);
+    await fetch('/api/admin/story-theme', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ theme: id }) }).catch(() => {});
+  }
 
   useEffect(() => {
+    if (theme === null) return;
     let alive = true;
     setState('loading');
     const api = (kind: string) => fetch(`/api/public/${encodeURIComponent(store.code)}/slots?date=${date}&kind=${kind}`, { cache: 'no-store' }).then((r) => r.json() as Promise<SlotsResp>);
@@ -27,12 +37,12 @@ export default function StoryClient({ store, date }: Props) {
           storeName: store.name, phone: store.phone,
           dateText: formatDateJa(date, false), nowText: minToHm(now.minutes),
           slots, closedText: !n.published ? '本日のWEB受付はありません' : '本日は休診日です',
-        });
+        }, themeOf(theme, store.code));
         setState('ready');
       })
       .catch(() => alive && setState('error'));
     return () => { alive = false; };
-  }, [store.code, store.name, store.phone, date, tick]);
+  }, [store.code, store.name, store.phone, date, tick, theme]);
 
   useEffect(() => {
     // 画像の共有（スマホの共有画面 → Instagram）に対応しているか
@@ -87,6 +97,24 @@ export default function StoryClient({ store, date }: Props) {
           {state === 'loading' && <p className="text-slate-500">作成中…</p>}
           {state === 'error' && <p className="text-red-700">空き状況を取得できませんでした。<button type="button" className="ml-2 underline" onClick={() => setTick((t) => t + 1)}>再試行</button></p>}
 
+          <div className="rounded-lg border bg-white p-3" role="group" aria-label="画像のテーマ">
+            <p className="font-bold">画像のテーマ（色・形）</p>
+            <p className="mt-0.5 text-xs text-slate-500">何店舗もフォローしている方に同じ絵が並ばないよう、店舗ごとに選べます（選んだテーマはこの店舗で覚えます）。</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button type="button" aria-pressed={theme === ''} onClick={() => chooseTheme('')}
+                className={`rounded-full border px-2.5 py-1 text-xs ${theme === '' ? 'border-brand bg-brand-light font-bold text-brand-dark ring-2 ring-brand' : 'bg-white'}`}>
+                おまかせ（{themeOf('', store.code).name}）
+              </button>
+              {STORY_THEMES.map((t) => (
+                <button key={t.id} type="button" aria-pressed={theme === t.id} onClick={() => chooseTheme(t.id)} aria-label={`テーマ ${t.name}`}
+                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${theme === t.id ? 'border-brand font-bold ring-2 ring-brand' : 'bg-white'}`}>
+                  <i className="inline-block h-3.5 w-3.5 rounded-full border" style={{ background: t.brand }} aria-hidden="true" />{t.name}
+                </button>
+              ))}
+            </div>
+            {theme === '' && <p className="mt-1 text-[11px] text-slate-400">おまかせは店舗ごとに決まった色です（{autoThemeId(store.code) ? themeOf('', store.code).name : ''}）。</p>}
+          </div>
+
           <p className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-900">📱 投稿は<b>スマホ</b>でこの画面を開いて行うのがかんたんです（スマホのブラウザで管理画面にログイン →「ストーリー画像」）。</p>
 
           <ol className="space-y-3">
@@ -116,7 +144,7 @@ export default function StoryClient({ store, date }: Props) {
             <Step n={4} title="スタンプの文字を変えて置く">
               <p className="mt-1 text-xs">
                 「スタンプのテキストをカスタマイズ」で <b>WEB予約はこちら</b> と入力 →「完了」。
-                スタンプは指で動かして、<b>下の紺色の帯（WEB予約の案内）の上</b>に重ねて置きます。時間の表には重ねないでください（一番下は返信欄に隠れるので避けます）。
+                スタンプは指で動かして、<b>下の濃い色の帯（WEB予約の案内）の上</b>に重ねて置きます。時間の表には重ねないでください（一番下は返信欄に隠れるので避けます）。
               </p>
             </Step>
             <Step n={5} title="ストーリーズに投稿">

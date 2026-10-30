@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS `store` (
   `newAdjust` INT NOT NULL DEFAULT 0,       -- WEB で同時に受ける新規：シフトの「初回を担当する」人数からの足し引き
   `revisitAdjust` INT NOT NULL DEFAULT 0,   -- 同じく再来：「再来を担当する」人数からの足し引き
   `totalAdjust` INT NOT NULL DEFAULT 0,     -- 同じく新規＋再来の合計：「初回か再来を担当する」人数からの足し引き
+  `storyTheme` VARCHAR(20) NOT NULL DEFAULT '', -- ストーリー画像のテーマ（空＝おまかせ）
   PRIMARY KEY (`id`),
   UNIQUE KEY `store_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,7 +1,7 @@
 # 設計書（WEB 予約システム・Xserver 版）
 
 この文書は、システムの**作り**をまとめたものです。運用の手順は `OPERATIONS.md`、別の事業体へ展開するときの手順は `CUSTOMIZE.md` にあります。
-行番号は 2026-10-28 時点の目安です（`Migrate::VERSION = 44`）。
+行番号は 2026-10-28 時点の目安です（`Migrate::VERSION = 45`）。
 
 ---
 
@@ -380,6 +380,7 @@ xserver/
 | 42 | メニューに「第三者」「自賠」を足す（新三の区分と合わせて） |
 | 43 | 通知の患者様を「予約表のとおりの氏名」に（notifyName surname → full） |
 | 44 | 媒体を使う店舗（referral.stores） |
+| 45 | ストーリー画像のテーマ（store.storyTheme） |
 
 ---
 

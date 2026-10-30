@@ -16,18 +16,42 @@ export const STORY_W = 1080;
 export const STORY_H = 1920;
 const FONT = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", Meiryo, system-ui, sans-serif';
 
-// ブランドカラー（#4CC0ED）を基準にした配色。白文字はブランド色の上だと読みにくいので、文字は紺を使う
-const C = {
-  brand: '#4cc0ed',
-  tint: '#e8f7fd',     // ブランド色のごく薄い色（背景・行の縞）
-  line: '#bfe7f8',
-  navy: '#0e3a4f',     // 文字（ブランド色の上でも白の上でも読みやすい）
-  sub: '#47606d',
-  open: '#0f6e92',     // 〇（ブランド色を濃くした色）
-  ret: '#a15c00',      // △
-  phone: '#a15c00',
-  none: '#9aa8b0',     // ×（空きなし。目立たせない）
-};
+// テーマ（色と見出しの形）。何店舗もフォローしている方に同じ絵が並ばないよう、店舗ごとに選べる
+export type HeaderShape = 'wave' | 'slant' | 'arch' | 'band';
+export interface StoryTheme {
+  id: string; name: string;
+  brand: string;   // 見出し・列の見出しの色
+  onBrand: string; // ブランド色の上の文字
+  tint: string;    // ごく薄い色（背景・行の縞）
+  line: string;
+  navy: string;    // 文字・フッターの地
+  sub: string;
+  open: string;    // 〇
+  ret: string;     // △
+  phone: string;   // 📞
+  none: string;    // ×
+  header: HeaderShape;
+  dots?: boolean;  // 背景の水玉
+  accent?: string; // フッター（紺の地）の線と電話番号の色（無ければブランド色）
+}
+export const STORY_THEMES: StoryTheme[] = [
+  { id: 'sky', name: '水色', brand: '#4cc0ed', onBrand: '#0e3a4f', tint: '#e8f7fd', line: '#bfe7f8', navy: '#0e3a4f', sub: '#47606d', open: '#0f6e92', ret: '#a15c00', phone: '#a15c00', none: '#9aa8b0', header: 'wave' },
+  { id: 'sakura', name: 'さくら', brand: '#f4a6c0', onBrand: '#5a1f36', tint: '#fdeef3', line: '#f6cddb', navy: '#5a1f36', sub: '#7a5563', open: '#b0305e', ret: '#8a5a00', phone: '#8a5a00', none: '#b3a2a8', header: 'arch', dots: true },
+  { id: 'mint', name: 'ミント', brand: '#6fd3b4', onBrand: '#0f4a3c', tint: '#e8f8f2', line: '#bfeadc', navy: '#0f4a3c', sub: '#46685e', open: '#12795d', ret: '#a15c00', phone: '#a15c00', none: '#9eb3ac', header: 'slant' },
+  { id: 'orange', name: 'オレンジ', brand: '#ffb74d', onBrand: '#4a2c00', tint: '#fff4e3', line: '#ffe0b3', navy: '#4a2c00', sub: '#6f5638', open: '#b25e00', ret: '#6c4bb0', phone: '#6c4bb0', none: '#b5a690', header: 'band', dots: true },
+  { id: 'lavender', name: 'ラベンダー', brand: '#b9a3f0', onBrand: '#2e1f5e', tint: '#f3effd', line: '#ddd2fa', navy: '#2e1f5e', sub: '#5f5580', open: '#5b3fc4', ret: '#a15c00', phone: '#a15c00', none: '#aaa3bf', header: 'wave', dots: true },
+  { id: 'lemon', name: 'レモン', brand: '#ffe066', onBrand: '#3d3500', tint: '#fffbe6', line: '#fff0a8', navy: '#3d3500', sub: '#6b6430', open: '#7a6200', ret: '#b03a2e', phone: '#b03a2e', none: '#b5ae8c', header: 'arch' },
+  { id: 'navy', name: 'ネイビー', brand: '#1f3b5b', onBrand: '#ffffff', tint: '#eef2f7', line: '#cdd8e5', navy: '#1f3b5b', sub: '#4f6275', open: '#1f5fa8', ret: '#a15c00', phone: '#a15c00', none: '#9aa6b2', header: 'slant', accent: '#8cc3f0' },
+  { id: 'momiji', name: 'もみじ', brand: '#e07a5f', onBrand: '#ffffff', tint: '#fcf0eb', line: '#f3cfc3', navy: '#4a1d10', sub: '#74503f', open: '#b5452a', ret: '#2f6f8f', phone: '#2f6f8f', none: '#b39f97', header: 'band' },
+];
+/** 店舗ごとの「おまかせ」：店舗コードから決める（店舗ごとに違う色になりやすい） */
+export function autoThemeId(storeCode: string): string {
+  let h = 0;
+  for (const ch of storeCode) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return STORY_THEMES[h % STORY_THEMES.length].id;
+}
+export const themeOf = (id: string | null | undefined, storeCode: string) => STORY_THEMES.find((t) => t.id === (id || autoThemeId(storeCode))) ?? STORY_THEMES[0];
+let C: StoryTheme = STORY_THEMES[0];
 
 /** 記号：〇 どなたでも／△ ご通院中の方のみ（30分枠は不可）／📞 お電話で／× 空きなし */
 export function symbolFor(s: StorySlot): { mark: string; color: string } {
@@ -38,7 +62,8 @@ export function symbolFor(s: StorySlot): { mark: string; color: string } {
 }
 
 // Instagram の画面では上端（名前など）と下端（返信欄）が重なるため、内容は上寄せにし、下 150px ほどは空けておく
-export function drawStory(canvas: HTMLCanvasElement, input: StoryInput): void {
+export function drawStory(canvas: HTMLCanvasElement, input: StoryInput, theme: StoryTheme = STORY_THEMES[0]): void {
+  C = theme;
   canvas.width = STORY_W;
   canvas.height = STORY_H;
   const ctx = canvas.getContext('2d');
@@ -51,22 +76,31 @@ export function drawStory(canvas: HTMLCanvasElement, input: StoryInput): void {
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, STORY_W, STORY_H);
 
-  // 見出し（ブランド色の帯）
+  // 背景の水玉（テーマによって）
+  if (C.dots) {
+    ctx.fillStyle = C.line;
+    for (let y = 560; y < STORY_H; y += 120) for (let x = (y / 120) % 2 ? 60 : 0; x < STORY_W; x += 120) { ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // 見出し（ブランド色。形はテーマによって：波・斜め・アーチ・帯）
   ctx.fillStyle = C.brand;
   ctx.beginPath();
-  ctx.moveTo(0, 0); ctx.lineTo(STORY_W, 0); ctx.lineTo(STORY_W, 430);
-  ctx.quadraticCurveTo(STORY_W / 2, 500, 0, 430);
+  ctx.moveTo(0, 0); ctx.lineTo(STORY_W, 0);
+  if (C.header === 'slant') { ctx.lineTo(STORY_W, 400); ctx.lineTo(0, 470); }
+  else if (C.header === 'arch') { ctx.lineTo(STORY_W, 400); ctx.quadraticCurveTo(STORY_W / 2, 540, 0, 400); }
+  else if (C.header === 'band') { ctx.lineTo(STORY_W, 450); ctx.lineTo(0, 450); }
+  else { ctx.lineTo(STORY_W, 430); ctx.quadraticCurveTo(STORY_W / 2, 500, 0, 430); }
   ctx.closePath();
   ctx.fill();
+  if (C.header === 'band') { ctx.fillStyle = C.navy; ctx.fillRect(0, 450, STORY_W, 12); }
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = C.navy;
+  ctx.fillStyle = C.onBrand;
   ctx.font = `bold 50px ${FONT}`;
   ctx.fillText(fit(ctx, input.storeName, 960), STORY_W / 2, 155);
   ctx.font = `bold 96px ${FONT}`;
   ctx.fillText(input.dateText, STORY_W / 2, 258);
-  // 「本日の空き状況」は白いラベルで目立たせる
+  // 「本日の空き状況」は白いラベルで目立たせる（ラベルの中の文字は紺）
   ctx.font = `bold 56px ${FONT}`;
   const title = '本日の空き状況';
   const tw = ctx.measureText(title).width + 90;
@@ -105,7 +139,7 @@ export function drawStory(canvas: HTMLCanvasElement, input: StoryInput): void {
       ctx.fillStyle = C.brand;
       ctx.fill();
       ctx.restore();
-      ctx.fillStyle = C.navy;
+      ctx.fillStyle = C.onBrand;
       ctx.font = `bold 48px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillText(label, x + colW / 2, top + head / 2 + 2);
@@ -155,14 +189,14 @@ export function drawStory(canvas: HTMLCanvasElement, input: StoryInput): void {
 
   // フッター（WEB予約・電話）
   roundRect(ctx, 90, 1600, STORY_W - 180, 150, 32, C.navy, null);
-  ctx.fillStyle = C.brand;
+  ctx.fillStyle = C.accent ?? C.brand;
   ctx.fillRect(90 + 32, 1600, STORY_W - 180 - 64, 8);
   ctx.textAlign = 'center';
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 44px ${FONT}`;
   ctx.fillText('WEB予約はリンクからどうぞ', STORY_W / 2, 1650);
   ctx.font = `bold 40px ${FONT}`;
-  ctx.fillStyle = C.brand;
+  ctx.fillStyle = C.accent ?? C.brand;
   ctx.fillText(`📞 ${input.phone}`, STORY_W / 2, 1710);
   ctx.fillStyle = C.sub;
   ctx.font = `24px ${FONT}`;

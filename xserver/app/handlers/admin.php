@@ -1253,3 +1253,20 @@ function adm_media_urls(): never
     }
     Http::json(['rows' => $out]);
 }
+
+/** ストーリー画像のテーマ（色と見出しの形）。空＝おまかせ（店舗コードから決める）。店舗ごとに覚える */
+const STORY_THEMES = ['sky', 'sakura', 'mint', 'orange', 'lavender', 'lemon', 'navy', 'momiji'];
+function adm_story_theme_get(): never
+{
+    $ctx = Auth::context();
+    Http::json(['theme' => (string)(Db::one('SELECT storyTheme FROM store WHERE id = ?', [$ctx['store']['id']])['storyTheme'] ?? '')]);
+}
+function adm_story_theme_put(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $t = (string)(Http::body()['theme'] ?? '');
+    if ($t !== '' && !in_array($t, STORY_THEMES, true)) Http::error('bad request', 400);
+    Db::exec('UPDATE store SET storyTheme = ? WHERE id = ?', [$t, $ctx['store']['id']]);
+    Http::json(['ok' => true]);
+}
