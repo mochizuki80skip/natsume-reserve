@@ -2,13 +2,14 @@
 // 投稿の内容（定型投稿の名前）を見ながら、ドラッグで日付を移動、クリックで日時・内容の変更や承認、日付を押してその日の投稿の追加ができる
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useFetch } from '@/lib/api';
-import { CHANNELS, CHANNEL_JA, STATUS_CLASS, STATUS_JA, addMonthsYm, monthGrid, sendJson, toInputDateTime, type Channel, type Post, type PostStatus, type Topic } from '@/lib/sns';
+import { getJson, useFetch } from '@/lib/api';
+import { CHANNELS, CHANNEL_JA, copyText, STATUS_CLASS, STATUS_JA, addMonthsYm, monthGrid, sendJson, toInputDateTime, type Channel, type Post, type PostStatus, type Topic } from '@/lib/sns';
 import { WEEKDAY_JA, addDays, weekdayOf } from '@/lib/time';
 import SnsNav from '@/components/SnsNav';
 import { StoreDot } from '@/lib/storeColor';
 import { useAdmin } from '../Layout';
 import SnsPostsPage from './SnsPostsPage';
+import { postsTsv, savePosts, type PostLine } from '@/lib/topicSheet';
 
 interface CalPost { id: string; channel: Channel; status: PostStatus; scheduledAt: string; title: string; storeCode: string; storeName: string }
 interface CalStore { code: string; name: string; areaGroup: string; igEnabled: boolean; gbpEnabled: boolean; igSchedule: string; gbpSchedule: string }
@@ -55,7 +56,8 @@ function SnsAreaCalendarPage() {
   const ym = sp.get('ym') ?? me.today.slice(0, 7);
   const from = `${ym}-01`;
   const to = addDays(addMonthsYm(ym, 1) + '-01', -1);
-  const { data, error, reload } = useFetch<Resp>(`/api/admin/sns/calendar?from=${from}&to=${to}${channel !== 'all' ? `&channel=${channel}` : ''}${area ? `&area=${encodeURIComponent(area)}` : ''}`);
+  const calUrl = `/api/admin/sns/calendar?from=${from}&to=${to}${channel !== 'all' ? `&channel=${channel}` : ''}${area ? `&area=${encodeURIComponent(area)}` : ''}`;
+  const { data, error, reload } = useFetch<Resp>(calUrl);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState('');
   const [postId, setPostId] = useState<string | null>(null);             // 右のパネル：投稿 1 件
@@ -88,6 +90,19 @@ function SnsAreaCalendarPage() {
       className={`rounded-full border px-3 py-1 ${area === key ? 'bg-brand font-bold text-white' : 'bg-white'}`}>{label}</button>
   );
   const changed = (m: string) => { setMsg(m); reload(); };
+  /** この月（表示中のエリア・媒体・店舗）の投稿文を保存する。差し込み語が入った、店舗ごとの文章 */
+  async function save(kind: 'xlsx' | 'docx' | 'csv' | 'copy') {
+    try {
+      const r = await getJson<{ posts: (CalPost & { text: string })[] }>(calUrl + '&text=1');
+      const ag = new Map(data!.stores.map((s) => [s.code, s.areaGroup]));
+      const lines: PostLine[] = r.posts.filter((p) => !storeCode || p.storeCode === storeCode)
+        .map((p) => ({ scheduledAt: p.scheduledAt, channel: p.channel, status: p.status, title: p.title, text: p.text, storeCode: p.storeCode, storeName: p.storeName, areaGroup: ag.get(p.storeCode) ?? '' }));
+      if (lines.length === 0) { setMsg('この月の投稿はありません'); return; }
+      if (kind === 'copy') { setMsg((await copyText(postsTsv(lines))) ? `${lines.length} 件をコピーしました。Google スプレッドシートの A1 を選んで貼り付け（Ctrl+V）してください` : 'コピーできませんでした。Excel で保存してください'); return; }
+      const label = [ym, area || '全エリア', storeCode ? stores[0]?.name : '', channel !== 'all' ? CHANNEL_JA[channel] : ''].filter(Boolean).join('_');
+      savePosts(kind, lines, label);
+    } catch (e) { setMsg((e as Error).message); }
+  }
 
   async function drop(date: string, ids: string[]) {
     setDragOver(null);
@@ -121,6 +136,13 @@ function SnsAreaCalendarPage() {
         <button type="button" onClick={() => set('show', null)} className={`rounded border px-2 py-1 ${show === 'content' ? 'bg-slate-700 text-white' : 'bg-white'}`}>内容ごと</button>
         <button type="button" onClick={() => set('show', 'store')} className={`rounded border px-2 py-1 ${show === 'store' ? 'bg-slate-700 text-white' : 'bg-white'}`}>店舗ごと</button>
         <span className="ml-auto text-xs text-slate-500">{posts.length} 件</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-slate-500">この月の投稿文を保存（表示中のエリア・媒体・店舗）</span>
+        <button type="button" onClick={() => save('xlsx')} className="rounded border border-green-700 bg-green-50 px-2 py-0.5 text-green-800">Excel</button>
+        <button type="button" onClick={() => save('docx')} className="rounded border border-blue-700 bg-blue-50 px-2 py-0.5 text-blue-800">Word</button>
+        <button type="button" onClick={() => save('csv')} className="rounded border bg-white px-2 py-0.5">CSV</button>
+        <button type="button" onClick={() => save('copy')} className="rounded border bg-white px-2 py-0.5">スプレッドシート用にコピー</button>
       </div>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
 

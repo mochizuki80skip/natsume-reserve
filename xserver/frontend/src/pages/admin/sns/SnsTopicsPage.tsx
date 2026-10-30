@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
-import { CHANNEL_JA, copyText, fileToJpegDataUrl, sendJson, type Channel, type Topic } from '@/lib/sns';
+import { CHANNEL_JA, copyText, fileToJpegDataUrl, imagePrompt, sendJson, type Channel, type Topic } from '@/lib/sns';
 import { addDays } from '@/lib/time';
 import SnsNav from '@/components/SnsNav';
 import SnsMediaPicker from '@/components/SnsMediaPicker';
+import { fileToImportText, normalizePasted, saveTopics, topicsTsv, TOPIC_HEADER } from '@/lib/topicSheet';
+import { download, writeXlsx } from '@/lib/officeFiles';
 import { useAdmin } from '../Layout';
 
 interface VarHelp { key: string; label: string; builtin: boolean }
@@ -97,6 +99,15 @@ export default function SnsTopicsPage() {
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
 
       {data.isHq && <ClaudeImport onImported={reload} />}
+      <div className="flex flex-wrap items-center gap-2 rounded border bg-white px-3 py-2 text-sm">
+        <span className="font-bold">一覧を保存</span>
+        <button type="button" onClick={() => saveTopics('xlsx', data.topics, data.store.code, data.isHq ? '全店' : data.store.name, me.today)} className="rounded border border-green-700 bg-green-50 px-2 py-0.5 text-green-800">Excel（.xlsx）</button>
+        <button type="button" onClick={() => saveTopics('docx', data.topics, data.store.code, data.isHq ? '全店' : data.store.name, me.today)} className="rounded border border-blue-700 bg-blue-50 px-2 py-0.5 text-blue-800">Word（.docx）</button>
+        <button type="button" onClick={() => saveTopics('csv', data.topics, data.store.code, data.isHq ? '全店' : data.store.name, me.today)} className="rounded border bg-white px-2 py-0.5">CSV</button>
+        <button type="button" onClick={async () => setMsg((await copyText(topicsTsv(data.topics, data.store.code))) ? `${data.topics.length} 件をコピーしました。Google スプレッドシートの A1 を選んで貼り付け（Ctrl+V）してください` : 'コピーできませんでした。Excel で保存してから開いてください')} className="rounded border bg-white px-2 py-0.5">スプレッドシート用にコピー</button>
+        {data.isHq && <button type="button" onClick={() => download(writeXlsx('定型投稿', TOPIC_HEADER.slice(0, 7), [['月_お悩み共感_01', 'Google', '月', '', '', '', '{エリア}で{メインキーワード}をお探しの方へ。\n足首をひねったあとの痛み、そのままにしていませんか？\nお気軽にご相談ください。']], [24, 10, 10, 8, 10, 8, 70]), '定型投稿_読み込み用ひな形.xlsx')} className="rounded border bg-white px-2 py-0.5">読み込み用ひな形（Excel）</button>}
+        <span className="text-xs text-slate-500">Google ドキュメント・スプレッドシートにするときは、保存したファイルを Google ドライブにアップロードして開きます。{data.isHq && '読み込みは上の紫の枠の ② から（Excel・CSV・Word・スプレッドシートの貼り付け）。'}</span>
+      </div>
 
       <form onSubmit={add} className="space-y-2 rounded border bg-white p-3 text-sm">
         <div className="flex flex-wrap items-center gap-3">
@@ -167,7 +178,7 @@ export default function SnsTopicsPage() {
                   <td className="px-2 py-1">{canEdit(t) && <input type="checkbox" checked={sel.has(t.id)} onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(t.id); else n.delete(t.id); setSel(n); }} />}</td>
                   <td className="px-2 py-1">
                     {t.imageUrl ? <img src={t.imageUrl} alt="" className="h-16 w-16 rounded border object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded border border-dashed text-xs text-slate-400">なし</div>}
-                    {canEdit(t) && <div className="mt-1 flex flex-wrap gap-1 text-xs"><button type="button" onClick={() => setPickFor(t)} className="text-brand underline">ライブラリから</button><label className="cursor-pointer text-brand underline">アップロード<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(t, e.target.files[0])} /></label>{t.imageUrl && <button type="button" onClick={() => removeImage(t)} className="text-red-700 underline">外す</button>}</div>}
+                    {canEdit(t) && <div className="mt-1 flex flex-wrap gap-1 text-xs"><button type="button" onClick={async () => setMsg((await copyText(imagePrompt(t))) ? `「${t.title}」の画像の依頼文をコピーしました。ChatGPT・Gemini・Canva などの画像の生成 AI に貼り付けて作り、できた画像をこの行の「アップロード」で付けてください（文字を入れるときは Canva で）` : 'コピーできませんでした')} className="text-violet-700 underline" title="画像の生成 AI に貼り付ける依頼文をコピー（システムから AI は使わないので費用はかかりません）">画像の依頼文</button><button type="button" onClick={() => setPickFor(t)} className="text-brand underline">ライブラリから</button><label className="cursor-pointer text-brand underline">アップロード<input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadImage(t, e.target.files[0])} /></label>{t.imageUrl && <button type="button" onClick={() => removeImage(t)} className="text-red-700 underline">外す</button>}</div>}
                   </td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs">{CH_LABEL[t.channel]}</td>
                   <td className="whitespace-nowrap px-2 py-1 text-xs">
@@ -268,27 +279,30 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
   async function check(dryRun: boolean) {
     setBusy(true); setMsg('');
     try {
-      const r = await sendJson<{ items: ImportItem[]; created: number; skipped: number }>('/api/admin/sns/topics/import', 'POST', { text, dryRun, channel: o.channel, area: o.area });
+      const r = await sendJson<{ items: ImportItem[]; created: number; skipped: number }>('/api/admin/sns/topics/import', 'POST', { text: normalizePasted(text), dryRun, channel: o.channel, area: o.area });
       setItems(r.items);
-      if (r.items.length === 0) setMsg('定型投稿を読み取れませんでした。「---」で区切られた「名前：」「本文：」の形か確認してください');
+      if (r.items.length === 0) setMsg('定型投稿を読み取れませんでした。「---」で区切られた「名前：」「本文：」の形か、表なら見出しに「本文」があるか確認してください');
+      else if (dryRun) { const dup = r.items.filter((i) => i.status === 'duplicate').length; if (dup) setMsg(`${r.items.length} 件のうち ${dup} 件は登録済みです（同じ名前・同じ本文）。取り込むのは「OK」のものだけです`); }
       else if (!dryRun) { setMsg(`${r.created} 件を定型投稿に登録しました${r.skipped ? `（同じものが登録済みで飛ばした ${r.skipped} 件）` : ''}`); setText(''); onImported(); }
     } catch (e) { setMsg((e as Error).message); }
     setBusy(false);
   }
-  /** claude.ai からダウンロードしたファイル（.txt / .md。複数可）を読み込んで、貼り付け欄に入れる */
+  /** ファイル（claude.ai の返答の .txt / .md、Excel・CSV・Word。複数可）を読み込んで、貼り付け欄に入れる */
   async function loadFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const list = [...files].sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
-    const texts = await Promise.all(list.map((f) => f.text()));
-    setText(texts.join('\n---\n')); setItems(null);
-    setMsg(`${list.length} 個のファイルを読み込みました。「確認する」を押してください`);
+    try {
+      const texts = await Promise.all(list.map((f) => fileToImportText(f)));
+      setText(texts.join('\n---\n')); setItems(null);
+      setMsg(`${list.length} 個のファイルを読み込みました。「確認する」を押してください`);
+    } catch (e) { setMsg((e as Error).message); }
   }
   const okCount = items?.filter((i) => i.status === 'ok').length ?? 0;
   const WDJ = ['日', '月', '火', '水', '木', '金', '土'];
 
   return (
     <details className="rounded border border-violet-200 bg-violet-50/40 p-3 text-sm">
-      <summary className="cursor-pointer font-bold text-violet-900">Claude で定型投稿を作って取り込む（claude.ai を使うので、システム側の費用はかかりません）</summary>
+      <summary className="cursor-pointer font-bold text-violet-900">定型投稿をまとめて取り込む：Claude で作る／Excel・スプレッドシート・Word から読み込む（システム側の費用はかかりません）</summary>
       <div className="mt-3 space-y-4">
         <section className="space-y-2">
           <div className="font-bold">① 依頼文を作ってコピー</div>
@@ -315,13 +329,13 @@ function ClaudeImport({ onImported }: { onImported: () => void }) {
           {prompt && <details className="text-xs"><summary className="cursor-pointer text-slate-600">依頼文を見る（コピーできないときはここから選んでコピー）</summary><textarea readOnly value={prompt} rows={10} className="mt-1 w-full rounded border bg-white px-2 py-1 font-mono text-xs" /></details>}
         </section>
         <section className="space-y-2">
-          <div className="font-bold">② claude.ai の返答を貼り付けて確認 → 取り込む</div>
+          <div className="font-bold">② claude.ai の返答・Excel・スプレッドシート・Word を読み込んで確認 → 取り込む</div>
           <label className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="rounded border bg-white px-3 py-1.5 text-sm text-slate-800">ファイルから読み込む（複数まとめて選べます）</span>
-            <input type="file" accept=".txt,.md,text/plain,text/markdown" multiple onChange={(e) => { void loadFiles(e.target.files); e.target.value = ''; }} className="text-xs" aria-label="返答のファイル" />
-            <span>claude.ai でファイルとして受け取った返答（.txt など）を、そのまま読み込めます。</span>
+            <input type="file" accept=".txt,.md,.xlsx,.xlsm,.csv,.tsv,.docx,.xls,.doc,text/plain,text/markdown" multiple onChange={(e) => { void loadFiles(e.target.files); e.target.value = ''; }} className="text-xs" aria-label="返答のファイル" />
+            <span>claude.ai の返答（.txt）、Excel（.xlsx）・CSV、Word（.docx）を読み込めます。Excel・CSV は 1 行目に「名前・媒体・曜日・月・エリア・店舗・本文」の見出し（本文だけでも可）。Google スプレッドシート・ドキュメントは「ファイル → ダウンロード」で .xlsx / .docx にするか、表をコピーして下の欄に貼り付けます。</span>
           </label>
-          <textarea value={text} onChange={(e) => { setText(e.target.value); setItems(null); }} rows={8} placeholder={'claude.ai の返答をそのまま貼り付け（「---」で区切られた「名前：」「媒体：」「曜日：」「本文：」の形）'} className="w-full rounded border bg-white px-2 py-1 font-mono text-xs" />
+          <textarea value={text} onChange={(e) => { setText(e.target.value); setItems(null); }} rows={8} placeholder={'claude.ai の返答をそのまま貼り付け（「---」で区切られた「名前：」「媒体：」「曜日：」「本文：」の形）。スプレッドシートの表（見出しの行から）をコピーして貼り付けてもかまいません'} className="w-full rounded border bg-white px-2 py-1 font-mono text-xs" />
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" disabled={busy || !text.trim()} onClick={() => check(true)} className="rounded border bg-white px-3 py-1.5 disabled:opacity-40">確認する</button>
             {items && okCount > 0 && <button type="button" disabled={busy} onClick={() => check(false)} className="rounded bg-brand px-3 py-1.5 font-bold text-white disabled:opacity-50">{okCount} 件を定型投稿に取り込む</button>}

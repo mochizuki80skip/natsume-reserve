@@ -127,7 +127,8 @@ export function pct(now: number, prev: number): number | null {
 }
 
 /** 画像ファイルを 1080px 以内の JPEG（dataUrl）にする */
-export function fileToJpegDataUrl(file: File, max = 1080): Promise<string> {
+// Google の投稿画像の推奨（横 1200 × 縦 900）が縮まないように、長い辺 1200px まで（Instagram も 1440px まで使える）
+export function fileToJpegDataUrl(file: File, max = 1200): Promise<string> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -146,4 +147,29 @@ export function fileToJpegDataUrl(file: File, max = 1080): Promise<string> {
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('画像を読み込めませんでした')); };
     img.src = url;
   });
+}
+
+/**
+ * 画像の生成 AI（ChatGPT・Gemini・Canva など）に貼り付ける依頼文。システムから AI は呼ばない（費用はかからない）。
+ * 差し込み語は店舗ごとに変わるので外し、文字は画像に入れない（文字は Canva などで後から入れる）
+ */
+export function imagePrompt(t: { title: string; body: string; channel: string }): string {
+  const text = t.body.replace(/\{(店舗名|メインキーワード)\}/g, '接骨院').replace(/\{[^{}]+\}/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  return `次の SNS 投稿文に合う画像を 1 枚作ってください。接骨院（柔道整復師の院）の Google ビジネスプロフィールと Instagram に載せます。
+
+# 投稿のテーマ
+${t.title}
+
+# 投稿文
+${text}
+
+# 画像の条件
+- 横長 4:3（横 1200 × 縦 900 ピクセル）
+- やさしいイラスト（フラットデザイン）。白〜淡い色の背景に、紺（#16345F）と緑（#568B39）を差し色に使う
+- 投稿のテーマが一目で分かる場面を 1 つだけ。人物は日本人で、落ち着いた表情に
+- 画像の中に文字・数字・ロゴは入れない（文字は後から入れます）
+- 実在の人物・有名人・他社のキャラクターやロゴに似せない
+- ケガを生々しく描かない（血・あざ・骨・レントゲン・手術・注射は描かない）
+- 施術の前後の比較（ビフォーアフター）や、効果を約束するような表現にしない
+- 病院・医師・白衣など、医療機関と誤解される表現は避ける`;
 }

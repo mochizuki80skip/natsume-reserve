@@ -1302,11 +1302,13 @@ function sns_calendar_get(): never
     if ($ids) {
         $in = implode(',', array_fill(0, count($ids), '?'));
         $params = array_merge($ids, [$from . ' 00:00:00', $to . ' 23:59:59']);
-        $sql = "SELECT p.id, p.channel, p.status, p.scheduledAt, p.title, p.body, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.storeId IN ($in) AND p.scheduledAt BETWEEN ? AND ?";
+        $withText = Http::query('text') === '1'; // 保存（Excel・Word）用に、差し込み語が入った投稿文も返す
+        $sql = "SELECT p.id, p.channel, p.status, p.scheduledAt, p.title, p.body, p.postText, s.code AS storeCode, s.name AS storeName FROM sns_post p JOIN store s ON s.id = p.storeId WHERE p.storeId IN ($in) AND p.scheduledAt BETWEEN ? AND ?";
         if ($ch) { $sql .= ' AND p.channel = ?'; $params[] = $ch; }
         foreach (Db::all($sql . ' ORDER BY p.scheduledAt ASC, s.code ASC LIMIT 5000', $params) as $r) {
             $posts[] = ['id' => $r['id'], 'channel' => $r['channel'], 'status' => $r['status'], 'scheduledAt' => substr((string)$r['scheduledAt'], 0, 16),
-                'title' => (string)$r['title'] !== '' ? (string)$r['title'] : mb_substr((string)$r['body'], 0, 30), 'storeCode' => $r['storeCode'], 'storeName' => $r['storeName']];
+                'title' => (string)$r['title'] !== '' ? (string)$r['title'] : mb_substr((string)$r['body'], 0, 30), 'storeCode' => $r['storeCode'], 'storeName' => $r['storeName']]
+                + ($withText ? ['text' => (string)$r['postText']] : []);
         }
     }
     // エリアの並びは店舗コード順で最初に出てくる順。エリア未設定は最後
@@ -1435,10 +1437,11 @@ function sns_topics_import(): never
         if ($unknown) $warnings[] = '未定義の差し込み語：' . implode(' ', $unknown);
         $months = sns_months($it['months']); $weekdays = $it['weekdays']; $areas = sns_areas($it['areas'] !== '' ? $it['areas'] : $forArea);
         $status = $errors ? 'error' : 'ok';
-        if (!$errors && !$dry) {
+        if (!$errors) {
+            // 同じ名前・同じ本文がすでにあれば登録しない（確認の段階でも「登録済み」と出す。保存した Excel を読み直したときに新しいものだけが分かる）
             $dup = Db::one('SELECT id FROM sns_topic WHERE ' . ($store ? 'storeId = ?' : 'storeId IS NULL') . ' AND title = ? AND body = ?', $store ? [$store['id'], $title, $it['body']] : [$title, $it['body']]);
             if ($dup) { $status = 'duplicate'; $skipped++; }
-            else {
+            elseif (!$dry) {
                 $max = Db::one('SELECT COALESCE(MAX(sortOrder), 0) AS m FROM sns_topic WHERE ' . ($store ? 'storeId = ?' : 'storeId IS NULL'), $store ? [$store['id']] : []);
                 Db::exec('INSERT INTO sns_topic (id, storeId, channel, title, body, standalone, months, weekdays, areas, sortOrder) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)',
                     [Db::newId(), $store['id'] ?? null, $ch, $title, $it['body'], $months, $weekdays, $areas, (int)$max['m'] + 1]);

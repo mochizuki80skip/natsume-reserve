@@ -181,7 +181,7 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   ok('締めのあいさつ（以上です）を本文に入れない', !dry.items[2].body.includes('以上です'));
   // 画面から取り込む
   await page.goto(`${BASE}/admin/sns/topics`); await page.waitForSelector('text=定型投稿を追加');
-  await page.locator('summary:has-text("Claude で定型投稿を作って取り込む")').click();
+  await page.locator('summary:has-text("定型投稿をまとめて取り込む")').click();
   await page.getByRole('button', { name: '依頼文をコピー' }).click();
   ok('依頼文を作れる（画面）', await page.waitForSelector('summary:has-text("依頼文を見る")', { timeout: 5000 }).then(() => true, () => false));
   await page.locator('textarea[placeholder^="claude.ai の返答"]').fill(reply);
@@ -197,7 +197,7 @@ ok('{予約URL} は BOOKING_URL のもの', typeof r.store?.bookingUrl === 'stri
   await page.waitForSelector('text=2 個のファイルを読み込みました');
   await page.getByRole('button', { name: '確認する' }).click();
   await page.waitForSelector('button:has-text("件を定型投稿に取り込む")');
-  const rowsText = (await page.locator('details:has(summary:has-text("Claude で定型投稿を作って取り込む")) table').first().textContent()) ?? '';
+  const rowsText = (await page.locator('details:has(summary:has-text("定型投稿をまとめて取り込む")) table').first().textContent()) ?? '';
   ok('ファイルを複数まとめて読み込み、名前の月を読む', rowsText.includes('7月') && rowsText.includes('12月') && (await page.getByRole('button', { name: /^2 件を定型投稿に取り込む/ }).count()) === 1, rowsText.slice(0, 120));
   const again = await (await fetch(`${BASE}/api/admin/sns/topics/import`, { method: 'POST', headers: H, body: JSON.stringify({ text: reply, dryRun: false }) })).json();
   ok('同じものは二重に登録しない', again.created === 0 && again.skipped === 2);
@@ -331,6 +331,49 @@ ok('Google の API 連携（分析用）は使える', (await fetch(`${BASE}/api
   ok('定型投稿の文章を変えると確認済みが外れる', ed.unapproved === true && tl?.approved === false);
   for (const d of ['2099-06-10', '2099-06-11']) for (const p of await cal(d)) await fetch(`${BASE}/api/admin/sns/posts/${p.id}/action`, { method: 'POST', headers: H, body: JSON.stringify({ action: 'delete' }) });
   await fetch(`${BASE}/api/admin/sns/topics`, { method: 'PUT', headers: H, body: JSON.stringify({ id: tid, action: 'delete' }) });
+}
+{
+  // 定型投稿・投稿文を Excel・Word・CSV に保存し、Excel・Word・CSV・スプレッドシートの貼り付けから読み込む
+  const fs = await import('node:fs'); const os = await import('node:os'); const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sns-io-'));
+  await page.goto(`${BASE}/admin/sns/topics`); await page.waitForSelector('text=一覧を保存');
+  const total = (await (await fetch(`${BASE}/api/admin/sns/topics`, { headers: { cookie: ck } })).json()).topics.length;
+  const dl = async (name) => { const [d] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name }).first().click()]); const f = path.join(dir, d.suggestedFilename()); await d.saveAs(f); return f; };
+  const xlsx = await dl('Excel（.xlsx）');
+  const docx = await dl('Word（.docx）');
+  ok('定型投稿を Excel・Word で保存できる', xlsx.endsWith('.xlsx') && docx.endsWith('.docx') && fs.statSync(xlsx).size > 500 && fs.statSync(docx).size > 500);
+  fs.writeFileSync(process.env.IO_OUT ?? path.join(dir, 'paths.txt'), `${xlsx}\n${docx}\n`);
+  await page.locator('summary:has-text("定型投稿をまとめて取り込む")').click();
+  const readBack = async (file) => {
+    await page.setInputFiles('input[aria-label="返答のファイル"]', file);
+    await page.waitForSelector('text=個のファイルを読み込みました');
+    await page.getByRole('button', { name: '確認する' }).click();
+    await page.waitForSelector('table:has(th:has-text("確認")) tbody tr', { timeout: 8000 }).catch(() => {});
+    return page.locator('table:has(th:has-text("確認")) tbody tr').count();
+  };
+  const nx = await readBack(xlsx);
+  ok('保存した Excel をそのまま読み込める（同じものは登録済み）', nx === total && (await page.locator('td:has-text("登録済み")').count()) >= 1, `${nx}/${total}`);
+  const nd = await readBack(docx);
+  ok('保存した Word をそのまま読み込める', nd === total, `${nd}/${total}`);
+  const csv = path.join(dir, 'in.csv');
+  fs.writeFileSync(csv, '﻿名前,媒体,曜日,本文\r\nE2E_CSV_1,Google,水,"{エリア}で{メインキーワード}をお探しの方へ。\r\n捻挫のご相談を承っています。"\r\nE2E_CSV_2,Instagram,金曜日,"打撲のあとに気をつけること, ご相談ください。"\r\n');
+  const nc = await readBack(csv);
+  const cells = await page.locator('table:has(th:has-text("確認")) tbody tr').first().locator('td').allTextContents();
+  ok('Excel で作った CSV（本文に改行・カンマ）を読み込める', nc === 2 && cells[0] === 'E2E_CSV_1' && cells[1] === 'Google' && cells[2] === '水' && cells[5].includes('捻挫'), JSON.stringify(cells));
+  await page.locator('textarea[placeholder*="claude.ai の返答"]').fill('名前\t媒体\t曜日\t本文\nE2E_貼付_1\tGoogle\t月\t"{エリア}の{メインキーワード}・{店舗名}では\n足首のケガのご相談を承っています。"\nE2E_貼付_2\t両方\t\t打撲のご相談を承っています。');
+  await page.getByRole('button', { name: '確認する' }).click();
+  await page.waitForSelector('td:has-text("E2E_貼付_2")', { timeout: 8000 }).catch(() => {});
+  const np = await page.locator('table:has(th:has-text("確認")) tbody tr').count();
+  ok('スプレッドシートからコピーした表を貼り付けて読み込める', np === 2 && (await page.locator('td:has-text("E2E_貼付_1")').count()) === 1, String(np));
+  await page.goto(`${BASE}/admin/sns/topics`); await page.waitForSelector('text=一覧を保存');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: '画像の依頼文' }).first().click();
+  const ip = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+  ok('定型投稿から画像の生成 AI への依頼文をコピーできる（差し込み語は外す）', ip.includes('横 1200 × 縦 900') && ip.includes('# 投稿文') && !/\{[^}]+\}/.test(ip), ip.slice(0, 60));
+  await page.goto(`${BASE}/admin/sns/calendar`); await page.waitForSelector('text=この月の投稿文を保存');
+  const [cd] = await Promise.all([page.waitForEvent('download', { timeout: 8000 }).catch(() => null), page.getByRole('button', { name: 'Excel', exact: true }).click()]);
+  const calMsg = cd ? '' : await page.locator('p.bg-brand-light').textContent().catch(() => '');
+  ok('カレンダーから月の投稿文を Excel で保存できる', (cd && /^投稿予定_.*\.xlsx$/.test(cd.suggestedFilename())) || calMsg.includes('この月の投稿はありません'), cd?.suggestedFilename() ?? calMsg);
 }
 {
   // 分析：エリア別の合計・メインキーワードの検索・週ごとの投稿と Google の数字
