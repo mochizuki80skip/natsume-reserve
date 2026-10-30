@@ -62,8 +62,8 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
     let alive = true;
     setLoading(true); setError('');
     // 区分が未選択の間は、選んでいるグループのいちばん厳しい区分の空き状況を見せる（新規・再来を止めた時間が 〇 に見えないように）。
-    // はじめての方・未選択＝初診。ご通院したことがある方は、押したときに「現在通院中」を選んだ状態にする（1ヶ月以上ぶりはボタンで切り替え）
-    const q = new URLSearchParams({ kind: kind ?? (group === 'VISITED' ? 'REVISIT' : 'NEW') });
+    // はじめての方・未選択＝初診、ご通院したことがある方＝現在通院中（どちらも内容を選ぶまでは未選択のまま。選んだら、その区分の空き状況で確かめ直す）
+    const q = new URLSearchParams({ kind: kind ?? (group === 'VISITED' ? 'RETURN' : 'NEW') });
     if (weekStart) q.set('start', weekStart);
     fetch(`/api/public/${encodeURIComponent(storeCode)}/week?${q}`)
       .then((r) => r.json())
@@ -112,7 +112,7 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
         <p className={`mb-1 text-[14px] font-bold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>① どちらかを選択してください</p>
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="来院区分">
           {(['FIRST', 'VISITED'] as Group[]).map((g) => (
-            <button key={g} type="button" aria-pressed={group === g} onClick={() => { if (group === g) return; setGroup(g); onKindChange(g === 'VISITED' ? 'RETURN' : null); }}
+            <button key={g} type="button" aria-pressed={group === g} onClick={() => { if (group === g) return; setGroup(g); onKindChange(null); }}
               className={`rounded-lg border-2 border-brand px-1.5 ${group ? 'py-2 text-[12.5px]' : 'py-4 text-[15px]'} font-semibold leading-tight ${group === g ? 'bg-brand text-white' : 'bg-white text-brand-dark'}`}>
               {GROUP_LABEL[g].title}
               {GROUP_LABEL[g].sub && <span className="block text-[10.5px] font-normal opacity-85">{GROUP_LABEL[g].sub}</span>}
@@ -130,7 +130,12 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
         {kind === 'RETURN' && <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-[12.5px] font-semibold text-amber-900" role="note" aria-label="通院中の方へのお願い">{cardRemembered
           ? <>診察券番号は前回の番号が入ります<span className="block text-[11px] font-normal">念のため番号をご確認ください</span></>
           : <>診察券をご用意ください<span className="block text-[11px] font-normal">次の画面で診察券番号を入力します</span></>}</p>}
-        {group && !kind && <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>ご来院の内容をお選びください</p>}
+        {group && !kind && (
+          <p className={`mt-2 text-center text-[13px] font-semibold ${needKind ? 'text-red-600' : 'text-brand-dark'}`} role="note" aria-label="ご来院の内容の案内">
+            {group === 'VISITED' ? '「現在通院中」か「1ヶ月以上ご来院の無い方」のどちらかを選んでください' : '「ケガ・痛み・不調など」か「交通事故による痛み」のどちらかを選んでください'}
+            {group === 'VISITED' && <span className="block text-[11px] font-normal text-slate-500">（下の表は、現在通院中の方の空き状況です）</span>}
+          </p>
+        )}
         <p className="mt-2.5 text-[14px] font-bold text-brand-dark">② ご希望の日時を選択してください</p>
         <div className="mt-1 flex items-center justify-between gap-2">
           <button type="button" disabled={prevDisabled} onClick={() => weekStart && setWeekStart(addDays(weekStart, -7))} className="rounded border bg-white px-2.5 py-1.5 text-sm disabled:opacity-40">‹ 前週</button>
