@@ -86,7 +86,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   const anchor = useRef<{ r: number; c: number } | null>(null);
   const [range, setRange] = useState<{ r0: number; c0: number; r1: number; c1: number } | null>(null);
   const extending = useRef(false);
-  // 日付の操作の帯（前日・日付・翌日・本日）は画面の上に固定。その高さぶん、メニューの帯をすぐ下に固定する
+  // 日付の操作の帯（前日・日付・翌日・本日）は上のメニュー（--admin-head-h）のすぐ下に固定。その高さぶん、メニューの帯をすぐ下に固定する
   const navRef = useRef<HTMLDivElement>(null);
   const [navH, setNavH] = useState(0);
   useEffect(() => {
@@ -708,7 +708,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
 
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
-      <div ref={navRef} className="no-print sticky top-0 z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b max-sm:mx-0 max-sm:mb-1 max-sm:flex-nowrap max-sm:gap-1 max-sm:px-0.5 max-sm:py-1 max-sm:text-sm bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
+      <div ref={navRef} className="no-print sticky top-[var(--admin-head-h,0px)] z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b max-sm:mx-0 max-sm:mb-1 max-sm:flex-nowrap max-sm:gap-1 max-sm:px-0.5 max-sm:py-1 max-sm:text-sm bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
         <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => stepDay(-1)} title="前日">‹<span className="max-sm:hidden"> 前日</span></button>
         <DatePicker value={data.date} today={today} onSelect={(d) => navigate(`/admin/day/${d}`)} className="w-full rounded border bg-white px-2 py-1 tabular-nums max-sm:px-1" />
         <span className="font-bold sm:hidden">（{WEEKDAY_JA[weekdayOf(data.date)]}）</span>
@@ -902,7 +902,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
           );
           return (
             // スマホ：名前の入ったセルを押したときだけ、画面の下に出す
-            <div style={{ ['--nav-h' as string]: `${navH}px` }} className={`no-print sticky top-[var(--nav-h)] z-10 mb-1 flex flex-col gap-1 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:z-30 max-sm:mb-0 max-sm:rounded-none max-sm:border-x-0 max-sm:bg-white max-sm:pb-2 max-sm:shadow-[0_-4px_12px_rgba(0,0,0,0.15)] ${ok || multi ? '' : 'max-sm:hidden'}`} role="group" aria-label="予約のメニュー">
+            <div style={{ ['--nav-h' as string]: `${navH}px` }} className={`no-print sticky top-[calc(var(--admin-head-h,0px)+var(--nav-h))] z-10 mb-1 flex flex-col gap-1 rounded border bg-white/95 px-2 py-1 text-sm shadow-sm backdrop-blur max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:z-30 max-sm:mb-0 max-sm:rounded-none max-sm:border-x-0 max-sm:bg-white max-sm:pb-2 max-sm:shadow-[0_-4px_12px_rgba(0,0,0,0.15)] ${ok || multi ? '' : 'max-sm:hidden'}`} role="group" aria-label="予約のメニュー">
             <div className="flex min-h-[30px] flex-wrap items-center gap-1.5">
               <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">メニュー</span>
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setSel(null); setRange(null); }} className="order-last ml-auto rounded border px-2 py-0.5 text-xs sm:hidden">✕ 閉じる</button>

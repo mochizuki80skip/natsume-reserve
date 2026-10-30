@@ -40,6 +40,16 @@ export default function AdminLayout() {
   // スマホ：上のメニューは ☰ で開く（画面を移ったら閉じる）
   const [navOpen, setNavOpen] = useState(false);
   useEffect(() => setNavOpen(false), [location.pathname, location.search]);
+  // 上のメニューの高さを --admin-head-h に入れる（予約表の日付の帯などを、その下に固定するため）
+  const headObs = useRef<ResizeObserver | null>(null);
+  const headRef = (el: HTMLElement | null) => {
+    headObs.current?.disconnect();
+    if (!el) { document.documentElement.style.setProperty('--admin-head-h', '0px'); return; }
+    const apply = () => document.documentElement.style.setProperty('--admin-head-h', `${el.offsetHeight}px`);
+    apply();
+    headObs.current = new ResizeObserver(apply);
+    headObs.current.observe(el);
+  };
   useEffect(() => {
     if (error && error.status === 401) goLogin();
   }, [error]);
@@ -68,7 +78,8 @@ export default function AdminLayout() {
     <div className="min-h-screen">
       <UpdateBanner role={me.session.role} />
       <WhatsNew role={me.session.role} />
-      <header className="no-print border-b bg-white">
+      {/* 上のメニュー（予約表・新患継続率など）は画面の上に固定。高さを --admin-head-h にして、予約表の日付の帯などをその下に固定する */}
+      <header ref={headRef} className="no-print sticky top-0 z-40 border-b bg-white" aria-label="管理画面のメニュー">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap px-3 py-1.5">
           <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' || acct ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {acct && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">経理</span>}
