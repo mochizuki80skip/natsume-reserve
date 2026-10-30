@@ -45,6 +45,19 @@ ok('31 日より長い期間は入れられない', (await api(hq, 'PUT', '/api/
 await sec.getByRole('button', { name: '全店をえらぶ' }).click();
 await sec.getByRole('button', { name: /店舗の.*臨時休業を取り消す/ }).click(); await hq.waitForTimeout(1500);
 ok('期間でまとめて取り消せる', (await api(hq, 'GET', `/api/admin/closures?date=${D2}`))[1].stores.every((r) => !r.part));
+// 店舗の予約表から期間で入れる
+const E = add(D, 7), E2 = add(D, 8);
+await s1.goto(`${B}/admin/day/${E}`); await s1.waitForSelector('td[data-cell="540:1"] input');
+await s1.getByRole('button', { name: /期間で入れる/ }).click();
+const g = s1.getByRole('group', { name: '臨時休業（期間）' });
+await g.getByLabel('臨時休業の終わりの日（店舗）').fill(E2);
+await g.getByLabel('臨時休業の一言（期間）').fill('店舗の連休');
+await g.getByRole('button', { name: '期間で臨時休業にする' }).click(); await s1.waitForTimeout(1500);
+ok('店舗の予約表から期間で臨時休業にできる', (await g.textContent()).includes('2 日分を臨時休業にしました'));
+const c = (await api(hq, 'GET', `/api/admin/closures?date=${E2}`))[1].stores.find((r) => r.code === 'S001');
+ok('終わりの日も休業・一言も入る', c.part === 'ALL' && c.note === '店舗の連休', JSON.stringify(c));
+await g.getByRole('button', { name: '期間の臨時休業を取り消す' }).click(); await s1.waitForTimeout(1500);
+ok('店舗の予約表から期間で取り消せる', !(await api(hq, 'GET', `/api/admin/closures?date=${E2}`))[1].stores.find((r) => r.code === 'S001').part);
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();
 console.log(process.exitCode ? 'CLOSURERANGE FAILED' : 'CLOSURERANGE OK');

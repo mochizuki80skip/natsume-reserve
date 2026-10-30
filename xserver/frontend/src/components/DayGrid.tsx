@@ -634,6 +634,22 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     await fetch('/api/admin/days', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, ...patch }) });
     onRefresh();
   }
+  // 臨時休業を期間で（今の日から終わりの日まで）
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [rangeTo, setRangeTo] = useState('');
+  const [rangePart, setRangePart] = useState<'ALL' | 'AM' | 'PM'>('ALL');
+  const [rangeNote, setRangeNote] = useState('');
+  const [rangeMsg, setRangeMsg] = useState('');
+  async function putRange(part: 'ALL' | 'AM' | 'PM' | null) {
+    const r = await fetch('/api/admin/days/range', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from: data.date, to: rangeTo, part, note: rangeNote }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { setRangeMsg(j.error ?? '保存できませんでした'); return; }
+    const booked: { date: string; count: number }[] = j.booked ?? [];
+    setRangeMsg(part === null
+      ? `${j.days} 日分の臨時休業を取り消しました`
+      : `${j.days} 日分を臨時休業にしました。${booked.length ? `予約が入っている日：${booked.map((b) => `${formatDateJa(b.date, false)} ${b.count}件`).join('、')}（患者様へ連絡し、キャンセル・変更名簿へ移してください）` : '入っている予約はありません。'}`);
+    onRefresh();
+  }
   async function saveCapacity(which: 'capacityAm' | 'capacityPm', raw: string) {
     const v = raw.trim() === '' ? null : Math.max(0, Math.min(20, Number(raw)));
     if (v !== null && Number.isNaN(v)) return;
@@ -791,6 +807,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
             return <button key={v} type="button" aria-pressed={cur === v} onClick={() => cur !== v && updateDay(v === 'all' ? { closed: true, closedPart: null } : { closed: false, closedPart: v === 'none' ? null : v })}
               className={`rounded border px-2 py-0.5 ${cur === v ? (v === 'none' ? 'bg-slate-600 text-white' : 'border-red-600 bg-red-600 font-bold text-white') : 'bg-white'}`}>{l}</button>;
           })}
+          <button type="button" onClick={() => setRangeOpen((v) => !v)} aria-expanded={rangeOpen} className="rounded border bg-white px-2 py-0.5 text-xs">期間で入れる{rangeOpen ? ' ▴' : ' ▾'}</button>
           {(day.closed || day.closedPart) && (
             <label className="flex flex-wrap items-center gap-1">
               お知らせの一言
@@ -801,6 +818,21 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
             </label>
           )}
         </div>
+        {rangeOpen && (
+          <div className="no-print rounded border border-red-200 bg-red-50 px-3 py-2 text-sm" role="group" aria-label="臨時休業（期間）">
+            <div className="flex flex-wrap items-center gap-2">
+              <b>臨時休業を期間で</b>
+              {formatDateJa(data.date, false)} 〜
+              <input type="date" value={rangeTo} min={data.date} onChange={(e) => setRangeTo(e.target.value)} aria-label="臨時休業の終わりの日（店舗）" className="rounded border px-1 py-0.5" />
+              {([['ALL', '終日'], ['AM', '午前'], ['PM', '午後']] as const).map(([v, l]) => <button key={v} type="button" aria-pressed={rangePart === v} onClick={() => setRangePart(v)} className={`rounded border px-2 py-0.5 ${rangePart === v ? 'border-red-600 bg-red-600 font-bold text-white' : 'bg-white'}`}>{l}</button>)}
+              <input value={rangeNote} onChange={(e) => setRangeNote(e.target.value)} maxLength={100} placeholder="お知らせの一言（例）年末年始のお休み" aria-label="臨時休業の一言（期間）" className="w-60 rounded border px-2 py-0.5" />
+              <button type="button" disabled={!rangeTo || rangeTo < data.date} onClick={() => putRange(rangePart)} className="rounded bg-red-600 px-3 py-0.5 font-bold text-white disabled:opacity-40">期間で臨時休業にする</button>
+              <button type="button" disabled={!rangeTo || rangeTo < data.date} onClick={() => confirm(`${formatDateJa(data.date, false)}〜${rangeTo ? formatDateJa(rangeTo, false) : ''} の臨時休業を取り消しますか？`) && putRange(null)} className="rounded border bg-white px-3 py-0.5 disabled:opacity-40">期間の臨時休業を取り消す</button>
+            </div>
+            <p className="mt-1 text-xs text-slate-600">年末年始など、何日か続けて休むときに使います（31 日分まで）。入っている予約は消しません。</p>
+            {rangeMsg && <p className="mt-1 text-xs font-bold text-red-800" role="status">{rangeMsg}</p>}
+          </div>
+        )}
         <div className="no-print flex flex-wrap items-center gap-1.5">
           {menuOptions.length > 0 && panelBtn('menu', 'メニュー別の人数')}
           {panelBtn('cap', `枠数・ブロック（午前 ${cap.am}・午後 ${cap.pm}${(data.blocks ?? []).length ? `・ブロック ${(data.blocks ?? []).length}件` : ''}）`)}

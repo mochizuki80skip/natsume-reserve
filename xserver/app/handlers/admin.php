@@ -1253,3 +1253,34 @@ function adm_media_urls(): never
     }
     Http::json(['rows' => $out]);
 }
+
+/** 店舗の予約表：臨時休業を期間でまとめて入れる・取り消す（{ from, to, part: ALL|AM|PM|null, note }。31 日分まで） */
+function adm_days_range_put(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $from = Http::date($b, 'from');
+    $to = Http::date($b, 'to');
+    if ($to < $from) Http::error('終わりの日は始めの日より後にしてください', 400);
+    if (Time::diffDays($from, $to) > 30) Http::error('一度に入れられるのは 31 日分までです', 400);
+    $part = $b['part'] ?? null;
+    if (!in_array($part, [null, 'ALL', 'AM', 'PM'], true)) Http::error('bad request', 400);
+    $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 100);
+    $store = $ctx['store'];
+    $setting = Settings::global();
+    $booked = [];
+    $n = 0;
+    for ($d = $from; $d <= $to; $d = Time::addDays($d, 1)) {
+        if (!Db::one('SELECT id FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $d])) Db::exec('INSERT INTO day_status (id, storeId, date) VALUES (?, ?, ?)', [Db::newId(), $store['id'], $d]);
+        $by = $ctx['session']['role'] === 'store' ? ', closedBy = NULL, closedAck = 1' : '';
+        if ($part === null) Db::exec("UPDATE day_status SET closed = 0, closedPart = NULL, closedNote = NULL$by WHERE storeId = ? AND date = ?", [$store['id'], $d]);
+        else {
+            Db::exec("UPDATE day_status SET closed = ?, closedPart = ?, closedNote = ?$by WHERE storeId = ? AND date = ?", [$part === 'ALL' ? 1 : 0, $part === 'ALL' ? null : $part, $note, $store['id'], $d]);
+            $k = closure_booked(DayData::load($store, $setting, $d), $part === 'ALL' ? true : $part);
+            if ($k > 0) $booked[] = ['date' => $d, 'count' => $k];
+        }
+        $n++;
+    }
+    Http::json(['ok' => true, 'days' => $n, 'booked' => $booked]);
+}
