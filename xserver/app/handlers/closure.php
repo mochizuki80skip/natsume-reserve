@@ -51,6 +51,12 @@ function closure_put(): never
     Http::requireJson();
     $b = Http::body();
     $date = Http::date($b, 'date');
+    // 期間（年末年始など）：to まで毎日同じにする（31 日分まで）
+    $to = isset($b['to']) && $b['to'] !== '' && $b['to'] !== null ? Http::date($b, 'to') : $date;
+    if ($to < $date) Http::error('終わりの日は始めの日より後にしてください', 400);
+    if (Time::diffDays($date, $to) > 30) Http::error('一度に入れられるのは 31 日分までです', 400);
+    $dates = [];
+    for ($d = $date; $d <= $to; $d = Time::addDays($d, 1)) $dates[] = $d;
     $part = $b['part'] ?? null;
     if (!in_array($part, [null, 'ALL', 'AM', 'PM'], true) || !is_array($b['codes'] ?? null)) Http::error('bad request', 400);
     $note = mb_substr(trim((string)($b['note'] ?? '')), 0, 100);
@@ -59,20 +65,28 @@ function closure_put(): never
     $s = Auth::session();
     $by = $s['role'] === 'hq' ? '本部' : 'MG（' . (string)(Auth::account()['area'] ?? '') . '）';
     $n = 0;
-    foreach (array_unique(array_map('strval', $b['codes'])) as $code) {
-        if (!isset($allowed[$code])) Http::error("この店舗は変えられません：$code", 403);
+    $codes = array_unique(array_map('strval', $b['codes']));
+    foreach ($codes as $code) if (!isset($allowed[$code])) Http::error("この店舗は変えられません：$code", 403);
+    $booked = [];
+    $setting = Settings::global();
+    foreach ($codes as $code) {
         $sid = $allowed[$code]['id'];
-        if (!Db::one('SELECT id FROM day_status WHERE storeId = ? AND date = ?', [$sid, $date])) Db::exec('INSERT INTO day_status (id, storeId, date) VALUES (?, ?, ?)', [Db::newId(), $sid, $date]);
-        if ($part === null) {
-            // 取り消し：店舗にも「取り消した」ことを知らせる
-            Db::exec('UPDATE day_status SET closed = 0, closedPart = NULL, closedNote = NULL, closedBy = ?, closedAck = 0 WHERE storeId = ? AND date = ?', [$by, $sid, $date]);
-        } else {
-            Db::exec('UPDATE day_status SET closed = ?, closedPart = ?, closedNote = ?, closedBy = ?, closedAck = 0 WHERE storeId = ? AND date = ?',
-                [$part === 'ALL' ? 1 : 0, $part === 'ALL' ? null : $part, $note, $by, $sid, $date]);
+        foreach ($dates as $d) {
+            if (!Db::one('SELECT id FROM day_status WHERE storeId = ? AND date = ?', [$sid, $d])) Db::exec('INSERT INTO day_status (id, storeId, date) VALUES (?, ?, ?)', [Db::newId(), $sid, $d]);
+            if ($part === null) {
+                // 取り消し：店舗にも「取り消した」ことを知らせる
+                Db::exec('UPDATE day_status SET closed = 0, closedPart = NULL, closedNote = NULL, closedBy = ?, closedAck = 0 WHERE storeId = ? AND date = ?', [$by, $sid, $d]);
+            } else {
+                Db::exec('UPDATE day_status SET closed = ?, closedPart = ?, closedNote = ?, closedBy = ?, closedAck = 0 WHERE storeId = ? AND date = ?',
+                    [$part === 'ALL' ? 1 : 0, $part === 'ALL' ? null : $part, $note, $by, $sid, $d]);
+                // 休みの時間に入っている予約（消さない。店舗が電話で連絡）
+                $k = closure_booked(DayData::load($allowed[$code], $setting, $d), $part === 'ALL' ? true : $part);
+                if ($k > 0) $booked[] = ['name' => $allowed[$code]['name'], 'date' => $d, 'count' => $k];
+            }
         }
         $n++;
     }
-    Http::json(['ok' => true, 'count' => $n]);
+    Http::json(['ok' => true, 'count' => $n, 'days' => count($dates), 'booked' => $booked]);
 }
 
 /** 店舗の画面に出す通知：本部・管轄MG が入れた（取り消した）臨時休業で、まだ「確認しました」を押していないもの */

@@ -34,7 +34,7 @@ await st.evaluate(async (d) => fetch('/api/public/S001/reserve', { method: 'POST
 
 await hq.goto(`${B}/admin/hq`); await hq.waitForSelector('section[aria-label="臨時休業（まとめて）"]');
 const sec = hq.locator('section[aria-label="臨時休業（まとめて）"]');
-await sec.locator('input[type=date]').fill(D); await hq.waitForTimeout(600);
+await sec.getByLabel('臨時休業の始めの日').fill(D); await hq.waitForTimeout(600);
 await sec.getByRole('button', { name: '午前' }).click();
 await sec.locator('input[placeholder="例）台風のため"]').fill('台風のため');
 await sec.getByLabel('静岡エリア（全部）').check();
