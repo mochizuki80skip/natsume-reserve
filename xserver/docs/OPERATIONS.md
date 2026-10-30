@@ -119,6 +119,7 @@ LINE の準備の細かい手順は、依頼者向けの資料「新自の通知
 | `smoke.mjs` | 予約・予約表・キャンセルなど全体の一通り |
 | `capkind.mjs` / `weblimits.mjs` / `rules.mjs` | WEB で取れる人数・新規／再来の上限・ブロック |
 | `blocksuggest.mjs` | 新規・再来ブロックの提案 |
+| `specialbulk.mjs` | 全店共通の営業時間・特別な営業日のまとめて入力（本部・管轄MG） |
 | `dupalert.mjs` | 予約表の同じお名前の重複のお知らせ |
 | `fewmark.mjs` | 予約ページの 〇・△・× とタッチの差の案内 |
 | `staffrole.mjs` | スタッフの施術者 ⇄ 受付の変更 |

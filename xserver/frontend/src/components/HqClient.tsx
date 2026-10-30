@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { StoreUrlCards } from './UrlQrCard';
+import HoursEditor from './HoursEditor';
+import { toForm } from '@/lib/hoursForm';
 
-interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean; area?: string; hqOnly?: boolean; jibaiOnly?: boolean }
+interface StoreRow { code: string; name: string; phone: string; beds: number; active: boolean; area?: string; hqOnly?: boolean; jibaiOnly?: boolean; ownHours?: boolean }
 interface SettingForm {
   slotMinutes: number; newVisitSlots: number; returnVisitSlots: number; webCutoffMinutes: number; phoneCutoffMinutes: number;
   phoneMarkRemaining: number; closeOnHolidays: boolean; adminExtraSlots: number; retentionDays: number; hours: string;
@@ -13,11 +15,16 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
   const [msg, setMsg] = useState('');
   const [edit, setEdit] = useState<{ code: string; newCode: string; name: string; phone: string; hqOnly: boolean; jibaiOnly: boolean } | null>(null);
   const [showJibai, setShowJibai] = useState(false);
+  // 全店共通の営業時間：店舗設定と同じ入れ方（1 日に 3 つ以上の時間帯があるときだけ、文字で入れる）
+  const [hoursForm] = useState(() => toForm(setting.hours, setting.slotMinutes) !== null);
+  const [hoursErr, setHoursErr] = useState('');
 
   async function saveSetting(e: React.FormEvent) {
     e.preventDefault();
+    if (hoursErr) { setMsg(hoursErr); return; }
+    if (!s.hours.trim()) { setMsg('全店共通の営業時間を入れてください'); return; }
     let hours: unknown;
-    try { hours = JSON.parse(s.hours); } catch { setMsg('営業時間が JSON として正しくありません'); return; }
+    try { hours = JSON.parse(s.hours); } catch { setMsg('営業時間が正しくありません'); return; }
     const r = await fetch('/api/admin/hq/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...s, hours }) });
     setMsg(r.ok ? '共通設定を保存しました' : (await r.json()).error ?? '保存に失敗しました');
     onRefresh();
@@ -147,9 +154,31 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
           <label>予約表・シフトの保持日数<span className="block text-[10px] text-slate-500">WEB予約・キャンセル名簿・入力の履歴・新患継続率は消しません</span><input type="number" min={7} max={3650} value={s.retentionDays} onChange={num('retentionDays')} className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label className="flex items-end gap-2 pb-2"><input type="checkbox" checked={s.closeOnHolidays} onChange={(e) => setS({ ...s, closeOnHolidays: e.target.checked })} />祝日は休診</label>
         </div>
-        <label className="block text-sm">営業時間（全店共通。曜日 0=日〜6=土。無い曜日は休診。[開始, 最終枠の開始]）
-          <textarea value={s.hours} onChange={(e) => setS({ ...s, hours: e.target.value })} rows={14} className="mt-1 w-full rounded border px-2 py-1 font-mono text-xs" />
-        </label>
+        <div className="rounded border p-3" role="group" aria-label="全店共通の営業時間">
+          <h3 className="mb-1 text-sm font-bold">営業時間（全店共通）</h3>
+          {hoursForm
+            ? <HoursEditor value={setting.hours} globalHours={setting.hours} slotMinutes={s.slotMinutes} mode="global" onChange={(json, error) => { setS((x) => ({ ...x, hours: json })); setHoursErr(error ?? ''); }} />
+            : <label className="block text-sm">（1 日に 3 つ以上の時間帯があるため、文字で入れます。曜日 0=日〜6=土。[開始, 最終枠の開始]）
+                <textarea value={s.hours} onChange={(e) => setS({ ...s, hours: e.target.value })} rows={14} className="mt-1 w-full rounded border px-2 py-1 font-mono text-xs" />
+              </label>}
+          {stores.some((x) => x.ownHours && x.active) && (
+            <div className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900" aria-label="店舗だけの営業時間を使っている店舗">
+              <b>次の店舗は「店舗だけの営業時間」を使っています</b>（その期間は全店共通の時間は使われません）：
+              <ul className="mt-1 space-y-1">
+                {stores.filter((x) => x.ownHours && x.active).map((x) => (
+                  <li key={x.code} className="flex items-center gap-2">{x.name}
+                    <button type="button" onClick={async () => {
+                      if (!confirm(`${x.name} の「店舗だけの営業時間」をやめて、全店共通の営業時間に戻しますか？`)) return;
+                      const r = await fetch('/api/admin/hq/stores', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: x.code, action: 'clearHours' }) });
+                      setMsg(r.ok ? `${x.name} を全店共通の営業時間に戻しました` : '戻せませんでした');
+                      onRefresh();
+                    }} className="rounded border bg-white px-2 py-0.5" aria-label={`${x.name} を全店共通に戻す`}>全店共通に戻す</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
         <button type="submit" className="rounded bg-brand px-4 py-2 font-bold text-white">共通設定を保存</button>
       </form>
     </div>

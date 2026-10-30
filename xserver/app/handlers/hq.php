@@ -9,7 +9,9 @@ function hq_get(): never
     $stores = array_map(fn($r) => ['code' => $r['code'], 'name' => $r['name'], 'phone' => $r['phone'], 'beds' => (int)$r['beds'], 'active' => (bool)$r['active'],
         'address' => (string)$r['address'], 'lat' => $r['lat'] !== null ? (float)$r['lat'] : null, 'lng' => $r['lng'] !== null ? (float)$r['lng'] : null, 'listed' => (bool)$r['listed'],
         'pageCity' => (string)($r['pageCity'] ?? ''), 'pageOrder' => $r['pageOrder'] === null ? null : (int)$r['pageOrder'],
-        'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly'], 'jibaiOnly' => (bool)$r['jibaiOnly']],
+        'area' => $r['area'], 'hqOnly' => (bool)$r['hqOnly'], 'jibaiOnly' => (bool)$r['jibaiOnly'],
+        // 店舗だけの営業時間を使っているか（全店共通の営業時間は使われない）と、その最後の期間の終わり
+        'ownHours' => is_string($r['hoursOverride'] ?? null) && trim((string)$r['hoursOverride']) !== '' && trim((string)$r['hoursOverride']) !== 'null'],
         Settings::storesInOrder());
     Http::json([
         'stores' => $stores,
@@ -262,6 +264,9 @@ function hq_stores_put(): never
         $idx = array_search($store['id'], array_column($list, 'id'), true);
         if ($idx !== false && isset($list[$idx + $dir])) [$list[$idx], $list[$idx + $dir]] = [$list[$idx + $dir], $list[$idx]];
         foreach ($list as $n => $r) Db::exec('UPDATE store SET pageOrder = ? WHERE id = ?', [$n + 1, $r['id']]);
+    } elseif ($action === 'clearHours') {
+        // 店舗だけの営業時間をやめて、全店共通の営業時間に戻す
+        Db::exec('UPDATE store SET hoursOverride = NULL WHERE id = ?', [$store['id']]);
     } elseif ($action === 'reset') {
         $password = (string)($b['password'] ?? '');
         if (strlen($password) < 8) Http::error('パスワードは8文字以上', 400);

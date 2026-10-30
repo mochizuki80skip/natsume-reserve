@@ -4,6 +4,7 @@ import { useFetch } from '@/lib/api';
 import { addDays, formatDateJa } from '@/lib/time';
 import { useAdmin } from './Layout';
 import ClosureBulkEditor from '@/components/ClosureBulkEditor';
+import SpecialBulkEditor from '@/components/SpecialBulkEditor';
 
 interface Row { code: string; name: string; closed: boolean; published: boolean | null; rAm: number; rPm: number; vAm: number; vPm: number; web: number; nw: number; re: number; jb: number; th?: number; cancel: number; noshow: number }
 interface Resp { date: string; today: string; rows: Row[]; sum: Omit<Row, 'code' | 'name' | 'closed' | 'published'>; storeCount: number }
@@ -91,7 +92,7 @@ export default function OverviewPage() {
           )}
         </table>
       </div>
-      {me.session.role === 'mg' && <div className="mt-6"><ClosureBulkEditor /></div>}
+      {me.session.role === 'mg' && <div className="mt-6"><ClosureBulkEditor /><SpecialBulkEditor /></div>}
       <p className="mt-2 text-xs text-slate-500">予約・来院は氏名が入ったセルの数（「上記初診対応」などは含まない）。WEB は WEB予約の件数。初診・再来・自賠・新三（新・第三者行為）はセルの文字による内訳（新三は初診にも数えます）。「予約表」を押すとその店舗に切り替えて予約表を開きます。</p>
     </div>
   );

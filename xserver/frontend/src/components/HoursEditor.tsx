@@ -2,11 +2,12 @@
 import { useState } from 'react';
 import { WEEK_LABEL, WEEK_ORDER, emptyDays, toForm, toJson, type DayForm, type PeriodForm, type Range } from '@/lib/hoursForm';
 
-interface Props { value: string; globalHours: string; slotMinutes: number; onChange: (json: string, error?: string) => void }
+// mode='global'：本部の全店共通の営業時間（期間で切り替え。いちばん後ろの期間が優先）
+interface Props { value: string; globalHours: string; slotMinutes: number; onChange: (json: string, error?: string) => void; mode?: 'store' | 'global' }
 
 const tIn = 'w-[6.6rem] rounded border px-1 py-0.5 text-sm';
 
-export default function HoursEditor({ value, globalHours, slotMinutes, onChange }: Props) {
+export default function HoursEditor({ value, globalHours, slotMinutes, onChange, mode = 'store' }: Props) {
   const initial = toForm(value, slotMinutes);
   const [periods, setPeriods] = useState<PeriodForm[]>(initial ?? []);
   const [err, setErr] = useState('');
@@ -45,10 +46,15 @@ export default function HoursEditor({ value, globalHours, slotMinutes, onChange 
 
   return (
     <div className="space-y-3 text-sm">
-      <p className="text-xs text-slate-600">
+      {mode === 'global' ? (
+        <p className="text-xs text-slate-600">
+          全店に使う営業時間です（「店舗だけの営業時間」を入れている店舗は、そちらが優先）。営業時間を変える日が決まっているときは、<b>期間を追加</b>して始めの日を入れると、その日から新しい時間に切り替わります
+          （例：期間1「〜2026/12/31」今の時間、期間2「2027/1/1〜」新しい時間）。期間の日付が空欄なら、ずっとその時間です。
+        </p>
+      ) : <p className="text-xs text-slate-600">
         何も入れなければ、全店共通の営業時間を使います。期間を入れると、<b>その期間の日だけ</b>この店舗の営業時間になり、期間の外の日は全店共通に戻ります。
         （例：「〜2026/10/20」だけ入れる → 10/20 まではこの店舗の時間、10/21 からは全店共通）
-      </p>
+      </p>}
       {periods.map((p, i) => (
         <div key={i} className="rounded border bg-slate-50 p-3">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -86,7 +92,7 @@ export default function HoursEditor({ value, globalHours, slotMinutes, onChange 
       {err && <p className="rounded bg-red-50 px-3 py-1 text-xs text-red-700">{err}</p>}
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => update([...periods, { from: '', to: '', days: emptyDays() }])} className="rounded border bg-white px-3 py-1 text-xs">＋ 期間を追加（空から）</button>
-        {globalForm && globalForm.length > 0 && <button type="button" onClick={copyGlobal} className="rounded border bg-white px-3 py-1 text-xs">＋ 期間を追加（全店共通の時間を写す）</button>}
+        {mode === 'store' && globalForm && globalForm.length > 0 && <button type="button" onClick={copyGlobal} className="rounded border bg-white px-3 py-1 text-xs">＋ 期間を追加（全店共通の時間を写す）</button>}
       </div>
       <p className="text-xs text-slate-500">終了は「最後の受付が終わる時刻」で入れます（例：午前 9:00〜12:00 → 最後の枠は 11:45）。祝日の休診は全店共通設定に従います。入力したら一番下の「保存」を押してください。</p>
     </div>
