@@ -99,6 +99,8 @@ await page.waitForSelector('text=全店集計');
 const s001 = page.locator('tbody tr', { hasText: 'サンプル本店' }).first();
 const s001Text = await s001.textContent();
 ok('本部集計に S001 の合計が出る', s001Text.includes(total.toLocaleString('ja-JP')) && s001Text.includes('提出済み'), s001Text);
+ok('状態の見方が出る', (await page.getByLabel('状態の見方').textContent()).includes('入力中（未提出）'));
+ok('明細 0 件の店舗は「未提出」', (await page.locator('tbody tr', { hasText: 'サンプル駅前院' }).first().textContent()).includes('未提出') && !(await page.locator('tbody tr', { hasText: 'サンプル駅前院' }).first().textContent()).includes('入力中'));
 ok('全社合計が出る', (await page.locator('tfoot').textContent()).includes(total.toLocaleString('ja-JP')));
 await page.screenshot({ path: 'e2e/out-jibai-hq.png', fullPage: true });
 

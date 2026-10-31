@@ -27,10 +27,11 @@ export default function JibaiHqPage() {
   const { ym, rows, sum } = data;
   const go = (m: string) => navigate(`/admin/hq/jibai?ym=${m}`);
   const num = 'px-2 py-1 text-right tabular-nums';
+  // 提出済み／入力中（未提出：この月分の明細が 1 件以上あるが、まだ提出していない）／未提出（この月分の明細が 0 件）
   const statusBadge = (r: Row) => r.status === 'SUBMITTED'
-    ? <span className="rounded bg-green-100 px-1.5 text-xs text-green-800">提出済み</span>
-    : r.status === 'DRAFT' || r.count > 0 ? <span className="rounded bg-yellow-100 px-1.5 text-xs text-yellow-800">入力中</span>
-    : <span className="rounded bg-slate-200 px-1.5 text-xs text-slate-600">未提出</span>;
+    ? <span className="rounded bg-green-100 px-1.5 text-xs text-green-800" title="店舗が「提出」を押しました">提出済み</span>
+    : r.count > 0 ? <span className="rounded bg-yellow-100 px-1.5 text-xs text-yellow-800" title={`この月分の明細が ${r.count} 件ありますが、まだ「提出」を押していません`}>入力中（未提出）</span>
+    : <span className="rounded bg-slate-200 px-1.5 text-xs text-slate-600" title="この月分の明細がまだありません">未提出</span>;
 
   async function saveDays(e: React.FormEvent) {
     e.preventDefault();
@@ -108,6 +109,7 @@ export default function JibaiHqPage() {
           )}
         </table>
       </div>
+      <p className="text-xs text-slate-600" aria-label="状態の見方"><b>状態の見方：</b><span className="rounded bg-green-100 px-1 text-green-800">提出済み</span> 店舗が「提出」を押した　<span className="rounded bg-yellow-100 px-1 text-yellow-800">入力中（未提出）</span> この月分の明細が 1 件以上あるが、まだ提出していない（月遅れ請求で別の月の画面から入った明細も含む）　<span className="rounded bg-slate-200 px-1 text-slate-600">未提出</span> この月分の明細がまだ 0 件</p>
       <p className="text-xs text-slate-500">件数・速報合計は請求月（請求書に印字された「令和 ○年 ○月」）で集計しています。別の月の画面で登録・提出された明細も、請求月がこの月ならここに入ります（「他の月の画面で登録」の表示）。速報合計は店舗がスクショから登録した金額の合計（提出前の入力中の分も含む）。確定合計は経理が請求書コピーと照合して登録した金額。差額は全件の経理確認が終わった店舗だけ表示します。「明細・経理確認」を押すとその店舗に切り替えて明細を開きます。</p>
 
       <div className="grid gap-4 md:grid-cols-2">
