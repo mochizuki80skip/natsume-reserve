@@ -317,7 +317,7 @@ export default function JibaiPage() {
               <th className="px-2 py-1">#</th>
               <th className="px-2 py-1">患者番号</th>
               <th className="px-2 py-1">氏名</th>
-              <th className="px-2 py-1">請求月</th>
+              <th className="px-2 py-1">請求月<span className="block whitespace-nowrap text-[10.5px] font-normal text-amber-800" aria-label="請求月の選び方">※月遅れ請求の場合は、本来請求するべき月を選択</span></th>
               <th className="px-2 py-1 text-right">実日数</th>
               <th className="px-2 py-1 text-right">合計金額（円）</th>
               <th className="px-2 py-1">読み取り確認</th>
@@ -336,7 +336,7 @@ export default function JibaiPage() {
                   <td className="px-2 py-1"><input value={r.patientNo} disabled={!editable} onChange={(e) => update(r.key, { patientNo: halfNum(e.target.value) })} className={`${inputCls} w-28 font-mono ${dup ? 'border-amber-500' : ''}`} placeholder="003862a" />{dup && <div className="text-[11px] text-amber-700">同じ番号が複数あります</div>}</td>
                   <td className="px-2 py-1"><input value={r.patientName} disabled={!editable} onChange={(e) => update(r.key, { patientName: e.target.value })} className={`${inputCls} w-36`} placeholder="氏名" /></td>
                   <td className="px-2 py-1">
-                    <select value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} aria-label="請求月" title="請求書に印字された「令和 年 月」" className={`${inputCls} min-w-[11.5rem] ${!r.invoiceYm ? 'border-2 border-red-500 bg-red-50' : r.invoiceYm !== ym ? 'border-amber-500' : ''}`}>
+                    <select value={r.invoiceYm} disabled={!editable} onChange={(e) => update(r.key, { invoiceYm: e.target.value })} aria-label="請求月" title="請求書に印字された「令和 年 月」。月遅れ請求の場合は、実際に出す月ではなく本来請求するべき月を選んでください" className={`${inputCls} min-w-[11.5rem] ${!r.invoiceYm ? 'border-2 border-red-500 bg-red-50' : r.invoiceYm !== ym ? 'border-amber-500' : ''}`}>
                       <option value="">— 何年何月分？ —</option>
                       {ymOptions(data.currentYm, [ym, r.invoiceYm]).map((m) => <option key={m} value={m}>{formatYmWithEra(m)}</option>)}
                     </select>

@@ -48,6 +48,7 @@ if (SHOT) {
   const days = await row.locator('input').nth(2).inputValue();
   const amount = await row.locator('input').nth(3).inputValue();
   console.log('OCR:', { no, name, invoiceYm, days, amount, sec });
+  ok('請求月の見出しに「月遅れ請求は本来の月を選択」の注記', (await page.getByLabel('請求月の選び方').textContent()).includes('月遅れ請求の場合は、本来請求するべき月を選択'));
   ok('請求月（令和 年 月）を読み取れた', invoiceYm === (process.env.EXPECT_YM ?? '2026-09'), invoiceYm);
   ok('患者番号を読み取れた', no === EXPECT.patientNo, no);
   ok('実日数を読み取れた', days === EXPECT.days, days);
