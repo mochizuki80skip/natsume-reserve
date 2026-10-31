@@ -10,10 +10,10 @@ const req = async (m, u, b) => {
 const ok = (label, cond, extra = '') => { console.log(`${cond ? 'PASS' : 'FAIL'} ${label} ${extra}`); if (!cond) process.exitCode = 1; };
 
 await req('POST', '/api/admin/login', { code: 'S001', password: 'password' });
-// 2 週間後以降の平日で、まだ予約の無い日を使う
+// 1 週間後以降の平日で、まだ予約の無い日を使う（通院中の方の「WEB で予約できる日数」14 日の中）
 const now = new Date(Date.now() + 9 * 3600e3);
 let date;
-for (let i = 14; i < 60; i++) {
+for (let i = 7; i < 60; i++) {
   const x = new Date(now.getTime() + i * 864e5);
   if (x.getUTCDay() < 1 || x.getUTCDay() > 5) continue;
   const d = x.toISOString().slice(0, 10);
