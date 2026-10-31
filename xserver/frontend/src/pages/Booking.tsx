@@ -3,13 +3,18 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import type { Closure } from '@/lib/closure';
 import { useFetch } from '@/lib/api';
 import BookingApp from '@/components/BookingApp';
+import type { PublicCampaign } from '@/components/CampaignBox';
 
-interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean; closures?: Closure[]; consultLineUrl?: string }
+interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean; closures?: Closure[]; consultLineUrl?: string; campaign?: PublicCampaign | null }
 
 export default function Booking() {
   const { code = '' } = useParams();
   const [params] = useSearchParams();
-  const { data, error, loading } = useFetch<StoreInfo>(`/api/public/${encodeURIComponent(code)}/store`);
+  const via = params.get('from') === 'card' ? 'card' : undefined;
+  const ref = /^[a-z0-9]{4,16}$/.test(params.get('ref') ?? '') ? params.get('ref')! : undefined;
+  // ギフトカード・媒体や紹介元の QR から来たときは、その経路のキャンペーンもいっしょに受け取る
+  const q = new URLSearchParams({ ...(via ? { via } : {}), ...(ref ? { ref } : {}) }).toString();
+  const { data, error, loading } = useFetch<StoreInfo>(`/api/public/${encodeURIComponent(code)}/store${q ? `?${q}` : ''}`);
   if (loading) return <main className="mx-auto max-w-lg px-3 pt-8 text-sm text-slate-500">読み込み中…</main>;
   if (error || !data || data.jibaiOnly) { // 自賠請求だけに使う店舗は WEB 予約のページを出さない
     return (
@@ -24,7 +29,7 @@ export default function Booking() {
   return (
     // 下に固定した帯（電話の予約・変更・キャンセル／交通事故の相談 LINE）。日時を選んだときの帯はその上に出す（.has-dock）
     <div className="has-dock" style={{ ['--dock-h' as string]: 'calc(52px + env(safe-area-inset-bottom, 0px))' }}>
-      <BookingApp store={{ code: data.code, name: data.name, phone: data.phone }} smsEnabled={data.smsEnabled} via={params.get('from') === 'card' ? 'card' : undefined} closures={data.closures ?? []} refCode={/^[a-z0-9]{4,16}$/.test(params.get('ref') ?? '') ? params.get('ref')! : undefined} />
+      <BookingApp store={{ code: data.code, name: data.name, phone: data.phone }} smsEnabled={data.smsEnabled} via={via} closures={data.closures ?? []} refCode={ref} campaign={data.campaign ?? null} />
       {/* ページのいちばん下（電話の欄など）が帯に隠れないよう、帯の高さぶん空ける */}
       <div style={{ height: 'calc(var(--dock-h) + 8px)' }} aria-hidden />
       <nav aria-label="お電話・ご相談" className="fixed inset-x-0 bottom-0 z-30 border-t bg-white shadow-[0_-3px_10px_rgba(0,0,0,0.08)]" style={{ padding: '6px 8px calc(6px + env(safe-area-inset-bottom, 0px))' }}>

@@ -3,6 +3,7 @@ import { useFetch } from '@/lib/api';
 import HqClient from '@/components/HqClient';
 import StoresPageEditor, { type ListingStore } from '@/components/StoresPageEditor';
 import ReferralEditor from '@/components/ReferralEditor';
+import CampaignEditor from '@/components/CampaignEditor';
 import PrivacyEditor from '@/components/PrivacyEditor';
 import GoodsEditor from '@/components/GoodsEditor';
 import ReportItemsEditor from '@/components/ReportItemsEditor';
@@ -32,6 +33,7 @@ export default function HqPage() {
       <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} />
       <ReferralEditor pageOpen={!!data.storesPageOpen} kind="media" />
+      <CampaignEditor />
       <JibaiNotifyEditor />
       <GoodsEditor />
       <ReportItemsEditor />

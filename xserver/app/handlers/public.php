@@ -14,7 +14,11 @@ function pub_load_store(string $code, bool $allowJibaiOnly = false): array
 function pub_store(array $p): never
 {
     $ctx = pub_load_store($p[1], true);
-    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0), 'closures' => PublicApi::closures($ctx['store'], Time::nowJst()['date']), 'consultLineUrl' => Settings::global()['consultLineUrl']]);
+    // ギフトカード（?via=card）・媒体や紹介元の QR（?ref=）から来たときは、その経路のキャンペーン（店舗向けメモは出さない）
+    $today = Time::nowJst()['date'];
+    $c = Campaign::activeFor(Campaign::routeOf(Http::query('via'), Http::query('ref')), (string)$ctx['store']['code'], $today);
+    Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0), 'closures' => PublicApi::closures($ctx['store'], $today), 'consultLineUrl' => Settings::global()['consultLineUrl'],
+        'campaign' => $c ? Campaign::forCustomer(Campaign::snapshot($c), (string)$c['presetKind']) : null]);
 }
 
 function pub_week(array $p): never
@@ -64,6 +68,9 @@ function pub_reserve(array $p): never
     $viaCard = ($b['via'] ?? '') === 'card'; // 紹介カード（店舗えらびページ）から来た予約
     // 紹介元（業者）の専用 QR から来た予約（登録済みで止めていない紹介元だけ）
     $refCode = is_string($b['ref'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $b['ref']) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$b['ref']]) ? $b['ref'] : null;
+    // その経路のキャンペーン（予約したときの内容を予約に残す）
+    $camp = Campaign::activeFor(Campaign::routeOf($viaCard ? 'card' : null, $refCode), (string)$store['code'], Time::nowJst()['date']);
+    $campJson = $camp ? json_encode(Campaign::snapshot($camp), JSON_UNESCAPED_UNICODE) : null;
     if ($kind === 'RETURN' && $cardNo === '') Http::error('診察券番号を入力してください', 400); // 再来は無くても可
     $phone = Text::normalizeJpPhone($phoneRaw);
     if (!$phone) Http::error('電話番号の形式が正しくありません', 400);
@@ -77,7 +84,7 @@ function pub_reserve(array $p): never
     $got = Db::one('SELECT GET_LOCK(?, 10) AS ok', [$lockName]);
     if (!$got || (int)$got['ok'] !== 1) Http::error('混み合っています。しばらくしてからお試しください', 503);
     try {
-        $result = Db::transaction(function () use ($store, $setting, $date, $time, $kind, $name, $phone, $cardNo, $day, $viaCard, $refCode) {
+        $result = Db::transaction(function () use ($store, $setting, $date, $time, $kind, $name, $phone, $cardNo, $day, $viaCard, $refCode, $campJson) {
             // 同じ電話番号＋同じ氏名の予約がその日にすでにあれば二重予約として断る（氏名が違えば親子などとして受け付ける）
             $same = Db::all('SELECT name, time FROM reservation WHERE storeId = ? AND date = ? AND phone = ? AND status = ?', [$store['id'], $date, $phone, 'BOOKED']);
             foreach ($same as $r) {
@@ -104,8 +111,8 @@ function pub_reserve(array $p): never
             $bed = $free[0];
             $rid = Db::newId();
             $token = bin2hex(random_bytes(16)); // 確認ページの URL に使う（推測できない）
-            Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, viewToken, viaCard, refCode, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', $token, $viaCard ? 1 : 0, $refCode, Time::nowJstDateTime()]);
+            Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, viewToken, viaCard, refCode, campaign, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $cardNo !== '' ? $cardNo : null, $name, $phone, 'BOOKED', $token, $viaCard ? 1 : 0, $refCode, $campJson, Time::nowJstDateTime()]);
             for ($k = 0; $k < $in['neededSlots']; $k++) {
                 $text = $k === 0 ? PublicApi::cellName($kind, $name) : PublicApi::contText($kind);
                 Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -131,7 +138,7 @@ function pub_reserve(array $p): never
         $safeName = preg_replace('#(https?://|www\.)\S*#i', '', $name) ?? '';
         if ($to) Sms::send($to, '【WEB予約】' . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . ' ' . PublicApi::KIND_JA[$kind] . " {$safeName} 様");
     }
-    Http::json(['ok' => true, 'id' => $result['id'], 'token' => $result['token'], 'date' => $date, 'time' => $time, 'smsStatus' => $smsStatus]);
+    Http::json(['ok' => true, 'id' => $result['id'], 'token' => $result['token'], 'date' => $date, 'time' => $time, 'smsStatus' => $smsStatus, 'campaign' => Campaign::forCustomer(Campaign::decode($campJson))]);
 }
 
 /** SMS に載せる URL の頭（APP_URL が空なら開かれている URL から作る） */
@@ -147,7 +154,7 @@ function pub_base_url(): string
 function pub_reservation_view(array $p): never
 {
     if (!RateLimit::allow('rview:' . Http::clientIp(), 60, 10 * 60)) Http::error('短時間に多くの操作がありました。しばらくしてからお試しください。', 429);
-    $r = Db::one('SELECT r.date, r.time, r.kind, r.name, r.status, s.code, s.name AS storeName, s.phone AS storePhone FROM reservation r JOIN store s ON s.id = r.storeId WHERE r.viewToken = ?', [$p[1]]);
+    $r = Db::one('SELECT r.date, r.time, r.kind, r.name, r.status, r.campaign, s.code, s.name AS storeName, s.phone AS storePhone FROM reservation r JOIN store s ON s.id = r.storeId WHERE r.viewToken = ?', [$p[1]]);
     if (!$r) Http::error('ご予約が見つかりません', 404);
     $today = Time::nowJst()['date'];
     $store = ['code' => $r['code'], 'name' => $r['storeName'], 'phone' => $r['storePhone']];
@@ -155,7 +162,7 @@ function pub_reservation_view(array $p): never
     // 予約日の翌日を過ぎたら中身は出さない
     if ($daysLeft < -1) Http::json(['state' => 'ENDED', 'store' => $store]);
     $state = $r['status'] === 'CANCELLED' ? 'CANCELLED' : ($daysLeft < 0 ? 'PAST' : 'BOOKED');
-    Http::json(['state' => $state, 'store' => $store, 'date' => $r['date'], 'time' => (int)$r['time'], 'kind' => $r['kind'], 'name' => $r['name'], 'daysLeft' => $daysLeft, 'today' => $today]);
+    Http::json(['state' => $state, 'store' => $store, 'date' => $r['date'], 'time' => (int)$r['time'], 'kind' => $r['kind'], 'name' => $r['name'], 'daysLeft' => $daysLeft, 'today' => $today, 'campaign' => Campaign::forCustomer(Campaign::decode($r['campaign']))]);
 }
 
 /**

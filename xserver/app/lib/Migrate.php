@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 45;
+    private const VERSION = 46;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -321,12 +321,35 @@ final class Migrate
                 // ストーリー画像のテーマ（空＝おまかせ：店舗コードから決める）
                 if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'storyTheme')) $pdo->exec("ALTER TABLE `store` ADD COLUMN `storyTheme` VARCHAR(20) NOT NULL DEFAULT ''");
             }
+            if ($ver < 46) {
+                // 経路（ギフトカード・媒体・紹介元の QR）ごとのキャンペーンと、保険のご負担の目安（全経路で共通の表）。予約にはその時の内容を残す
+                $pdo->exec(self::CAMPAIGN_DDL);
+                if (self::hasTable($pdo, 'global_setting') && !self::hasColumn($pdo, 'global_setting', 'insuranceTable')) $pdo->exec('ALTER TABLE `global_setting` ADD COLUMN `insuranceTable` TEXT NULL');
+                if (self::hasTable($pdo, 'reservation') && !self::hasColumn($pdo, 'reservation', 'campaign')) $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `campaign` TEXT NULL');
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
         }
     }
+
+    public const CAMPAIGN_DDL = "CREATE TABLE IF NOT EXISTS `campaign` (
+  `id` VARCHAR(32) NOT NULL,
+  `route` VARCHAR(30) NOT NULL,
+  `name` VARCHAR(60) NOT NULL,
+  `description` TEXT NULL,
+  `showInsurance` TINYINT(1) NOT NULL DEFAULT 1,
+  `presetKind` VARCHAR(10) NOT NULL DEFAULT '',
+  `fromDate` CHAR(10) NOT NULL DEFAULT '',
+  `toDate` CHAR(10) NOT NULL DEFAULT '',
+  `storeMemo` TEXT NULL,
+  `stores` TEXT NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `campaign_route` (`route`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 
     public const LINE_TARGET_DDL = "CREATE TABLE IF NOT EXISTS `line_target` (
   `id` VARCHAR(32) NOT NULL,

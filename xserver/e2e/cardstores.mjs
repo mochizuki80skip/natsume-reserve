@@ -82,8 +82,13 @@ await pub.waitForURL(/\/s\/S001\?from=card/);
 ok('WEB 予約へ（紹介カードの印を付けたまま）', true);
 // 紹介カード経由の予約 → 来院チェック → 初回カルテ集計のきっかけ「ギフトカード」
 const D2 = s1.quiet?.date ?? '2026-10-27';
-const wk = await (await fetch(`${B}/api/public/S001/week?start=${D}&kind=NEW`)).json();
-const open = wk.days.flatMap((d) => d.slots.filter((x) => x.status === 'open').map((x) => [d.date, x.time]))[0];
+// 空きのある週を探す（土日に動かすと今週はもう空きがないため、2 週先まで）
+let open;
+for (let w = 0; w < 3 && !open; w++) {
+  const st = new Date(D + 'T12:00:00Z'); st.setUTCDate(st.getUTCDate() + w * 7);
+  const wk = await (await fetch(`${B}/api/public/S001/week?start=${st.toISOString().slice(0, 10)}&kind=NEW`)).json();
+  open = wk.days.flatMap((d) => d.slots.filter((x) => x.status === 'open').map((x) => [d.date, x.time]))[0];
+}
 const rv = await (await fetch(`${B}/api/public/S001/reserve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'NEW', date: open[0], time: open[1], name: 'カード 経由', phone: '09012121212', via: 'card' }) })).json();
 ok('紹介カード経由の予約', rv.ok === true, JSON.stringify(rv));
 const day = (await api(p, 'GET', `/api/admin/day?date=${open[0]}`))[1].data;

@@ -350,6 +350,7 @@ xserver/
 | `cancel_log`・`cell_log` | キャンセル名簿・取り消し用の記録 |
 | `patient_card` | 診察券番号と氏名（レセコンから取り込み） |
 | `referral` | 紹介元・媒体の QR |
+| `campaign` | 経路別キャンペーン（route = card／ref:コード。内容・保険の目安を出すか・はじめに選ぶ区分・期間・店舗・店舗向けメモ）。予約したときの内容は reservation.campaign（JSON）に残し、店舗向けメモは患者様に返さない |
 | `karte`・`karte_option` | 新患継続率の行（事故日・事故内容・通知日時を含む）と選択肢 |
 | `churn`・`follow`・`visit_archive` | 離反者・フォロー・削除前の来院の控え |
 | `madoguchi_*`・`goods_item` | 窓口集計・物販 |
@@ -381,6 +382,7 @@ xserver/
 | 43 | 通知の患者様を「予約表のとおりの氏名」に（notifyName surname → full） |
 | 44 | 媒体を使う店舗（referral.stores） |
 | 45 | ストーリー画像のテーマ（store.storyTheme） |
+| 46 | 経路別キャンペーン（campaign 表・global_setting.insuranceTable・reservation.campaign） |
 
 ---
 

@@ -850,6 +850,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
         <span><i className="mr-1 inline-block h-3 w-3 border border-l-4 border-l-green-700 align-[-2px]" />来院チェック済み（左に緑の線）</span>
         <span><span className="mr-1 rounded bg-yellow-600 px-1 text-[10px] text-white">未チェック</span>予約時刻を過ぎて未チェック</span>
         <span><span className="mr-1 rounded-sm border border-sky-600 px-[2px] text-[8px] font-bold text-sky-700">WEB</span>WEB予約</span>
+        <span><span className="mr-1 rounded-sm bg-orange-600 px-[2px] text-[8px] font-bold text-white">🎁特典</span>キャンペーン（セルを選ぶと内容）</span>
         <span><span className="mr-1 rounded-full border border-brand px-1.5 text-[10px] font-bold text-brand-dark">名前</span>担当</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-amber-50 align-[-2px]" />管理側だけの枠</span>
         <span><i className="mr-1 inline-block h-3 w-3 border bg-slate-300 align-[-2px]" />🔒 ブロック中の時間</span>
@@ -939,6 +940,20 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                 </>
               )}
             </div>
+            {(() => {
+              // WEB 予約のキャンペーン：会計をまちがえないよう、予約したときの内容と店舗向けメモを出す
+              const c = ok && !multi ? webInfo.get(sk)?.campaign : null;
+              if (!c) return null;
+              return (
+                <div className="rounded border border-orange-300 bg-orange-50 px-2 py-1 text-xs leading-relaxed" role="note" aria-label="この予約のキャンペーン">
+                  <b className="text-orange-900">🎁 {c.route}特典：{c.name}</b>
+                  {c.insurance.length > 0 && <span className="ml-2 text-slate-700">保険の自己負担の目安（{c.insurance.map((r) => `${r.label} ${r.amount.toLocaleString()}円`).join('／')}）</span>}
+                  {c.description && <span className="block whitespace-pre-line text-slate-700">{c.description}</span>}
+                  {c.memo && <span className="block font-bold text-orange-800">店舗向け：{c.memo}</span>}
+                  <span className="block text-[10.5px] text-slate-500">予約したときの内容です（あとで本部が設定を変えても、この予約はこのままです）</span>
+                </div>
+              );
+            })()}
             {goodsOptions.length > 0 && (
               <div className="flex min-h-[26px] flex-wrap items-center gap-1.5 border-t pt-1" role="group" aria-label="物販">
                 <span className="mr-1 w-14 flex-none whitespace-nowrap text-xs font-bold text-slate-600">物販</span>
@@ -1018,6 +1033,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                                 className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] max-sm:absolute max-sm:left-px max-sm:top-[3px] max-sm:z-[1] max-sm:ml-0 max-sm:h-2.5 max-sm:w-2.5 max-sm:text-[7px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
                             )}
                             {web && hasName && <span className="ml-0.5 flex-none rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700 max-sm:hidden" title="WEB予約">WEB</span>}
+                            {web?.campaign && hasName && <span className="ml-0.5 flex-none rounded-sm bg-orange-600 px-[2px] text-[8px] font-bold leading-[12px] text-white" title={`${web.campaign.route}特典：${web.campaign.name}（セルを選ぶと上に内容が出ます）`} aria-label={`キャンペーンの予約：${web.campaign.name}`}>🎁<span className="max-sm:hidden">特典</span></span>}
                             {cellMenus.length > 0 && (
                               <span className="ml-0.5 flex flex-none gap-px max-sm:hidden" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
                                 {cellMenus.map((m) => <i key={m} className="min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m, menuOptions)}</i>)}

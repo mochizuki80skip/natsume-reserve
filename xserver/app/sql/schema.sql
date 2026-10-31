@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS `global_setting` (
   `consultLineUrl` VARCHAR(300) NOT NULL DEFAULT '', -- 交通事故の相談 LINE の URL（店舗えらび・予約ページのバナー。空＝出さない）
   `lineToken` VARCHAR(400) NOT NULL DEFAULT '',      -- 新自の通知を送る LINE 公式アカウントのチャネルアクセストークン（画面には出さない）
   `lineSecret` VARCHAR(100) NOT NULL DEFAULT '',     -- 同じくチャネルシークレット（Webhook の署名の確認）
+  `insuranceTable` TEXT NULL, -- 保険のご負担の目安（[{label, amount}]。全部のキャンペーンで共通。空＝はじめの目安）
   `notifyName` VARCHAR(10) NOT NULL DEFAULT 'full', -- 新自・新三の通知に出す患者様：none／karte（カルテNo）／surname（名字＋カルテNo）／full（予約表のとおりの氏名＋カルテNo）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
@@ -234,6 +235,7 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `viewToken` VARCHAR(40) NULL,
   `viaCard` TINYINT(1) NOT NULL DEFAULT 0,  -- 紹介カード（店舗えらびページ）から来た予約
   `refCode` VARCHAR(16) NULL,  -- 紹介元（業者）の専用 QR から来た予約（referral.code）
+  `campaign` TEXT NULL,  -- 予約したときのキャンペーンの内容（JSON。あとで設定を変えてもこの予約はそのまま）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `res_view_token` (`viewToken`),
@@ -320,6 +322,24 @@ CREATE TABLE IF NOT EXISTS `referral` (
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `referral_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 経路ごとのキャンペーン（route = 'card'：ギフトカード、'ref:<referral.code>'：媒体・紹介元の QR）。stores が空＝全店
+CREATE TABLE IF NOT EXISTS `campaign` (
+  `id` VARCHAR(32) NOT NULL,
+  `route` VARCHAR(30) NOT NULL,
+  `name` VARCHAR(60) NOT NULL,
+  `description` TEXT NULL,
+  `showInsurance` TINYINT(1) NOT NULL DEFAULT 1,
+  `presetKind` VARCHAR(10) NOT NULL DEFAULT '', -- はじめから選んでおく来院区分（NEW・ACCIDENT・RETURN・REVISIT。空＝選ばない）
+  `fromDate` CHAR(10) NOT NULL DEFAULT '',
+  `toDate` CHAR(10) NOT NULL DEFAULT '',
+  `storeMemo` TEXT NULL, -- 店舗向けメモ（会計の注意など。患者様には出さない）
+  `stores` TEXT NULL,
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `campaign_route` (`route`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- プライバシーポリシーなど、本部が文章を書く共通のページ（k = 'privacy'）

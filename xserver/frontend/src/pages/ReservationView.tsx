@@ -4,6 +4,7 @@ import PublicFooter from '@/components/PublicFooter';
 import { useFetch } from '@/lib/api';
 import { formatDateJa, minToHm } from '@/lib/time';
 import type { Kind } from '@/components/WeekGrid';
+import CampaignBox, { type PublicCampaign } from '@/components/CampaignBox';
 
 // 1 行に収まる短い書き方（スマホの幅で折り返さないように）
 const KIND_SHORT: Record<Kind, string> = { NEW: 'はじめて（ケガ・痛み・不調）', ACCIDENT: 'はじめて（交通事故）', RETURN: '現在通院中', REVISIT: '1ヶ月以上ぶりのご来院' };
@@ -12,6 +13,7 @@ interface View {
   state: 'BOOKED' | 'PAST' | 'CANCELLED' | 'ENDED';
   store: { code: string; name: string; phone: string };
   date?: string; time?: number; kind?: Kind; name?: string; daysLeft?: number;
+  campaign?: PublicCampaign | null;
 }
 
 export default function ReservationView() {
@@ -52,6 +54,7 @@ export default function ReservationView() {
           </dl>
         )}
       </section>
+      {data.state === 'BOOKED' && data.campaign && <div className="mt-3"><CampaignBox c={data.campaign} compact /></div>}
       {data.state === 'BOOKED' && (
         <ul className="mt-3 space-y-1 rounded-lg border border-brand bg-brand-light px-4 py-3 text-sm leading-relaxed text-brand-dark">
           <li><b>お支払いは現金のみ</b>となります。</li>

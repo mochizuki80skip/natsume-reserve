@@ -110,6 +110,9 @@ ok('ページの下の電話の欄が帯に隠れない', big.y + big.height <= 
 // 日時を選ぶと、選んだ日時の帯は下の帯の上に出る（重ならない）
 await pub.evaluate(() => window.scrollTo(0, 0));
 await pub.getByRole('button', { name: /はじめての方/ }).first().click().catch(() => {});
+await pub.waitForTimeout(600);
+// 週末に動かすと今週はもう空きがないので、翌週へ
+for (let i = 0; i < 3 && (await pub.locator('table.wk tbody button').count()) === 0; i++) { await pub.getByRole('button', { name: '翌週 ›' }).click(); await pub.waitForTimeout(800); }
 await pub.locator('table.wk tbody button').first().click(); await pub.waitForTimeout(500);
 const sh = await pub.locator('.wk-sheet').boundingBox();
 ok('選んだ日時の帯は下の帯の上（重ならない）', sh && sh.y + sh.height <= tb.y + 1, JSON.stringify([sh, tb]));

@@ -111,6 +111,7 @@ function hq_audit_get(): never
 
 // ---------- 操作の記録 ----------
 const AUDIT_LABEL = [
+    'hq_campaigns_put' => '経路別キャンペーン', 'hq_campaigns_delete' => '経路別キャンペーンの削除', 'hq_insurance_put' => '保険のご負担の目安',
     'hq_special_bulk_put' => '特別な営業日（まとめて）', 'hq_special_bulk_delete' => '特別な営業日の解除（まとめて）',
     'adm_cells_put' => '予約表の入力', 'adm_visit_put' => '来院チェック', 'adm_cancel_post' => 'キャンセル名簿へ移動', 'adm_cancel_delete' => 'キャンセルを戻す',
     'adm_days_put' => '日の設定（公開・休診・枠数）', 'adm_shifts_put' => 'シフト', 'adm_help_in_put' => 'ヘルプ（他店から）',

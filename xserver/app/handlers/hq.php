@@ -492,3 +492,78 @@ function hq_notify_name_put(): never
     Db::exec('UPDATE global_setting SET notifyName = ? WHERE id = 1', [$mode]);
     Http::json(['ok' => true]);
 }
+
+// ---------- 経路別キャンペーン ----------
+
+/** キャンペーンの一覧・経路（ギフトカード・媒体・紹介元）・保険のご負担の目安・店舗 */
+function hq_campaigns_get(): never
+{
+    Auth::requireHq();
+    $routes = [['route' => 'card', 'label' => 'ギフトカード', 'group' => 'card']];
+    foreach (Db::all('SELECT code, name, kind, active FROM referral ORDER BY kind DESC, createdAt ASC, name ASC') as $r) {
+        $routes[] = ['route' => 'ref:' . $r['code'], 'label' => $r['name'] . ((int)$r['active'] ? '' : '（止めている）'), 'group' => $r['kind'] === 'media' ? 'media' : 'partner'];
+    }
+    $rows = array_map(fn($c) => [
+        'id' => $c['id'], 'route' => $c['route'], 'name' => $c['name'], 'description' => (string)($c['description'] ?? ''), 'showInsurance' => (bool)(int)$c['showInsurance'],
+        'presetKind' => $c['presetKind'], 'from' => $c['fromDate'], 'to' => $c['toDate'], 'memo' => (string)($c['storeMemo'] ?? ''), 'stores' => Campaign::stores($c['stores'] ?? null), 'active' => (bool)(int)$c['active'],
+        'reservations' => (int)(Db::one('SELECT COUNT(*) AS n FROM reservation WHERE campaign LIKE ?', ['%"id":"' . $c['id'] . '"%'])['n'] ?? 0),
+    ], Db::all('SELECT * FROM campaign ORDER BY createdAt ASC, id ASC'));
+    Http::json(['rows' => $rows, 'routes' => $routes, 'insurance' => Campaign::insurance(),
+        'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'area' => $s['area']], Settings::storesInOrder('active = 1 AND hqOnly = 0 AND jibaiOnly = 0', [], false))]);
+}
+
+/** キャンペーンの追加・変更（id があれば変更）。止める／再開は { id, active } だけでもよい */
+function hq_campaigns_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $b = Http::body();
+    $id = (string)($b['id'] ?? '');
+    $row = $id !== '' ? Db::one('SELECT * FROM campaign WHERE id = ?', [$id]) : null;
+    if ($id !== '' && !$row) Http::error('not found', 404);
+    if ($row && count($b) === 2 && array_key_exists('active', $b)) {
+        Db::exec('UPDATE campaign SET active = ? WHERE id = ?', [Http::bool($b, 'active') ? 1 : 0, $id]);
+        Http::json(['ok' => true]);
+    }
+    $route = (string)($b['route'] ?? '');
+    if (!($route === 'card' || (str_starts_with($route, 'ref:') && Db::one('SELECT id FROM referral WHERE code = ?', [substr($route, 4)])))) Http::error('経路を選んでください', 400);
+    $name = mb_substr(trim((string)($b['name'] ?? '')), 0, 60);
+    if ($name === '') Http::error('キャンペーン名を入れてください', 400);
+    $desc = mb_substr(trim((string)($b['description'] ?? '')), 0, 600);
+    $memo = mb_substr(trim((string)($b['memo'] ?? '')), 0, 600);
+    $kind = (string)($b['presetKind'] ?? '');
+    if ($kind !== '' && !in_array($kind, Campaign::KINDS, true)) Http::error('はじめから選ぶ区分が正しくありません', 400);
+    $from = (string)($b['from'] ?? ''); $to = (string)($b['to'] ?? '');
+    if (($from !== '' && !Time::isValidDate($from)) || ($to !== '' && !Time::isValidDate($to))) Http::error('期間の日付が正しくありません', 400);
+    if ($from !== '' && $to !== '' && $to < $from) Http::error('期間の終わりは始めより後にしてください', 400);
+    $valid = array_column(Db::all('SELECT code FROM store'), 'code');
+    $stores = is_array($b['stores'] ?? null) ? array_values(array_unique(array_filter(array_map('strval', $b['stores']), fn($c) => in_array($c, $valid, true)))) : [];
+    $vals = [$route, $name, $desc, !empty($b['showInsurance']) ? 1 : 0, $kind, $from, $to, $memo, $stores ? implode(',', $stores) : null];
+    if ($row) {
+        Db::exec('UPDATE campaign SET route = ?, name = ?, description = ?, showInsurance = ?, presetKind = ?, fromDate = ?, toDate = ?, storeMemo = ?, stores = ? WHERE id = ?', array_merge($vals, [$id]));
+    } else {
+        $id = Db::newId();
+        Db::exec('INSERT INTO campaign (id, route, name, description, showInsurance, presetKind, fromDate, toDate, storeMemo, stores, active, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)', array_merge([$id], $vals, [Time::nowJstDateTime()]));
+    }
+    Http::json(['ok' => true, 'id' => $id]);
+}
+
+/** キャンペーンを消す（入っている予約には、予約したときの内容が残る） */
+function hq_campaigns_delete(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    Db::exec('DELETE FROM campaign WHERE id = ?', [(string)(Http::body()['id'] ?? '')]);
+    Http::json(['ok' => true]);
+}
+
+/** 保険のご負担の目安（全部のキャンペーンで共通。保険の改定のときに直す） */
+function hq_insurance_put(): never
+{
+    Auth::requireHq();
+    Http::requireJson();
+    $rows = Campaign::cleanInsurance(Http::body()['rows'] ?? null);
+    Settings::global();
+    Db::exec('UPDATE global_setting SET insuranceTable = ? WHERE id = 1', [json_encode($rows, JSON_UNESCAPED_UNICODE)]);
+    Http::json(['ok' => true, 'rows' => $rows]);
+}

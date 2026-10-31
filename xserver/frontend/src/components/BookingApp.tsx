@@ -9,19 +9,22 @@ import { Link } from 'react-router-dom';
 import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
 import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
 import { addMyReservation, loadMyReservations } from '@/lib/myReservations';
+import CampaignBox, { type PublicCampaign } from './CampaignBox';
 
-interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string; closures?: Closure[] }
+interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string; closures?: Closure[]; campaign?: PublicCampaign | null }
 
-export default function BookingApp({ store, smsEnabled, via, refCode, closures = [] }: Props) {
+export default function BookingApp({ store, smsEnabled, via, refCode, closures = [], campaign = null }: Props) {
   // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=確認, 4=完了
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
-  const [kind, setKind] = useState<Kind | null>(null); // 最初は未選択
+  // 最初は未選択（キャンペーンの経路から来たときは、キャンペーンで決めた区分を選んだ状態で始める。変えることもできる）
+  const presetKind = (['NEW', 'ACCIDENT', 'RETURN', 'REVISIT'] as Kind[]).find((k) => k === campaign?.kind) ?? null;
+  const [kind, setKind] = useState<Kind | null>(presetKind);
   const submitKind = kind;
   const [sel, setSel] = useState<Selection | null>(null);
   const [form, setForm] = useState({ cardNo: '', name: '', phone: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState<{ date: string; time: number; smsStatus: string; token?: string } | null>(null);
+  const [done, setDone] = useState<{ date: string; time: number; smsStatus: string; token?: string; campaign?: PublicCampaign | null } | null>(null);
   // この端末で前に予約した方の情報（次回は入力欄に最初から入れる）。「別の方の予約をする」で今回は使わない
   const [memory, setMemory] = useState(loadPatient);
   const [useMemory, setUseMemory] = useState(true);
@@ -102,6 +105,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
       </header>
 
       {step === 1 && <ClosureNotice closures={closures} />}
+      {step === 1 && campaign && <div className="mb-3"><CampaignBox c={campaign} /></div>}
 
       {error && step !== 1 && <p className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
@@ -167,6 +171,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
             <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">氏名</dt><dd className="font-bold">{form.name}</dd></div>
             <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">電話番号</dt><dd className="font-bold tabular-nums">{formatJpPhone(form.phone) || form.phone}</dd></div>
           </dl>
+          {campaign && <div className="mt-3"><CampaignBox c={campaign} compact /></div>}
           <PrivacyNote />
           {sel.status === 'few' && <p className="mt-3 rounded bg-amber-50 px-3 py-2 text-sm text-amber-900" role="note" aria-label="残り1枠の案内">この時間は<b>残り1枠</b>です。ご予約の手続き中に、ほかの方のご予約で埋まることがあります。ご予約が取れたかどうかは、次の画面でお知らせします。</p>}
           <button type="button" onClick={submit} disabled={loading} className="mt-4 w-full rounded-lg bg-brand px-4 py-3 text-base font-bold text-white disabled:opacity-50">
@@ -186,6 +191,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
           <p className="mt-1 text-sm text-slate-600">このお時間でご予約をお取りしました。</p>
           <p className="mt-3 text-base">{formatDateJa(done.date)} {minToHm(done.time)}〜</p>
           <p className="mt-1 text-sm text-slate-600">{store.name}</p>
+          {done.campaign && <div className="mt-3"><CampaignBox c={done.campaign} compact /></div>}
           {done.smsStatus === 'SENT'
             ? <p className="mt-3 text-sm">確認のSMSをお送りしました。</p>
             : !done.token && <p className="mt-3 text-sm text-slate-600">この画面を保存（スクリーンショット）しておいてください。</p>}
@@ -209,7 +215,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
           </label>
           {notes}
           <p className="mt-3 text-sm">変更・キャンセルはお電話（{phoneLink}）へお願いいたします。</p>
-          <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setKind(null); setUseMemory(true); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
+          <button type="button" className="mt-5 text-sm text-brand underline" onClick={() => { setStep(1); setSel(null); setDone(null); setKind(presetKind); setUseMemory(true); setForm({ cardNo: '', name: '', phone: '' }); setGridKey((k) => k + 1); }}>続けて予約する</button>
         </section>
       )}
 

@@ -11,7 +11,7 @@ const STATUS_JA: Record<string, string> = { BOOKED: '予約中', CANCELLED: '取
 const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 
 interface Filter { tab: 'web' | 'cancel'; from: string; to: string; status: string; q: string }
-interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string }
+interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string; campaign?: { route: string; name: string; memo: string } | null }
 interface CancelRow { id: string; date: string; time: number; bed: number; name: string; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAtText: string }
 interface Resp { filter: Filter; rows: (WebRow | CancelRow)[] }
 
@@ -93,7 +93,7 @@ export default function ReservationsPage() {
             <thead>
               <tr className="bg-slate-100 text-left">
                 <th className="px-2 py-1">受付日時</th><th className="px-2 py-1">予約日時</th><th className="px-2 py-1">ベッド</th><th className="px-2 py-1">区分</th>
-                <th className="px-2 py-1">氏名</th><th className="px-2 py-1">診察券</th><th className="px-2 py-1">電話</th><th className="px-2 py-1">状態</th><th></th>
+                <th className="px-2 py-1">氏名</th><th className="px-2 py-1">診察券</th><th className="px-2 py-1">電話</th><th className="px-2 py-1">状態</th><th className="px-2 py-1">特典</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -107,10 +107,11 @@ export default function ReservationsPage() {
                   <td className="px-2 py-1">{r.cardNo ?? ''}</td>
                   <td className="whitespace-nowrap px-2 py-1">{r.phoneText}</td>
                   <td className="px-2 py-1">{STATUS_JA[r.status] ?? r.status}</td>
+                  <td className="px-2 py-1 text-xs" title={r.campaign?.memo ? `店舗向け：${r.campaign.memo}` : undefined}>{r.campaign ? <span className="whitespace-nowrap font-bold text-orange-800">🎁 {r.campaign.name}</span> : ''}</td>
                   <td className="px-2 py-1"><Link to={`/admin/day/${r.date}`} className="text-brand underline">予約表</Link></td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={9} className="px-2 py-4 text-center text-slate-500">該当する予約はありません</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={10} className="px-2 py-4 text-center text-slate-500">該当する予約はありません</td></tr>}
             </tbody>
           </table>
         </div>

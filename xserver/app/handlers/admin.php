@@ -588,7 +588,11 @@ function adm_reservations_get(): never
         $r['time'] = (int)$r['time'];
         $r['bed'] = (int)$r['bed'];
         $r['createdAtText'] = Time::formatDateTimeShort($r['createdAt']);
-        if ($f['tab'] === 'web') $r['phoneText'] = Text::formatJpPhone($r['phone']);
+        if ($f['tab'] === 'web') {
+            $r['phoneText'] = Text::formatJpPhone($r['phone']);
+            $c = Campaign::decode($r['campaign'] ?? null);
+            $r['campaign'] = $c ? ['route' => $c['route'] ?? '', 'name' => $c['name'] ?? '', 'memo' => $c['memo'] ?? ''] : null;
+        }
         return $r;
     }, $rows);
     Http::json(['filter' => $f, 'rows' => $out]);
@@ -625,8 +629,9 @@ function adm_reservations_export(): never
         $rows = array_map(fn($c) => [$c['date'], Time::minToHm((int)$c['time']), (int)$c['bed'], $c['name'], ($c['kind'] === 'ADVANCE' ? '事前連絡' : ($c['kind'] === 'CHANGE' ? '予約変更' : '無断')), $c['source'] === 'WEB' ? 'WEB予約' : '電話・窓口', $c['createdAt'], $c['byCode'], trim(($c['nextDate'] ?? '') . ($c['nextTime'] !== null ? ' ' . Time::minToHm((int)$c['nextTime']) : '')), $c['memo'] ?? ''], $list);
         $label = 'キャンセル・変更名簿';
     } else {
-        $header = ['受付日時', '予約日', '時刻', 'ベッド', '区分', '氏名', '診察券番号', '電話番号', '状態'];
-        $rows = array_map(fn($r) => [$r['createdAt'], $r['date'], Time::minToHm((int)$r['time']), (int)$r['bed'], ADM_KIND_JA[$r['kind']] ?? $r['kind'], $r['name'], $r['cardNo'] ?? '', Text::formatJpPhone($r['phone']), ADM_STATUS_JA[$r['status']] ?? $r['status']], $list);
+        $header = ['受付日時', '予約日', '時刻', 'ベッド', '区分', '氏名', '診察券番号', '電話番号', '状態', '特典（キャンペーン）'];
+        $camp = function (?string $j): string { $c = Campaign::decode($j); return $c ? trim(($c['route'] ?? '') . '：' . ($c['name'] ?? ''), '：') : ''; };
+        $rows = array_map(fn($r) => [$r['createdAt'], $r['date'], Time::minToHm((int)$r['time']), (int)$r['bed'], ADM_KIND_JA[$r['kind']] ?? $r['kind'], $r['name'], $r['cardNo'] ?? '', Text::formatJpPhone($r['phone']), ADM_STATUS_JA[$r['status']] ?? $r['status'], $camp($r['campaign'] ?? null)], $list);
         $label = 'WEB予約一覧';
     }
     $base = "{$store['code']}_{$f['tab']}_{$f['from']}_{$f['to']}";
