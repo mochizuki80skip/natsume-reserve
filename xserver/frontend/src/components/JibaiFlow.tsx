@@ -31,7 +31,7 @@ function StepCard({ s, sys }: { s: Step; sys?: boolean }) {
       {img && (
         // 押すと大きな画像を別のタブで開く
         <a href={`/guide/jibai-flow-${s.n}.png`} target="_blank" rel="noreferrer" title="押すと大きく見られます" className="mt-1 block">
-          <img src={`/guide/jibai-flow-${s.n}.png`} alt={`手順 ${s.n}：${s.title}`} loading="lazy" onError={() => setImg(false)} className="w-full rounded border object-contain hover:opacity-80" />
+          <img src={`/guide/jibai-flow-${s.n}.png`} alt={`手順 ${s.n}：${s.title}`} loading="lazy" onError={() => setImg(false)} className="max-h-40 w-full rounded border bg-white object-contain hover:opacity-80" />
           <span className="text-[10.5px] text-brand underline">🔍 大きく見る</span>
         </a>
       )}

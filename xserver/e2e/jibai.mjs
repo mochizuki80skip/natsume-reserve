@@ -34,7 +34,7 @@ ok('店舗の自賠請求ページが開く', true);
   const flow = page.getByRole('region', { name: '自賠請求の手順' });
   const ft = await flow.textContent();
   ok('手順のフロー（レセコン 1〜6・システム 7〜10）と締め切り', ft.includes('労災・自賠責レセ') && ft.includes('Win') && ft.includes('この月を提出する') && ft.includes('毎月 5 日まで'));
-  ok('システム側の手順に画面写真', (await flow.getByRole('img', { name: /手順 8/ }).count()) === 1);
+  ok('レセコン・システムの手順に画面写真（10 枚）', (await flow.getByRole('img').count()) === 10, String(await flow.getByRole('img').count()));
   await page.screenshot({ path: 'e2e/out-jibai-flow.png', fullPage: false });
   await flow.getByRole('button', { name: /自賠請求の手順/ }).click();
   await page.reload(); await page.waitForSelector('text=自賠請求（速報）');
