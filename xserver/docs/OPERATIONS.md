@@ -121,14 +121,12 @@ LINE の準備の細かい手順は、依頼者向けの資料「新自の通知
 | `blocksuggest.mjs` | 新規・再来ブロックの提案 |
 | `stickyhead.mjs` | 上のメニューと予約表の日付の帯を画面の上に固定 |
 | `storytheme.mjs` | ストーリー画像のテーマ（店舗ごとに選ぶ・覚える） |
-| `campaign.mjs` | 経路別キャンペーン（予約ページの表示・区分の選択・予約に残す・予約表の🎁特典と店舗向けメモ） |
-| `campaignurl.mjs` | キャンペーン専用の URL・QR（店舗えらび用＋店舗別・新患継続率のきっかけ） |
+| `campaign.mjs` | WEB 予約の URL・QR（集客経路）とキャンペーン（作る・店舗えらびと予約ページの表示・予約に残す・予約表の🎁特典・新患継続率のきっかけ・店舗設定） |
 | `closurerange.mjs` | 臨時休業を期間でまとめて入れる |
 | `specialbulk.mjs` | 全店共通の営業時間・特別な営業日のまとめて入力（本部・管轄MG） |
 | `dupalert.mjs` | 予約表の同じお名前の重複のお知らせ |
 | `fewmark.mjs` | 予約ページの 〇・△・× とタッチの差の案内 |
 | `staffrole.mjs` | スタッフの施術者 ⇄ 受付の変更 |
-| `mediastore.mjs` | 媒体ごと×店舗ごとの URL・QR（まとめて保存・店舗設定・新患継続率のきっかけ） |
 | `karte.mjs` / `accident.mjs` / `shinsan.mjs` | 新患継続率・新自／新三の事故日／事故内容・通知・新三の区分 |
 | `linenotify.mjs` | LINE の登録・送信・署名の確認 |
 | `security.mjs` | ログインの制限・権限・別サイトからの送信 |

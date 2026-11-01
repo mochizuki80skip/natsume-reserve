@@ -55,18 +55,17 @@ export function StoreUrlCards({ code, name }: { code: string; name: string }) {
 /** 店舗設定：ギフトカードと、本部が作った媒体別の URL・QR（見る・保存するだけ。追加・変更は本部） */
 export function StoreMediaCards({ code, name }: { code: string; name: string }) {
   const origin = typeof location !== 'undefined' ? location.origin : '';
-  const { data } = useFetch<{ rows: { code: string; name: string; trig: string }[] }>('/api/admin/media-urls');
+  const { data } = useFetch<{ rows: { code: string; name: string; trig: string; campaign: string }[] }>('/api/admin/media-urls');
   return (
     <div className="space-y-2" role="region" aria-label="媒体別の URL・QR">
-      <h3 className="text-sm font-bold">媒体別の URL・QR（新患継続率のきっかけが自動で入ります）</h3>
-      <p className="text-xs text-slate-500">ここから WEB 予約した初診の方は、新患継続率のきっかけ・内訳が自動で入ります。媒体の追加・変更は本部が行います。</p>
+      <h3 className="text-sm font-bold">本部が作った WEB 予約の URL・QR（ギフトカード・広告など）</h3>
+      <p className="text-xs text-slate-500">この店舗の予約ページへの URL・QR です。ここから WEB 予約した初診の方は、新患継続率のきっかけ・内訳が自動で入ります。キャンペーンが付いているものは、予約ページにキャンペーンの内容が出ます。追加・変更は本部が行います。</p>
       <div className="grid gap-2 md:grid-cols-2">
-        <UrlQrCard label="ギフトカード（紹介カード）" help="きっかけ「ギフトカード」で入ります（店舗えらびページが開きます）" url={`${origin}/stores?from=card`} fileName={`QR_${name}_ギフトカード`} />
         {(data?.rows ?? []).map((m) => (
-          <UrlQrCard key={m.code} label={`媒体：${m.name}`} help={`きっかけ「${m.trig}」・内訳「${m.name}」で入ります（この店舗の予約ページが開きます）`} url={`${origin}/s/${encodeURIComponent(code)}?ref=${m.code}`} fileName={`QR_${name}_${m.name}`} />
+          <UrlQrCard key={m.code} label={m.name} help={`きっかけ「${m.trig}」・内訳「${m.name}」で入ります${m.campaign ? `。キャンペーン：${m.campaign}` : ''}`} url={`${origin}/s/${encodeURIComponent(code)}?c=${m.code}`} fileName={`QR_${name}_${m.name}`} />
         ))}
       </div>
-      {data && data.rows.length === 0 && <p className="text-xs text-slate-400">本部が作った媒体はまだありません。</p>}
+      {data && data.rows.length === 0 && <p className="text-xs text-slate-400">本部が作った URL・QR はまだありません。</p>}
     </div>
   );
 }

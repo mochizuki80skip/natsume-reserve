@@ -1,6 +1,9 @@
 <?php
-// 経路（ギフトカード・媒体の QR・紹介元の QR）ごとのキャンペーン。
-// 予約ページに内容と「保険のご負担の目安」（全経路で共通の表）を出し、予約にはその時の内容を残す（店舗の会計用に店舗向けメモも残す）
+// WEB 予約の URL・QR（集客経路）とキャンペーン。表は campaign（1 行＝1 つの URL）。
+// - URL は /stores?c=コード（店舗えらび用）と /s/店舗?c=コード（店舗別）。そこから予約した初診の新患継続率は、きっかけ＝trig・内訳＝label
+// - キャンペーン（hasContent）は付けても付けなくてもよい。付けて止めていない・期間内・店舗が合うときだけ、予約ページ・店舗えらびページに出す
+// - 予約には予約したときの内容を残す（reservation.campaign。店舗向けメモつき。患者様には店舗向けメモを出さない）
+// - 古い形（route = 'card'：紹介カード用の QR /stores?from=card、'ref:<code>'：紹介元の QR）も読める
 declare(strict_types=1);
 
 final class Campaign
@@ -9,15 +12,38 @@ final class Campaign
     public const KINDS = ['NEW', 'ACCIDENT', 'RETURN', 'REVISIT'];
     /** 保険のご負担の目安（本部が直すまでの、はじめの内容） */
     public const DEFAULT_INSURANCE = [['label' => '3割負担', 'amount' => 2000], ['label' => '2割負担', 'amount' => 1500], ['label' => '1割負担', 'amount' => 1200]];
+    public const GIFT = 'ギフトカード';
 
-    /** 予約ページの via・ref から経路を決める（紹介元・媒体の QR が先） */
-    public static function routeOf(?string $via, ?string $ref, ?string $c = null): ?string
+    /** 予約ページ・店舗えらびページの ?c= ・?from=card（via）・?ref= から、その URL の行を決める */
+    public static function entryOf(?string $via, ?string $ref, ?string $c = null): ?array
     {
-        // キャンペーン専用の URL（?c=）がいちばん先
-        if (is_string($c) && preg_match('/^[a-z0-9]{4,16}$/', $c) && Db::one('SELECT id FROM campaign WHERE code = ?', [$c])) return 'c:' . $c;
-        if (is_string($ref) && preg_match('/^[a-z0-9]{4,16}$/', $ref) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$ref])) return 'ref:' . $ref;
-        if ($via === 'card') return 'card';
+        if (is_string($c) && preg_match('/^[a-z0-9]{4,16}$/', $c)) {
+            $r = Db::one('SELECT * FROM campaign WHERE code = ?', [$c]);
+            if ($r) return $r;
+        }
+        if (is_string($ref) && preg_match('/^[a-z0-9]{4,16}$/', $ref) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$ref])) {
+            return self::firstActive('ref:' . $ref);
+        }
+        if ($via === 'card') {
+            // 紹介カード用の QR（/stores?from=card）：きっかけ「ギフトカード」の URL の行（なければ古い形の行）
+            return Db::one("SELECT * FROM campaign WHERE code IS NOT NULL AND trig = ? ORDER BY active DESC, createdAt ASC, id ASC LIMIT 1", [self::GIFT]) ?? self::firstActive('card');
+        }
         return null;
+    }
+
+    private static function firstActive(string $route): ?array
+    {
+        return Db::one('SELECT * FROM campaign WHERE route = ? ORDER BY active DESC, createdAt ASC, id ASC LIMIT 1', [$route]);
+    }
+
+    /** キャンペーンを出すか（付けている・止めていない・期間内・店舗が合う。店舗 null＝店舗えらびページ） */
+    public static function showing(?array $e, ?string $storeCode, string $date): bool
+    {
+        if (!$e || !(int)($e['hasContent'] ?? 1) || !(int)$e['active'] || trim((string)$e['name']) === '') return false;
+        if ($e['fromDate'] !== '' && $e['fromDate'] > $date) return false;
+        if ($e['toDate'] !== '' && $e['toDate'] < $date) return false;
+        $st = self::stores($e['stores'] ?? null);
+        return $storeCode === null || !$st || in_array($storeCode, $st, true);
     }
 
     public static function insurance(): array
@@ -48,55 +74,49 @@ final class Campaign
         return array_values(array_filter(explode(',', (string)$csv), fn($c) => $c !== ''));
     }
 
-    /** その経路・店舗・日に使うキャンペーン（止めていない・期間内・店舗が合う。複数あれば先に作ったもの） */
-    public static function activeFor(?string $route, string $storeCode, string $date): ?array
+    /** 札の名前（「○○特典」の○○）：ギフトカードはギフトカード、ほかはキャンペーン（古い紹介元の形は紹介元の名前） */
+    public static function badgeOf(array $e): string
     {
-        if ($route === null) return null;
-        foreach (Db::all('SELECT * FROM campaign WHERE route = ? AND active = 1 ORDER BY createdAt ASC, id ASC', [$route]) as $c) {
-            if ($c['fromDate'] !== '' && $c['fromDate'] > $date) continue;
-            if ($c['toDate'] !== '' && $c['toDate'] < $date) continue;
-            $st = self::stores($c['stores'] ?? null);
-            if ($st && !in_array($storeCode, $st, true)) continue;
-            return $c;
+        if (($e['trig'] ?? '') === self::GIFT || $e['route'] === 'card') return self::GIFT;
+        if (str_starts_with((string)$e['route'], 'ref:')) {
+            $r = Db::one('SELECT name FROM referral WHERE code = ?', [substr((string)$e['route'], 4)]);
+            if ($r) return (string)$r['name'];
         }
-        return null;
+        return 'キャンペーン';
     }
 
-    /** 経路の名前（ギフトカード・媒体や紹介元の名前） */
-    public static function routeLabel(string $route): string
+    /**
+     * 予約に残す内容。キャンペーンを出さないとき（付けていない・止めている・期間外・店舗が違う）は name を空にする
+     * （URL の行の印・新患継続率のきっかけだけ残す）
+     */
+    public static function snapshot(array $e, ?string $storeCode, string $date): array
     {
-        if ($route === 'card') return 'ギフトカード';
-        if (str_starts_with($route, 'c:')) return 'キャンペーン';
-        $r = str_starts_with($route, 'ref:') ? Db::one('SELECT name FROM referral WHERE code = ?', [substr($route, 4)]) : null;
-        return $r ? (string)$r['name'] : $route;
-    }
-
-    /** 予約に残す内容（店舗向けメモも入れる） */
-    public static function snapshot(array $c): array
-    {
+        $show = self::showing($e, $storeCode, $date);
+        $own = (string)($e['code'] ?? '') !== '';
         return [
-            'id' => $c['id'],
-            'route' => self::routeLabel((string)$c['route']),
-            'name' => (string)$c['name'],
-            'description' => (string)($c['description'] ?? ''),
-            'insurance' => (int)$c['showInsurance'] ? self::insurance() : [],
-            'memo' => (string)($c['storeMemo'] ?? ''),
-            // 専用の URL から来た初診の新患継続率（きっかけ・内訳＝キャンペーン名）
-            'trig' => str_starts_with((string)$c['route'], 'c:') ? (string)($c['trig'] ?? '') : '',
-            'detail' => str_starts_with((string)$c['route'], 'c:') ? (string)$c['name'] : '',
+            'id' => $e['id'],
+            'route' => self::badgeOf($e),
+            'label' => (string)($e['label'] ?? ''),
+            'name' => $show ? (string)$e['name'] : '',
+            'description' => $show ? (string)($e['description'] ?? '') : '',
+            'insurance' => $show && (int)$e['showInsurance'] ? self::insurance() : [],
+            'memo' => $show ? (string)($e['storeMemo'] ?? '') : '',
+            // URL から来た初診の新患継続率（きっかけ・内訳＝URL の名前）
+            'trig' => $own ? (string)($e['trig'] ?? '') : '',
+            'detail' => $own ? (string)($e['label'] ?? '') : '',
         ];
     }
 
-    /** 患者様に見せる内容（店舗向けメモは出さない） */
+    /** 患者様に見せる内容（店舗向けメモは出さない）。キャンペーンを出さないときは null */
     public static function forCustomer(?array $snap, string $presetKind = ''): ?array
     {
-        if (!$snap) return null;
-        $out = ['route' => $snap['route'] ?? '', 'name' => $snap['name'] ?? '', 'description' => $snap['description'] ?? '', 'insurance' => $snap['insurance'] ?? []];
+        if (!$snap || ($snap['name'] ?? '') === '') return null;
+        $out = ['route' => $snap['route'] ?? '', 'name' => $snap['name'], 'description' => $snap['description'] ?? '', 'insurance' => $snap['insurance'] ?? []];
         if ($presetKind !== '') $out['kind'] = $presetKind;
         return $out;
     }
 
-    /** キャンペーン専用の URL（店舗えらび用・店舗別） */
+    /** URL（店舗えらび用・店舗別） */
     public static function url(string $code, ?string $storeCode = null): string
     {
         $base = rtrim(Config::str('APP_URL'), '/');
@@ -110,5 +130,23 @@ final class Campaign
         if ($json === null || $json === '') return null;
         $d = json_decode($json, true);
         return is_array($d) ? $d : null;
+    }
+
+    /** 予約表・ログに出すキャンペーン（キャンペーンを出していない予約は null） */
+    public static function forStore(?string $json): ?array
+    {
+        $d = self::decode($json);
+        return $d && ($d['name'] ?? '') !== '' ? $d : null;
+    }
+
+    /** 短い印（読み間違えやすい 0・o・1・l・i は使わない。紹介元の QR とも重ならない） */
+    public static function newCode(): string
+    {
+        $chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+        do {
+            $code = '';
+            for ($i = 0; $i < 6; $i++) $code .= $chars[random_int(0, strlen($chars) - 1)];
+        } while (Db::one('SELECT id FROM campaign WHERE code = ?', [$code]) || Db::one('SELECT id FROM referral WHERE code = ?', [$code]));
+        return $code;
     }
 }

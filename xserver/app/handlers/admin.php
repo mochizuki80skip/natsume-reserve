@@ -590,7 +590,7 @@ function adm_reservations_get(): never
         $r['createdAtText'] = Time::formatDateTimeShort($r['createdAt']);
         if ($f['tab'] === 'web') {
             $r['phoneText'] = Text::formatJpPhone($r['phone']);
-            $c = Campaign::decode($r['campaign'] ?? null);
+            $c = Campaign::forStore($r['campaign'] ?? null);
             $r['campaign'] = $c ? ['route' => $c['route'] ?? '', 'name' => $c['name'] ?? '', 'memo' => $c['memo'] ?? ''] : null;
         }
         return $r;
@@ -630,7 +630,7 @@ function adm_reservations_export(): never
         $label = 'キャンセル・変更名簿';
     } else {
         $header = ['受付日時', '予約日', '時刻', 'ベッド', '区分', '氏名', '診察券番号', '電話番号', '状態', '特典（キャンペーン）'];
-        $camp = function (?string $j): string { $c = Campaign::decode($j); return $c ? trim(($c['route'] ?? '') . '：' . ($c['name'] ?? ''), '：') : ''; };
+        $camp = function (?string $j): string { $c = Campaign::forStore($j); return $c ? trim(($c['route'] ?? '') . '：' . ($c['name'] ?? ''), '：') : ''; };
         $rows = array_map(fn($r) => [$r['createdAt'], $r['date'], Time::minToHm((int)$r['time']), (int)$r['bed'], ADM_KIND_JA[$r['kind']] ?? $r['kind'], $r['name'], $r['cardNo'] ?? '', Text::formatJpPhone($r['phone']), ADM_STATUS_JA[$r['status']] ?? $r['status'], $camp($r['campaign'] ?? null)], $list);
         $label = 'WEB予約一覧';
     }
@@ -1250,11 +1250,15 @@ function adm_find_get(): never
 /** 店舗設定：本部が作った、この店舗の媒体別の WEB 予約の URL（見る・保存するだけ。追加・変更は本部） */
 function adm_media_urls(): never
 {
+    // この店舗で使う WEB 予約の URL・QR（本部が作った集客経路。店舗をしぼっていない URL と、この店舗を選んだ URL）
     $ctx = Auth::context();
     $code = $ctx['store']['code'];
+    $today = Time::nowJst()['date'];
     $out = [];
-    foreach (Db::all("SELECT code, name, trig, stores FROM referral WHERE kind = 'media' AND active = 1 ORDER BY createdAt ASC, name ASC") as $r) {
-        if (in_array($code, array_filter(explode(',', (string)$r['stores'])), true)) $out[] = ['code' => $r['code'], 'name' => $r['name'], 'trig' => $r['trig']];
+    foreach (Db::all('SELECT * FROM campaign WHERE code IS NOT NULL ORDER BY createdAt ASC, id ASC') as $r) {
+        $st = Campaign::stores($r['stores'] ?? null);
+        if ($st && !in_array($code, $st, true)) continue;
+        $out[] = ['code' => $r['code'], 'name' => $r['label'], 'trig' => $r['trig'], 'campaign' => Campaign::showing($r, $code, $today) ? $r['name'] : ''];
     }
     Http::json(['rows' => $out]);
 }

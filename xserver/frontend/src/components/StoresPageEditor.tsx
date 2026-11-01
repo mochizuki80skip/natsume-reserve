@@ -85,10 +85,10 @@ export default function StoresPageEditor({ stores, open, onRefresh }: { stores: 
         入力済み {done}／載せる店舗 {shown}。すべて入れ終わってから「公開する」を押してください。
       </p>
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}
-      {/* 店舗えらびページの URL と QR（ふつう用と紹介カード用。紹介カード用から予約すると、きっかけに「ギフトカード」が入る） */}
+      {/* 店舗えらびページの URL と QR（キャンペーンなし・きっかけなし）。ギフトカード・広告などは「WEB 予約の URL・QR」の一覧で作る */}
       <div className="mt-2 grid gap-2 md:grid-cols-2">
-        <UrlQrCard label="店舗えらびの URL（ふつう）" help="ホームページ・チラシ・SNS などに。全店舗の一覧から店舗を選んで WEB 予約します" url={`${location.origin}/stores`} fileName="QR_店舗えらび" />
-        <UrlQrCard label="店舗えらびの URL（紹介カード用）" help="紹介カードに印刷する QR。ここから予約すると、新患継続率のきっかけに「ギフトカード」が入ります" url={`${location.origin}/stores?from=card`} fileName="QR_店舗えらび_紹介カード" />
+        <UrlQrCard label="店舗えらびの URL（ふつう）" help="エリアを指定できないポータルサイトなどに。全店舗の一覧から店舗を選んで WEB 予約します（キャンペーン・きっかけは入りません）" url={`${location.origin}/stores`} fileName="QR_店舗えらび" />
+        <p className="rounded border border-dashed bg-slate-50 p-3 text-xs text-slate-600">ギフトカード・SNS 広告・チラシなど、<b>キャンペーンを出したい・新患継続率のきっかけを入れたい URL・QR</b> は、下の「🔗 WEB 予約の URL・QR（集客経路）とキャンペーン」で作ります。</p>
       </div>
       {!open && <p className="mt-1 text-xs text-amber-800">※ 今は非公開なので、この URL を開いた患者様には「準備中」と出ます。公開してから配ってください。</p>}
       <div className="mt-2 overflow-x-auto">

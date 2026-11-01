@@ -31,9 +31,8 @@ export default function HqPage() {
       <ClosureBulkEditor />
       <SpecialBulkEditor />
       <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
-      <ReferralEditor pageOpen={!!data.storesPageOpen} />
-      <ReferralEditor pageOpen={!!data.storesPageOpen} kind="media" />
       <CampaignEditor />
+      <ReferralEditor pageOpen={!!data.storesPageOpen} />
       <JibaiNotifyEditor />
       <GoodsEditor />
       <ReportItemsEditor />

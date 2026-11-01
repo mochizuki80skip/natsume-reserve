@@ -58,7 +58,7 @@ final class DayData
                 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'visited' => (bool)$c['visited'], 'menus' => self::menusOf((string)($c['menus'] ?? '')),
                 'staff' => (string)($c['staff'] ?? ''), 'staffCheck' => isset($staffCheck[(int)$c['time'] . ':' . (int)$c['bed']]),
                 'phone' => $c['phone'] ?? null, // 電話で取った予約の電話番号
-                'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo'], 'campaign' => Campaign::decode($c['rCampaign'] ?? null)] : null,
+                'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo'], 'campaign' => Campaign::forStore($c['rCampaign'] ?? null)] : null,
             ], $cells),
             // メニューと物販はセルには同じように付く（色・印・人数はまとめて扱う）。予約表の帯では物販を別の段に出す
             'menuOptions' => array_values(array_unique(array_merge(Karte::options()['menu'] ?? [], Karte::options()['goods'] ?? []))),

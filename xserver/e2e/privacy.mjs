@@ -43,21 +43,21 @@ await cp.screenshot({ path: O + 'privacy-page.png', fullPage: true });
 await cp.goto(`${B}/s/S001`); await cp.waitForSelector('table.wk tbody tr', { timeout: 15000 });
 ok('予約ページの下にリンク', await cp.locator('footer').getByRole('link', { name: 'プライバシーポリシー' }).waitFor({ timeout: 8000 }).then(() => true, () => false));
 
-// 4) 媒体：作る → 店舗えらびページから予約 → 新患継続率のきっかけ・内訳
-ok('媒体はきっかけが必要', (await api(hp, 'PUT', '/api/admin/hq/referrals', { name: '見本インスタ', kind: 'media' }))[0] === 400);
-ok('内訳つきのきっかけは選べない', (await api(hp, 'PUT', '/api/admin/hq/referrals', { name: '見本インスタ', kind: 'media', trig: '業者紹介' }))[0] === 400);
-await hp.reload();
-const media = hp.getByRole('region', { name: '媒体の専用 QR' });
-await media.getByLabel('新しい媒体の名前').fill('見本インスタ');
-await media.getByLabel('入るきっかけ').selectOption('SNS');
-await media.getByRole('button', { name: '媒体を追加' }).click();
-await hp.waitForSelector('text=「見本インスタ」を追加しました');
-const m = (await api(hp, 'GET', '/api/admin/hq/referrals'))[1].rows.find((r) => r.name === '見本インスタ');
-ok('媒体ができる', m && m.kind === 'media' && m.trig === 'SNS', JSON.stringify(m));
-ok('紹介元の表には出ない', (await hp.getByRole('region', { name: '紹介元の専用 QR' }).getByLabel('紹介元の名前', { exact: true }).count()) === 0);
+// 4) WEB 予約の URL（集客経路）：作る → 店舗えらびページから予約 → 新患継続率のきっかけ・内訳
+ok('URL はきっかけが必要', (await api(hp, 'PUT', '/api/admin/hq/campaigns', { label: '見本インスタ' }))[0] === 400);
+ok('内訳つきのきっかけは選べない', (await api(hp, 'PUT', '/api/admin/hq/campaigns', { label: '見本インスタ', trig: '業者紹介' }))[0] === 400);
+await hp.reload(); await hp.waitForTimeout(1200);
+const media = hp.getByRole('region', { name: 'WEB 予約の URL・QR' });
+await media.getByRole('button', { name: '＋ URL・QR を作る' }).click();
+await media.getByLabel('URL の名前').fill('見本インスタ');
+await media.getByLabel('新患継続率のきっかけ').selectOption('SNS');
+await media.getByRole('button', { name: '保存', exact: true }).click();
+await hp.waitForSelector('text=「見本インスタ」を保存しました');
+const m = (await api(hp, 'GET', '/api/admin/hq/campaigns'))[1].rows.find((r) => r.label === '見本インスタ');
+ok('URL ができる', m && m.trig === 'SNS' && !m.hasContent, JSON.stringify(m));
 await hp.screenshot({ path: O + 'media-editor.png', fullPage: true });
 await api(hp, 'PUT', '/api/admin/hq/stores-page', { open: true });
-await cp.goto(`${B}/stores?ref=${m.code}`); await cp.waitForSelector('text=ご予約の店舗をお選びください');
+await cp.goto(`${B}/stores?c=${m.code}`); await cp.waitForSelector('text=ご予約の店舗をお選びください');
 ok('店舗えらびページの下にもリンク', await cp.locator('footer').getByRole('link', { name: 'プライバシーポリシー' }).isVisible());
 const href = await cp.getByRole('link', { name: 'WEB 予約' }).first().getAttribute('href');
 await cp.goto(B + href.replace(/^\/s\/[^?]+/, '/s/S001')); await cp.waitForSelector('table.wk tbody tr', { timeout: 15000 });
@@ -82,10 +82,10 @@ const k = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`
 ok('新患継続率：きっかけ SNS・内訳 見本インスタ', k?.trig === 'SNS' && k?.trigDetail === '見本インスタ', JSON.stringify(k && [k.trig, k.trigDetail]));
 await sp.goto(`${B}/admin/karte?month=${res.date.slice(0, 7)}`); await sp.waitForSelector('text=継続の状況');
 ok('内訳の欄に媒体名が見える', (await sp.getByLabel('内訳').first().inputValue()) === '見本インスタ');
-const m2 = (await api(hp, 'GET', '/api/admin/hq/referrals'))[1].rows.find((r) => r.name === '見本インスタ');
-ok('媒体の予約数・新患継続率の数', m2.reservations === 1 && m2.kartes === 1, JSON.stringify(m2));
+const m2 = (await api(hp, 'GET', '/api/admin/hq/campaigns'))[1].rows.find((r) => r.label === '見本インスタ');
+ok('URL の予約数・新患継続率の数', m2.reservations === 1 && m2.kartes === 1, JSON.stringify(m2));
 // きっかけを変えると新患継続率もそろう
-await api(hp, 'PUT', '/api/admin/hq/referrals', { id: m2.id, trig: 'チラシ' });
+await api(hp, 'PUT', '/api/admin/hq/campaigns', { ...m2, trig: 'チラシ' });
 const k2 = (await api(sp, 'GET', `/api/admin/karte?month=${res.date.slice(0, 7)}`))[1].rows.find((r) => r.name === '見本媒子');
 ok('きっかけを変えると行もそろう', k2.trig === 'チラシ' && k2.trigDetail === '見本インスタ');
 ok('ページのエラーなし', errs.length === 0, errs.join(' / '));

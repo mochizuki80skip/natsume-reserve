@@ -16,7 +16,7 @@ import { closureBadge, type Closure } from '@/lib/closure';
 const SKY = '#1eb4ec';
 interface Quiet { date: string; isToday: boolean; closedToday: boolean; am: string | null; pm: string | null }
 interface StoreItem { code: string; name: string; phone: string; address: string; lat: number | null; lng: number | null; area: string; city?: string; quiet: Quiet | null; closures?: Closure[] }
-interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[]; consultLineUrl?: string; campaign?: PublicCampaign | null }
+interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[]; consultLineUrl?: string; campaign?: PublicCampaign | null; gift?: boolean }
 
 /** 2 点間の距離（km） */
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -106,7 +106,12 @@ export default function Stores() {
         <h1 className="text-xl font-bold">ご予約の店舗をお選びください</h1>
         <p className="mt-1 text-sm">店舗を選ぶと、その店舗の WEB 予約の画面に進みます。</p>
       </div>
-      {data.campaign && <div className="mx-3 mt-3"><CampaignBox c={data.campaign} /></div>}
+      {data.campaign && (
+        <div className="mx-3 mt-3" role="region" aria-label="キャンペーンのお知らせ">
+          <p className="mb-1 rounded-md bg-orange-600 px-3 py-1.5 text-center text-[15px] font-bold text-white">🎁 {data.gift ? 'ギフトカードをお持ちの方へ' : 'キャンペーン実施中'}</p>
+          <CampaignBox c={data.campaign} />
+        </div>
+      )}
       <ConsultLineBanner url={data.consultLineUrl ?? ''} className="mx-3 mt-3" />
 
       {data.hours && (

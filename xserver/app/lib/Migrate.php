@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 47;
+    private const VERSION = 48;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -331,10 +331,53 @@ final class Migrate
                 // キャンペーン専用の URL（/stores?c=コード・/s/店舗?c=コード）と、そこから来た初診の新患継続率のきっかけ（内訳＝キャンペーン名）
                 if (self::hasTable($pdo, 'campaign') && !self::hasColumn($pdo, 'campaign', 'code')) $pdo->exec("ALTER TABLE `campaign` ADD COLUMN `code` VARCHAR(16) NULL, ADD COLUMN `trig` VARCHAR(30) NOT NULL DEFAULT '', ADD UNIQUE KEY `campaign_code` (`code`)");
             }
+            if ($ver < 48) {
+                // WEB 予約の URL・QR（集客経路）とキャンペーンを 1 つの一覧に：URL の名前（label）と、キャンペーンを付けるか（hasContent）
+                if (self::hasTable($pdo, 'campaign') && !self::hasColumn($pdo, 'campaign', 'label')) {
+                    $pdo->exec("ALTER TABLE `campaign` ADD COLUMN `label` VARCHAR(60) NOT NULL DEFAULT '', ADD COLUMN `hasContent` TINYINT(1) NOT NULL DEFAULT 1");
+                    $pdo->exec("UPDATE `campaign` SET `label` = `name` WHERE `label` = ''");
+                    self::moveRoutesToUrls($pdo);
+                }
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
             error_log('[migrate] ' . $e->getMessage());
+        }
+    }
+
+    /** 古い形（紹介カード・媒体の QR に付けたキャンペーンと、媒体の URL）を、URL・QR の一覧の行に移す（媒体はまだどこにも載せていない） */
+    private static function moveRoutesToUrls(PDO $pdo): void
+    {
+        $code = function () use ($pdo): string {
+            $chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+            do {
+                $c = '';
+                for ($i = 0; $i < 6; $i++) $c .= $chars[random_int(0, strlen($chars) - 1)];
+                $q = $pdo->prepare('SELECT (SELECT COUNT(*) FROM campaign WHERE code = ?) + (SELECT COUNT(*) FROM referral WHERE code = ?)');
+                $q->execute([$c, $c]);
+            } while ((int)$q->fetchColumn() > 0);
+            return $c;
+        };
+        // 紹介カード（ギフトカード）のキャンペーン
+        foreach ($pdo->query("SELECT id FROM campaign WHERE route = 'card'")->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $c = $code();
+            $pdo->prepare("UPDATE campaign SET route = ?, code = ?, trig = 'ギフトカード', label = 'ギフトカード' WHERE id = ?")->execute(['c:' . $c, $c, $id]);
+        }
+        // 媒体：その媒体に付けたキャンペーンがあれば合わせて 1 行に（印は媒体と同じ文字）
+        if (!self::hasTable($pdo, 'referral')) return;
+        foreach ($pdo->query("SELECT * FROM referral WHERE kind = 'media'")->fetchAll(PDO::FETCH_ASSOC) as $m) {
+            $q = $pdo->prepare('SELECT id FROM campaign WHERE route = ? ORDER BY createdAt ASC LIMIT 1');
+            $q->execute(['ref:' . $m['code']]);
+            $cid = $q->fetchColumn();
+            if ($cid) {
+                $pdo->prepare('UPDATE campaign SET route = ?, code = ?, trig = ?, label = ?, stores = COALESCE(NULLIF(stores, \'\'), ?) WHERE id = ?')->execute(['c:' . $m['code'], $m['code'], $m['trig'], $m['name'], $m['stores'], $cid]);
+            } else {
+                $pdo->prepare("INSERT INTO campaign (id, route, code, trig, label, name, hasContent, showInsurance, stores, active, createdAt) VALUES (?, ?, ?, ?, ?, '', 0, 1, ?, ?, ?)")
+                    ->execute([bin2hex(random_bytes(12)), 'c:' . $m['code'], $m['code'], $m['trig'], $m['name'], $m['stores'], (int)$m['active'], $m['createdAt']]);
+            }
+            // 媒体の一覧からは外す（前の予約の新患継続率のつながりのために行は残す）
+            $pdo->prepare('UPDATE referral SET active = 0 WHERE id = ?')->execute([$m['id']]);
         }
     }
 
@@ -352,6 +395,8 @@ final class Migrate
   `active` TINYINT(1) NOT NULL DEFAULT 1,
   `code` VARCHAR(16) NULL,
   `trig` VARCHAR(30) NOT NULL DEFAULT '',
+  `label` VARCHAR(60) NOT NULL DEFAULT '',
+  `hasContent` TINYINT(1) NOT NULL DEFAULT 1,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `campaign_code` (`code`),
