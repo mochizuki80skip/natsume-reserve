@@ -93,6 +93,7 @@ ok('売上目標（本部）', (await api(hq, 'PUT', '/api/admin/acct/madoguchi/
 // ---- 経理：一覧・確認・見るだけ・ほかの画面は出ない
 const ac = await login('', 'keiripass1', 'keiri1');
 ok('経理はログインすると窓口集計', /\/admin\/acct/.test(ac.url()), ac.url());
+await ac.goto(`${B}/admin/acct?month=${M}`); // 月が変わっても 10 月を見る
 await ac.waitForSelector('table[aria-label="窓口集計の一覧"]');
 const row1 = ac.locator('tbody tr', { hasText: 'サンプル本店' });
 ok('一覧に売上・目標・達成率', (await row1.textContent()).includes('273,672') && (await row1.textContent()).includes('3,710,000') && (await row1.textContent()).includes('7%'), await row1.textContent());

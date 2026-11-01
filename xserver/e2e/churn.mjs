@@ -18,7 +18,8 @@ const visit = async (date, time, bed, text, visited = true) => {
   await api('PUT', '/api/admin/cells', { date, cells: [{ time, bed, text }] });
   if (visited) await api('PUT', '/api/admin/visit', { date, time, bed, visited: true });
 };
-const ym = today.slice(0, 7), prevYm = add(`${ym}-01`, -1).slice(0, 7);
+// 離反の日（前月の来院の翌月の同じ日）が今日より前になるよう、先月を「今月」として見る（月の初めに動かしても通る）
+const ym = add(`${today.slice(0, 7)}-01`, -1).slice(0, 7), prevYm = add(`${ym}-01`, -1).slice(0, 7);
 // 前月の来院：一郎（今月に離反）・二郎（今月また来院＝続けて通院）・四郎（初診・今月に離反・中止）
 await visit(`${prevYm}-05`, 540, 1, '見本 四郎（初診）');
 await visit(`${prevYm}-10`, 600, 1, '見本 一郎');

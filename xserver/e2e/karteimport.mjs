@@ -123,6 +123,6 @@ await h.getByRole('button', { name: '除く' }).click();
 ok('本部：中止・転院を除くと継続率が変わる', retBefore !== await fyRet(), `${retBefore} → ${await fyRet()}`);
 void hh;
 await h.goto(`${B}/admin/hq`); await h.waitForSelector('text=店舗えらびページ');
-ok('本部：店舗えらびの URL・QR（ふつう・紹介カード用）', await h.getByText('店舗えらびの URL（ふつう）').isVisible() && (await h.textContent('body')).includes('/stores?from=card'));
+ok('本部：店舗えらびの URL・QR（ふつう）と、ギフトカード・広告は URL・QR の一覧で作る案内', await h.getByText('店舗えらびの URL（ふつう）').isVisible() && (await h.textContent('body')).includes('WEB 予約の URL・QR（集客経路）とキャンペーン'));
 ok('ページのエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();

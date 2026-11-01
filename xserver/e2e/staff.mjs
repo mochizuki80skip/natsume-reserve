@@ -60,7 +60,10 @@ const mo = sc.rows.find((r) => r.staff === '望月'), sa = sc.rows.find((r) => r
 ok('担当数（来院チェック済み）', mo?.total === 3 && mo.new === 1 && mo.revisit === 1 && mo.counts['2回目'] === 1 && sa?.total === 1, JSON.stringify(sc.rows));
 ok('2回目到達率の元', mo?.firsts === 2 && mo.reached2 === 1, JSON.stringify(mo));
 ok('日ごとの人数', mo?.days?.[D1] === 2 && mo.days[D2] === 1 && sa?.days?.[D1] === 1, JSON.stringify(mo?.days));
-await p.goto(`${B}/admin/staff-counts`); await p.waitForSelector('table');
+await p.goto(`${B}/admin/staff-counts`); await p.waitForTimeout(1200);
+// 月が変わっていたら 10 月へ戻す
+for (let i = 0; i < 24 && !(await p.textContent('main')).includes('2026年10月'); i++) { await p.getByRole('button', { name: '‹ 前月' }).click(); await p.waitForTimeout(500); }
+await p.waitForSelector('table');
 // 縦＝日付・横＝施術者。月の合計の行で望月 3、10/6 の行で望月 2・合計 3
 const t = p.locator('table[aria-label="日ごとの施術人数"]');
 const heads = await t.locator('thead tr').first().locator('th').allTextContents();
