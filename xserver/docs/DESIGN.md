@@ -383,6 +383,7 @@ xserver/
 | 44 | 媒体を使う店舗（referral.stores） |
 | 45 | ストーリー画像のテーマ（store.storyTheme） |
 | 46 | 経路別キャンペーン（campaign 表・global_setting.insuranceTable・reservation.campaign） |
+| 47 | キャンペーン専用の URL（campaign.code・campaign.trig） |
 
 ---
 

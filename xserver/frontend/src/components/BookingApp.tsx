@@ -11,9 +11,9 @@ import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
 import { addMyReservation, loadMyReservations } from '@/lib/myReservations';
 import CampaignBox, { type PublicCampaign } from './CampaignBox';
 
-interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string; closures?: Closure[]; campaign?: PublicCampaign | null }
+interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string; closures?: Closure[]; campaign?: PublicCampaign | null; campaignCode?: string }
 
-export default function BookingApp({ store, smsEnabled, via, refCode, closures = [], campaign = null }: Props) {
+export default function BookingApp({ store, smsEnabled, via, refCode, closures = [], campaign = null, campaignCode }: Props) {
   // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=確認, 4=完了
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   // 最初は未選択（キャンペーンの経路から来たときは、キャンペーンで決めた区分を選んだ状態で始める。変えることもできる）
@@ -50,7 +50,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
     try {
       const r = await fetch(api('/reserve'), {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: submitKind, date: sel.date, time: sel.time, ...form, via, ref: refCode }), // via=card：紹介カード（店舗えらびページ）から。ref：紹介元（業者）の専用 QR から
+        body: JSON.stringify({ kind: submitKind, date: sel.date, time: sel.time, ...form, via, ref: refCode, c: campaignCode }), // via=card：紹介カード（店舗えらびページ）から。ref：紹介元（業者）の専用 QR から
       });
       const j = await r.json();
       if (!r.ok) {

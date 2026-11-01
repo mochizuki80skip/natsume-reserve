@@ -11,8 +11,10 @@ final class Campaign
     public const DEFAULT_INSURANCE = [['label' => '3割負担', 'amount' => 2000], ['label' => '2割負担', 'amount' => 1500], ['label' => '1割負担', 'amount' => 1200]];
 
     /** 予約ページの via・ref から経路を決める（紹介元・媒体の QR が先） */
-    public static function routeOf(?string $via, ?string $ref): ?string
+    public static function routeOf(?string $via, ?string $ref, ?string $c = null): ?string
     {
+        // キャンペーン専用の URL（?c=）がいちばん先
+        if (is_string($c) && preg_match('/^[a-z0-9]{4,16}$/', $c) && Db::one('SELECT id FROM campaign WHERE code = ?', [$c])) return 'c:' . $c;
         if (is_string($ref) && preg_match('/^[a-z0-9]{4,16}$/', $ref) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$ref])) return 'ref:' . $ref;
         if ($via === 'card') return 'card';
         return null;
@@ -64,6 +66,7 @@ final class Campaign
     public static function routeLabel(string $route): string
     {
         if ($route === 'card') return 'ギフトカード';
+        if (str_starts_with($route, 'c:')) return 'キャンペーン';
         $r = str_starts_with($route, 'ref:') ? Db::one('SELECT name FROM referral WHERE code = ?', [substr($route, 4)]) : null;
         return $r ? (string)$r['name'] : $route;
     }
@@ -78,6 +81,9 @@ final class Campaign
             'description' => (string)($c['description'] ?? ''),
             'insurance' => (int)$c['showInsurance'] ? self::insurance() : [],
             'memo' => (string)($c['storeMemo'] ?? ''),
+            // 専用の URL から来た初診の新患継続率（きっかけ・内訳＝キャンペーン名）
+            'trig' => str_starts_with((string)$c['route'], 'c:') ? (string)($c['trig'] ?? '') : '',
+            'detail' => str_starts_with((string)$c['route'], 'c:') ? (string)$c['name'] : '',
         ];
     }
 
@@ -88,6 +94,14 @@ final class Campaign
         $out = ['route' => $snap['route'] ?? '', 'name' => $snap['name'] ?? '', 'description' => $snap['description'] ?? '', 'insurance' => $snap['insurance'] ?? []];
         if ($presetKind !== '') $out['kind'] = $presetKind;
         return $out;
+    }
+
+    /** キャンペーン専用の URL（店舗えらび用・店舗別） */
+    public static function url(string $code, ?string $storeCode = null): string
+    {
+        $base = rtrim(Config::str('APP_URL'), '/');
+        if ($base === '') $base = (Http::isHttps() ? 'https://' : 'http://') . (string)($_SERVER['HTTP_HOST'] ?? '');
+        return $base . ($storeCode === null ? '/stores' : '/s/' . rawurlencode($storeCode)) . '?c=' . rawurlencode($code);
     }
 
     /** 予約に残した JSON を読む */

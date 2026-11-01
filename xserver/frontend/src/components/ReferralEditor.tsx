@@ -15,7 +15,7 @@ const urlOf = (code: string) => `${location.origin}/stores?ref=${code}`;
 /** 店舗の予約ページへ直接の URL（媒体の印つき） */
 export const storeUrlOf = (store: string, code: string) => `${location.origin}/s/${encodeURIComponent(store)}?ref=${code}`;
 
-function Qr({ url, fileName, alt, size = 72 }: { url: string; fileName: string; alt: string; size?: number }) {
+export function Qr({ url, fileName, alt, size = 72 }: { url: string; fileName: string; alt: string; size?: number }) {
   const src = useQrBlobUrl(url);
   if (!src) return null;
   return (

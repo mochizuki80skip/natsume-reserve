@@ -324,7 +324,7 @@ CREATE TABLE IF NOT EXISTS `referral` (
   UNIQUE KEY `referral_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 経路ごとのキャンペーン（route = 'card'：ギフトカード、'ref:<referral.code>'：媒体・紹介元の QR）。stores が空＝全店
+-- 経路ごとのキャンペーン（route = 'card'：ギフトカード、'ref:<referral.code>'：媒体・紹介元の QR、'c:<code>'：キャンペーン専用の URL）。stores が空＝全店
 CREATE TABLE IF NOT EXISTS `campaign` (
   `id` VARCHAR(32) NOT NULL,
   `route` VARCHAR(30) NOT NULL,
@@ -337,8 +337,11 @@ CREATE TABLE IF NOT EXISTS `campaign` (
   `storeMemo` TEXT NULL, -- 店舗向けメモ（会計の注意など。患者様には出さない）
   `stores` TEXT NULL,
   `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `code` VARCHAR(16) NULL, -- キャンペーン専用の URL の印（route = 'c:<code>'。/stores?c=…・/s/店舗?c=…）
+  `trig` VARCHAR(30) NOT NULL DEFAULT '', -- 専用の URL から来た初診の新患継続率のきっかけ（内訳＝キャンペーン名）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `campaign_code` (`code`),
   KEY `campaign_route` (`route`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

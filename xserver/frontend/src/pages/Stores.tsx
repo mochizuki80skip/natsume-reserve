@@ -9,13 +9,14 @@ const cityOfStore = (s: { city?: string; address: string }) => s.city || cityOf(
 import PublicFooter from '@/components/PublicFooter';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
+import CampaignBox, { type PublicCampaign } from '@/components/CampaignBox';
 import { WEEKDAY_JA, weekdayOf } from '@/lib/time';
 import { closureBadge, type Closure } from '@/lib/closure';
 
 const SKY = '#1eb4ec';
 interface Quiet { date: string; isToday: boolean; closedToday: boolean; am: string | null; pm: string | null }
 interface StoreItem { code: string; name: string; phone: string; address: string; lat: number | null; lng: number | null; area: string; city?: string; quiet: Quiet | null; closures?: Closure[] }
-interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[]; consultLineUrl?: string }
+interface Resp { open: boolean; today?: string; hours?: { rows: { days: string; text: string }[]; closed: string }; areas?: string[]; stores?: StoreItem[]; consultLineUrl?: string; campaign?: PublicCampaign | null }
 
 /** 2 点間の距離（km） */
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -39,9 +40,13 @@ export default function Stores() {
   const fromCard = params.get('from') === 'card';
   // 紹介元（業者）の専用 QR（/stores?ref=…）。予約ページへそのまま引き継ぐ
   const ref = /^[a-z0-9]{4,16}$/.test(params.get('ref') ?? '') ? params.get('ref')! : '';
-  const carry = new URLSearchParams({ ...(fromCard ? { from: 'card' } : {}), ...(ref ? { ref } : {}) }).toString();
+  // キャンペーン専用の URL（/stores?c=…）。予約ページへそのまま引き継ぐ
+  const camp = /^[a-z0-9]{4,16}$/.test(params.get('c') ?? '') ? params.get('c')! : '';
+  const carry = new URLSearchParams({ ...(fromCard ? { from: 'card' } : {}), ...(ref ? { ref } : {}), ...(camp ? { c: camp } : {}) }).toString();
   const preview = params.get('preview') === '1'; // 本部の確認用（公開前でも本部でログイン中なら見られる）
-  const { data, error } = useFetch<Resp>(`/api/public-stores${preview ? '?preview=1' : ''}`);
+  // 紹介カード・キャンペーンの URL から来たときは、そのキャンペーンを上に出し、使う店舗だけを並べる
+  const qs = new URLSearchParams({ ...(preview ? { preview: '1' } : {}), ...(fromCard ? { from: 'card' } : {}), ...(ref ? { ref } : {}), ...(camp ? { c: camp } : {}) }).toString();
+  const { data, error } = useFetch<Resp>(`/api/public-stores${qs ? `?${qs}` : ''}`);
   const [q, setQ] = useState('');
   const [area, setArea] = useState(''); // 市・町（住所から）
   const [here, setHere] = useState<{ lat: number; lng: number } | null>(null);
@@ -101,6 +106,7 @@ export default function Stores() {
         <h1 className="text-xl font-bold">ご予約の店舗をお選びください</h1>
         <p className="mt-1 text-sm">店舗を選ぶと、その店舗の WEB 予約の画面に進みます。</p>
       </div>
+      {data.campaign && <div className="mx-3 mt-3"><CampaignBox c={data.campaign} /></div>}
       <ConsultLineBanner url={data.consultLineUrl ?? ''} className="mx-3 mt-3" />
 
       {data.hours && (

@@ -108,6 +108,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/hq/referrals$#', 'hq_referrals_put'],
         ['GET', '#^/api/admin/hq/referrals/export$#', 'hq_referrals_export'],
         ['GET', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_get'],
+        ['GET', '#^/api/admin/hq/campaigns/export$#', 'hq_campaigns_export'],
         ['PUT', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_put'],
         ['DELETE', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_delete'],
         ['PUT', '#^/api/admin/hq/insurance$#', 'hq_insurance_put'],

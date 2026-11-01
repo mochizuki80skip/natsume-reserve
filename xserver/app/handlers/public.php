@@ -16,7 +16,7 @@ function pub_store(array $p): never
     $ctx = pub_load_store($p[1], true);
     // ギフトカード（?via=card）・媒体や紹介元の QR（?ref=）から来たときは、その経路のキャンペーン（店舗向けメモは出さない）
     $today = Time::nowJst()['date'];
-    $c = Campaign::activeFor(Campaign::routeOf(Http::query('via'), Http::query('ref')), (string)$ctx['store']['code'], $today);
+    $c = Campaign::activeFor(Campaign::routeOf(Http::query('via'), Http::query('ref'), Http::query('c')), (string)$ctx['store']['code'], $today);
     Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0), 'closures' => PublicApi::closures($ctx['store'], $today), 'consultLineUrl' => Settings::global()['consultLineUrl'],
         'campaign' => $c ? Campaign::forCustomer(Campaign::snapshot($c), (string)$c['presetKind']) : null]);
 }
@@ -69,7 +69,7 @@ function pub_reserve(array $p): never
     // 紹介元（業者）の専用 QR から来た予約（登録済みで止めていない紹介元だけ）
     $refCode = is_string($b['ref'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $b['ref']) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$b['ref']]) ? $b['ref'] : null;
     // その経路のキャンペーン（予約したときの内容を予約に残す）
-    $camp = Campaign::activeFor(Campaign::routeOf($viaCard ? 'card' : null, $refCode), (string)$store['code'], Time::nowJst()['date']);
+    $camp = Campaign::activeFor(Campaign::routeOf($viaCard ? 'card' : null, $refCode, is_string($b['c'] ?? null) ? $b['c'] : null), (string)$store['code'], Time::nowJst()['date']);
     $campJson = $camp ? json_encode(Campaign::snapshot($camp), JSON_UNESCAPED_UNICODE) : null;
     if ($kind === 'RETURN' && $cardNo === '') Http::error('診察券番号を入力してください', 400); // 再来は無くても可
     $phone = Text::normalizeJpPhone($phoneRaw);
@@ -183,16 +183,23 @@ function pub_stores(): never
         $areaOrder[] = $a['name'];
         foreach (array_filter(explode(',', (string)$a['storeCodes'])) as $code) $areaOf[$code] ??= $a['name'];
     }
+    // キャンペーン（紹介カードの QR・キャンペーン専用の URL）：内容を上に出し、使う店舗だけを並べる
+    $route = Campaign::routeOf(Http::query('via') ?? (Http::query('from') === 'card' ? 'card' : null), Http::query('ref'), Http::query('c'));
+    $camps = $route === null ? [] : array_values(array_filter(Db::all('SELECT * FROM campaign WHERE route = ? AND active = 1 ORDER BY createdAt ASC, id ASC', [$route]), fn($c) => ($c['fromDate'] === '' || $c['fromDate'] <= $today) && ($c['toDate'] === '' || $c['toDate'] >= $today)));
+    $campStores = null; // null＝しぼらない
+    if ($camps) { foreach ($camps as $c) { $s = Campaign::stores($c['stores'] ?? null); if (!$s) { $campStores = null; break; } $campStores = array_merge($campStores ?? [], $s); } }
     $stores = [];
     foreach (Settings::pageSort(Settings::storesInOrder('active = 1 AND listed = 1', [], false)) as $row) {
         $st = Settings::storeRow($row);
+        if ($campStores !== null && !in_array($st['code'], $campStores, true)) continue;
         $stores[] = [
             'code' => $st['code'], 'name' => $st['name'], 'phone' => $st['phone'], 'address' => (string)($row['address'] ?? ''),
             'lat' => $row['lat'] !== null ? (float)$row['lat'] : null, 'lng' => $row['lng'] !== null ? (float)$row['lng'] : null,
             'area' => $areaOf[$st['code']] ?? '', 'city' => (string)($row['pageCity'] ?? ''), 'quiet' => pub_quiet_times($st, $setting, $today), 'closures' => PublicApi::closures($st, $today),
         ];
     }
-    Http::json(['open' => true, 'today' => $today, 'hours' => pub_hours_summary($setting, $today), 'areas' => $areaOrder, 'stores' => $stores, 'consultLineUrl' => $setting['consultLineUrl']]);
+    Http::json(['open' => true, 'today' => $today, 'hours' => pub_hours_summary($setting, $today), 'areas' => $areaOrder, 'stores' => $stores, 'consultLineUrl' => $setting['consultLineUrl'],
+        'campaign' => $camps ? Campaign::forCustomer(Campaign::snapshot($camps[0])) : null]);
 }
 
 /** 全店共通の営業時間の表示（同じ時間の曜日をまとめる）と休診日 */

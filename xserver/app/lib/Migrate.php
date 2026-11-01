@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 46;
+    private const VERSION = 47;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -327,6 +327,10 @@ final class Migrate
                 if (self::hasTable($pdo, 'global_setting') && !self::hasColumn($pdo, 'global_setting', 'insuranceTable')) $pdo->exec('ALTER TABLE `global_setting` ADD COLUMN `insuranceTable` TEXT NULL');
                 if (self::hasTable($pdo, 'reservation') && !self::hasColumn($pdo, 'reservation', 'campaign')) $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `campaign` TEXT NULL');
             }
+            if ($ver < 47) {
+                // キャンペーン専用の URL（/stores?c=コード・/s/店舗?c=コード）と、そこから来た初診の新患継続率のきっかけ（内訳＝キャンペーン名）
+                if (self::hasTable($pdo, 'campaign') && !self::hasColumn($pdo, 'campaign', 'code')) $pdo->exec("ALTER TABLE `campaign` ADD COLUMN `code` VARCHAR(16) NULL, ADD COLUMN `trig` VARCHAR(30) NOT NULL DEFAULT '', ADD UNIQUE KEY `campaign_code` (`code`)");
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -346,8 +350,11 @@ final class Migrate
   `storeMemo` TEXT NULL,
   `stores` TEXT NULL,
   `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `code` VARCHAR(16) NULL,
+  `trig` VARCHAR(30) NOT NULL DEFAULT '',
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `campaign_code` (`code`),
   KEY `campaign_route` (`route`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
 

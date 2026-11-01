@@ -499,16 +499,19 @@ function hq_notify_name_put(): never
 function hq_campaigns_get(): never
 {
     Auth::requireHq();
-    $routes = [['route' => 'card', 'label' => 'ギフトカード', 'group' => 'card']];
+    $routes = [['route' => 'own', 'label' => 'このキャンペーン専用の URL・QR を作る', 'group' => 'own'], ['route' => 'card', 'label' => 'ギフトカード（紹介カード用の QR）', 'group' => 'card']];
     foreach (Db::all('SELECT code, name, kind, active FROM referral ORDER BY kind DESC, createdAt ASC, name ASC') as $r) {
         $routes[] = ['route' => 'ref:' . $r['code'], 'label' => $r['name'] . ((int)$r['active'] ? '' : '（止めている）'), 'group' => $r['kind'] === 'media' ? 'media' : 'partner'];
     }
     $rows = array_map(fn($c) => [
         'id' => $c['id'], 'route' => $c['route'], 'name' => $c['name'], 'description' => (string)($c['description'] ?? ''), 'showInsurance' => (bool)(int)$c['showInsurance'],
         'presetKind' => $c['presetKind'], 'from' => $c['fromDate'], 'to' => $c['toDate'], 'memo' => (string)($c['storeMemo'] ?? ''), 'stores' => Campaign::stores($c['stores'] ?? null), 'active' => (bool)(int)$c['active'],
+        'code' => $c['code'], 'trig' => (string)($c['trig'] ?? ''),
         'reservations' => (int)(Db::one('SELECT COUNT(*) AS n FROM reservation WHERE campaign LIKE ?', ['%"id":"' . $c['id'] . '"%'])['n'] ?? 0),
     ], Db::all('SELECT * FROM campaign ORDER BY createdAt ASC, id ASC'));
-    Http::json(['rows' => $rows, 'routes' => $routes, 'insurance' => Campaign::insurance(),
+    // 専用の URL のきっかけ：新患継続率のきっかけの選択肢から（内訳つきのものとギフトカードは使わない。媒体と同じ）
+    $triggers = array_values(array_filter(Karte::options()['trigger'], fn($t) => !array_key_exists($t, Karte::DETAIL_FOR) && $t !== 'ギフトカード'));
+    Http::json(['rows' => $rows, 'routes' => $routes, 'insurance' => Campaign::insurance(), 'triggers' => $triggers,
         'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'area' => $s['area']], Settings::storesInOrder('active = 1 AND hqOnly = 0 AND jibaiOnly = 0', [], false))]);
 }
 
@@ -526,7 +529,19 @@ function hq_campaigns_put(): never
         Http::json(['ok' => true]);
     }
     $route = (string)($b['route'] ?? '');
-    if (!($route === 'card' || (str_starts_with($route, 'ref:') && Db::one('SELECT id FROM referral WHERE code = ?', [substr($route, 4)])))) Http::error('経路を選んでください', 400);
+    // このキャンペーン専用の URL：印（コード）は一度決めたら変えない（配った QR が使えなくなるため）
+    $trig = '';
+    if ($route === 'own' || str_starts_with($route, 'c:')) {
+        $code = $row && str_starts_with((string)$row['route'], 'c:') ? substr((string)$row['route'], 2) : null;
+        if ($code === null) {
+            $chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+            do { $code = ''; for ($i = 0; $i < 6; $i++) $code .= $chars[random_int(0, strlen($chars) - 1)]; } while (Db::one('SELECT id FROM campaign WHERE code = ?', [$code]) || Db::one('SELECT id FROM referral WHERE code = ?', [$code]));
+        }
+        $route = 'c:' . $code;
+        $trig = (string)($b['trig'] ?? '');
+        if (!in_array($trig, Karte::options()['trigger'], true) || array_key_exists($trig, Karte::DETAIL_FOR) || $trig === 'ギフトカード') Http::error('新患継続率に入るきっかけ（媒体）を選んでください', 400);
+    }
+    if (!(str_starts_with($route, 'c:') || $route === 'card' || (str_starts_with($route, 'ref:') && Db::one('SELECT id FROM referral WHERE code = ?', [substr($route, 4)])))) Http::error('経路を選んでください', 400);
     $name = mb_substr(trim((string)($b['name'] ?? '')), 0, 60);
     if ($name === '') Http::error('キャンペーン名を入れてください', 400);
     $desc = mb_substr(trim((string)($b['description'] ?? '')), 0, 600);
@@ -538,12 +553,13 @@ function hq_campaigns_put(): never
     if ($from !== '' && $to !== '' && $to < $from) Http::error('期間の終わりは始めより後にしてください', 400);
     $valid = array_column(Db::all('SELECT code FROM store'), 'code');
     $stores = is_array($b['stores'] ?? null) ? array_values(array_unique(array_filter(array_map('strval', $b['stores']), fn($c) => in_array($c, $valid, true)))) : [];
-    $vals = [$route, $name, $desc, !empty($b['showInsurance']) ? 1 : 0, $kind, $from, $to, $memo, $stores ? implode(',', $stores) : null];
+    $own = str_starts_with($route, 'c:') ? substr($route, 2) : null;
+    $vals = [$route, $name, $desc, !empty($b['showInsurance']) ? 1 : 0, $kind, $from, $to, $memo, $stores ? implode(',', $stores) : null, $own, $trig];
     if ($row) {
-        Db::exec('UPDATE campaign SET route = ?, name = ?, description = ?, showInsurance = ?, presetKind = ?, fromDate = ?, toDate = ?, storeMemo = ?, stores = ? WHERE id = ?', array_merge($vals, [$id]));
+        Db::exec('UPDATE campaign SET route = ?, name = ?, description = ?, showInsurance = ?, presetKind = ?, fromDate = ?, toDate = ?, storeMemo = ?, stores = ?, code = ?, trig = ? WHERE id = ?', array_merge($vals, [$id]));
     } else {
         $id = Db::newId();
-        Db::exec('INSERT INTO campaign (id, route, name, description, showInsurance, presetKind, fromDate, toDate, storeMemo, stores, active, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)', array_merge([$id], $vals, [Time::nowJstDateTime()]));
+        Db::exec('INSERT INTO campaign (id, route, name, description, showInsurance, presetKind, fromDate, toDate, storeMemo, stores, code, trig, active, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)', array_merge([$id], $vals, [Time::nowJstDateTime()]));
     }
     Http::json(['ok' => true, 'id' => $id]);
 }
@@ -566,4 +582,23 @@ function hq_insurance_put(): never
     Settings::global();
     Db::exec('UPDATE global_setting SET insuranceTable = ? WHERE id = 1', [json_encode($rows, JSON_UNESCAPED_UNICODE)]);
     Http::json(['ok' => true, 'rows' => $rows]);
+}
+
+/** キャンペーン専用の URL の一覧（Excel）：店舗えらび用と店舗別 */
+function hq_campaigns_export(): never
+{
+    Auth::requireHq();
+    $names = array_column(Db::all('SELECT code, name FROM store WHERE active = 1 AND hqOnly = 0 AND jibaiOnly = 0'), 'name', 'code');
+    $rows = [];
+    foreach (Db::all("SELECT * FROM campaign WHERE code IS NOT NULL AND active = 1 ORDER BY createdAt ASC, id ASC") as $c) {
+        $rows[] = [$c['name'], $c['trig'], '（店舗えらび）', '', Campaign::url((string)$c['code'])];
+        $codes = Campaign::stores($c['stores'] ?? null) ?: array_keys($names);
+        foreach ($codes as $sc) if (isset($names[$sc])) $rows[] = [$c['name'], $c['trig'], $sc, $names[$sc], Campaign::url((string)$c['code'], $sc)];
+    }
+    $bytes = Xlsx::build('キャンペーンURL', 'キャンペーン別 WEB予約 URL　（出力 ' . Time::nowJst()['date'] . '）', ['キャンペーン', '入るきっかけ', '店舗コード', '店舗', 'URL'], $rows);
+    header('Cache-Control: no-store');
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header("Content-Disposition: attachment; filename=\"campaign_urls.xlsx\"; filename*=UTF-8''" . rawurlencode('キャンペーンURL_' . Time::nowJst()['date']) . '.xlsx');
+    echo $bytes;
+    exit;
 }

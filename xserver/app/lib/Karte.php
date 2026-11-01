@@ -123,7 +123,7 @@ final class Karte
         $dates = Time::datesOfMonth($ym);
         $first = $dates[0];
         $last = $dates[count($dates) - 1];
-        $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard, rf.name AS refName, rf.kind AS refKind, rf.trig AS refTrig FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId LEFT JOIN referral rf ON rf.code = r.refCode WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
+        $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard, r.campaign AS rCampaign, rf.name AS refName, rf.kind AS refKind, rf.trig AS refTrig FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId LEFT JOIN referral rf ON rf.code = r.refCode WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
         $want = [];
         $exists = [];
         foreach ($cells as $c) {
@@ -131,7 +131,7 @@ final class Karte
             $exists[$k] = true;
             if (!(int)$c['visited']) continue;
             $kind = self::kindOfText((string)$c['text']);
-            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1, 'ref' => (string)($c['refName'] ?? ''), 'refTrig' => ($c['refKind'] ?? '') === 'media' ? (string)$c['refTrig'] : '業者紹介'];
+            if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1, 'ref' => (string)($c['refName'] ?? ''), 'refTrig' => ($c['refKind'] ?? '') === 'media' ? (string)$c['refTrig'] : '業者紹介', 'camp' => Campaign::decode($c['rCampaign'] ?? null)];
         }
         $rows = Db::all('SELECT id, date, srcTime, srcBed, edited FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? AND auto = 1', [$store['id'], $first, $last]);
         $have = [];
@@ -147,6 +147,8 @@ final class Karte
             if (isset($have[$k])) continue;
             $newId = Db::newId();
             // きっかけ：紹介元（業者）の QR から → 業者紹介（内訳＝業者名）、媒体の URL から → 媒体に決めたきっかけ（内訳＝媒体名）、紹介カードの QR から → ギフトカード
+            // キャンペーン専用の URL から → キャンペーンに決めたきっかけ（内訳＝キャンペーン名）
+            if (($w['camp']['trig'] ?? '') !== '') { $w['ref'] = (string)($w['camp']['detail'] ?? ''); $w['refTrig'] = (string)$w['camp']['trig']; }
             $sur = self::surnameLenOf($w['name']) ?? self::surnameLenFromCards($store['id'], $w['name']);
             $added = Db::exec('INSERT IGNORE INTO karte (id, storeId, date, srcTime, srcBed, auto, kind, name, surnameLen, trig, trigDetail, symptomCat, staff, visits) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)', [
                 $newId, $store['id'], $w['date'], $w['time'], $w['bed'], $w['kind'], mb_substr(self::karteName($w['name']), 0, 40), $sur,

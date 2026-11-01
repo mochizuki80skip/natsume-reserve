@@ -3,18 +3,24 @@
 import { useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { formatDateJa } from '@/lib/time';
+import QRCode from 'qrcode';
 import CampaignBox from './CampaignBox';
+import { Qr } from './ReferralEditor';
+import { makeZip, safeFileName } from '@/lib/zip';
 
 interface Ins { label: string; amount: number }
-interface Route { route: string; label: string; group: 'card' | 'media' | 'partner' }
+interface Route { route: string; label: string; group: 'own' | 'card' | 'media' | 'partner' }
 interface StoreLite { code: string; name: string; area: string }
-interface Camp { id: string; route: string; name: string; description: string; showInsurance: boolean; presetKind: string; from: string; to: string; memo: string; stores: string[]; active: boolean; reservations: number }
-interface Resp { rows: Camp[]; routes: Route[]; insurance: Ins[]; stores: StoreLite[] }
+interface Camp { id: string; route: string; name: string; description: string; showInsurance: boolean; presetKind: string; from: string; to: string; memo: string; stores: string[]; active: boolean; reservations: number; code: string | null; trig: string }
+interface Resp { rows: Camp[]; routes: Route[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[] }
+
+/** キャンペーン専用の URL（店舗えらび用・店舗別） */
+const campUrl = (code: string, store?: string) => `${location.origin}${store ? `/s/${encodeURIComponent(store)}` : '/stores'}?c=${code}`;
 
 const KIND_OPTIONS: [string, string][] = [['', '選ばない（患者様が選ぶ）'], ['NEW', 'はじめて（ケガ・痛み・不調など）'], ['ACCIDENT', 'はじめて（交通事故）'], ['REVISIT', '再来（1ヶ月以上ぶり）'], ['RETURN', '現在通院中']];
 const KIND_SHORT: Record<string, string> = { '': '選ばない', NEW: 'はじめて（一般）', ACCIDENT: 'はじめて（交通事故）', REVISIT: '再来（1ヶ月以上ぶり）', RETURN: '現在通院中' };
-const GROUP_LABEL = { card: 'ギフトカード', media: '媒体の QR', partner: '紹介元（業者）の QR' };
-const EMPTY: Omit<Camp, 'id' | 'active' | 'reservations'> = { route: 'card', name: '', description: '', showInsurance: true, presetKind: 'NEW', from: '', to: '', memo: '', stores: [] };
+const GROUP_LABEL = { own: 'キャンペーン専用', card: 'ギフトカード', media: '媒体の QR', partner: '紹介元（業者）の QR' };
+const EMPTY = { route: 'own', name: '', description: '', showInsurance: true, presetKind: 'NEW', from: '', to: '', memo: '', stores: [] as string[], trig: '' };
 
 async function send(method: string, url: string, body: unknown): Promise<{ ok: boolean; j: { error?: string } }> {
   const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -80,15 +86,16 @@ function StoreChoice({ all, pick, onChange }: { all: StoreLite[]; pick: string[]
 }
 
 function CampaignForm({ init, data, onDone, onMsg }: { init: Camp | null; data: Resp; onDone: () => void; onMsg: (m: string) => void }) {
-  const [f, setF] = useState(init ? { route: init.route, name: init.name, description: init.description, showInsurance: init.showInsurance, presetKind: init.presetKind, from: init.from, to: init.to, memo: init.memo, stores: init.stores } : EMPTY);
-  const routeLabel = data.routes.find((r) => r.route === f.route)?.label ?? '';
+  const [f, setF] = useState(init ? { route: init.code ? 'own' : init.route, name: init.name, description: init.description, showInsurance: init.showInsurance, presetKind: init.presetKind, from: init.from, to: init.to, memo: init.memo, stores: init.stores, trig: init.trig } : EMPTY);
+  const own = f.route === 'own';
+  const routeLabel = own ? 'キャンペーン' : data.routes.find((r) => r.route === f.route)?.label.replace(/（紹介カード用の QR）$/, '') ?? '';
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const { ok, j } = await send('PUT', '/api/admin/hq/campaigns', { ...(init ? { id: init.id } : {}), ...f });
-    onMsg(ok ? `「${f.name.trim()}」を保存しました。${routeLabel} から開いた予約ページに出ます` : j.error ?? '保存できませんでした');
+    onMsg(ok ? `「${f.name.trim()}」を保存しました。${own ? '下の一覧に、このキャンペーンの URL・QR ができました' : `${routeLabel} から開いた予約ページに出ます`}` : j.error ?? '保存できませんでした');
     if (ok) onDone();
   }
-  const groups = (['card', 'media', 'partner'] as const).map((g) => [g, data.routes.filter((r) => r.group === g)] as const).filter(([, l]) => l.length);
+  const groups = (['own', 'card', 'media', 'partner'] as const).map((g) => [g, data.routes.filter((r) => r.group === g)] as const).filter(([, l]) => l.length);
   return (
     <form onSubmit={save} className="mt-3 rounded border border-brand p-3" aria-label={init ? 'キャンペーンを直す' : 'キャンペーンを追加'}>
       <h3 className="font-bold">{init ? 'キャンペーンを直す' : 'キャンペーンを追加'}</h3>
@@ -99,6 +106,15 @@ function CampaignForm({ init, data, onDone, onMsg }: { init: Camp | null; data: 
               {groups.map(([g, l]) => <optgroup key={g} label={GROUP_LABEL[g]}>{l.map((r) => <option key={r.route} value={r.route}>{r.label}</option>)}</optgroup>)}
             </select>
           </label>
+          {own && (
+            <label className="block">新患継続率に入るきっかけ（媒体）
+              <select value={f.trig} onChange={(e) => setF({ ...f, trig: e.target.value })} aria-label="入るきっかけ" className="ml-2 rounded border px-2 py-1">
+                <option value="">選ぶ</option>
+                {data.triggers.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <span className="block text-xs text-slate-500">この URL から予約した初診の方は、きっかけがここで選んだもの、内訳がキャンペーン名で入ります</span>
+            </label>
+          )}
           <label className="block">キャンペーン名<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={60} placeholder="例）初回 骨格・骨盤矯正 無料" aria-label="キャンペーン名" className="mt-0.5 w-full rounded border px-2 py-1" /></label>
           <label className="block">説明（患者様に出す）<textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={600} rows={3} placeholder={'例）初回の骨格・骨盤矯正が無料になります。\n※別途、保険の自己負担分がかかります。'} aria-label="説明" className="mt-0.5 w-full rounded border px-2 py-1" /></label>
           <label className="block"><input type="checkbox" checked={f.showInsurance} onChange={(e) => setF({ ...f, showInsurance: e.target.checked })} /> 保険のご負担の目安（共通の表）を出す</label>
@@ -116,7 +132,7 @@ function CampaignForm({ init, data, onDone, onMsg }: { init: Camp | null; data: 
           <div>使う店舗 <StoreChoice all={data.stores} pick={f.stores} onChange={(stores) => setF({ ...f, stores })} /></div>
           <label className="block">店舗向けメモ（会計の注意など。予約表にだけ出す）<textarea value={f.memo} onChange={(e) => setF({ ...f, memo: e.target.value })} maxLength={600} rows={2} placeholder="例）会計：矯正 0 円＋保険の自己負担。レセコンでは「ギフト」コードを入れる" aria-label="店舗向けメモ" className="mt-0.5 w-full rounded border px-2 py-1" /></label>
           <div className="flex gap-2">
-            <button type="submit" disabled={!f.name.trim()} className="rounded bg-brand px-4 py-1 font-bold text-white disabled:opacity-40">保存</button>
+            <button type="submit" disabled={!f.name.trim() || (own && !f.trig)} className="rounded bg-brand px-4 py-1 font-bold text-white disabled:opacity-40">保存</button>
             <button type="button" onClick={onDone} className="rounded border px-3 py-1">やめる</button>
           </div>
         </div>
@@ -129,11 +145,59 @@ function CampaignForm({ init, data, onDone, onMsg }: { init: Camp | null; data: 
   );
 }
 
+/** キャンペーン専用の URL・QR（店舗えらび用 1 本と、使う店舗ごと） */
+function CampaignUrls({ c, stores, onMsg }: { c: Camp; stores: StoreLite[]; onMsg: (m: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const list = (c.stores.length ? stores.filter((s) => c.stores.includes(s.code)) : stores);
+  const copy = (u: string) => navigator.clipboard.writeText(u).then(() => onMsg('URL をコピーしました')).catch(() => {});
+  async function zip() {
+    setBusy(true);
+    try {
+      const files: { name: string; data: Uint8Array }[] = [];
+      for (const [u, n] of [[campUrl(c.code!), '店舗えらび'], ...list.map((s) => [campUrl(c.code!, s.code), s.name])] as [string, string][]) {
+        const d = await QRCode.toDataURL(u, { width: 800, margin: 2, errorCorrectionLevel: 'M' });
+        files.push({ name: `QR_${safeFileName(c.name)}_${safeFileName(n)}.png`, data: new Uint8Array(await (await fetch(d)).arrayBuffer()) });
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([makeZip(files)], { type: 'application/zip' })); a.download = `キャンペーンQR_${safeFileName(c.name)}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      onMsg(`QR を ${files.length} 枚まとめて保存しました（zip）`);
+    } finally { setBusy(false); }
+  }
+  return (
+    <details className="mt-1 text-xs" open>
+      <summary className="cursor-pointer font-bold text-brand-dark" aria-label={`${c.name} の URL・QR`}>URL・QR（店舗えらび用＋店舗別 {list.length} 店）</summary>
+      <div className="mt-1 space-y-1 rounded border bg-slate-50 p-2" role="region" aria-label={`${c.name} の URL・QR の一覧`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <b className="w-28">店舗えらび用</b><code className="break-all">{campUrl(c.code!)}</code>
+          <button type="button" onClick={() => copy(campUrl(c.code!))} className="rounded border bg-white px-1.5">コピー</button>
+          <Qr url={campUrl(c.code!)} fileName={`QR_${safeFileName(c.name)}_店舗えらび`} alt={`${c.name}（店舗えらび用）の QR コード`} size={48} />
+        </div>
+        <div className="flex flex-wrap gap-2 py-1">
+          <button type="button" disabled={busy} onClick={zip} className="rounded bg-brand px-3 py-1 font-bold text-white disabled:opacity-40">{busy ? '作っています…' : 'QR をまとめて保存（zip）'}</button>
+          <a href="/api/admin/hq/campaigns/export" className="rounded border bg-white px-3 py-1 font-bold no-underline">URL の一覧を Excel で保存</a>
+        </div>
+        <table className="w-full">
+          <tbody>
+            {list.map((s) => (
+              <tr key={s.code} className="border-t align-middle">
+                <td className="w-28 whitespace-nowrap py-1 pr-2">{s.name}</td>
+                <td className="py-1 pr-2"><code className="break-all">{campUrl(c.code!, s.code)}</code> <button type="button" onClick={() => copy(campUrl(c.code!, s.code))} className="rounded border bg-white px-1.5">コピー</button></td>
+                <td className="py-1"><Qr url={campUrl(c.code!, s.code)} fileName={`QR_${safeFileName(c.name)}_${safeFileName(s.name)}`} alt={`${c.name}・${s.name} の QR コード`} size={48} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
 export default function CampaignEditor() {
   const { data, reload } = useFetch<Resp>('/api/admin/hq/campaigns');
   const [msg, setMsg] = useState('');
   const [edit, setEdit] = useState<Camp | 'new' | null>(null);
-  const routeLabel = (r: string) => data?.routes.find((x) => x.route === r)?.label ?? r;
+  const routeLabel = (r: string) => (r.startsWith('c:') ? 'キャンペーン専用の URL' : data?.routes.find((x) => x.route === r)?.label ?? r);
   const nameOf = new Map((data?.stores ?? []).map((s) => [s.code, s.name]));
   async function toggle(c: Camp) {
     const { ok } = await send('PUT', '/api/admin/hq/campaigns', { id: c.id, active: !c.active });
@@ -150,7 +214,7 @@ export default function CampaignEditor() {
     <section className="mt-6 rounded border bg-white p-4 text-sm" aria-label="経路別キャンペーン">
       <h2 className="font-bold">🎁 経路別キャンペーン（ギフトカード・媒体・紹介元の QR）</h2>
       <p className="mt-1 text-xs text-slate-600">
-        経路ごとに、予約ページに出すキャンペーンの内容と金額の目安を決めます。その経路の URL・QR から開いた予約ページの上に出て、決めた来院区分が選ばれた状態で始まります。
+        キャンペーンごとに、予約ページに出す内容と金額の目安を決めます。経路は「<b>このキャンペーン専用の URL・QR を作る</b>」（店舗えらび用 1 本と店舗別の URL・QR ができる。SNS 広告・チラシなど）、「ギフトカード（紹介カード用の QR）」、媒体・紹介元の QR から選びます。その URL・QR から開いた予約ページの上に出て、決めた来院区分が選ばれた状態で始まります。
         予約表では、その方のセルに <b className="rounded bg-orange-600 px-1 text-white">🎁特典</b> が付き、セルを選ぶと内容と店舗向けメモが出ます（予約したときの内容が残ります）。
       </p>
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}
@@ -162,7 +226,7 @@ export default function CampaignEditor() {
             {(data?.rows ?? []).map((c) => (
               <tr key={c.id} className={`border-t ${c.active ? '' : 'text-slate-400'}`} aria-label={`キャンペーン ${c.name}`}>
                 <td className="whitespace-nowrap pr-2">{routeLabel(c.route)}</td>
-                <td className="pr-2 font-bold">{c.name}{!c.active && '（止めている）'}{c.memo && <span className="block text-xs font-normal text-slate-500">店舗向け：{c.memo}</span>}</td>
+                <td className="pr-2 font-bold">{c.name}{!c.active && '（止めている）'}{c.memo && <span className="block text-xs font-normal text-slate-500">店舗向け：{c.memo}</span>}{c.code && <span className="block text-xs font-normal text-slate-500">新患継続率：{c.trig}（内訳：{c.name}）</span>}{c.code && c.active && <CampaignUrls c={c} stores={data?.stores ?? []} onMsg={setMsg} />}</td>
                 <td className="whitespace-nowrap pr-2 text-xs">{KIND_SHORT[c.presetKind] ?? ''}</td>
                 <td className="whitespace-nowrap pr-2 text-xs">{c.from || c.to ? `${c.from ? formatDateJa(c.from) : ''}〜${c.to ? formatDateJa(c.to) : ''}` : 'ずっと'}</td>
                 <td className="pr-2 text-xs" title={c.stores.map((s) => nameOf.get(s) ?? s).join('・')}>{c.stores.length ? `${c.stores.length} 店` : '全店'}</td>
