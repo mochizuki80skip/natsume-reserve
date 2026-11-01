@@ -1,4 +1,4 @@
-// Xserver（PHP）版：人員の過不足（全体・エリア別・氏名・院長・入社／退職／異動／休職）と、更新のお知らせの出し分け
+// Xserver（PHP）版：人員配置（全体・エリア別・氏名・院長・入社／退職／異動／休職）と、更新のお知らせの出し分け
 // 例：BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... CHROMIUM_PATH=... node e2e/staffing.mjs
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(new URL('../frontend/package.json', import.meta.url))('playwright');
@@ -42,7 +42,7 @@ const note = (n) => s1.people.therapist.concat(s1.people.reception).find((p) => 
 ok('退職・休職・入社の印', note('見本 退職') === 'end' && note('見本 休職') === 'leave' && note('見本 受付') === 'join', [note('見本 退職'), note('見本 休職'), note('見本 受付')].join('/'));
 ok('休職の期間中は数えない（いちばん少ない日：院長・二番の 2 人＋退職は 20 日まで）', s1.therapist.min === 2 && s1.therapist.start === 4, JSON.stringify(s1.therapist));
 
-await hq.goto(`${B}/admin/staffing?month=2026-11`); await hq.waitForSelector('table[aria-label="人員の過不足"]');
+await hq.goto(`${B}/admin/staffing?month=2026-11`); await hq.waitForSelector('table[aria-label="人員配置"]');
 ok('開いたときは全体', (await hq.getByRole('tab', { name: '全体' }).getAttribute('aria-selected')) === 'true');
 ok('全体：上にエリアごとのまとめ', await hq.getByLabel('静岡エリアのまとめ').isVisible() && await hq.getByLabel('東部エリアのまとめ').isVisible() && await hq.getByLabel('全体のまとめ').isVisible());
 ok('まとめに足りない店舗', (await hq.getByLabel('静岡エリアのまとめ').textContent()).includes('足りない店舗：サンプル本店'));
@@ -51,7 +51,7 @@ ok('氏名と院長・退職・休職の表示', nm.includes('見本 院長院�
 ok('受付の入社の表示', (await hq.getByLabel('サンプル本店 受付の氏名').textContent()).includes('11/10〜 入社'));
 await hq.screenshot({ path: O + 'staffing-all.png', fullPage: true });
 await hq.getByRole('tab', { name: 'エリア別' }).click(); await hq.waitForTimeout(300);
-const body = await hq.locator('table[aria-label="人員の過不足"] tbody').textContent();
+const body = await hq.locator('table[aria-label="人員配置"] tbody').textContent();
 ok('エリア別：エリアの小計の下に店舗', body.indexOf('静岡エリア 計') < body.indexOf('サンプル本店') && body.indexOf('東部エリア 計') < body.indexOf('サンプル駅前院'), body.slice(0, 120));
 await hq.screenshot({ path: O + 'staffing-area.png', fullPage: true });
 
@@ -62,6 +62,6 @@ const titles = async (p) => { await p.goto(`${B}/admin/updates`); await p.waitFo
 const tStore = await titles(st), tMg = await titles(await login('', 'mgpass123', 'mg1')), tAcct = await titles(await login('', 'keiripass1', 'keiri1'));
 ok('店舗には本部だけのお知らせは出ない', !tStore.includes('人員の過不足：全体・エリア別と氏名') && tStore.includes('スタッフに院長'));
 ok('管轄MG にはすべて出る', tMg.includes('人員の過不足：全体・エリア別と氏名') && tMg.includes('スタッフに院長'));
-ok('経理には経理に関係するものだけ', tAcct.includes('窓口集計（月間窓口表・物販内訳・返戻）') && !tAcct.includes('スタッフに院長') && !tAcct.includes('人員の過不足：全体'));
+ok('経理には経理に関係するものだけ', tAcct.includes('窓口集計（月間窓口表・物販内訳・返戻）') && !tAcct.includes('スタッフに院長') && !tAcct.includes('人員配置：全体'));
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();

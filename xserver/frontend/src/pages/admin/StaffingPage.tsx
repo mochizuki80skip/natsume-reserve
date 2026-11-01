@@ -1,4 +1,4 @@
-// 人員の過不足 /admin/staffing?month=YYYY-MM&view=all|area（本部・管轄MG＝全店）。人員基準（施術者・受付）と、その月の在籍人数・氏名を店舗ごとに。採用の判断に使う
+// 人員配置 /admin/staffing?month=YYYY-MM&view=all|area（本部・管轄MG＝全店）。人員基準（施術者・受付）と、その月の在籍人数・氏名を店舗ごとに。採用の判断に使う
 import { Fragment, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
@@ -129,7 +129,7 @@ export default function StaffingPage() {
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <h1 className="mr-1 text-lg font-bold">人員の過不足</h1>
+        <h1 className="mr-1 text-lg font-bold">人員配置</h1>
         <button type="button" onClick={() => go({ month: shiftYm(ym, -1) })} className="rounded border bg-white px-2 py-0.5 text-sm">‹ 前月</button>
         <b className="text-sm">{Number(ym.slice(0, 4))}年{Number(ym.slice(5))}月</b>
         <button type="button" onClick={() => go({ month: shiftYm(ym, 1) })} className="rounded border bg-white px-2 py-0.5 text-sm">翌月 ›</button>
@@ -147,7 +147,7 @@ export default function StaffingPage() {
         </div>
       )}
       <div className="overflow-x-auto rounded border bg-white">
-        <table className="w-full border-collapse text-sm" aria-label="人員の過不足">
+        <table className="w-full border-collapse text-sm" aria-label="人員配置">
           <thead className="bg-slate-300 text-[11px]">
             <tr><th rowSpan={2} className="border px-2 text-left">{view === 'area' ? 'エリア・店舗' : '店舗'}</th><th colSpan={3} className="border px-2">施術者</th><th colSpan={3} className="border px-2">受付</th><th rowSpan={2} className="border px-2 text-left">施術者の氏名</th><th rowSpan={2} className="border px-2 text-left">受付の氏名</th></tr>
             <tr>{[0, 1].map((i) => ['人員基準', '在籍（月初→月末）', '過不足'].map((h) => <th key={`${i}${h}`} className="border px-2">{h}</th>))}</tr>

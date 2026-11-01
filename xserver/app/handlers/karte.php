@@ -262,3 +262,61 @@ function karte_export(): never
     echo $bytes;
     exit;
 }
+
+// ---------- 新自・新三（全店）：本部・管轄MG（全店）が、事故日・事故内容を見るだけ ----------
+
+/** 本部・管轄MG だけ（管轄MG も全店を見る） */
+function accidents_auth(): void
+{
+    $s = Auth::requireSession();
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') throw new HttpError(403, 'forbidden');
+}
+
+/** その月の新自・新三と、前の月までの未入力（事故日・事故内容のどちらかが空） */
+function accidents_rows(string $ym): array
+{
+    $first = $ym . '-01';
+    $last = date('Y-m-t', strtotime($first . ' 00:00:00 UTC'));
+    $stores = [];
+    foreach (Settings::storesInOrder('active = 1 AND hqOnly = 0 AND jibaiOnly = 0', [], false) as $s) $stores[$s['id']] = $s;
+    $areaOf = [];
+    foreach (Db::all('SELECT name, storeCodes FROM area ORDER BY sortOrder ASC, name ASC') as $a) foreach (array_filter(explode(',', (string)$a['storeCodes'])) as $c) $areaOf[$c] ??= $a['name'];
+    $out = [];
+    foreach (Db::all("SELECT * FROM karte WHERE kind IN ('ACCIDENT', 'THIRD') AND (date BETWEEN ? AND ? OR (date < ? AND (accidentDate IS NULL OR accidentNote = ''))) ORDER BY date ASC, srcTime ASC", [$first, $last, $first]) as $k) {
+        $s = $stores[$k['storeId']] ?? null;
+        if (!$s) continue;
+        $out[] = [
+            'id' => $k['id'], 'store' => $s['code'], 'storeName' => $s['name'], 'area' => $areaOf[$s['code']] ?? '',
+            'date' => $k['date'], 'kind' => $k['kind'], 'karteNo' => (string)$k['karteNo'], 'name' => (string)$k['name'],
+            'trig' => (string)$k['trig'], 'trigDetail' => (string)$k['trigDetail'], 'staff' => (string)$k['staff'],
+            'accidentDate' => $k['accidentDate'], 'accidentNote' => (string)($k['accidentNote'] ?? ''),
+            'missing' => $k['accidentDate'] === null || trim((string)$k['accidentNote']) === '', 'earlier' => $k['date'] < $first,
+        ];
+    }
+    return [$out, array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'area' => $areaOf[$s['code']] ?? ''], array_values($stores))];
+}
+
+function hq_accidents(): never
+{
+    accidents_auth();
+    $ym = Http::query('month', substr(Time::nowJst()['date'], 0, 7));
+    if (!Time::isValidMonth($ym)) Http::error('bad month', 400);
+    [$rows, $stores] = accidents_rows($ym);
+    $areas = array_map(fn($a) => $a['name'], Db::all('SELECT name FROM area ORDER BY sortOrder ASC, name ASC'));
+    Http::json(['month' => $ym, 'rows' => $rows, 'stores' => $stores, 'areas' => $areas]);
+}
+
+function hq_accidents_export(): never
+{
+    accidents_auth();
+    $ym = Http::query('month', substr(Time::nowJst()['date'], 0, 7));
+    if (!Time::isValidMonth($ym)) Http::error('bad month', 400);
+    [$rows] = accidents_rows($ym);
+    $list = array_map(fn($r) => [$r['area'], $r['storeName'], $r['date'], $r['kind'] === 'THIRD' ? '新三' : '新自', $r['karteNo'], $r['name'], $r['trig'] . ($r['trigDetail'] !== '' ? "（{$r['trigDetail']}）" : ''), $r['accidentDate'] ?? '', $r['accidentNote'], $r['staff'], $r['missing'] ? '未入力あり' : ''], $rows);
+    $bytes = Xlsx::build('新自・新三', '新自・新三（全店）' . $ym . '　（出力 ' . Time::nowJst()['date'] . '。前の月までの未入力も含む）', ['エリア', '店舗', '初診日', '区分', 'カルテNo', '氏名', 'きっかけ', '事故日', '事故内容', '担当', '未入力'], $list);
+    header('Cache-Control: no-store');
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header("Content-Disposition: attachment; filename=\"accidents.xlsx\"; filename*=UTF-8''" . rawurlencode('新自新三_' . $ym) . '.xlsx');
+    echo $bytes;
+    exit;
+}

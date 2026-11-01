@@ -20,6 +20,7 @@ import HqPage from './pages/admin/HqPage';
 import OverviewPage from './pages/admin/OverviewPage';
 import JibaiPage from './pages/admin/JibaiPage';
 import JibaiHqPage from './pages/admin/JibaiHqPage';
+import AccidentsHqPage from './pages/admin/AccidentsHqPage';
 import StoryPage from './pages/admin/StoryPage';
 import KartePage from './pages/admin/KartePage';
 import KarteHqPage from './pages/admin/KarteHqPage';
@@ -77,6 +78,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="hq" element={<HqPage />} />
           <Route path="hq/overview" element={<OverviewPage />} />
           <Route path="hq/jibai" element={<JibaiHqPage />} />
+          <Route path="hq/accidents" element={<AccidentsHqPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

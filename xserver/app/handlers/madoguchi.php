@@ -329,7 +329,7 @@ function hq_goods_put(): never
     Http::json(['ok' => true]);
 }
 
-// ---------- 人員の過不足（本部・管轄MG）：人員基準と、その月の在籍人数（施術者・受付）を店舗ごとに ----------
+// ---------- 人員配置（本部・管轄MG）：人員基準と、その月の在籍人数（施術者・受付）を店舗ごとに ----------
 function staffing_get(): never
 {
     $s = Auth::requireSession();

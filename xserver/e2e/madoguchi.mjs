@@ -160,17 +160,17 @@ const mv = await api(mg, 'PUT', '/api/admin/staff-members', { id: st.id, endDate
 ok('管轄MG：スタッフの追加・初回／再来の担当・異動', st && up[0] === 200 && mv[0] === 200, JSON.stringify([up, mv]).slice(0, 200));
 const nav2 = await mg.getByRole('navigation').textContent();
 ok('管轄MG のメニュー', nav2.includes('予約表') && nav2.includes('MG（見本エリア）') && !nav2.includes('本部メニュー'), nav2);
-// ---- 人員の過不足（本部・管轄MG）
+// ---- 人員配置（本部・管轄MG）
 ok('管轄MG：人員基準を入れる', (await api(mg, 'PUT', '/api/admin/staffing/std', { store: 'S002', therapists: 2, reception: 0 }))[0] === 200);
 ok('管轄MG：管轄外の人員基準は入れられない', (await api(mg, 'PUT', '/api/admin/staffing/std', { store: 'S001', therapists: 2 }))[0] === 403);
 const sf = (await api(mg, 'GET', '/api/admin/staffing?month=2026-11'))[1];
 const s2 = sf.rows.find((r) => r.code === 'S002');
-ok('人員の過不足：全店・在籍と基準（直せるのは管轄の店舗だけ）', sf.rows.length === 2 && s2.canEdit && !sf.rows.find((r) => r.code === 'S001').canEdit && s2.therapist.std === 2 && s2.therapist.min === 1 && s2.reception.std === 0, JSON.stringify(s2));
+ok('人員配置：全店・在籍と基準（直せるのは管轄の店舗だけ）', sf.rows.length === 2 && s2.canEdit && !sf.rows.find((r) => r.code === 'S001').canEdit && s2.therapist.std === 2 && s2.therapist.min === 1 && s2.reception.std === 0, JSON.stringify(s2));
 ok('この月の入れ替わり（11/30 に終了）', s2.changes.some((c) => c.name === '見本 異動' && !c.in && c.date === '2026-11-30'));
 ok('店舗アカウントは見られない', (await api(sp, 'GET', '/api/admin/staffing'))[0] === 403);
 ok('本部は全店', (await api(hq, 'GET', '/api/admin/staffing?month=2026-11'))[1].rows.length === 2);
-await mg.goto(`${B}/admin/staffing?month=2026-11`); await mg.waitForSelector('table[aria-label="人員の過不足"]');
-ok('画面：足りない店舗は赤', (await mg.locator('table[aria-label="人員の過不足"] td.bg-red-500').count()) === 1 && (await mg.textContent('main')).includes('-1 人'));
+await mg.goto(`${B}/admin/staffing?month=2026-11`); await mg.waitForSelector('table[aria-label="人員配置"]');
+ok('画面：足りない店舗は赤', (await mg.locator('table[aria-label="人員配置"] td.bg-red-500').count()) === 1 && (await mg.textContent('main')).includes('-1 人'));
 await mg.screenshot({ path: O + 'staffing.png' });
 // 本部でアカウントを止めると、すぐ使えなくなる
 const accs = (await api(hq, 'GET', '/api/admin/hq/accounts'))[1].accounts;

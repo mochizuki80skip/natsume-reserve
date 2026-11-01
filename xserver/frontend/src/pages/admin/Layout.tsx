@@ -122,7 +122,8 @@ export default function AdminLayout() {
                   <Link to="/admin/hq/overview">全店状況</Link>
                   <Link to="/admin/acct">窓口集計・売上（全店）</Link>
                   <Link to="/admin/hq/jibai">自賠集計</Link>
-                  <Link to="/admin/staffing">人員の過不足</Link>
+                  <Link to="/admin/hq/accidents">新自・新三（全店）</Link>
+                  <Link to="/admin/staffing">人員配置</Link>
                 </DropMenu>
               )}
             </>)}
@@ -131,8 +132,9 @@ export default function AdminLayout() {
                 <Link to="/admin/hq/overview">全店状況</Link>
                 <Link to="/admin/hq/karte">新患・再来集計（全店）</Link>
                 <Link to="/admin/hq/jibai">自賠集計</Link>
+                <Link to="/admin/hq/accidents">新自・新三（全店）</Link>
                 <Link to="/admin/acct">窓口集計（全店）</Link>
-                <Link to="/admin/staffing">人員の過不足</Link>
+                <Link to="/admin/staffing">人員配置</Link>
                 <Link to="/admin/hq">本部（店舗・設定）</Link>
                 <Link to="/admin/hq/accounts">アカウント</Link>
               </DropMenu>
