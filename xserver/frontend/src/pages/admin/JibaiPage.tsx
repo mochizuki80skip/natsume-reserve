@@ -1,5 +1,6 @@
 // 店舗：自賠責請求の速報登録（スクショをブラウザ内で読み取り → 確認・修正 → 提出）。本部は店舗切替で同じ画面から経理確認を行う
 import { useCallback, useEffect, useRef, useState } from 'react';
+import JibaiFlow from '@/components/JibaiFlow';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, formatYmWithEra, LOG_ACTION_JA, ymOptions, yen, type JibaiClaim, type JibaiLog, type JibaiMonth } from '@/lib/jibai';
@@ -237,6 +238,7 @@ export default function JibaiPage() {
         <button type="button" onClick={() => go(data.currentYm)} className="rounded border bg-white px-3 py-1">今月</button>
         <span className="ml-auto text-slate-600">{data.store.name}</span>
       </div>
+      <JibaiFlow />
 
       <div className="flex flex-wrap items-center gap-3 rounded border bg-white px-4 py-3">
         <div><span className="text-xs text-slate-500">対象月</span><div className="text-lg font-bold">{formatYm(ym)}</div></div>
@@ -294,7 +296,7 @@ export default function JibaiPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" onClick={() => fileInput.current?.click()} className="rounded bg-brand px-4 py-1.5 font-bold text-white">スクショを選ぶ</button>
             <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp" multiple className="hidden" onChange={(e) => { addFiles(Array.from(e.target.files ?? []).map((f) => ({ file: f, name: f.name }))); e.target.value = ''; }} />
-            <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、ここにドラッグ＆ドロップするか、「スクショを選ぶ」で選んでください。複数枚まとめて可。</span>
+            <span className="text-slate-600">レセコンの請求書画面（印刷前のプレビュー）を患者様 1 人につき 1 枚、<b>この画面で Ctrl＋V（貼り付け）</b>するか、ここにドラッグ＆ドロップ、または「スクショを選ぶ」で選んでください。複数枚まとめて可。</span>
           </div>
           <JibaiSizeGuide />
           {(progress || queueLeft > 0) && <OcrProgressBar message={progress ?? '読み取り待ち…'} pct={pct} total={batchView.total} done={batchView.done} msPer={batchView.msPer} queueLeft={queueLeft} />}

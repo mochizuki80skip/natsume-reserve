@@ -5,6 +5,10 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 107, date: '2026-10-31', title: '自賠請求の手順をフローで表示', audience: ['店舗', '本部'],
+    items: ['自賠請求の画面のいちばん上に、レセコン（THE 柔 PLUS）でスクショを撮る手順（1〜6）と、このシステムで貼り付け・確認・保存・提出する手順（7〜10）をフローで出しました。締め切り（毎月 5 日まで。基本は月末の作業のときに提出）も出ています。慣れたら「閉じる」で小さくでき、このパソコンで覚えます。「使い方」の自賠請求にも同じ手順を載せました。'],
+  },
+  {
     id: 106, date: '2026-10-31', title: 'キャンペーンごとの URL・QR', audience: ['本部'],
     items: [
       '経路別キャンペーンの「経路」に「このキャンペーン専用の URL・QR を作る」を足しました。保存すると、店舗えらび用の URL・QR 1 本と、使う店舗ごとの URL・QR ができます（QR は zip、URL の一覧は Excel でまとめて保存できます）。SNS 広告やチラシなど、キャンペーンごとに URL を分けて使えます。',
