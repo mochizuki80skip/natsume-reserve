@@ -86,6 +86,10 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   const anchor = useRef<{ r: number; c: number } | null>(null);
   const [range, setRange] = useState<{ r0: number; c0: number; r1: number; c1: number } | null>(null);
   const extending = useRef(false);
+  // Ctrl＋クリックで足した、離れたセル（ブロック・担当をまとめて付ける）
+  const [picks, setPicks] = useState<Set<string>>(new Set());
+  const [blkLabel, setBlkLabel] = useState('');
+  const [blkMsg, setBlkMsg] = useState('');
   // 日付の操作の帯（前日・日付・翌日・本日）は上のメニュー（--admin-head-h）のすぐ下に固定。その高さぶん、メニューの帯をすぐ下に固定する
   const navRef = useRef<HTMLDivElement>(null);
   const [navH, setNavH] = useState(0);
@@ -323,7 +327,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
       focusCell(nr, nc);
       return;
     }
-    if (e.key === 'Escape') { setRange(null); setNumHint(null); return; }
+    if (e.key === 'Escape') { setRange(null); setPicks(new Set()); setNumHint(null); return; }
     // 数字だけのときの Enter：診察券番号として氏名に置き換える
     // 日本語入力で変換を確定する Enter（入力中の文字に下線がある間）は、確定だけにして次の Enter で置き換える
     if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229 && isCardNo(e.currentTarget.value)) { e.preventDefault(); void applyCardNo(rows[r], cols[c], r, c, halfDigits(e.currentTarget.value)); return; }
@@ -550,9 +554,45 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   function targetCells(): { time: number; bed: number }[] {
     const out: { time: number; bed: number }[] = [];
     const add = (r: number, c: number) => { const t = rows[r], b = cols[c]; const v = cells.get(key(t, b)) ?? ''; if (v.trim() && !isContinuationText(v)) out.push({ time: t, bed: b }); };
-    if (range && rangeSize(range) > 1) { for (let r = range.r0; r <= range.r1; r++) for (let c = range.c0; c <= range.c1; c++) add(r, c); }
+    if (picks.size) { for (const k of picks) { const [t, b] = k.split(':').map(Number); add(rows.indexOf(t), cols.indexOf(b)); } }
+    else if (range && rangeSize(range) > 1) { for (let r = range.r0; r <= range.r1; r++) for (let c = range.c0; c <= range.c1; c++) add(r, c); }
     else if (sel) add(rows.indexOf(sel.time), cols.indexOf(sel.bed));
     return out;
+  }
+  // 選んでいる枠（Ctrl＋クリックで足した枠、または範囲、または 1 つ）
+  function selectedSlots(): { time: number; bed: number }[] {
+    if (picks.size) return [...picks].map((k) => { const [time, bed] = k.split(':').map(Number); return { time, bed }; });
+    if (range && rangeSize(range) > 1) { const o = []; for (let r = range.r0; r <= range.r1; r++) for (let c = range.c0; c <= range.c1; c++) o.push({ time: rows[r], bed: cols[c] }); return o; }
+    return sel ? [sel] : [];
+  }
+  const isBlocked = (t: number, b: number) => (data.blocks ?? []).some((x) => t >= x.start && t < x.end && x.beds.includes(b));
+  // 選んだ枠をブロックする・外す（予約の入っている枠・もうブロックしてある枠は飛ばす）
+  async function blockSelected(action: 'block' | 'unblock') {
+    const list = selectedSlots().filter((c) => !(cells.get(key(c.time, c.bed)) ?? '').trim() && (action === 'block' ? !isBlocked(c.time, c.bed) : isBlocked(c.time, c.bed)));
+    if (!list.length) return;
+    await flush();
+    const r = await fetch('/api/admin/blocks/cells', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: list, action, label: blkLabel }) });
+    const j = await r.json().catch(() => ({})) as { count?: number; error?: string };
+    setBlkMsg(r.ok ? (action === 'block' ? `🔒 ${j.count ?? list.length} 枠をブロックしました` : `${j.count ?? list.length} 枠のブロックを外しました`) : j.error ?? 'できませんでした');
+    setTimeout(() => setBlkMsg(''), 4000);
+    if (r.ok) { setPicks(new Set()); setRange(null); setBlkLabel(''); }
+    onRefresh();
+  }
+  // Excel のオートフィルのように、右下の ■ をドラッグして選んだ範囲を広げる
+  function startFill(e: React.MouseEvent, r: number, c: number) {
+    e.preventDefault(); e.stopPropagation();
+    const base = range ?? { r0: r, c0: c, r1: r, c1: c };
+    anchor.current = { r: base.r0, c: base.c0 };
+    const move = (ev: MouseEvent) => {
+      const td = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest('td[data-cell]') as HTMLElement | null;
+      if (!td) return;
+      const [t, b] = (td.dataset.cell ?? '').split(':').map(Number);
+      const nr = rows.indexOf(t), nc = cols.indexOf(b);
+      if (nr < 0 || nc < 0) return;
+      setRange({ r0: Math.min(base.r0, nr), c0: Math.min(base.c0, nc), r1: Math.max(base.r1, nr), c1: Math.max(base.c1, nc) });
+    };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
   }
   async function setStaffFor(name: string) {
     const list = targetCells();
@@ -885,7 +925,21 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
           const ok = !!sel && sText.trim() !== '' && !isContinuationText(sText);
           const cur = ok ? menus.get(sk) ?? [] : [];
           const tag = ok ? kindTagOf(sText) : null;
-          const multi = !!range && rangeSize(range) > 1;
+          const multi = (!!range && rangeSize(range) > 1) || picks.size > 1;
+          // 選んだ枠のブロック（空いた枠をブロック／ブロックしてある枠を外す）
+          const slots = selectedSlots().filter((x) => !(cells.get(key(x.time, x.bed)) ?? '').trim());
+          const canBlock = slots.filter((x) => !isBlocked(x.time, x.bed)).length;
+          const canUnblock = slots.filter((x) => isBlocked(x.time, x.bed)).length;
+          const blockCtl = (canBlock > 0 || canUnblock > 0 || blkMsg) && (
+            <span className="inline-flex flex-wrap items-center gap-1" role="group" aria-label="選んだ枠のブロック">
+              {canBlock > 0 && <>
+                <input value={blkLabel} onChange={(e) => setBlkLabel(e.target.value)} maxLength={30} placeholder="理由（任意）例：打合せ" aria-label="ブロックの理由" className="w-36 rounded border px-1.5 py-0.5 text-xs" />
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void blockSelected('block')} className="rounded bg-slate-700 px-2 py-0.5 text-xs font-bold text-white">🔒 {canBlock} 枠をブロック</button>
+              </>}
+              {canUnblock > 0 && <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => void blockSelected('unblock')} className="rounded border-2 border-slate-500 bg-white px-2 py-0.5 text-xs font-bold text-slate-700">ブロックを外す（{canUnblock} 枠）</button>}
+              {blkMsg && <span className="text-xs font-bold text-slate-700" role="status">{blkMsg}</span>}
+            </span>
+          );
           const curStaff = ok && !multi ? staffMap.get(sk) ?? '' : '';
           // 担当は 2 行目に分けて出す
           // 段は選んでいなくても出しておく（セルを押したときに予約表が下にずれないように）
@@ -909,7 +963,8 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setSel(null); setRange(null); }} className="order-last ml-auto rounded border px-2 py-0.5 text-xs sm:hidden">✕ 閉じる</button>
               {multi ? (
                 <>
-                  <span className="mr-1 text-xs text-slate-600"><b className="text-slate-800">{targetCells().length} 件</b>選択中（下の担当を押すと、まとめて付けられます）</span>
+                  <span className="mr-1 text-xs text-slate-600"><b className="text-slate-800">{selectedSlots().length} 枠</b>選択中{targetCells().length > 0 && <>（名前の入った {targetCells().length} 件は、下の担当を押すとまとめて付けられます）</>}</span>
+                  {blockCtl}
                 </>
               ) : ok ? (
                 <>
@@ -936,6 +991,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                     <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => setPhoneDlg({ time: sel.time, bed: sel.bed })}
                       className="rounded border-2 border-brand bg-white px-2 py-0.5 text-xs font-bold text-brand-dark hover:bg-brand-light">📞 {minToHm(sel.time)} ベッド{sel.bed} に電話予約を入れる</button>
                   )}
+                  {sel && !multi && !sText.trim() && blockCtl}
                   <span className="text-xs text-slate-500">名前の入ったセルをクリックすると、ここで新患・再来・新自・新三・メニュー・物販・担当を付けられます{sel && !sText.trim() ? '。空いたセルでは電話予約（氏名・電話番号）を入れられます' : ''}</span>
                 </>
               )}
@@ -1022,7 +1078,9 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                       const staffName = hasName ? staffMap.get(k) ?? '' : '';
                       const needCheck = hasName && !staffName && staffCheck.has(k);
                       const isSel = !!sel && sel.time === t && sel.bed === b && hasName;
-                      const ranged = inRange(r, c);
+                      const ranged = inRange(r, c) || picks.has(k);
+                      // 右下の ■（オートフィルのように広げる）：範囲の右下、または 1 つだけ選んだセル
+                      const fillHere = picks.size === 0 && (range && rangeSize(range) > 1 ? r === range.r1 && c === range.c1 : !!sel && sel.time === t && sel.bed === b);
                       return (
                         <td key={b} data-cell={k} className={`grid-cell border p-0 ${dragFrom === k ? 'opacity-40' : ''} ${dragOver === k && dragFrom && dragOver !== dragFrom ? (text.trim() && !(dragFrom && isOwnTwo(dragFrom, k)) ? 'outline-dashed outline-2 -outline-offset-2 outline-red-500' : 'outline-dashed outline-2 -outline-offset-2 outline-sky-600 !bg-sky-100') : ''} ${ranged ? 'bg-indigo-100' : bg} ${color?.dark && !ranged ? 'dark-cell' : ''} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''} ${st === 'visited' ? 'shadow-[inset_4px_0_0_#15803d]' : ''}`}
                           style={color && !ranged ? { background: color.bg } : undefined}
@@ -1051,6 +1109,22 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                               onDragStart={(e) => e.preventDefault()}
                               onDrop={(e) => e.preventDefault()}
                               onMouseDown={(e) => {
+                                // Ctrl＋クリック：離れたセルを 1 つずつ足す（もう一度押すと外す）
+                                if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+                                  e.preventDefault();
+                                  setPicks((prev) => {
+                                    const n = new Set(prev);
+                                    if (n.size === 0) {
+                                      if (range && rangeSize(range) > 1) { for (let rr = range.r0; rr <= range.r1; rr++) for (let cc = range.c0; cc <= range.c1; cc++) n.add(key(rows[rr], cols[cc])); }
+                                      else if (sel) n.add(key(sel.time, sel.bed));
+                                    }
+                                    if (n.has(k)) n.delete(k); else n.add(k);
+                                    return n;
+                                  });
+                                  setRange(null);
+                                  if (!sel) setSel({ time: t, bed: b });
+                                  return;
+                                }
                                 // Shift＋クリック：最初に押したセルからここまでをまとめて選ぶ
                                 if (e.shiftKey && anchor.current) {
                                   e.preventDefault();
@@ -1076,12 +1150,14 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                                 e.currentTarget.select(); justFocused.current = true; setSel({ time: t, bed: b });
                                 focusSnap.current = { k, val: e.currentTarget.value };
                                 setEditingKey(k);
-                                if (extending.current) extending.current = false; else { anchor.current = { r, c }; setRange(null); }
+                                if (extending.current) extending.current = false; else { anchor.current = { r, c }; setRange(null); if (picks.size) setPicks(new Set()); }
                               }}
                               onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}
                               placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
                               className={`min-w-0 flex-1 ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
+                            {fillHere && <span aria-label="選んだ範囲を広げる" title="ドラッグすると、選ぶ範囲を広げられます（Excel のオートフィルと同じ）" onMouseDown={(e) => startFill(e, r, c)}
+                              className="no-print absolute -bottom-[4px] -right-[4px] z-[4] h-[8px] w-[8px] cursor-crosshair border border-white bg-brand max-sm:hidden" />}
                             {/* スマホ：入力欄は 1 行で切れるので、氏名は 2 行に折り返して見せる（入力中は消える）。（再）（初診）などの印はセルの色で分かるので外す */}
                             {text && <span aria-hidden className={`cell-label ${hasName ? 'with-check' : ''}`}>{hasName ? text.replace(/[（(][^（()）]*[）)]\s*$/, '') || text : text}</span>}
                             {hasName && st === 'pending' && <span className="no-print pointer-events-none flex-none rounded bg-yellow-600 max-sm:hidden px-1 text-[10px] leading-4 text-white">未チェック</span>}

@@ -60,6 +60,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/help-in$#', 'adm_help_in_put'],
         ['POST', '#^/api/admin/move$#', 'adm_move_post'],
         ['POST', '#^/api/admin/blocks$#', 'adm_block_post'],
+        ['POST', '#^/api/admin/blocks/cells$#', 'adm_block_cells_post'],
         ['GET', '#^/api/admin/karte$#', 'karte_get'],
         ['GET', '#^/api/admin/karte/export$#', 'karte_export'],
         ['POST', '#^/api/admin/karte$#', 'karte_post'],

@@ -729,6 +729,79 @@ function adm_block_post(): never
     Http::json(['ok' => true]);
 }
 
+/**
+ * 予約表で選んだ枠（{ date, cells: [{time, bed}], action: 'block'|'unblock', label? }）をブロックする・外す。
+ * ブロック：予約の入っている枠・もうブロックしてある枠は飛ばす。ベッドごとに続いた時間をまとめ、同じ時間のベッドは 1 つのブロックにする。
+ * 外す：選んだ枠だけを外す（ほかの枠のブロックは理由ごと残す）
+ */
+function adm_block_cells_post(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $date = Http::date($b, 'date');
+    $action = ($b['action'] ?? '') === 'unblock' ? 'unblock' : 'block';
+    $label = mb_substr(trim((string)($b['label'] ?? '')), 0, 30);
+    $list = $b['cells'] ?? null;
+    if (!is_array($list) || !$list || count($list) > 2000) Http::error('枠を選んでください', 400);
+    $sid = $ctx['store']['id'];
+    $slot = (int)Settings::global()['slotMinutes'];
+    $all = Settings::allBeds($ctx['store']);
+    $want = [];
+    foreach ($list as $c) {
+        $t = (int)($c['time'] ?? -1); $bd = (int)($c['bed'] ?? 0);
+        if ($t < 0 || $t >= 24 * 60 || !in_array($bd, $all, true)) Http::error('枠が正しくありません', 400);
+        $want["$t:$bd"] = [$t, $bd];
+    }
+    $blocks = Db::all('SELECT * FROM slot_block WHERE storeId = ? AND date = ?', [$sid, $date]);
+    $cellsOf = function (array $blk) use ($slot, $all): array {
+        $out = [];
+        foreach (PublicApi::blockBeds((string)$blk['beds'], $all) as $bd) for ($t = (int)$blk['startTime']; $t < (int)$blk['endTime']; $t += $slot) $out["$t:$bd"] = [$t, $bd];
+        return $out;
+    };
+    /** 枠の集まりを、ベッドごとの続いた時間 → 同じ時間のベッドをまとめたブロックにする */
+    $toBlocks = function (array $cells) use ($slot): array {
+        $byBed = [];
+        foreach ($cells as [$t, $bd]) $byBed[$bd][] = $t;
+        $runs = [];
+        foreach ($byBed as $bd => $ts) {
+            sort($ts);
+            $st = $ts[0]; $prev = $ts[0];
+            foreach (array_slice($ts, 1) as $t) {
+                if ($t === $prev + $slot) { $prev = $t; continue; }
+                $runs["$st-" . ($prev + $slot)][] = $bd; $st = $t; $prev = $t;
+            }
+            $runs["$st-" . ($prev + $slot)][] = $bd;
+        }
+        $out = [];
+        foreach ($runs as $k => $beds) { [$a, $z] = array_map('intval', explode('-', $k)); sort($beds); $out[] = [$a, $z, $beds]; }
+        return $out;
+    };
+    $n = 0; $skipped = 0;
+    Db::transaction(function () use ($action, $want, $blocks, $cellsOf, $toBlocks, $sid, $date, $label, &$n, &$skipped) {
+        if ($action === 'block') {
+            $blocked = [];
+            foreach ($blocks as $blk) $blocked += $cellsOf($blk);
+            $taken = [];
+            foreach (Db::all("SELECT time, bed FROM cell WHERE storeId = ? AND date = ? AND bed > 0 AND TRIM(text) <> ''", [$sid, $date]) as $c) $taken[(int)$c['time'] . ':' . (int)$c['bed']] = true;
+            $add = [];
+            foreach ($want as $k => $c) { if (isset($taken[$k]) || isset($blocked[$k])) { $skipped++; continue; } $add[$k] = $c; }
+            foreach ($toBlocks($add) as [$a, $z, $beds]) Db::exec('INSERT INTO slot_block (id, storeId, date, startTime, endTime, count, beds, label) VALUES (?, ?, ?, ?, ?, 0, ?, ?)', [Db::newId(), $sid, $date, $a, $z, implode(',', $beds), $label]);
+            $n = count($add);
+        } else {
+            foreach ($blocks as $blk) {
+                $have = $cellsOf($blk);
+                $left = array_diff_key($have, $want);
+                if (count($left) === count($have)) continue;
+                $n += count($have) - count($left);
+                Db::exec('DELETE FROM slot_block WHERE id = ?', [$blk['id']]);
+                foreach ($toBlocks($left) as [$a, $z, $beds]) Db::exec('INSERT INTO slot_block (id, storeId, date, startTime, endTime, count, beds, label) VALUES (?, ?, ?, ?, ?, 0, ?, ?)', [Db::newId(), $sid, $date, $a, $z, implode(',', $beds), (string)$blk['label']]);
+            }
+        }
+    });
+    Http::json(['ok' => true, 'count' => $n, 'skipped' => $skipped]);
+}
+
 /** ブロックの提案（今日から 14 日先まで。?date= ならその日だけ）。予約表が変わるたびに画面が呼び、新しい提案はお知らせする */
 function adm_block_suggest_get(): never
 {
