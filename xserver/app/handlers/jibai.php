@@ -183,6 +183,9 @@ function hq_jibai(): never
     foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, SUM(CASE WHEN verifiedAmount IS NULL THEN 0 ELSE 1 END) AS vn, COALESCE(SUM(verifiedAmount), 0) AS vtotal, SUM(CASE WHEN source = ? THEN 1 ELSE 0 END) AS ocr, SUM(CASE WHEN ym <> ? THEN 1 ELSE 0 END) AS late, COALESCE(SUM(CASE WHEN ym <> ? THEN amount ELSE 0 END), 0) AS lateTotal FROM jibai_claim WHERE COALESCE(invoiceYm, ym) = ? GROUP BY storeId', ['OCR', $ym, $ym, $ym]) as $r) {
         $agg[$r['storeId']] = $r;
     }
+    // この月に出した明細（この月の画面で登録した分）：合計と、うち月遅れ（請求月が前の月）
+    $sent = [];
+    foreach (Db::all('SELECT storeId, COUNT(*) AS n, COALESCE(SUM(amount), 0) AS total, SUM(CASE WHEN invoiceYm IS NOT NULL AND invoiceYm < ym THEN 1 ELSE 0 END) AS ln, COALESCE(SUM(CASE WHEN invoiceYm IS NOT NULL AND invoiceYm < ym THEN amount ELSE 0 END), 0) AS lt FROM jibai_claim WHERE ym = ? GROUP BY storeId', [$ym]) as $r) $sent[$r['storeId']] = $r;
     // この月の画面で登録したが、別の月分として集計される明細（件数）
     $out = [];
     foreach (Db::all('SELECT storeId, COUNT(*) AS n FROM jibai_claim WHERE ym = ? AND invoiceYm IS NOT NULL AND invoiceYm <> ym GROUP BY storeId', [$ym]) as $r) $out[$r['storeId']] = (int)$r['n'];
@@ -206,7 +209,10 @@ function hq_jibai(): never
             'movedOut' => $out[$s['id']] ?? 0,
             'verifiedCount' => $a ? (int)$a['vn'] : 0,
             'verifiedTotal' => $a ? (int)$a['vtotal'] : 0,
+            'sentCount' => (int)($sent[$s['id']]['n'] ?? 0), 'sentTotal' => (int)($sent[$s['id']]['total'] ?? 0),
+            'sentLateCount' => (int)($sent[$s['id']]['ln'] ?? 0), 'sentLateTotal' => (int)($sent[$s['id']]['lt'] ?? 0),
         ];
+        foreach (['sentCount', 'sentTotal', 'sentLateCount', 'sentLateTotal'] as $k) $sum[$k] = ($sum[$k] ?? 0) + $row[$k];
         $sum['count'] += $row['count'];
         $sum['total'] += $row['total'];
         $sum['verifiedCount'] += $row['verifiedCount'];

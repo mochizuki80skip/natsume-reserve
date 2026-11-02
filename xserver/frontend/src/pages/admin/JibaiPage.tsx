@@ -219,6 +219,9 @@ export default function JibaiPage() {
   const monthCount = thisMonth.count + otherScreens.reduce((a, o) => a + o.count, 0);
   const monthTotal = thisMonth.total + otherScreens.reduce((a, o) => a + o.total, 0);
   const hasOtherMonths = breakdown.some((b) => b.ym !== ym);
+  // 月遅れ：この画面（この月に出す分）のうち、請求月が前の月の明細
+  const lateRows = rows.filter((r) => r.invoiceYm && r.invoiceYm < ym);
+  const lateTotal = lateRows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
   const ymMissing = rows.filter((r) => !r.invoiceYm).length;
   const fillMissingYm = () => setRows((prev) => prev.map((r) => (r.invoiceYm ? r : { ...r, invoiceYm: ym, dirty: true })));
   const dupNos = new Set(rows.map((r) => r.patientNo.trim()).filter((n, i, a) => n !== '' && a.indexOf(n) !== i));
@@ -243,7 +246,8 @@ export default function JibaiPage() {
       <div className="flex flex-wrap items-center gap-3 rounded border bg-white px-4 py-3">
         <div><span className="text-xs text-slate-500">対象月</span><div className="text-lg font-bold">{formatYm(ym)}</div></div>
         <div><span className="text-xs text-slate-500">{formatYm(ym)}分の合計（請求月で集計）</span><div className="text-lg font-bold tabular-nums text-brand-dark">{monthCount} 件　{yen(monthTotal)}</div></div>
-        {(hasOtherMonths || otherScreens.length > 0 || ymMissing > 0) && <div><span className="text-xs text-slate-500">この画面の明細（提出する分）</span><div className="text-lg font-bold tabular-nums">{rows.length} 件　{yen(total)}</div></div>}
+        <div aria-label="月遅れ（この月に出す分）"><span className="text-xs text-slate-500">月遅れ（この月に出す前の月分）</span><div className={`text-lg font-bold tabular-nums ${lateRows.length ? 'text-amber-800' : 'text-slate-400'}`}>{lateRows.length} 件　{yen(lateTotal)}</div></div>
+        <div aria-label="この月に出す合計"><span className="text-xs text-slate-500">この月に出す合計（{formatYm(ym)}分＋月遅れ）</span><div className="text-lg font-bold tabular-nums">{rows.length} 件　{yen(total)}</div></div>
         {(data.isHq || verifiedCount > 0) && <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-lg font-bold tabular-nums">{verifiedCount} 件 / {yen(verifiedTotal)}</div></div>}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {submitted ? (

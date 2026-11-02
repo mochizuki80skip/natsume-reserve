@@ -208,7 +208,8 @@ if (process.env.SHOT_NO_YM) {
   await page.goto(`${BASE}/admin/hq/jibai?ym=${nextYm}`);
   await page.waitForSelector('text=全店集計');
   const s002n = await page.locator('tbody tr', { hasText: 'S002' }).first().textContent();
-  ok('翌月の本部集計には入らず「別の月分」と出る', s002n.includes('別の月分 1件') && !s002n.includes('30,000'), s002n);
+  const s002c = await page.locator('tbody tr', { hasText: 'S002' }).first().locator('td').allTextContents();
+  ok('翌月の本部集計には入らず「別の月分」と出る（月遅れの列には出る）', s002n.includes('別の月分 1件') && !s002c[3].includes('30,000') && s002c[7].includes('30,000'), s002n);
 }
 
 await browser.close();

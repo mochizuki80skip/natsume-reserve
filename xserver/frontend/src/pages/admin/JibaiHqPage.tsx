@@ -5,9 +5,9 @@ import { useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, yen } from '@/lib/jibai';
 import { useAdmin } from './Layout';
 
-interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; lateCount: number; lateTotal: number; movedOut: number; verifiedCount: number; verifiedTotal: number }
+interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; lateCount: number; lateTotal: number; movedOut: number; verifiedCount: number; verifiedTotal: number; sentCount: number; sentTotal: number; sentLateCount: number; sentLateTotal: number }
 interface Resp {
-  ym: string; currentYm: string; rows: Row[]; sum: { count: number; total: number; verifiedCount: number; verifiedTotal: number; submitted: number }; storeCount: number;
+  ym: string; currentYm: string; rows: Row[]; sum: { count: number; total: number; verifiedCount: number; verifiedTotal: number; sentCount: number; sentTotal: number; sentLateCount: number; sentLateTotal: number; submitted: number }; storeCount: number;
   trend: { ym: string; count: number; total: number; verifiedTotal: number }[]; setting: { nameRetentionDays: number };
 }
 
@@ -58,6 +58,8 @@ export default function JibaiHqPage() {
         <div><span className="text-xs text-slate-500">件数</span><div className="text-xl font-bold tabular-nums">{sum.count} 件</div></div>
         <div><span className="text-xs text-slate-500">提出済み店舗</span><div className="text-xl font-bold tabular-nums">{sum.submitted} / {data.storeCount}</div></div>
         <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-xl font-bold tabular-nums">{sum.verifiedCount} 件 / {yen(sum.verifiedTotal)}</div></div>
+        <div aria-label="全店の月遅れ"><span className="text-xs text-slate-500">月遅れ（この月に出した前の月分）</span><div className={`text-xl font-bold tabular-nums ${sum.sentLateCount ? 'text-amber-800' : 'text-slate-400'}`}>{sum.sentLateCount} 件 / {yen(sum.sentLateTotal)}</div></div>
+        <div aria-label="全店のこの月に出した合計"><span className="text-xs text-slate-500">この月に出した合計（この月分＋月遅れ）</span><div className="text-xl font-bold tabular-nums">{sum.sentCount} 件 / {yen(sum.sentTotal)}</div></div>
       </div>
 
       <div className="overflow-x-auto rounded border bg-white">
@@ -71,6 +73,8 @@ export default function JibaiHqPage() {
               <th className={num}>経理確認</th>
               <th className={num}>確定合計</th>
               <th className={num}>差額</th>
+              <th className={`${num} bg-amber-50`} title="この月に出した明細のうち、請求月が前の月の分（月遅れ請求）">月遅れ（この月に出した）</th>
+              <th className={`${num} bg-amber-50`} title="この月に出した明細の合計（この月分＋月遅れ）">この月に出した合計</th>
               <th></th>
             </tr>
           </thead>
@@ -84,6 +88,8 @@ export default function JibaiHqPage() {
                 <td className={num}>{r.count > 0 ? `${r.verifiedCount} / ${r.count}` : ''}</td>
                 <td className={num}>{r.verifiedCount > 0 ? r.verifiedTotal.toLocaleString('ja-JP') : ''}</td>
                 <td className={`${num} ${r.verifiedCount > 0 && r.verifiedCount === r.count && r.verifiedTotal !== r.total ? 'text-amber-700' : 'text-slate-500'}`}>{r.verifiedCount > 0 && r.verifiedCount === r.count ? (r.verifiedTotal - r.total).toLocaleString('ja-JP') : ''}</td>
+                <td className={`${num} bg-amber-50/60 ${r.sentLateCount > 0 ? 'font-bold text-amber-900' : ''}`}>{r.sentLateCount > 0 ? `${r.sentLateCount}件 ${r.sentLateTotal.toLocaleString('ja-JP')}` : ''}</td>
+                <td className={`${num} bg-amber-50/60`}>{r.sentCount > 0 ? `${r.sentCount}件 ${r.sentTotal.toLocaleString('ja-JP')}` : ''}</td>
                 <td className="whitespace-nowrap px-2 py-1">
                   {canSwitch && <form action="/api/admin/switch" method="post" className="inline">
                     <input type="hidden" name="store" value={r.code} /><input type="hidden" name="back" value={`/admin/jibai?ym=${ym}`} />
@@ -92,7 +98,7 @@ export default function JibaiHqPage() {
                 </td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={8} className="px-2 py-4 text-center text-slate-500">稼働中の店舗がありません</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={10} className="px-2 py-4 text-center text-slate-500">稼働中の店舗がありません</td></tr>}
           </tbody>
           {rows.length > 0 && (
             <tfoot>
@@ -103,6 +109,8 @@ export default function JibaiHqPage() {
                 <td className={num}>{sum.verifiedCount} / {sum.count}</td>
                 <td className={num}>{sum.verifiedCount > 0 ? sum.verifiedTotal.toLocaleString('ja-JP') : ''}</td>
                 <td className={num}></td>
+                <td className={`${num} bg-amber-50`}>{sum.sentLateCount > 0 ? `${sum.sentLateCount}件 ${sum.sentLateTotal.toLocaleString('ja-JP')}` : ''}</td>
+                <td className={`${num} bg-amber-50`}>{sum.sentCount} 件 {sum.sentTotal.toLocaleString('ja-JP')}</td>
                 <td></td>
               </tr>
             </tfoot>
@@ -110,6 +118,7 @@ export default function JibaiHqPage() {
         </table>
       </div>
       <p className="text-xs text-slate-600" aria-label="状態の見方"><b>状態の見方：</b><span className="rounded bg-green-100 px-1 text-green-800">提出済み</span> 店舗が「提出」を押した　<span className="rounded bg-yellow-100 px-1 text-yellow-800">入力中（未提出）</span> この月分の明細が 1 件以上あるが、まだ提出していない（月遅れ請求で別の月の画面から入った明細も含む）　<span className="rounded bg-slate-200 px-1 text-slate-600">未提出</span> この月分の明細がまだ 0 件</p>
+      <p className="text-xs text-slate-500" aria-label="月遅れの見方"><b>月遅れ（この月に出した）</b>：この月の画面で出した明細のうち、請求月が前の月の分（月遅れ請求）。金額は本来の月の速報合計に入ります。<b>この月に出した合計</b>：この月の画面で出した明細の合計（この月分＋月遅れ）。</p>
       <p className="text-xs text-slate-500">件数・速報合計は請求月（請求書に印字された「令和 ○年 ○月」）で集計しています。別の月の画面で登録・提出された明細も、請求月がこの月ならここに入ります（「他の月の画面で登録」の表示）。速報合計は店舗がスクショから登録した金額の合計（提出前の入力中の分も含む）。確定合計は経理が請求書コピーと照合して登録した金額。差額は全件の経理確認が終わった店舗だけ表示します。「明細・経理確認」を押すとその店舗に切り替えて明細を開きます。</p>
 
       <div className="grid gap-4 md:grid-cols-2">
