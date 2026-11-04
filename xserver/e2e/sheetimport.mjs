@@ -112,7 +112,7 @@ ok('新患継続率：氏名のある 2 行が「新しく入る」', (await kd.
 await kd.getByRole('button', { name: /件を取り込む/ }).click(); await p.waitForTimeout(1500);
 const kr = (await api('GET', `/api/admin/karte?month=${M}`))[1].rows;
 const ichi = kr.find((r) => r.name.includes('一郎'));
-ok('新患継続率に入る（ママこケアHP → ママニケアHP・2回目も）', ichi && ichi.trig === 'ママニケアHP' && ichi.karteNo === '2101' && ichi.visits?.[0]?.d === `${M}-06` && kr.some((r) => r.name.includes('二子')), JSON.stringify(ichi && [ichi.trig, ichi.karteNo, ichi.visits?.[0]]));
+ok('新患継続率に入る（きっかけ ママこケアHP・2回目も）', ichi && ichi.trig === 'ママこケアHP' && ichi.karteNo === '2101' && ichi.visits?.[0]?.d === `${M}-06` && kr.some((r) => r.name.includes('二子')), JSON.stringify(ichi && [ichi.trig, ichi.karteNo, ichi.visits?.[0]]));
 
 // 3) 離反者リスト：ファイルから
 await p.goto(`${B}/admin/churn?month=${M}`); await p.waitForSelector('table[aria-label="離反者リスト"]');

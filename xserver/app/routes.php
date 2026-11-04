@@ -170,6 +170,7 @@ function route_table(): array
         ['POST', '#^/api/admin/jibai/submit$#', 'jibai_submit'],
         ['PUT', '#^/api/admin/jibai/verify$#', 'jibai_verify'],
         ['GET', '#^/api/admin/hq/jibai$#', 'hq_jibai'],
+        ['POST', '#^/api/admin/hq/jibai/submit-empty$#', 'hq_jibai_submit_empty'],
         ['PUT', '#^/api/admin/hq/jibai/settings$#', 'hq_jibai_settings_put'],
         // 自動削除・初期設定
         ['GET', '#^/api/cron/cleanup$#', 'cron_cleanup'],

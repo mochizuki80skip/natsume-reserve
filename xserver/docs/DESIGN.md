@@ -384,6 +384,8 @@ xserver/
 | 45 | ストーリー画像のテーマ（store.storyTheme） |
 | 46 | 経路別キャンペーン（campaign 表・global_setting.insuranceTable・reservation.campaign） |
 | 47 | キャンペーン専用の URL（campaign.code・campaign.trig） |
+| 48 | WEB 予約の URL・QR（集客経路）とキャンペーンを 1 つに（campaign.label・campaign.hasContent。媒体と古い経路を移す） |
+| 49 | きっかけ「ママニケアHP」→ 正式の「ママこケアHP」 |
 
 ---
 

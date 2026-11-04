@@ -34,8 +34,8 @@ export function parseTsv(text: string): string[][] {
   return rows;
 }
 
-/** スプレッドシートの選択肢の書き方の違いを、システムの選択肢にそろえる */
-const TRIG_ALIAS: Record<string, string> = { 'ママこケアHP': 'ママニケアHP' };
+/** 書き方の違いを、システムの選択肢にそろえる（正式は「ママこケアHP」） */
+const TRIG_ALIAS: Record<string, string> = { 'ママニケアHP': 'ママこケアHP' };
 
 const norm = (s: string) => s.normalize('NFKC').replace(/[\s　]/g, '').toLowerCase();
 

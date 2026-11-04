@@ -177,7 +177,7 @@ export default function JibaiPage() {
     if (rows.some((r) => r.dirty || !r.id)) { setMsg({ text: '先に「変更を保存」を押してください', kind: 'err' }); return; }
     if (action === 'submit' && ymMissing > 0) { setMsg({ text: `請求月が未選択の明細が ${ymMissing} 件あります。何年何月分かを選んで保存してから提出してください`, kind: 'err' }); return; }
     const others = breakdown.filter((b) => b.ym !== ym);
-    const label = action === 'reopen' ? '提出を取り消して修正できるようにします。' : action === 'submit_empty' ? `${formatYm(data.ym)} は自賠請求 0 件として提出します。`
+    const label = action === 'reopen' ? '提出を取り消して修正できるようにします。' : action === 'submit_empty' ? `${formatYm(data.ym)} は請求する患者様がいない（請求者なし・0 件）として提出します。`
       : `${formatYm(data.ym)} の画面の明細 ${rows.length} 件・${yen(total)} を提出します。${others.length ? `\nうち ${others.map((b) => `${formatYm(b.ym)}分 ${b.count}件 ${yen(b.total)}`).join('、')} は、それぞれの請求月の合計に入ります。` : ''}\n提出後は本部の集計に反映されます。`;
     if (!confirm(`${label}よろしいですか？`)) return;
     try {
@@ -252,11 +252,14 @@ export default function JibaiPage() {
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {submitted ? (
             <>
-              <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">提出済み {formatDateTime(data.month?.submittedAt)}（{data.month?.submittedBy}）</span>
+              <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">提出済み{rows.length === 0 ? '（請求者なし）' : ''} {formatDateTime(data.month?.submittedAt)}（{data.month?.submittedBy}）</span>
               <button type="button" onClick={() => submitMonth('reopen')} className="rounded border bg-white px-3 py-1 text-sm">提出を取り消す</button>
             </>
           ) : rows.length === 0 && unsaved === 0 ? (
-            <button type="button" onClick={() => submitMonth('submit_empty')} className="rounded border bg-white px-3 py-1 text-sm">0 件で提出（自賠請求なし）</button>
+            <span className="flex flex-wrap items-center gap-2" role="group" aria-label="請求者なしで提出">
+              <span className="text-xs text-slate-600">この月に請求する患者様がいないときは →</span>
+              <button type="button" onClick={() => void submitMonth('submit_empty')} className="rounded bg-slate-700 px-4 py-1.5 text-sm font-bold text-white">請求者なし（0 件で提出）</button>
+            </span>
           ) : (
             <button type="button" onClick={() => submitMonth('submit')} disabled={unsaved > 0 || ymMissing > 0} className="rounded bg-brand px-4 py-1.5 text-sm font-bold text-white disabled:opacity-50" title={ymMissing > 0 ? '請求月が未選択の明細があります' : unsaved > 0 ? '先に「変更を保存」を押してください' : ''}>この月を提出する</button>
           )}

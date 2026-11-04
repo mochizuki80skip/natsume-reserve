@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 48;
+    private const VERSION = 49;
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -337,6 +337,12 @@ final class Migrate
                     $pdo->exec("ALTER TABLE `campaign` ADD COLUMN `label` VARCHAR(60) NOT NULL DEFAULT '', ADD COLUMN `hasContent` TINYINT(1) NOT NULL DEFAULT 1");
                     $pdo->exec("UPDATE `campaign` SET `label` = `name` WHERE `label` = ''");
                     self::moveRoutesToUrls($pdo);
+                }
+            }
+            if ($ver < 49) {
+                // きっかけ「ママニケアHP」は「ママこケアHP」が正式（選択肢・新患継続率・URL・紹介元の媒体をそろえる）
+                foreach ([['karte_option', 'label'], ['karte', 'trig'], ['campaign', 'trig'], ['referral', 'trig']] as [$t, $c]) {
+                    if (self::hasTable($pdo, $t) && self::hasColumn($pdo, $t, $c)) $pdo->prepare("UPDATE `$t` SET `$c` = ? WHERE `$c` = ?")->execute(['ママこケアHP', 'ママニケアHP']);
                 }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");

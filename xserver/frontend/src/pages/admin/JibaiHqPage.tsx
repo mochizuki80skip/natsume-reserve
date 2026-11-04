@@ -25,11 +25,23 @@ export default function JibaiHqPage() {
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   const { ym, rows, sum } = data;
+  // 請求者なし（0 件で提出）にできる店舗：まだ提出していなくて、この月の画面の明細が 0 件
+  const emptyable = rows.filter((r) => r.status !== 'SUBMITTED' && r.sentCount === 0);
+  async function submitEmpty(list: Row[]) {
+    if (!list.length) return;
+    if (!confirm(`次の店舗を「請求者なし（0 件で提出）」にしますか？\n${list.map((r) => r.name).join('・')}\n（あとで明細があると分かったときは、店舗の画面の「提出を取り消す」で戻せます）`)) return;
+    const r = await fetch('/api/admin/hq/jibai/submit-empty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ym, stores: list.map((x) => x.code) }) });
+    const j = await r.json().catch(() => ({})) as { done?: string[]; skipped?: string[]; error?: string };
+    setMsg(r.ok ? `${j.done?.length ?? 0} 店舗を「請求者なし」で提出しました${j.skipped?.length ? `（${j.skipped.length} 店舗は明細がある・提出済み・管轄外のためそのまま）` : ''}` : j.error ?? 'できませんでした');
+    reload();
+  }
   const go = (m: string) => navigate(`/admin/hq/jibai?ym=${m}`);
   const num = 'px-2 py-1 text-right tabular-nums';
   // 提出済み／入力中（未提出：この月分の明細が 1 件以上あるが、まだ提出していない）／未提出（この月分の明細が 0 件）
   const statusBadge = (r: Row) => r.status === 'SUBMITTED'
-    ? <span className="rounded bg-green-100 px-1.5 text-xs text-green-800" title="店舗が「提出」を押しました">提出済み</span>
+    ? r.count === 0 && r.sentCount === 0
+      ? <span className="rounded bg-green-100 px-1.5 text-xs text-green-800" title="請求者なし（0 件）で提出しました">提出済み（請求者なし）</span>
+      : <span className="rounded bg-green-100 px-1.5 text-xs text-green-800" title="店舗が「提出」を押しました">提出済み</span>
     : r.count > 0 ? <span className="rounded bg-yellow-100 px-1.5 text-xs text-yellow-800" title={`この月分の明細が ${r.count} 件ありますが、まだ「提出」を押していません`}>入力中（未提出）</span>
     : <span className="rounded bg-slate-200 px-1.5 text-xs text-slate-600" title="この月分の明細がまだありません">未提出</span>;
 
@@ -62,6 +74,13 @@ export default function JibaiHqPage() {
         <div aria-label="全店のこの月に出した合計"><span className="text-xs text-slate-500">この月に出した合計（この月分＋月遅れ）</span><div className="text-xl font-bold tabular-nums">{sum.sentCount} 件 / {yen(sum.sentTotal)}</div></div>
       </div>
 
+      {canSwitch && emptyable.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded border border-slate-300 bg-slate-50 px-3 py-2 text-sm" role="group" aria-label="請求者なしの店舗">
+          <span>まだ提出していなくて、この月の明細が 0 件の店舗：<b>{emptyable.length} 店舗</b>（{emptyable.map((r) => r.name).join('・')}）</span>
+          <button type="button" onClick={() => void submitEmpty(emptyable)} className="rounded bg-slate-700 px-3 py-1 text-xs font-bold text-white">まとめて「請求者なし」にする</button>
+          <span className="text-xs text-slate-500">その月に請求する患者様がいなかった店舗です。店舗ごとには、表の「請求者なし」を押します。</span>
+        </div>
+      )}
       <div className="overflow-x-auto rounded border bg-white">
         <table className="w-full text-sm">
           <thead>
@@ -91,6 +110,7 @@ export default function JibaiHqPage() {
                 <td className={`${num} bg-amber-50/60 ${r.sentLateCount > 0 ? 'font-bold text-amber-900' : ''}`}>{r.sentLateCount > 0 ? `${r.sentLateCount}件 ${r.sentLateTotal.toLocaleString('ja-JP')}` : ''}</td>
                 <td className={`${num} bg-amber-50/60`}>{r.sentCount > 0 ? `${r.sentCount}件 ${r.sentTotal.toLocaleString('ja-JP')}` : ''}</td>
                 <td className="whitespace-nowrap px-2 py-1">
+                  {canSwitch && r.status !== 'SUBMITTED' && r.sentCount === 0 && <button type="button" onClick={() => void submitEmpty([r])} className="mr-2 rounded border border-slate-400 bg-white px-1.5 text-xs" aria-label={`${r.name} を請求者なしにする`}>請求者なし</button>}
                   {canSwitch && <form action="/api/admin/switch" method="post" className="inline">
                     <input type="hidden" name="store" value={r.code} /><input type="hidden" name="back" value={`/admin/jibai?ym=${ym}`} />
                     <button className="text-brand underline">{isHq ? '明細・経理確認' : '明細'}</button>
