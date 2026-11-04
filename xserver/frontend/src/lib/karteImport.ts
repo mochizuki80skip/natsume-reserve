@@ -34,6 +34,9 @@ export function parseTsv(text: string): string[][] {
   return rows;
 }
 
+/** スプレッドシートの選択肢の書き方の違いを、システムの選択肢にそろえる */
+const TRIG_ALIAS: Record<string, string> = { 'ママこケアHP': 'ママニケアHP' };
+
 const norm = (s: string) => s.normalize('NFKC').replace(/[\s　]/g, '').toLowerCase();
 
 function fieldOf(h: string): Field | 'd' | 's' | 't' | null {
@@ -162,7 +165,7 @@ export function parseSheet(text: string, fy: number): ParseResult {
       line,
       row: {
         date, name: name.slice(0, 40), karteNo: get('karteNo').replace(/^(\d{1,3}(?:,\d{3})+)$/, (x) => x.replace(/,/g, '')).slice(0, 20), kind: kindOf(get('kind')),
-        trig: get('trig').slice(0, 30), trigDetail: get('trigDetail').slice(0, 60),
+        trig: (TRIG_ALIAS[get('trig')] ?? get('trig')).slice(0, 30), trigDetail: get('trigDetail').slice(0, 60),
         age: age && Number(age[0]) <= 120 ? Number(age[0]) : null, sex: sexOf(get('sex')),
         symptomCat: get('symptomCat').slice(0, 20), symptom: get('symptom').slice(0, 100), staff: get('staff').slice(0, 30), treatment: treatmentOf(get('treatment')),
         visits,

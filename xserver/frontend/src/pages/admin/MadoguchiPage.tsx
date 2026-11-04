@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { halfNum, halfNumInput } from '@/lib/format';
 import { useAdmin } from './Layout';
+import MadoImportDialog from '@/components/MadoImportDialog';
 
 interface Calc { copayTotal: number; selfAcu: number; total: number; match: number; mismatch: boolean; goodsSales: number }
 type Vals = Record<string, number | string | Record<string, number> | undefined> & { goodsCount?: Record<string, number>; otherNote?: string };
@@ -75,6 +76,7 @@ export default function MadoguchiPage() {
   const { data, error, reload } = useFetch<Resp>(`/api/admin/madoguchi?month=${encodeURIComponent(month)}${storeParam ? `&store=${encodeURIComponent(storeParam)}` : ''}`);
   const [tab, setTab] = useState<'main' | 'goods' | 'henrei'>('main');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [imp, setImp] = useState(false); // スプレッドシートから取り込む
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   // 経理アカウントと、一覧から別の店舗を開いたときは見るだけ
@@ -93,6 +95,7 @@ export default function MadoguchiPage() {
 
   return (
     <div>
+      {imp && <MadoImportDialog month={data.month} onClose={() => setImp(false)} onDone={(m) => { setImp(false); setMsg({ ok: true, text: m }); reload(); }} />}
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h1 className="mr-1 text-lg font-bold">窓口集計{storeParam && `（${data.store.name}）`}</h1>
         <button type="button" onClick={() => go(-1)} className="rounded border bg-white px-2 py-0.5 text-sm">‹ 前月</button>
@@ -106,6 +109,7 @@ export default function MadoguchiPage() {
           : <span className="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">経理 未確認</span>}
         {data.canCheck && <button type="button" onClick={() => check(!data.checkedAt || data.editedAfterCheck)} className="rounded bg-brand px-3 py-0.5 text-sm font-bold text-white">{!data.checkedAt || data.editedAfterCheck ? '経理確認済みにする' : '経理確認を取り消す'}</button>}
         <span className="ml-auto text-xs text-slate-500">{ro ? '見るだけ（直すときは店舗を切り替えてください）' : '入力すると自動で保存されます'}</span>
+        {!ro && <button type="button" onClick={() => setImp(true)} className="rounded border bg-white px-2 py-0.5 text-sm">📋 スプレッドシートから取り込む</button>}
         <a href={`/api/admin/madoguchi/export?month=${ym}${storeParam ? `&store=${encodeURIComponent(storeParam)}` : ''}`} className="rounded border bg-white px-2 py-0.5 text-sm no-underline">Excel で保存</a>
         {storeParam && <Link to={`/admin/acct?month=${ym}`} className="text-sm text-brand underline">← 一覧に戻る</Link>}
       </div>

@@ -393,3 +393,70 @@ function staffing_std_put(): never
     if ($set) Db::exec('UPDATE store SET ' . implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($set))) . ' WHERE id = ?', array_merge(array_values($set), [$st['id']]));
     Http::json(['ok' => true]);
 }
+
+/**
+ * スプレッドシートから取り込む（月間窓口表の日ごとの欄と、返戻）。
+ * { month, days: [{ date, vals: { copay: 1200, … } }], henrei: [{ treatYm, claimMonth, patient, … }], dryRun }
+ * 取り込む側が空の欄は今のまま。dryRun のときは、日・行ごとの結果（新しく入る／上書き／同じ）だけ返す
+ */
+function mado_import(): never
+{
+    $ctx = Auth::context();
+    Http::requireJson();
+    $b = Http::body();
+    $ym = (string)($b['month'] ?? '');
+    if (!Time::isValidMonth($ym)) Http::error('月が正しくありません', 400);
+    $days = is_array($b['days'] ?? null) ? $b['days'] : [];
+    $hen = is_array($b['henrei'] ?? null) ? $b['henrei'] : [];
+    if (count($days) > 62 || count($hen) > 300 || (!$days && !$hen)) Http::error('取り込む行がありません', 400);
+    $dry = !empty($b['dryRun']);
+    $sid = $ctx['store']['id'];
+    $dayOut = []; $henOut = [];
+    $n = ['new' => 0, 'update' => 0, 'same' => 0];
+    Db::transaction(function () use ($days, $hen, $ym, $sid, $dry, &$dayOut, &$henOut, &$n) {
+        foreach ($days as $d) {
+            $date = (string)($d['date'] ?? '');
+            if (!Time::isValidDate($date)) throw new HttpError(400, '日付が正しくありません');
+            $clean = [];
+            foreach ((array)($d['vals'] ?? []) as $k => $v) {
+                if (!array_key_exists((string)$k, Madoguchi::DAY_KEYS) || $v === null || $v === '') continue;
+                $clean[$k] = Madoguchi::cleanDayValue((string)$k, $v);
+            }
+            if (!$clean) continue;
+            $row = Db::one('SELECT vals FROM madoguchi_day WHERE storeId = ? AND date = ?', [$sid, $date]);
+            $cur = $row ? (json_decode((string)$row['vals'], true) ?: []) : [];
+            $changed = array_keys(array_filter($clean, fn($v, $k) => !array_key_exists($k, $cur) || $cur[$k] != $v, ARRAY_FILTER_USE_BOTH));
+            $over = array_values(array_filter($changed, fn($k) => array_key_exists($k, $cur)));
+            $st = !$changed ? 'same' : ($over ? 'update' : 'new');
+            $dayOut[] = ['date' => $date, 'status' => $st, 'overwrite' => $over];
+            $n[$st]++;
+            if ($dry || !$changed) continue;
+            $v = array_replace($cur, $clean);
+            Db::exec('INSERT INTO madoguchi_day (storeId, date, vals) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE vals = VALUES(vals)', [$sid, $date, json_encode((object)$v, JSON_UNESCAPED_UNICODE)]);
+            Madoguchi::touchMonth($sid, substr($date, 0, 7));
+        }
+        $have = Db::all('SELECT * FROM madoguchi_henrei WHERE storeId = ? AND ym = ?', [$sid, $ym]);
+        foreach ($hen as $h) {
+            $set = [];
+            foreach (Madoguchi::HENREI_KEYS as $k => $len) if (isset($h[$k]) && trim((string)$h[$k]) !== '') $set[$k] = mb_substr(trim((string)$h[$k]), 0, $len);
+            foreach (['amount', 'reamount'] as $k) if (isset($h[$k]) && $h[$k] !== '' && $h[$k] !== null) {
+                if (!is_numeric($h[$k]) || abs((int)$h[$k]) > 99999999) throw new HttpError(400, '返戻の金額が正しくありません');
+                $set[$k] = (int)$h[$k];
+            }
+            if (($set['patient'] ?? '') === '') { $henOut[] = ['status' => 'error', 'error' => '患者様名がありません']; continue; }
+            // 同じ患者様・施術月・請求額の行があれば上書き
+            $same = null;
+            foreach ($have as $x) if ($x['patient'] === $set['patient'] && (string)$x['treatYm'] === (string)($set['treatYm'] ?? '') && (int)$x['amount'] === (int)($set['amount'] ?? 0)) { $same = $x; break; }
+            $diff = $same ? array_filter($set, fn($v, $k) => (string)$same[$k] !== (string)$v, ARRAY_FILTER_USE_BOTH) : $set;
+            $st = !$same ? 'new' : ($diff ? 'update' : 'same');
+            $henOut[] = ['status' => $st];
+            $n[$st]++;
+            if ($dry || !$diff) continue;
+            $id = $same['id'] ?? Db::newId();
+            if (!$same) Db::exec('INSERT INTO madoguchi_henrei (id, storeId, ym, special, createdAt) VALUES (?, ?, ?, 0, ?)', [$id, $sid, $ym, Time::nowJstDateTime()]);
+            Db::exec('UPDATE madoguchi_henrei SET ' . implode(', ', array_map(fn($k) => "`$k` = ?", array_keys($diff))) . ' WHERE id = ?', array_merge(array_values($diff), [$id]));
+            Madoguchi::touchMonth($sid, $ym);
+        }
+    });
+    Http::json(['ok' => true, 'dryRun' => $dry, 'counts' => $n, 'days' => $dayOut, 'henrei' => $henOut]);
+}

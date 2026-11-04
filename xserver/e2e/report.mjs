@@ -19,7 +19,13 @@ const api = (p, m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fe
 const st = await login('S001', 'password');
 // 営業日（月曜〜水曜・金・土のどれか）：今日より前の、同じ月の営業日を 2 日使う（月の初めに動かすと前の月の 2 日）
 const days = [];
-for (let i = 1; days.length < 2 && i < 20; i++) { const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10); const day = (await api(st, 'GET', `/api/admin/day?date=${d}`))[1]?.data; if (day?.times?.length && (days.length === 0 || d.slice(0, 7) === days[0].slice(0, 7))) days.push(d); }
+{
+  // 今日より前の営業日を集め、同じ月に 2 日以上ある、いちばん近い月の 2 日を使う（月の初め・祝日が続いても通る）
+  const found = [];
+  for (let i = 1; i < 45; i++) { const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10); const day = (await api(st, 'GET', `/api/admin/day?date=${d}`))[1]?.data; if (day?.times?.length) found.push(d); }
+  const ym = found.map((d) => d.slice(0, 7)).find((m) => found.filter((d) => d.startsWith(m)).length >= 2);
+  days.push(...found.filter((d) => d.startsWith(ym)).slice(0, 2));
+}
 const [D, D0] = days;
 console.log('days', D, D0);
 // 予約表：午前 2 人（初診 1）・午後 1 人（自賠）・自費メニュー 1 人、前の日に 1 人 → 来院チェック

@@ -1,5 +1,7 @@
 // 離反・フォロー /admin/churn?tab=churn|follow（離反者リスト：月ごと。2 週間フォロー：毎日のリストと履歴）
 import { useEffect, useState } from 'react';
+import SheetFilePicker from '@/components/SheetFilePicker';
+import { colOf, sectionText } from '@/lib/sheetFile';
 import { useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { halfNum, halfNumInput } from '@/lib/format';
@@ -166,15 +168,19 @@ function ImportDialog({ initial, ym, onClose, onDone }: { initial: string; ym: s
   useEffect(() => { if (initial) void check(initial); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const ok = (lines ?? []).filter((l) => l.row && l.status !== 'error');
   const run = async () => {
+    // 最後の確認：上書きする行があるときは、はっきり聞く
+    const up = ok.filter((l) => l.status === 'update').length;
+    if (up > 0 && !confirm(`${up} 件は、今入っている内容を取り込んだ内容で上書きします（取り込む側が空の欄は今のまま）。\n新しく入る ${ok.length - up} 件と合わせて取り込みますか？`)) return;
     setBusy(true);
     try { const j = await send('/api/admin/churn/import', 'POST', { rows: ok.map((l) => l.row) }); onDone(`${j.counts.new} 件を新しく入れ、${j.counts.update} 件を上書きしました`); } catch (e) { setErr((e as Error).message); setBusy(false); }
   };
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-auto bg-black/40 p-4" onClick={onClose}>
       <form onSubmit={(e) => { e.preventDefault(); void check(); }} onClick={(e) => e.stopPropagation()} aria-label="離反者リストの取り込み" className="w-full max-w-5xl rounded-lg bg-white p-4 text-sm shadow-xl">
-        <div className="mb-2 flex items-center"><h2 className="text-base font-bold">📋 離反者リストをスプレッドシートから貼り付け</h2><button type="button" onClick={onClose} aria-label="閉じる" className="ml-auto text-slate-500">✕</button></div>
+        <div className="mb-2 flex items-center"><h2 className="text-base font-bold">📋 離反者リストをスプレッドシートから取り込む（貼り付け・ファイル）</h2><button type="button" onClick={onClose} aria-label="閉じる" className="ml-auto text-slate-500">✕</button></div>
         <p className="mb-2 text-xs text-slate-600">スプレッドシートで行を選んでコピー（Ctrl+C）し、ここに貼り付け（Ctrl+V）ます。見出しの行はあってもなくても読めます。同じ日付・同じカルテNo（なければ氏名）の行は上書きします。年のない日付は選んだ年度で読みます。</p>
         <label className="mb-2 flex items-center gap-1 text-xs">年度<select value={fy} onChange={(e) => { setFy(Number(e.target.value)); setLines(null); }} className="rounded border px-2 py-1">{[fy - 1, fy, fy + 1].map((y) => <option key={y} value={y}>{y}年度</option>)}</select></label>
+        <div className="mb-2"><SheetFilePicker kind="churn" onPick={(sh, sec) => { const t = sectionText(sh.grid, sec, [colOf(sh.grid, sec, (n) => n.includes('氏名')), 0]); setText(t); void check(t); }} /></div>
         <textarea value={text} onChange={(e) => { setText(e.target.value); setLines(null); }} rows={lines ? 3 : 6} aria-label="貼り付ける欄" placeholder="ここに貼り付け（Ctrl+V）"
           onPaste={(e) => { const t = e.clipboardData.getData('text/plain'); if (t) { e.preventDefault(); setText(t); void check(t); } }} className="w-full rounded border-2 border-dashed px-2 py-1 font-mono text-xs" />
         {err && <p className="mt-1 rounded bg-red-50 px-2 py-1 text-red-800">{err}</p>}

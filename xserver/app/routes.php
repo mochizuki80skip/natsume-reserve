@@ -125,6 +125,7 @@ function route_table(): array
         ['PUT', '#^/api/admin/madoguchi/day$#', 'mado_day_put'],
         ['PUT', '#^/api/admin/madoguchi/month$#', 'mado_month_put'],
         ['PUT', '#^/api/admin/madoguchi/henrei$#', 'mado_henrei_put'],
+        ['POST', '#^/api/admin/madoguchi/import$#', 'mado_import'],
         ['DELETE', '#^/api/admin/madoguchi/henrei$#', 'mado_henrei_delete'],
         ['GET', '#^/api/admin/madoguchi/export$#', 'mado_export'],
         ['GET', '#^/api/admin/acct/madoguchi$#', 'acct_mado_get'],

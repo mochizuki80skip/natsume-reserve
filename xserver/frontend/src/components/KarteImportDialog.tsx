@@ -2,6 +2,8 @@
 import { useEffect, useState } from 'react';
 import { KIND_LABEL, md, type KarteOptions } from '@/lib/karte';
 import { parseSheet, type ImportRow, type ParsedLine } from '@/lib/karteImport';
+import SheetFilePicker from './SheetFilePicker';
+import { colOf, sectionText } from '@/lib/sheetFile';
 
 type Checked = ParsedLine & { status?: 'new' | 'update' | 'error'; serverError?: string };
 
@@ -40,6 +42,9 @@ export default function KarteImportDialog({ today, month, initialText = '', opti
   async function run() {
     const ok = (lines ?? []).filter((l) => l.row && l.status !== 'error');
     if (!ok.length) return;
+    // 最後の確認：上書きする行があるときは、はっきり聞く
+    const up = ok.filter((l) => l.status === 'update').length;
+    if (up > 0 && !confirm(`${up} 件は、今入っている内容を取り込んだ内容で上書きします（取り込む側が空の欄は今のまま）。\n新しく入る ${ok.length - up} 件と合わせて取り込みますか？`)) return;
     setBusy(true);
     try {
       const res = await post(ok.map((l) => l.row!), false);
@@ -62,7 +67,7 @@ export default function KarteImportDialog({ today, month, initialText = '', opti
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-auto bg-black/40 p-4" onClick={onClose}>
       <form onSubmit={(e) => { e.preventDefault(); void check(); }} onClick={(e) => e.stopPropagation()} aria-label="スプレッドシートから貼り付け" className="w-full max-w-5xl rounded-lg bg-white p-4 text-sm shadow-xl">
         <div className="mb-2 flex items-center gap-2">
-          <h2 className="text-base font-bold">📋 スプレッドシートから貼り付け</h2>
+          <h2 className="text-base font-bold">📋 スプレッドシートから取り込む（貼り付け・ファイル）</h2>
           <button type="button" onClick={onClose} aria-label="閉じる" className="ml-auto text-slate-500">✕</button>
         </div>
         <ol className="mb-2 list-decimal space-y-0.5 pl-5 text-xs text-slate-600">
@@ -77,6 +82,7 @@ export default function KarteImportDialog({ today, month, initialText = '', opti
             </select>
           </label>
         </div>
+        <div className="mb-2"><SheetFilePicker kind="karte" onPick={(sh, sec) => { const t = sectionText(sh.grid, sec, [colOf(sh.grid, sec, (n) => n.includes('氏名'))]); setText(t); void check(t); }} /></div>
         <textarea value={text} onChange={(e) => { setText(e.target.value); setLines(null); }}
           onPaste={(e) => { const t = e.clipboardData.getData('text/plain'); if (t) { e.preventDefault(); setText(t); void check(t); } }}
           placeholder="ここに貼り付け（Ctrl+V）" aria-label="貼り付ける欄" rows={lines ? 3 : 8}
