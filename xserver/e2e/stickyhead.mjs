@@ -11,8 +11,8 @@ const errs = [];
 for (const [label, viewport] of [['パソコン', { width: 1366, height: 800 }], ['スマホ', { width: 390, height: 844 }]]) {
   const p = await br.newPage({ viewport }); p.on('pageerror', (e) => errs.push(e.message));
   await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
-  // 休診日（日曜など）に動かしても予約表が出るよう、次の月〜金の日を開く
-  const wd = (() => { const d = new Date(); for (;;) { d.setDate(d.getDate() + 1); if (d.getDay() >= 1 && d.getDay() <= 5 && !['2026-11-03', '2026-11-23'].includes(d.toISOString().slice(0, 10))) return d.toISOString().slice(0, 10); } })();
+  // 休診日（日曜など）に動かしても予約表が出るよう、次の月・火・水・金の日を開く（サンプル店舗は木曜が定休日）
+  const wd = (() => { const d = new Date(); for (;;) { d.setDate(d.getDate() + 1); if ([1, 2, 3, 5].includes(d.getDay()) && !['2026-11-03', '2026-11-23'].includes(d.toISOString().slice(0, 10))) return d.toISOString().slice(0, 10); } })();
   await p.goto(`${B}/admin/day/${wd}`);
   await p.waitForSelector('td[data-cell="540:1"] input'); await p.waitForTimeout(800);
   const head = p.getByRole('banner', { name: '管理画面のメニュー' });

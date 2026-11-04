@@ -19,7 +19,7 @@ export default function JibaiAlertDialog({ alert, role, today }: { alert: Alert 
   const one = stores ? null : (alert as Exclude<Alert, { stores: unknown }>);
   const overdue = stores ? stores.some((s) => s.overdue) : !!one?.overdue;
   return (
-    <div className="no-print fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="alertdialog" aria-label="自賠請求の提出のお知らせ">
+    <div className="no-print fixed inset-0 z-[45] flex items-center justify-center bg-black/30 p-4" role="alertdialog" aria-label="自賠請求の提出のお知らせ">
       <div className={`w-full max-w-md rounded-lg border-2 bg-white p-4 text-sm shadow-xl ${overdue ? 'border-red-500' : 'border-amber-400'}`}>
         <h2 className={`text-base font-bold ${overdue ? 'text-red-700' : 'text-amber-800'}`}>⚠ 自賠請求の提出のお知らせ</h2>
         {one && (

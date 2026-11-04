@@ -68,7 +68,9 @@ ok('別の名前に書き換えると電話番号は外れる', cellOf(d, 690, 4
 // 6) 予約を探す：氏名・診察券番号（患者一覧から）・WEB 予約
 await api('POST', '/api/admin/patients', { rows: [{ no: '003842', name: '見本 花子', kana: 'ミホン ハナコ' }] });
 await api('PUT', '/api/admin/cells', { date: '2026-11-10', cells: [{ time: 600, bed: 1, text: '見本 花子（再来）' }] });
-const wb = await api('POST', '/api/public/S001/reserve', { kind: 'RETURN', date: '2026-11-04', time: 600, name: '見本 花子', phone: '070' + String(Date.now()).slice(-8), cardNo: '3842' });
+// WEB 予約は 3 日以上先の月・火・水・金（祝日を除く。日付によって「お電話でのみ」にならないように）
+const WD = (() => { const d = new Date(); d.setDate(d.getDate() + 3); for (;;) { const s = d.toISOString().slice(0, 10); if ([1, 2, 3, 5].includes(d.getDay()) && !['2026-11-23', '2027-01-01'].includes(s)) return s; d.setDate(d.getDate() + 1); } })();
+const wb = await api('POST', '/api/public/S001/reserve', { kind: 'RETURN', date: WD, time: 600, name: '見本 花子', phone: '070' + String(Date.now()).slice(-8), cardNo: '3842' });
 ok('準備：WEB 予約', wb[0] === 200, JSON.stringify(wb[1]).slice(0, 60));
 await p.reload(); await p.waitForSelector('#grid');
 await p.getByRole('button', { name: '🔍 予約を探す' }).click();

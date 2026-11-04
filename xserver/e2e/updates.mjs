@@ -10,6 +10,8 @@ const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); 
 const br = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
 try {
   const p = await br.newPage({ viewport: { width: 1200, height: 900 } });
+  // 自賠請求の提出のお知らせ（1 日 1 回）は、今日は見たことにする（更新のお知らせの確認をふさがないため）
+  await p.addInitScript(() => { try { localStorage.setItem(`natsume.jibaiAlert.${new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)}`, '1'); } catch { /* */ } });
   const errs = []; p.on('pageerror', (e) => errs.push(e.message));
   await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
   const dlg = p.getByRole('dialog', { name: '更新のお知らせ' });
