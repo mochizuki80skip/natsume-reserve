@@ -55,13 +55,14 @@ function adm_jibai_alert(array $s, ?array $store): ?array
     try {
         Jibai::ensureTables();
         $setting = Settings::global();
-        $today = Time::nowJst()['date'];
-        if ($s['role'] === 'store') return $store ? Jibai::alertFor($store, $setting, $today) : null;
+        $now = Time::nowJst();
+        $today = $now['date'];
+        if ($s['role'] === 'store') return $store ? Jibai::alertFor($store, $setting, $today, (int)$now['minutes']) : null;
         if ($s['role'] !== 'hq' && $s['role'] !== 'mg') return null;
         $list = $s['role'] === 'mg' ? Auth::mgStores() : Settings::storesInOrder('active = 1 AND hqOnly = 0', [], false);
         $out = [];
         foreach ($list as $st) {
-            $a = Jibai::alertFor($st, $setting, $today);
+            $a = Jibai::alertFor($st, $setting, $today, (int)$now['minutes']);
             if ($a) $out[] = ['code' => $st['code'], 'name' => $st['name']] + $a;
         }
         return $out ? ['stores' => $out] : null;

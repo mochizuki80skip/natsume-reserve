@@ -1,6 +1,7 @@
-// 自賠請求の提出のアラート。その月の最終営業日から、提出するまで（締め切り：翌月 5 日）。
+// 自賠請求の提出のアラート。その月の最終営業日の営業終了の時刻から、提出するまで（締め切り：翌月 5 日）。
+// 画面を開いたままでも営業終了の時刻を過ぎたら出るよう、10 分ごとに確かめる。
 // ログインしたあと 1 日 1 回、画面の上に知らせる（店舗：自分の店舗／本部・管轄MG：未提出の店舗の一覧）。メニューには赤い印
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { JibaiAlert as Alert } from '@/lib/types';
 
@@ -9,8 +10,18 @@ const mdJa = (d: string) => `${Number(d.slice(5, 7))}月${Number(d.slice(8, 10))
 export const jibaiAlertText = (a: { ym: string; deadline: string; daysLeft: number; overdue: boolean }) =>
   a.overdue ? `締め切り（${mdJa(a.deadline)}）を過ぎています` : a.daysLeft === 0 ? `締め切りは今日（${mdJa(a.deadline)}）です` : `締め切り：${mdJa(a.deadline)}（あと ${a.daysLeft} 日）`;
 
-export default function JibaiAlertDialog({ alert, role, today }: { alert: Alert | null | undefined; role: string; today: string }) {
+export default function JibaiAlertDialog({ alert: first, role, today }: { alert: Alert | null | undefined; role: string; today: string }) {
   const key = `natsume.jibaiAlert.${today}`;
+  const [alert, setAlert] = useState(first);
+  useEffect(() => { setAlert(first); }, [first]);
+  useEffect(() => {
+    if (role !== 'store' && role !== 'hq' && role !== 'mg') return;
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      fetch('/api/admin/me').then((r) => (r.ok ? r.json() : null)).then((j) => { if (j) setAlert(j.jibaiAlert ?? null); }).catch(() => {});
+    }, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [role]);
   const [open, setOpen] = useState(() => { try { return localStorage.getItem(key) !== '1'; } catch { return true; } });
   const nav = useNavigate();
   if (!alert || !open) return null;
