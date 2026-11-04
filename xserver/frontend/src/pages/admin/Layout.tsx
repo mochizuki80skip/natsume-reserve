@@ -6,6 +6,7 @@ import { goLogin, useFetch } from '@/lib/api';
 import type { Me } from '@/lib/types';
 import WebNotifier from '@/components/WebNotifier';
 import { UpdateBanner, WhatsNew } from '@/components/UpdateNotice';
+import JibaiAlertDialog, { jibaiAlertText } from '@/components/JibaiAlert';
 import { APP_VERSION } from '@/version';
 
 export interface AdminContext { me: Me; refreshMe: () => void }
@@ -15,7 +16,7 @@ export function useAdmin(): AdminContext {
 }
 
 /** ヘッダーの「▾」で開くメニュー（項目を押すか、外を押すと閉じる） */
-function DropMenu({ label, plain, children }: { label: string; plain?: boolean; children: ReactNode }) {
+function DropMenu({ label, plain, children }: { label: ReactNode; plain?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) ref.current.open = false; };
@@ -69,6 +70,12 @@ export default function AdminLayout() {
   if (!me) return <div className="p-4 text-sm text-red-700">{error?.status === 401 ? 'ログインしてください' : error?.message ?? '読み込みに失敗しました'}</div>;
   const store = me.store;
   const today = me.today;
+  // 自賠請求の提出のアラート：店舗はメニューの「自賠請求」に「!」、本部・管轄MG は「自賠集計」に未提出の店舗の数
+  const ja = me.jibaiAlert;
+  const jibaiBadge = me.session.role === 'store' && ja && !('stores' in ja)
+    ? <span className={`ml-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full px-1 align-[1px] text-[10.5px] font-bold text-white ${ja.overdue ? 'bg-red-600' : 'bg-amber-500'}`} title={`自賠請求がまだ提出されていません（${jibaiAlertText(ja)}）`} aria-label="自賠請求の未提出">!</span> : null;
+  const hqN = ja && 'stores' in ja ? ja.stores.length : 0;
+  const hqJibaiBadge = hqN > 0 ? <span className="ml-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-600 px-1 align-[1px] text-[10.5px] font-bold text-white" title={`自賠請求の未提出 ${hqN} 店舗`} aria-label={`自賠請求の未提出 ${hqN} 店舗`}>{hqN}</span> : null;
   // 自賠請求だけに使う店舗では、予約表などの画面は開かず自賠請求へ（本部のページはそのまま）
   if (store?.jibaiOnly && me.session.role !== 'acct' && !/^\/admin\/(jibai|hq|updates|guide)/.test(location.pathname)) return <Navigate to="/admin/jibai" replace />;
   // 経理アカウント：窓口集計・自賠集計だけ（予約表などの店舗の画面は開かない）
@@ -78,6 +85,7 @@ export default function AdminLayout() {
     <div className="min-h-screen">
       <UpdateBanner role={me.session.role} />
       <WhatsNew role={me.session.role} />
+      <JibaiAlertDialog alert={me.jibaiAlert} role={me.session.role} today={me.today} />
       {/* 上のメニュー（予約表・新患継続率など）は画面の上に固定。高さを --admin-head-h にして、予約表の日付の帯などをその下に固定する */}
       <header ref={headRef} className="no-print sticky top-0 z-40 border-b bg-white" aria-label="管理画面のメニュー">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap px-3 py-1.5">
@@ -101,10 +109,10 @@ export default function AdminLayout() {
           <nav className={`ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] ${navOpen ? 'max-sm:ml-0 max-sm:w-full max-sm:gap-x-4 max-sm:gap-y-2 max-sm:py-1 max-sm:text-sm' : 'max-sm:hidden'}`}>
             {acct ? (<>
               <Link to="/admin/acct" className="hover:underline">窓口集計（全店）</Link>
-              <Link to="/admin/hq/jibai" className="hover:underline">自賠集計</Link>
+              <Link to="/admin/hq/jibai" className="hover:underline">自賠集計{hqJibaiBadge}</Link>
             </>) : store?.jibaiOnly ? (
               // 自賠請求だけに使う店舗：メニューは自賠請求だけ
-              <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
+              <Link to="/admin/jibai" className="hover:underline">自賠請求{jibaiBadge}</Link>
             ) : (<>
               <Link to={`/admin/day/${today}`} className="hover:underline">予約表</Link>
               <Link to="/admin/shifts" className="hover:underline">シフト</Link>
@@ -113,25 +121,25 @@ export default function AdminLayout() {
               {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
               <Link to="/admin/churn" className="hover:underline" title="離反者リスト・2週間フォロー">離反</Link>
               <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
-              <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
+              <Link to="/admin/jibai" className="hover:underline">自賠請求{jibaiBadge}</Link>
               <Link to="/admin/madoguchi" className="hover:underline">窓口集計</Link>
               <Link to="/admin/report" className="hover:underline">日報</Link>
               <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
               {me.session.role === 'mg' && (
-                <DropMenu label={`MG（${me.session.area}）`}>
+                <DropMenu label={<>MG（{me.session.area}）{hqN > 0 && <i className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600 align-middle" aria-hidden />}</>}>
                   <Link to="/admin/hq/overview">全店状況</Link>
                   <Link to="/admin/acct">窓口集計・売上（全店）</Link>
-                  <Link to="/admin/hq/jibai">自賠集計</Link>
+                  <Link to="/admin/hq/jibai">自賠集計{hqJibaiBadge}</Link>
                   <Link to="/admin/hq/accidents">新自・新三（全店）</Link>
                   <Link to="/admin/staffing">人員配置</Link>
                 </DropMenu>
               )}
             </>)}
             {me.session.role === 'hq' && (
-              <DropMenu label="本部メニュー">
+              <DropMenu label={<>本部メニュー{hqN > 0 && <i className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600 align-middle" aria-hidden />}</>}>
                 <Link to="/admin/hq/overview">全店状況</Link>
                 <Link to="/admin/hq/karte">新患・再来集計（全店）</Link>
-                <Link to="/admin/hq/jibai">自賠集計</Link>
+                <Link to="/admin/hq/jibai">自賠集計{hqJibaiBadge}</Link>
                 <Link to="/admin/hq/accidents">新自・新三（全店）</Link>
                 <Link to="/admin/acct">窓口集計（全店）</Link>
                 <Link to="/admin/staffing">人員配置</Link>

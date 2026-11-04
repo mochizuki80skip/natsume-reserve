@@ -49,6 +49,28 @@ function adm_switch(): never
 }
 
 /** 画面の共通情報（ログイン状態・表示中の店舗・本部なら店舗一覧） */
+/** 自賠請求の提出のアラート（画面に出すだけ） */
+function adm_jibai_alert(array $s, ?array $store): ?array
+{
+    try {
+        Jibai::ensureTables();
+        $setting = Settings::global();
+        $today = Time::nowJst()['date'];
+        if ($s['role'] === 'store') return $store ? Jibai::alertFor($store, $setting, $today) : null;
+        if ($s['role'] !== 'hq' && $s['role'] !== 'mg') return null;
+        $list = $s['role'] === 'mg' ? Auth::mgStores() : Settings::storesInOrder('active = 1 AND hqOnly = 0', [], false);
+        $out = [];
+        foreach ($list as $st) {
+            $a = Jibai::alertFor($st, $setting, $today);
+            if ($a) $out[] = ['code' => $st['code'], 'name' => $st['name']] + $a;
+        }
+        return $out ? ['stores' => $out] : null;
+    } catch (Throwable $e) {
+        error_log('[jibai alert] ' . $e->getMessage());
+        return null;
+    }
+}
+
 function adm_me(): never
 {
     $s = Auth::requireSession();
@@ -68,6 +90,8 @@ function adm_me(): never
         'smsEnabled' => Sms::enabled(),
         // 新自（交通事故）の事故日・事故内容の未入力（メニューの「新患継続率」に赤い数字で出す）
         'accidentMissing' => $store && !(int)($store['jibaiOnly'] ?? 0) ? Karte::accidentMissing($store['id']) : 0,
+        // 自賠請求の提出のアラート（店舗：今の店舗の分。本部・管轄MG：未提出の店舗の一覧。管轄MG は管轄の店舗だけ）
+        'jibaiAlert' => adm_jibai_alert($s, $store),
     ]);
 }
 

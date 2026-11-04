@@ -50,4 +50,10 @@ export interface Me {
   smsEnabled: boolean;
   /** 新自（交通事故）の事故日・事故内容の未入力の数 */
   accidentMissing?: number;
+  /** 自賠請求の提出のアラート（店舗：自分の店舗の分／本部・管轄MG：未提出の店舗） */
+  jibaiAlert?: JibaiAlert | null;
 }
+
+/** 自賠請求の提出のアラート（その月の最終営業日から提出するまで。締め切り：翌月 5 日） */
+export type JibaiAlertOne = { ym: string; deadline: string; daysLeft: number; overdue: boolean };
+export type JibaiAlert = JibaiAlertOne | { stores: (JibaiAlertOne & { code: string; name: string })[] };

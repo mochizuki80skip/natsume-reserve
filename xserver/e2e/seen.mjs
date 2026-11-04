@@ -9,6 +9,8 @@ export function skipWhatsNew(browser) {
         // 閉院後に予約表を開くと出る「ブロックの提案」の一覧も、今日は見たことにする（確認の時刻によって操作をふさがないため）
         const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
         for (let i = 1; i <= 9; i++) localStorage.setItem(`natsume.blockSuggest.S00${i}.${today}`, '1');
+        // 自賠請求の提出のお知らせ（1 日 1 回）も、今日は見たことにする（e2e/jibaialert.mjs だけ消して確かめる）
+        localStorage.setItem(`natsume.jibaiAlert.${today}`, '1');
       } catch { /* 保存できなくても続ける */ }
     });
     return ctx;

@@ -97,6 +97,42 @@ final class Jibai
         return self::monthRow(Db::one('SELECT * FROM jibai_month WHERE storeId = ? AND ym = ?', [$storeId, $ym]));
     }
 
+    public const DEADLINE_DAY = 5; // 提出の締め切り：翌月 5 日
+
+    /** その月の最終営業日（定休日・祝日・終日の臨時休業を除く） */
+    public static function lastBusinessDay(array $store, array $setting, string $ym): string
+    {
+        $d = date('Y-m-t', strtotime($ym . '-01 00:00:00 UTC'));
+        for ($i = 0; $i < 15; $i++) {
+            $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $d]));
+            $closed = Settings::closedOf($day);
+            if ($closed !== true && Settings::storeSessions($store, $setting, $d, $closed)) return $d;
+            $d = Time::addDays($d, -1);
+        }
+        return date('Y-m-t', strtotime($ym . '-01 00:00:00 UTC'));
+    }
+
+    /**
+     * 提出のアラート：その月の最終営業日から、提出するまで（締め切りの翌月 5 日を過ぎたら「過ぎています」）。
+     * 前の月が未提出ならそちら、済んでいれば今月の最終営業日から今月。提出済み（請求者なしを含む）なら null
+     */
+    public static function alertFor(array $store, array $setting, string $today): ?array
+    {
+        if ((int)($store['hqOnly'] ?? 0) || !(int)($store['active'] ?? 1)) return null;
+        $cur = substr($today, 0, 7);
+        [$y, $m] = array_map('intval', explode('-', $cur));
+        $prev = sprintf('%04d-%02d', $m === 1 ? $y - 1 : $y, $m === 1 ? 12 : $m - 1);
+        $sent = fn(string $ym) => (($mo = self::month((string)$store['id'], $ym)) && $mo['status'] === 'SUBMITTED');
+        // 前の月が未提出なら、まずそちら（締め切りを過ぎても、提出するまで出す）。前の月が済んでいれば、今月の最終営業日から今月
+        if (!$sent($prev)) $ym = $prev;
+        elseif ($today >= self::lastBusinessDay($store, $setting, $cur) && !$sent($cur)) $ym = $cur;
+        else return null;
+        [$yy, $mm] = array_map('intval', explode('-', $ym));
+        $deadline = sprintf('%04d-%02d-%02d', $mm === 12 ? $yy + 1 : $yy, $mm === 12 ? 1 : $mm + 1, self::DEADLINE_DAY);
+        $left = (int)((strtotime($deadline . ' 00:00:00 UTC') - strtotime($today . ' 00:00:00 UTC')) / 86400);
+        return ['ym' => $ym, 'deadline' => $deadline, 'daysLeft' => $left, 'overdue' => $left < 0];
+    }
+
     /** 操作記録（氏名は残さない） */
     public static function log(string $storeId, string $ym, ?string $claimId, string $action, ?string $detail, string $byCode): void
     {
