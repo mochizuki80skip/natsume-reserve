@@ -189,6 +189,19 @@ export default function JibaiPage() {
     }
   }
 
+  // 提出月を変える（例：10 月分を 11 月の画面で提出してしまったとき、提出を 10 月へ移す）
+  async function moveMonth(to: string) {
+    if (!data || !to) return;
+    if (!confirm(`${formatYm(data.ym)} の画面で提出した明細 ${rows.length} 件と「提出済み」を、${formatYm(to)} へ移します（${formatYm(to)} の提出になります）。\n${formatYm(data.ym)} は未提出に戻ります。よろしいですか？`)) return;
+    try {
+      const j = await send('/api/admin/jibai/submit', 'POST', { ym: data.ym, action: 'move', to }) as { moved?: number };
+      setMsg({ text: `提出月を ${formatYm(to)} に変えました（明細 ${j.moved ?? 0} 件を移しました）`, kind: 'ok' });
+      go(to);
+    } catch (e: unknown) {
+      setMsg({ text: e instanceof Error ? e.message : '失敗しました', kind: 'err' });
+    }
+  }
+
   async function verify(r: Row, verifiedAmount: number | null, note: string) {
     if (!r.id) return;
     try {
@@ -254,6 +267,7 @@ export default function JibaiPage() {
             <>
               <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">提出済み{rows.length === 0 ? '（請求者なし）' : ''} {formatDateTime(data.month?.submittedAt)}（{data.month?.submittedBy}）</span>
               <button type="button" onClick={() => submitMonth('reopen')} className="rounded border bg-white px-3 py-1 text-sm">提出を取り消す</button>
+              <MoveMonth ym={ym} suggest={rows.length && rows.every((r) => r.invoiceYm && r.invoiceYm < ym) ? rows[0].invoiceYm : ''} onMove={moveMonth} />
             </>
           ) : rows.length === 0 && unsaved === 0 ? (
             <span className="flex flex-wrap items-center gap-2" role="group" aria-label="請求者なしで提出">
@@ -456,5 +470,22 @@ function OcrProgressBar({ message, pct, total, done, msPer, queueLeft }: { messa
         <div className="h-full rounded-full bg-brand transition-[width] duration-300" style={{ width: `${total > 1 ? all : cur}%` }} />
       </div>
     </div>
+  );
+}
+
+/** 提出月を変える（提出済みのとき）。明細の請求月がすべて前の月なら、その月をはじめに選んでおく */
+function MoveMonth({ ym, suggest, onMove }: { ym: string; suggest: string; onMove: (to: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState(suggest || addMonths(ym, -1));
+  if (!open) return <button type="button" onClick={() => setOpen(true)} className="rounded border bg-white px-3 py-1 text-sm" title="例：10 月分を 11 月の画面で提出してしまったとき">提出月を変える</button>;
+  return (
+    <span className="flex flex-wrap items-center gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-sm" role="group" aria-label="提出月を変える">
+      <select value={to} onChange={(e) => setTo(e.target.value)} aria-label="移す先の月" className="rounded border px-1 py-0.5">
+        {[-3, -2, -1, 1].map((n) => addMonths(ym, n)).map((m) => <option key={m} value={m}>{formatYm(m)}{m === suggest ? '（明細の請求月）' : ''}</option>)}
+      </select>
+      <span className="text-xs">の提出にする</span>
+      <button type="button" onClick={() => onMove(to)} className="rounded bg-brand px-2 py-0.5 text-xs font-bold text-white">変える</button>
+      <button type="button" onClick={() => setOpen(false)} className="text-xs underline">やめる</button>
+    </span>
   );
 }

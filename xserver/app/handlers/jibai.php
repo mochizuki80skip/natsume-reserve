@@ -132,6 +132,29 @@ function jibai_submit(): never
         Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy)',
             [Db::newId(), $sid, $ym, 'SUBMITTED', Time::nowJstDateTime(), $by]);
         Jibai::log($sid, $ym, null, 'submit', '0 件（自賠請求なし）', $by);
+    } elseif ($action === 'move') {
+        // 提出月を変える：提出した明細と「提出済み」を、別の月（本来の提出月）へ移す（例：10 月分を 11 月の画面で提出してしまった）
+        $to = (string)($b['to'] ?? '');
+        if (!Jibai::isValidYm($to) || $to === $ym) Http::error('移す先の月を選んでください', 400);
+        $m = Jibai::month($sid, $ym);
+        if (!$m || $m['status'] !== 'SUBMITTED') Http::error('提出済みの月だけ、提出月を変えられます', 400);
+        $tm = Jibai::month($sid, $to);
+        if ($tm && $tm['status'] === 'SUBMITTED') Http::error('移す先の月はもう提出済みです。先に、その月の「提出を取り消す」を押してください', 409);
+        $n = 0;
+        Db::transaction(function () use ($sid, $ym, $to, $m, $by, &$n) {
+            // 明細は移す先の月の続きの番号にする
+            $seq = (int)Db::one('SELECT COALESCE(MAX(seq), 0) AS m FROM jibai_claim WHERE storeId = ? AND ym = ? FOR UPDATE', [$sid, $to])['m'];
+            foreach (Db::all('SELECT id FROM jibai_claim WHERE storeId = ? AND ym = ? ORDER BY seq ASC, createdAt ASC, id ASC', [$sid, $ym]) as $c) {
+                Db::exec('UPDATE jibai_claim SET ym = ?, seq = ? WHERE id = ?', [$to, ++$seq, $c['id']]);
+                $n++;
+            }
+            Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy)',
+                [Db::newId(), $sid, $to, 'SUBMITTED', $m['submittedAt'], $m['submittedBy']]);
+            Db::exec('DELETE FROM jibai_month WHERE storeId = ? AND ym = ?', [$sid, $ym]);
+            Jibai::log($sid, $to, null, 'submit', sprintf('%s の画面から提出月を変更（%d 件）', $ym, $n), $by);
+            Jibai::log($sid, $ym, null, 'reopen', sprintf('提出月を %s に変更（%d 件を移動）', $to, $n), $by);
+        });
+        Http::json(['ok' => true, 'moved' => $n, 'to' => $to, 'month' => Jibai::month($sid, $ym)]);
     } elseif ($action === 'reopen') {
         $m = Jibai::month($sid, $ym);
         if (!$m || $m['status'] !== 'SUBMITTED') Http::error('提出されていません', 400);
