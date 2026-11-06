@@ -66,6 +66,9 @@ const cells = [
   [L, 540, 1, '見本 一郎（初診）', 1, '見本 施術者'], [L, 555, 1, '上記初診対応', 1, '見本 施術者'], [L, 600, 2, '見本 二郎（再来）', 1, '見本 施術者'], [L, 600, 3, '見本 三郎（初自）', 1, ''],
   [L, 660, 1, '見本 四郎（新三）', 1, ''], [L, 660, 2, '見本 五郎', 1, ''], [L, 720, 1, '見本 六郎（初診）', 0, ''], [L2, 540, 1, '見本 七郎', 1, ''],
 ];
+// 離反の日の当日に来院した人（八郎）は離反・前日に来院した人（九郎）は離反ではない
+const Cm1 = `${CY}-${pad(cd - 1)}`;
+if (cd > 1) cells.push([L, 780, 2, '見本 八郎', 1, ''], [C, 540, 5, '見本 八郎', 1, ''], [L, 780, 3, '見本 九郎', 1, ''], [Cm1, 540, 5, '見本 九郎', 1, '']);
 for (const [d, tm, b, tx, v, s] of cells) sql(`INSERT INTO cell (id, storeId, date, time, bed, text, visited, staff) VALUES (REPLACE(UUID(), '-', ''), '${sid}', '${d}', ${tm}, ${b}, '${tx}', ${v}, '${s}');`);
 sql(`INSERT INTO cancel_log (id, storeId, date, time, bed, name, kind, source, byCode) VALUES (REPLACE(UUID(), '-', ''), '${sid}', '${L}', 780, 1, '見本 取消', 'NEW', 'phone', 'S001');`);
 sql(`INSERT INTO staff_member (id, storeId, name, role, startDate, joinType) VALUES ('stapi1', '${sid}', '見本 新人', 'THERAPIST', '${LY}-02', 'NEW') ON DUPLICATE KEY UPDATE startDate = VALUES(startDate);`);
@@ -105,8 +108,8 @@ const rv = (id) => rep.items.find((x) => x.id === id)?.value;
 const sum = (k) => out.daily.data.reduce((a, x) => a + x[k], 0);
 ok('daily：その日の来院・新患・新患（自賠）・再来が日報と一致', dl.visits === rv('total') && dl.newGeneral === rv('new') && dl.newJibai === rv('new-jibai') && dl.revisit === rv('revisit'), JSON.stringify([rv('total'), rv('new'), rv('new-jibai'), rv('revisit')]));
 ok('daily：月の初めからの新規・再来の合計が日報の「月間成績」と一致', sum('newGeneral') === rv('p-new') && sum('revisit') === rv('p-revisit'));
-ok('daily：その日の数（来院 5・初診 1・初自 1・新三 1・再来 1・キャンセル 1）', dl.visits === 5 && dl.newGeneral === 1 && dl.newJibai === 1 && dl.newThirdParty === 1 && dl.revisit === 1 && dl.cancels === 1, JSON.stringify(dl).slice(0, 160));
-ok('monthly：来院・新規の合計（月全体）', mo.visits === 6 && mo.newGeneral === 1 && mo.revisit === 1);
+ok('daily：その日の数（来院 5〜7・初診 1・初自 1・新三 1・再来 1・キャンセル 1）', dl.visits === 5 + (cd > 1 ? 2 : 0) && dl.newGeneral === 1 && dl.newJibai === 1 && dl.newThirdParty === 1 && dl.revisit === 1 && dl.cancels === 1, JSON.stringify(dl).slice(0, 160));
+ok('monthly：来院・新規の合計（月全体）', mo.visits === 6 + (cd > 1 ? 2 : 0) && mo.newGeneral === 1 && mo.revisit === 1);
 // 新患継続率（画面を開く前の API の数＝画面を開いたあとの数）
 const kart = (await api(st, 'GET', `/api/admin/karte?month=${LY}`))[1];
 const ret = out.retention.data[0];
@@ -122,9 +125,11 @@ ok('retention：2 回目の来院・中止（除いた数も）', ret2.reached['
 // 離反
 const ch = (await api(st, 'GET', `/api/admin/churn?month=${CY}`))[1];
 const co = out.churn.data[0];
-ok('churn：離反数・分母・離反率が離反者リストの画面と一致', co.churned === ch.stats.count && co.base === ch.stats.active && co.churnRate === ch.stats.rate && co.churnRateEx === ch.stats.rateEx && co.churned >= 4, `${co.churned}/${co.base} ${co.churnRate} vs ${JSON.stringify(ch.stats)}`);
-// 区分（新患・再来・既存）は初回カルテを見て決める（画面と同じ。上で新患継続率の画面を開いたので、今の API と画面で比べる）
+ok('churn：画面を開く前の API の離反数・分母も画面と同じ', co.churned === ch.stats.count && co.base === ch.stats.active);
+// 区分（新患・再来・既存）と「除く」は初回カルテ（中止・転院）を見て決める（画面と同じ。上で新患継続率の画面を直したので、今の API と画面で比べる）
 const coNow = (await stats(`churn?ym=${CY}&stores=S001`, KEY))[1].data[0];
+ok('churn：離反数・分母・離反率・除いた離反率が離反者リストの画面と一致', coNow.churned === ch.stats.count && coNow.base === ch.stats.active && coNow.churnRate === ch.stats.rate && coNow.excluded === ch.stats.excluded && coNow.churnRateEx === ch.stats.rateEx && coNow.churned >= 4, `${coNow.churned}/${coNow.base} ${coNow.churnRate} ${coNow.churnRateEx} vs ${JSON.stringify(ch.stats)}`);
+if (cd > 1) ok('churn：離反の日の当日の来院は離反・前日までの来院は継続（8 人中 7 人）', coNow.churned === 7 && coNow.base === 8 && ch.rows.some((r) => r.name.includes('八郎')) && !ch.rows.some((r) => r.name.includes('九郎')), `${coNow.churned}/${coNow.base}`);
 ok('churn：区分ごと（新患・再来・既存）が画面と一致・合計＝離反数', coNow.byKind.reduce((a, x) => a + x.churned, 0) === coNow.churned && ['新患', '再来', '既存'].every((l) => coNow.byKind.find((x) => x.label === l).churned === ch.rows.filter((r) => r.kind === l).length), JSON.stringify(coNow.byKind));
 // 中止にした人は除く方に（画面で管理を入れた内容が API にも）
 const target = ch.rows.find((r) => r.kind === '再来') ?? ch.rows[0];

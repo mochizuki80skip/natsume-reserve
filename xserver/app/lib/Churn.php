@@ -129,6 +129,7 @@ final class Churn
         foreach ($visits as $v) $byKey[$v['key']][] = $v;
         $karte = self::karteOf($store['id']);
         $want = [];
+        $cands = [];
         foreach ($byKey as $key => $vs) {
             for ($i = 0; $i < count($vs); $i++) {
                 $v = $vs[$i];
@@ -138,21 +139,32 @@ final class Churn
                 if ($next !== null && $next < $cd) continue; // 離反の前に来院している
                 if ($next !== null && $next === $v['date']) continue;
                 $k = $karte[$key] ?? $karte['n:' . Text::normalizeName($v['name'])] ?? null;
-                $count = '';
-                if ($k) {
-                    // 初回から最後の来院までの来院回数（システムに入っている分）
-                    $n = count(array_unique(array_column(array_filter(self::visits($store, $k['date'], $v['date']), fn($x) => $x['key'] === $key), 'date')));
-                    $count = $n >= 13 ? '13〜' : ($n >= 7 ? '7〜12' : (string)max($n, 1));
-                }
-                $want[$key . '|' . $v['date']] = [
-                    'patientKey' => $key, 'lastVisit' => $v['date'], 'churnDate' => $cd, 'cardNo' => $v['card'], 'name' => mb_substr($v['name'], 0, 40),
-                    'sex' => $k['sex'] ?? '', 'age' => isset($k['age']) && $k['age'] !== null ? (int)$k['age'] : null,
-                    'kind' => $k ? ($k['kind'] === 'REVISIT' ? '再来' : '新患') : '既存', 'visits' => $count, 'staff' => mb_substr($v['staff'], 0, 30),
-                    'symptom' => $k ? mb_substr(trim(($k['symptomCat'] ?? '') . ($k['symptom'] !== '' && $k['symptom'] !== $k['symptomCat'] ? ' ' . $k['symptom'] : '')), 0, 100) : '',
-                    'treatment' => $k['treatment'] ?? '',
-                    'manage' => $k && (int)($k['stopped'] ?? 0) ? '中止' : ($k && (int)($k['transferred'] ?? 0) ? '転院' : ''),
-                ];
+                $cands[] = [$key, $v, $cd, $k];
             }
+        }
+        // 初回から最後の来院までの来院回数（システムに入っている分）。来院の記録は 1 回だけまとめて読む（患者様ごとに読むと遅いため）
+        $hist = [];
+        $ks = array_filter($cands, fn($c) => $c[3] !== null);
+        if ($ks) {
+            $from = min(array_map(fn($c) => (string)$c[3]['date'], $ks));
+            $to = max(array_map(fn($c) => $c[1]['date'], $ks));
+            foreach (self::visits($store, $from, $to) as $x) $hist[$x['key']][$x['date']] = true;
+        }
+        foreach ($cands as [$key, $v, $cd, $k]) {
+            $count = '';
+            if ($k) {
+                // ※ 今までと同じ結果にするため、カルテNo（数字）の患者様は数えない（前からの作りで 1 になる。直すかは依頼者に確認中）
+                $n = is_string($key) ? count(array_filter(array_keys($hist[$key] ?? []), fn($d) => $d >= $k['date'] && $d <= $v['date'])) : 0;
+                $count = $n >= 13 ? '13〜' : ($n >= 7 ? '7〜12' : (string)max($n, 1));
+            }
+            $want[$key . '|' . $v['date']] = [
+                'patientKey' => $key, 'lastVisit' => $v['date'], 'churnDate' => $cd, 'cardNo' => $v['card'], 'name' => mb_substr($v['name'], 0, 40),
+                'sex' => $k['sex'] ?? '', 'age' => isset($k['age']) && $k['age'] !== null ? (int)$k['age'] : null,
+                'kind' => $k ? ($k['kind'] === 'REVISIT' ? '再来' : '新患') : '既存', 'visits' => $count, 'staff' => mb_substr($v['staff'], 0, 30),
+                'symptom' => $k ? mb_substr(trim(($k['symptomCat'] ?? '') . ($k['symptom'] !== '' && $k['symptom'] !== $k['symptomCat'] ? ' ' . $k['symptom'] : '')), 0, 100) : '',
+                'treatment' => $k['treatment'] ?? '',
+                'manage' => $k && (int)($k['stopped'] ?? 0) ? '中止' : ($k && (int)($k['transferred'] ?? 0) ? '転院' : ''),
+            ];
         }
         return $want;
     }

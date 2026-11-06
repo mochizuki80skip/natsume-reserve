@@ -8,7 +8,7 @@ final class StatsApi
     public const VERSION = '1.0';
     public const MAX_DAYS = 93;
     public const RETENTION_MAX_VISIT = 6; // 新患継続率は 2〜6 回目まで（7 回目以降は数えない仕様）
-    public const CHURN_RULE = '最終来院の翌月の同じ日（その日がない月は月末）までに来院がない患者様を、その日に離反とする（月によって 28〜31 日）';
+    public const CHURN_RULE = '最終来院の翌月の同じ日（その日がない月は月末）を離反の日とする。その前日までに来院があれば離反ではない。離反の日の当日の来院は離反に数える（月によって 28〜31 日）';
     private const KIND_OUT = ['NEW' => 'NEW', 'ACCIDENT' => 'ACCIDENT', 'THIRD' => 'THIRD_PARTY', 'REVISIT' => 'REVISIT'];
     /** 窓口集計の列 → API のキー（画面の並びと同じ） */
     private const SALES_KEYS = [
