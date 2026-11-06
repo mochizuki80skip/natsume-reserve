@@ -13,6 +13,10 @@ body { @apply bg-slate-50 text-slate-800; }
 /* 回数（2回目など）の濃い色のセルは文字を白に（入力中は読みやすいよう黒） */
 .grid-cell.dark-cell input:not(:focus) { color: #fff; font-weight: 700; }
 .grid-cell.dark-cell input::placeholder { color: #e2e8f0; }
+/* パソコン：ベッドの列は同じ幅で固定（名前・WEB・特典・メニュー・担当などを入れても列が広がらない。入りきらない印は縮める） */
+@media (min-width: 640px) {
+  #grid { table-layout: fixed; min-width: calc(4.5rem + var(--beds, 8) * 7.5rem); }
+}
 /* スマホ：8 ベッドまで画面の幅に収める（セルの高さはそのまま、文字を小さく） */
 .grid-cell .cell-label { display: none; }
 @media (max-width: 639px) {

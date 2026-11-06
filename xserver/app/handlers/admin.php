@@ -1223,8 +1223,18 @@ function adm_patients_lookup(): never
     $ctx = Auth::context();
     $no = patient_no(Http::query('no', ''));
     if ($no === '') Http::json(['name' => null]);
-    $r = Db::one('SELECT name FROM patient_card WHERE storeId = ? AND cardNo = ?', [$ctx['store']['id'], $no]);
-    Http::json(['no' => $no, 'name' => $r['name'] ?? null]);
+    $sid = $ctx['store']['id'];
+    $r = Db::one('SELECT name FROM patient_card WHERE storeId = ? AND cardNo = ?', [$sid, $no]);
+    if ($r) Http::json(['no' => $no, 'name' => $r['name'], 'from' => 'patients']);
+    // 患者一覧に無ければ、新患継続率に入れたカルテNo から（いちばん新しい行。名字の長さが分かれば「名字 名前」にする）
+    foreach (Db::all("SELECT karteNo, name, surnameLen FROM karte WHERE storeId = ? AND karteNo <> '' AND name <> '' ORDER BY date DESC, srcTime DESC LIMIT 5000", [$sid]) as $k) {
+        if (patient_no((string)$k['karteNo']) !== $no) continue;
+        $name = (string)$k['name'];
+        $len = (int)($k['surnameLen'] ?? 0);
+        if ($len > 0 && $len < mb_strlen($name) && !preg_match('/[\s　]/u', $name)) $name = mb_substr($name, 0, $len) . ' ' . mb_substr($name, $len);
+        Http::json(['no' => $no, 'name' => $name, 'from' => 'karte']);
+    }
+    Http::json(['no' => $no, 'name' => null]);
 }
 
 // ---------- 特別な営業日（プレオープン・イベントなど） ----------

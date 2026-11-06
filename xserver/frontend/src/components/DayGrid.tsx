@@ -188,7 +188,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     const name = await lookupNo(no);
     setNumHint(null);
     if (name) { setCellsTracked([{ time, bed, text: name }]); setPasteInfo(`診察券番号 ${no} → ${name}`); }
-    else setPasteInfo(`診察券番号 ${no} は患者一覧にありません（番号のまま残しました。店舗設定で患者一覧を取り込み直すと出るようになります）`);
+    else setPasteInfo(`診察券番号 ${no} は患者一覧・新患継続率にありません（番号のまま残しました。店舗設定で患者一覧を取り込み直すか、新患継続率にカルテNo を入れると出るようになります）`);
     // 画面に氏名が出てから次の行へ（先に移ると、入力前の内容の記録がずれて「元に戻す」が 1 回余分になる）
     setTimeout(() => focusCell(r + 1, c), 0);
   }
@@ -1028,7 +1028,9 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
           );
         })()}
         <div className="overflow-x-auto rounded border bg-white">
-          <table id="grid" className="w-full border-collapse text-sm">
+          <table id="grid" className="w-full border-collapse text-sm" style={{ ['--beds' as string]: cols.length }}>
+            {/* 列の幅：時間の列は固定、ベッドの列は同じ幅（入力しても広がらない） */}
+            <colgroup><col className="w-[4.5rem] max-sm:w-8" />{cols.map((b) => <col key={b} />)}</colgroup>
             <thead>
               {(() => {
                 const lo = Math.min(cap.am, cap.pm), hi = Math.max(cap.am, cap.pm), n = cols.length;
@@ -1044,7 +1046,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                 );
               })()}
               <tr className="bg-slate-100">
-                <th className="w-16 border px-1 py-1 max-sm:w-8 max-sm:text-[9px]">時間</th>
+                <th className="border px-1 py-1 max-sm:text-[9px]">時間</th>
                 {/* スマホでは「ベッド」を外して番号だけ（8 ベッドまで画面の幅に収める） */}
                 {cols.map((b) => <th key={b} className={`border px-1 py-1 max-sm:px-0 max-sm:text-[10px] ${b > Math.max(cap.am, cap.pm) ? 'bg-slate-100 text-slate-500' : ''}`}><span className="max-sm:hidden">ベッド</span>{b}</th>)}
               </tr>
@@ -1090,11 +1092,11 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                               <button type="button" tabIndex={-1} onClick={() => toggleVisit(t, b)} aria-label={visited.has(k) ? '来院チェックを外す' : '来院チェック'}
                                 className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] max-sm:absolute max-sm:left-px max-sm:top-[3px] max-sm:z-[1] max-sm:ml-0 max-sm:h-2.5 max-sm:w-2.5 max-sm:text-[7px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
                             )}
-                            {web && hasName && <span className="ml-0.5 flex-none rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700 max-sm:hidden" title="WEB予約">WEB</span>}
-                            {web?.campaign && hasName && <span className="ml-0.5 flex-none rounded-sm bg-orange-600 px-[2px] text-[8px] font-bold leading-[12px] text-white" title={`${web.campaign.route}特典：${web.campaign.name}（セルを選ぶと上に内容が出ます）`} aria-label={`キャンペーンの予約：${web.campaign.name}`}>🎁<span className="max-sm:hidden">特典</span></span>}
+                            {web && hasName && <span className="ml-0.5 min-w-0 shrink truncate rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700 max-sm:hidden" title="WEB予約">WEB</span>}
+                            {web?.campaign && hasName && <span className="ml-0.5 min-w-0 shrink truncate rounded-sm bg-orange-600 px-[2px] text-[8px] font-bold leading-[12px] text-white" title={`${web.campaign.route}特典：${web.campaign.name}（セルを選ぶと上に内容が出ます）`} aria-label={`キャンペーンの予約：${web.campaign.name}`}>🎁<span className="max-sm:hidden">特典</span></span>}
                             {cellMenus.length > 0 && (
-                              <span className="ml-0.5 flex flex-none gap-px max-sm:hidden" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
-                                {cellMenus.map((m) => <i key={m} className="min-w-[13px] rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m, menuOptions)}</i>)}
+                              <span className="ml-0.5 flex min-w-0 shrink gap-px overflow-hidden max-sm:hidden" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
+                                {cellMenus.map((m) => <i key={m} className="min-w-[13px] flex-none whitespace-nowrap rounded-sm px-[2px] text-center text-[9px] font-bold not-italic leading-[14px] text-white" style={{ background: menuColor(m, menuOptions) }}>{menuShort(m, menuOptions)}</i>)}
                               </span>
                             )}
                             <input
@@ -1154,15 +1156,15 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                               }}
                               onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}
                               placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
-                              className={`min-w-0 flex-1 ${bBlock ? 'placeholder:text-slate-600' : ''}`}
+                              className={`min-w-0 flex-1 sm:min-w-[3rem] ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
                             {fillHere && <span aria-label="選んだ範囲を広げる" title="ドラッグすると、選ぶ範囲を広げられます（Excel のオートフィルと同じ）" onMouseDown={(e) => startFill(e, r, c)}
                               className="no-print absolute -bottom-[4px] -right-[4px] z-[4] h-[8px] w-[8px] cursor-crosshair border border-white bg-brand max-sm:hidden" />}
                             {/* スマホ：入力欄は 1 行で切れるので、氏名は 2 行に折り返して見せる（入力中は消える）。（再）（初診）などの印はセルの色で分かるので外す */}
                             {text && <span aria-hidden className={`cell-label ${hasName ? 'with-check' : ''}`}>{hasName ? text.replace(/[（(][^（()）]*[）)]\s*$/, '') || text : text}</span>}
-                            {hasName && st === 'pending' && <span className="no-print pointer-events-none flex-none rounded bg-yellow-600 max-sm:hidden px-1 text-[10px] leading-4 text-white">未チェック</span>}
-                            {staffName && <span className="ml-0.5 flex-none rounded-full border border-brand max-sm:hidden bg-white px-1.5 text-[10px] font-bold leading-4 text-brand-dark" title={`担当：${staffName}`}>{staffName}</span>}
-                            {needCheck && <span className="no-print ml-0.5 flex-none rounded bg-amber-500 max-sm:hidden px-1 text-[10px] font-bold leading-4 text-white" title="同じ名前の初回の患者様が複数いるため、担当を自動で付けられませんでした">担当を確認</span>}
+                            {hasName && st === 'pending' && <span className="no-print pointer-events-none min-w-0 shrink truncate rounded bg-yellow-600 max-sm:hidden px-1 text-[10px] leading-4 text-white">未チェック</span>}
+                            {staffName && <span className="ml-0.5 min-w-0 shrink truncate rounded-full border border-brand max-sm:hidden bg-white px-1.5 text-[10px] font-bold leading-4 text-brand-dark" title={`担当：${staffName}`}>{staffName}</span>}
+                            {needCheck && <span className="no-print ml-0.5 min-w-0 shrink truncate rounded bg-amber-500 max-sm:hidden px-1 text-[10px] font-bold leading-4 text-white" title="同じ名前の初回の患者様が複数いるため、担当を自動で付けられませんでした">担当を確認</span>}
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); setMenu(menu === k ? null : k); }} aria-label="メニュー"
                                 className="no-print absolute right-0 top-0 h-full w-4 text-xs text-slate-400 hover:text-slate-700 max-sm:w-2 max-sm:text-[8px]">⋯</button>
