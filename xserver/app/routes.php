@@ -13,6 +13,7 @@ require_once __DIR__ . '/handlers/madoguchi.php';
 require_once __DIR__ . '/handlers/churn.php';
 require_once __DIR__ . '/handlers/closure.php';
 require_once __DIR__ . '/handlers/report.php';
+require_once __DIR__ . '/handlers/stats.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -110,6 +111,18 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/referrals/export$#', 'hq_referrals_export'],
         ['GET', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_get'],
         ['GET', '#^/api/admin/hq/accidents$#', 'hq_accidents'],
+        // 集計API のキー（本部・アカウント管理の権限がある人）
+        ['GET', '#^/api/admin/hq/api-keys$#', 'hq_api_keys_get'],
+        ['POST', '#^/api/admin/hq/api-keys$#', 'hq_api_keys_post'],
+        ['PUT', '#^/api/admin/hq/api-keys$#', 'hq_api_keys_put'],
+        ['DELETE', '#^/api/admin/hq/api-keys$#', 'hq_api_keys_delete'],
+        // 集計API（統合ダッシュボード用・読み取り専用。API キーで認証）
+        ['GET', '#^/api/stats/meta$#', 'stats_meta'],
+        ['GET', '#^/api/stats/daily$#', 'stats_daily'],
+        ['GET', '#^/api/stats/monthly$#', 'stats_monthly'],
+        ['GET', '#^/api/stats/retention$#', 'stats_retention'],
+        ['GET', '#^/api/stats/churn$#', 'stats_churn'],
+        ['GET', '#^/api/stats/staff$#', 'stats_staff'],
         ['GET', '#^/api/admin/hq/accidents/export$#', 'hq_accidents_export'],
         ['GET', '#^/api/admin/hq/campaigns/export$#', 'hq_campaigns_export'],
         ['PUT', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_put'],

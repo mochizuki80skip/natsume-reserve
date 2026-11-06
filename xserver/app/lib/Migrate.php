@@ -5,7 +5,21 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 49;
+    private const VERSION = 50;
+    public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
+  `id` VARCHAR(32) NOT NULL,
+  `name` VARCHAR(40) NOT NULL,
+  `keyHash` CHAR(64) NOT NULL,
+  `prefix` VARCHAR(12) NOT NULL DEFAULT '',
+  `allowedIps` VARCHAR(500) NOT NULL DEFAULT '',
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `lastUsedAt` DATETIME NULL,
+  `lastIp` VARCHAR(45) NOT NULL DEFAULT '',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `createdBy` VARCHAR(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `api_key_hash` (`keyHash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     private static bool $done = false;
 
     public static function run(PDO $pdo): void
@@ -344,6 +358,10 @@ final class Migrate
                 foreach ([['karte_option', 'label'], ['karte', 'trig'], ['campaign', 'trig'], ['referral', 'trig']] as [$t, $c]) {
                     if (self::hasTable($pdo, $t) && self::hasColumn($pdo, $t, $c)) $pdo->prepare("UPDATE `$t` SET `$c` = ? WHERE `$c` = ?")->execute(['ママこケアHP', 'ママニケアHP']);
                 }
+            }
+            if ($ver < 50) {
+                // 集計API のキー（統合ダッシュボード用。キーはハッシュだけを残す）
+                $pdo->exec(self::API_KEY_DDL);
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

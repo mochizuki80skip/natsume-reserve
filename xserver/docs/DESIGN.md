@@ -193,6 +193,14 @@ xserver/
 | 自賠請求 | `/api/admin/jibai`（`/claims` `/submit` `/verify`）、`hq/jibai`（`/settings`） | 自賠責の請求の速報 |
 | 臨時休業 | `/api/admin/closures`（`/notices` `/ack`） | 本部・MG からのまとめての休業と店舗の確認 |
 
+### 5-4b. 集計API（`handlers/stats.php`・`lib/StatsApi.php`）
+統合ダッシュボード（別システム）向けの読み取り専用の API。仕様は依頼者と決めた「集計API 仕様書（確定版 1.0）」。
+- `GET /api/stats/meta` `daily?from&to&stores`（最大 93 日）`monthly?ym` `retention?ym` `churn?ym` `staff?ym`（`stores` は店舗コードのカンマ区切り、省略で全店舗。自賠請求だけの店舗は除く）。
+- 認証：`Authorization: Bearer <キー>`（届かないサーバー用に `X-API-Key` も）。キーは本部アカウントの画面（`/api/admin/hq/api-keys`、アカウント管理の権限がある人）で発行・停止。DB は SHA-256 のハッシュだけ（`api_key`）。接続元 IP の制限、1 キー 60 回／分（`RateLimit`）、HTTPS のみ（同じサーバーの中からの 127.0.0.1 は除く）。呼ばれるたびに `audit_log`（action `api.stats.*`）。
+- 応答：`{ ok, apiVersion, generatedAt, period, definitions, data }`、エラーは `{ ok:false, error:{ code, message } }`（400 invalid_param・401 unauthorized・403 forbidden / https_required・429 rate_limited）。
+- 数え方は画面と同じ：来院・新規は日報（`Text::categorize`）、窓口は `Madoguchi::month`／`dayCalc`、継続率は `Karte::rowsView`、離反は `Churn::rowsView`（画面を開いたときの sync と同じ結果を、保存・メールなしで計算）。
+- 返さないもの：患者様の氏名・電話番号・カルテ番号・患者番号、スタッフの名前・ID・担当数。継続率は 2〜6 回目まで。
+
 ### 5-5. その他（`handlers/misc.php`）
 - `GET /api/cron/cleanup?token=CRON_SECRET`（または `Authorization: Bearer`）：古いデータの削除（§10）。
 - `GET /install?token=INSTALL_TOKEN`：テーブル作成と初期データ。

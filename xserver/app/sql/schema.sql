@@ -583,3 +583,19 @@ CREATE TABLE IF NOT EXISTS `follow` (
   UNIQUE KEY `follow_store_day_patient` (`storeId`, `listDate`, `patientKey`),
   CONSTRAINT `fk_follow_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 集計API のキー（統合ダッシュボードなど。キーそのものは残さず SHA-256 のハッシュだけ。prefix は見分け用の先頭の数文字）
+CREATE TABLE IF NOT EXISTS `api_key` (
+  `id` VARCHAR(32) NOT NULL,
+  `name` VARCHAR(40) NOT NULL,
+  `keyHash` CHAR(64) NOT NULL,
+  `prefix` VARCHAR(12) NOT NULL DEFAULT '',
+  `allowedIps` VARCHAR(500) NOT NULL DEFAULT '',  -- 許可する接続元 IP（カンマ区切り。空＝制限なし）
+  `active` TINYINT(1) NOT NULL DEFAULT 1,
+  `lastUsedAt` DATETIME NULL,
+  `lastIp` VARCHAR(45) NOT NULL DEFAULT '',
+  `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `createdBy` VARCHAR(60) NOT NULL DEFAULT '',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `api_key_hash` (`keyHash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

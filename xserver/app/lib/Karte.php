@@ -123,6 +123,14 @@ final class Karte
         $dates = Time::datesOfMonth($ym);
         $first = $dates[0];
         $last = $dates[count($dates) - 1];
+        [$want, $exists] = self::wantedCells($store, $first, $last);
+        $rows = Db::all('SELECT id, date, srcTime, srcBed, edited FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? AND auto = 1', [$store['id'], $first, $last]);
+        self::syncSave($store, $want, $exists, $rows);
+    }
+
+    /** その月の予約表から、初回カルテにする来院（来院チェック済みの初診・初・初自・再）と、セルがある枠 */
+    private static function wantedCells(array $store, string $first, string $last): array
+    {
         $cells = Db::all('SELECT c.date, c.time, c.bed, c.text, c.visited, c.staff, r.viaCard, r.campaign AS rCampaign, rf.name AS refName, rf.kind AS refKind, rf.trig AS refTrig FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId LEFT JOIN referral rf ON rf.code = r.refCode WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0', [$store['id'], $first, $last]);
         $want = [];
         $exists = [];
@@ -133,7 +141,11 @@ final class Karte
             $kind = self::kindOfText((string)$c['text']);
             if ($kind) $want[$k] = ['date' => $c['date'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'kind' => $kind, 'name' => self::nameOfText((string)$c['text']), 'staff' => (string)($c['staff'] ?? ''), 'card' => (int)($c['viaCard'] ?? 0) === 1, 'ref' => (string)($c['refName'] ?? ''), 'refTrig' => ($c['refKind'] ?? '') === 'media' ? (string)$c['refTrig'] : '業者紹介', 'camp' => Campaign::decode($c['rCampaign'] ?? null)];
         }
-        $rows = Db::all('SELECT id, date, srcTime, srcBed, edited FROM karte WHERE storeId = ? AND date BETWEEN ? AND ? AND auto = 1', [$store['id'], $first, $last]);
+        return [$want, $exists];
+    }
+
+    private static function syncSave(array $store, array $want, array $exists, array $rows): void
+    {
         $have = [];
         foreach ($rows as $r) {
             $k = $r['date'] . ':' . (int)$r['srcTime'] . ':' . (int)$r['srcBed'];
@@ -157,6 +169,31 @@ final class Karte
             // 新自が来院（来院チェック）したら、エリアMG・本部が決めた人へメールで知らせる。昔の日のチェックでは送らない
             if ($added > 0 && in_array($w['kind'], self::INJURY_KINDS, true) && $w['date'] >= Time::addDays($today, -1)) self::notifyAccident($store, $newId, $w['name']);
         }
+    }
+
+    /**
+     * 新患継続率の画面を開いたときと同じ行（sync したあとの行）を、保存もメールもせずに出す（集計API 用）。
+     * 返すのは数えるのに使う kind・visits（2〜6回目の来院日）・stopped・transferred だけ
+     */
+    public static function rowsView(array $store, string $ym): array
+    {
+        $dates = Time::datesOfMonth($ym);
+        $first = $dates[0];
+        $last = $dates[count($dates) - 1];
+        [$want, $exists] = self::wantedCells($store, $first, $last);
+        $out = [];
+        $have = [];
+        foreach (Db::all('SELECT date, srcTime, srcBed, auto, edited, kind, visits, stopped, transferred FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$store['id'], $first, $last]) as $r) {
+            if ((int)$r['auto']) {
+                $k = $r['date'] . ':' . (int)$r['srcTime'] . ':' . (int)$r['srcBed'];
+                $have[$k] = true;
+                if (!isset($want[$k]) && isset($exists[$k]) && !(int)$r['edited']) continue; // sync で取り除かれる行
+            }
+            $v = json_decode((string)$r['visits'], true);
+            $out[] = ['kind' => (string)$r['kind'], 'visits' => is_array($v) ? $v : [], 'stopped' => (int)$r['stopped'] === 1, 'transferred' => (int)$r['transferred'] === 1];
+        }
+        foreach ($want as $k => $w) if (!isset($have[$k])) $out[] = ['kind' => $w['kind'], 'visits' => [], 'stopped' => false, 'transferred' => false];
+        return $out;
     }
 
     /** 新自（交通事故）の行で、事故日・事故内容のどちらかが空の数（前の月も含めてすべて） */

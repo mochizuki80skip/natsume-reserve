@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { useAdmin } from './Layout';
+import ApiKeyEditor from '@/components/ApiKeyEditor';
 
 interface Account { id: string; code: string; name: string; role: 'hq' | 'mg' | 'acct'; area: string; active: boolean; canManage: boolean; lastLoginAt: string; owner: boolean }
 interface Resp { accounts: Account[]; me: { id: string; canManage: boolean }; areas: string[] }
@@ -126,6 +127,8 @@ export default function AccountsPage() {
           <p className="mt-2 text-xs text-slate-500">本人は、店舗設定の「パスワード変更」から自分のパスワードに変えられます。異動・退職のときは「停止」してください（記録は残ります）。</p>
         </form>
       )}
+
+      {can && <ApiKeyEditor />}
 
       {can && <Audit />}
     </div>

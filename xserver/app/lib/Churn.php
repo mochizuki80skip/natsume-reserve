@@ -112,6 +112,16 @@ final class Churn
         $dates = Time::datesOfMonth($ym);
         $first = $dates[0];
         $last = end($dates);
+        $want = self::wanted($store, $ym);
+        self::save($store, $first, $last, $want);
+    }
+
+    /** その月に離反した方（自動で出す行）を計算する（保存はしない）。キーは「患者|最後の来院日」 */
+    public static function wanted(array $store, string $ym): array
+    {
+        $dates = Time::datesOfMonth($ym);
+        $first = $dates[0];
+        $last = end($dates);
         $today = Time::nowJst()['date'];
         // 最後の来院が [月初の 1 か月前, 月末の 1 か月前] にある方。間にほかの来院がないか見るため、月末までの来院を読む
         $visits = self::visits($store, Time::addDays($first, -40), min($last, $today));
@@ -144,6 +154,11 @@ final class Churn
                 ];
             }
         }
+        return $want;
+    }
+
+    private static function save(array $store, string $first, string $last, array $want): void
+    {
         $have = [];
         foreach (Db::all("SELECT id, patientKey, lastVisit, edited, manage FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source = 'auto'", [$store['id'], $first, $last]) as $r) {
             $id = $r['patientKey'] . '|' . $r['lastVisit'];
@@ -166,6 +181,39 @@ final class Churn
             Db::exec('INSERT INTO churn (id, storeId, churnDate, patientKey, lastVisit, cardNo, name, sex, age, kind, visits, staff, symptom, treatment, manage, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 [Db::newId(), $store['id'], $w['churnDate'], $w['patientKey'], $w['lastVisit'], $w['cardNo'], $w['name'], $w['sex'], $w['age'], $w['kind'], $w['visits'], $w['staff'], $w['symptom'], $w['treatment'], $w['manage'], 'auto']);
         }
+    }
+
+    /**
+     * 離反者リストの画面を開いたときと同じ行（sync したあとの行）を、保存せずに出す（集計API 用）。
+     * 返すのは数えるのに使う kind・manage だけ（氏名などは返さない）
+     * @return array<int, array{kind:string, manage:string}>
+     */
+    public static function rowsView(array $store, string $ym): array
+    {
+        $dates = Time::datesOfMonth($ym);
+        $first = $dates[0];
+        $last = end($dates);
+        $want = self::wanted($store, $ym);
+        $out = [];
+        $have = [];
+        foreach (Db::all('SELECT patientKey, lastVisit, edited, manage, kind, source, churnDate, cardNo, name FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ?', [$store['id'], $first, $last]) as $r) {
+            if ($r['source'] !== 'auto') { $out[] = ['kind' => (string)$r['kind'], 'manage' => (string)$r['manage']]; continue; }
+            $id = $r['patientKey'] . '|' . $r['lastVisit'];
+            $have[$id] = true;
+            if (!isset($want[$id])) { if ((int)$r['edited']) $out[] = ['kind' => (string)$r['kind'], 'manage' => (string)$r['manage']]; continue; }
+            if ((int)$r['edited']) { $out[] = ['kind' => (string)$r['kind'], 'manage' => (string)$r['manage']]; continue; }
+            $w = $want[$id];
+            $out[] = ['kind' => $w['kind'], 'manage' => (string)$r['manage'] !== '' ? (string)$r['manage'] : $w['manage']];
+        }
+        $imported = [];
+        foreach (Db::all("SELECT churnDate, cardNo, name FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source IN ('import', 'manual')", [$store['id'], $first, $last]) as $r) {
+            $imported[$r['churnDate'] . '|' . (self::cardKey($r['cardNo']) ?: 'n:' . Text::normalizeName($r['name']))] = true;
+        }
+        foreach ($want as $id => $w) {
+            if (isset($have[$id]) || isset($imported[$w['churnDate'] . '|' . $w['patientKey']])) continue;
+            $out[] = ['kind' => $w['kind'], 'manage' => $w['manage']];
+        }
+        return $out;
     }
 
     /** 前月に来院した実人数（離反率の母数） */
