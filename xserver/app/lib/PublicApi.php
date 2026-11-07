@@ -121,11 +121,12 @@ final class PublicApi
                 }
             }
         }
-        // 新規・再来を止める時間帯（初診・再来の予約だけ。新自・通院中は取れる）
+        // 受付を止める時間帯（新規＝初診・再来・既存＝現在通院中のうち、選んだものだけ。新自は止めない）
         $kindStop = [];
-        if ($kind === 'NEW' || $kind === 'REVISIT') {
+        $stopKey = ['NEW' => 'N', 'REVISIT' => 'R', 'RETURN' => 'E'][$kind] ?? null;
+        if ($stopKey !== null) {
             foreach (Db::all('SELECT startTime, endTime, kinds FROM kind_block WHERE storeId = ? AND date = ?', [$store['id'], $date]) as $kb) {
-                if (!str_contains((string)$kb['kinds'], $kind === 'NEW' ? 'N' : 'R')) continue; // 新規だけ・再来だけのブロック
+                if (!str_contains((string)$kb['kinds'], $stopKey)) continue; // 止めるものに入っていない区分
                 for ($t = (int)$kb['startTime']; $t < (int)$kb['endTime']; $t += $setting['slotMinutes']) $kindStop[$t] = true;
             }
         }

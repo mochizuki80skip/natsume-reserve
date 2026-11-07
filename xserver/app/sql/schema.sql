@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS `kind_block` (
   `startTime` INT NOT NULL,
   `endTime` INT NOT NULL,
   `label` VARCHAR(30) NOT NULL DEFAULT '',
-  `kinds` VARCHAR(4) NOT NULL DEFAULT 'NR',   -- 止めるもの：N＝新規（初診）／R＝再来／NR＝両方
+  `kinds` VARCHAR(4) NOT NULL DEFAULT 'NR',   -- 止めるもの：N＝新規（初診）／R＝再来／E＝既存（現在通院中）の組み合わせ（例 NR・NRE）。0〜1440 は1日まるごと
   `auto` TINYINT(1) NOT NULL DEFAULT 0,       -- 1＝提案から承認したもの（当てはまらなくなったら自動で外す）
   PRIMARY KEY (`id`),
   KEY `kind_block_store_date` (`storeId`, `date`),

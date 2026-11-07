@@ -874,14 +874,22 @@ function adm_kind_block_post(): never
     Http::requireJson();
     $b = Http::body();
     $date = Http::date($b, 'date');
-    try {
-        $start = Http::int($b, 'start', 0, 24 * 60);
-        $end = Http::int($b, 'end', 0, 24 * 60);
-    } catch (HttpError) {
-        Http::error('入力内容を確認してください', 400);
+    if (!empty($b['allDay'])) {
+        // 1日まるごと：0:00〜24:00 で持つ（営業時間が変わっても全部止まる）
+        [$start, $end] = [0, 24 * 60];
+    } else {
+        try {
+            $start = Http::int($b, 'start', 0, 24 * 60);
+            $end = Http::int($b, 'end', 0, 24 * 60);
+        } catch (HttpError) {
+            Http::error('入力内容を確認してください', 400);
+        }
+        if ($end <= $start) Http::error('終了時刻は開始時刻より後にしてください', 400);
     }
-    if ($end <= $start) Http::error('終了時刻は開始時刻より後にしてください', 400);
-    $kinds = in_array($b['kinds'] ?? 'NR', ['NR', 'N', 'R'], true) ? ($b['kinds'] ?? 'NR') : 'NR';
+    // 止めるもの：N＝新規（初診）・R＝再来・E＝既存（現在通院中）の組み合わせ（この順にそろえる）
+    $raw = (string)($b['kinds'] ?? 'NR');
+    $kinds = implode('', array_filter(['N', 'R', 'E'], fn($k) => str_contains($raw, $k)));
+    if ($kinds === '' || preg_match('/[^NRE]/', $raw)) Http::error('止めるもの（新規・再来・既存）を選んでください', 400);
     Db::exec('INSERT INTO kind_block (id, storeId, date, startTime, endTime, label, kinds) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, mb_substr(trim((string)($b['label'] ?? '')), 0, 30), $kinds]);
     BlockSuggest::sync($ctx['store'], Settings::global(), $date);
     Http::json(['ok' => true]);

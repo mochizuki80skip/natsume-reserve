@@ -37,8 +37,9 @@ ok('店舗設定に「WEB で同時に受ける人数」の欄（古い同時対
 // ---- 2. 新規・再来を止める時間（初診・再来は×、新自・通院中は取れる）
 await p.goto(`${B}/admin/day/${D}`); await p.waitForSelector('#grid');
 await p.getByRole('button', { name: /枠数・ブロック/ }).click();
-const ks = p.getByLabel('新規・再来を止める', { exact: true });
-await ks.getByRole('button', { name: '＋ 時間を追加' }).click();
+const ks = p.getByLabel('WEBの受付を止める', { exact: true });
+await ks.getByRole('button', { name: '＋ 止める時間を追加' }).click();
+ok('止めるものの既定は新規・再来（既存は外れている）', (await ks.getByLabel('新規（初診）').isChecked()) && (await ks.getByLabel('再来（1か月以上ぶり）').isChecked()) && !(await ks.getByLabel('既存（現在通院中）').isChecked()));
 await ks.getByLabel('止める開始').selectOption('600');
 await ks.getByLabel('止める終了').selectOption('660');
 await ks.getByPlaceholder('理由（例：院長不在）').fill('院長不在');
@@ -51,8 +52,29 @@ ok('新自（交通事故）は取れる', (await st('ACCIDENT', 615)) !== 'clos
 ok('通院中は取れる', (await st('RETURN', 615)) !== 'closed');
 ok('止める時間の外は初診も取れる', (await st('NEW', 690)) !== 'closed');
 await p.screenshot({ path: O + 'kindstop.png', clip: { x: 0, y: 0, width: 1366, height: 700 } });
-await ks.getByLabel('新規・再来を止めるのをやめる').click(); await p.waitForTimeout(800);
+await ks.getByLabel('受付を止めるのをやめる').click(); await p.waitForTimeout(800);
 ok('やめると初診も取れる', (await st('NEW', 615)) !== 'closed');
+
+// ---- 2b. 既存（現在通院中）を 1日まるごと止める
+await ks.getByRole('button', { name: '＋ 止める時間を追加' }).click();
+await ks.getByLabel('新規（初診）').uncheck(); await ks.getByLabel('再来（1か月以上ぶり）').uncheck(); await ks.getByLabel('既存（現在通院中）').check();
+await ks.getByLabel('1日まるごと').check();
+ok('1日まるごとのときは時刻を選ばない', (await ks.getByLabel('止める開始').count()) === 0);
+await ks.getByPlaceholder('理由（例：院長不在）').fill('研修');
+await ks.getByRole('button', { name: '追加' }).click(); await p.waitForTimeout(800);
+ok('「既存✕ 1日まるごと 研修」と出る', (await ks.textContent()).includes('既存✕ 1日まるごと') && (await ks.textContent()).includes('研修'), await ks.textContent());
+ok('予約表の時刻に「既✕」（朝も夕方も）', (await p.locator('#grid tbody tr').filter({ has: p.locator('td', { hasText: /^9:00/ }) }).first().textContent()).includes('既✕') && (await p.locator('#grid tbody tr').filter({ has: p.locator('td', { hasText: /^15:00/ }) }).first().textContent()).includes('既✕'));
+ok('通院中は 1日中×（朝・昼・夕方）', (await st('RETURN', 615)) === 'closed' && (await st('RETURN', 690)) === 'closed' && (await st('RETURN', 900)) === 'closed');
+ok('初診・再来・新自は取れる', (await st('NEW', 690)) !== 'closed' && (await st('REVISIT', 690)) !== 'closed' && (await st('ACCIDENT', 690)) !== 'closed');
+await p.screenshot({ path: O + 'kindstop-all.png', clip: { x: 0, y: 0, width: 1366, height: 700 } });
+// 3 つとも・時間を決めて（API）
+ok('止めるものが空・知らない文字は断る', (await api('POST', '/api/admin/kind-blocks', { date: D, start: 600, end: 660, kinds: '' }))[0] === 400 && (await api('POST', '/api/admin/kind-blocks', { date: D, start: 600, end: 660, kinds: 'NX' }))[0] === 400);
+ok('新規・再来・既存をまとめて止められる', (await api('POST', '/api/admin/kind-blocks', { date: D, start: 900, end: 960, kinds: 'ERN' }))[0] === 200);
+const kb = (await api('GET', `/api/admin/day?date=${D}`))[1].data.kindBlocks;
+ok('並びは N・R・E にそろう', kb.some((b) => b.kinds === 'NRE' && b.start === 900), JSON.stringify(kb));
+ok('3 つとも止めた時間は初診も×', (await st('NEW', 900)) === 'closed' && (await st('REVISIT', 900)) === 'closed');
+for (const b of kb) await api('DELETE', '/api/admin/kind-blocks', { id: b.id });
+ok('外すと通院中も取れる', (await st('RETURN', 615)) !== 'closed');
 
 // ---- 3. 1 人が持てる予約（既定 4 件）と、WEB で予約できる日数（既定 14 日）
 const s0 = (await api('GET', '/api/admin/settings'))[1].store;

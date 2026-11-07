@@ -11,7 +11,7 @@ import { categorizeCell, cellState, isContinuationText, type CellState } from '@
 import { findDuplicates } from '@/lib/duplicates';
 import { formatJpPhone } from '@/lib/format';
 import NextDateInput from './NextDateInput';
-import BlockPanel, { blockBedsText } from './BlockPanel';
+import BlockPanel, { blockBedsText, kindStopShort, kindStopText } from './BlockPanel';
 import ChangeDialog, { type ChangeFrom } from './ChangeDialog';
 import CellLogPanel from './CellLogPanel';
 import { CANCEL_KIND_CLASS, CANCEL_KIND_JA, changeTargetText } from '@/lib/cancelKind';
@@ -1062,7 +1062,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                     <td className={`whitespace-nowrap border px-1 text-center font-mono max-sm:px-0 max-sm:text-[9px] ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
                       title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockBedsText(b.beds, cols)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
                       {blk.length > 0 && <span className="no-print mr-0.5 text-[10px]">🔒</span>}{minToHm(t)}
-                      {kblk && <span className="no-print ml-0.5 rounded bg-amber-400 px-0.5 font-sans text-[9px] font-bold text-white max-sm:hidden" title={`WEB の${kblk.kinds === 'N' ? '新規' : kblk.kinds === 'R' ? '再来' : '新規・再来'}を止めています${kblk.label ? `（${kblk.label}）` : ''}`}>{kblk.kinds === 'N' ? '新✕' : kblk.kinds === 'R' ? '再✕' : '新再✕'}</span>}
+                      {kblk && <span className="no-print ml-0.5 rounded bg-amber-400 px-0.5 font-sans text-[9px] font-bold text-white max-sm:hidden" title={`WEB の${kindStopText(kblk.kinds)}を止めています${kblk.label ? `（${kblk.label}）` : ''}`}>{kindStopShort(kblk.kinds)}</span>}
                     </td>
                     {cols.map((b, c) => {
                       const k = key(t, b);
