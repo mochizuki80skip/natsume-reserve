@@ -22,6 +22,10 @@ const visit = async (date, time, bed, text, visited = true) => {
 const ym = add(`${today.slice(0, 7)}-01`, -1).slice(0, 7), prevYm = add(`${ym}-01`, -1).slice(0, 7);
 // 前月の来院：一郎（今月に離反）・二郎（今月また来院＝続けて通院）・四郎（初診・今月に離反・中止）
 await visit(`${prevYm}-05`, 540, 1, '見本 四郎（初診）');
+// 四郎はもう 1 回来院（カルテNo のある方の通院回数＝2。前は 1 と出ていた）。営業している日を選ぶ
+let shiro2 = null;
+for (const d of ['06', '07', '08', '09']) { const x = (await api('GET', `/api/admin/day?date=${prevYm}-${d}`))[1]?.data; if (x?.times?.length) { shiro2 = `${prevYm}-${d}`; break; } }
+await visit(shiro2, 540, 1, '見本 四郎');
 await visit(`${prevYm}-10`, 600, 1, '見本 一郎');
 await visit(`${prevYm}-20`, 600, 2, '見本 二郎');
 await visit(`${ym}-15`, 600, 2, '見本 二郎');
@@ -39,7 +43,7 @@ const ichiro = c.rows.find((r) => r.name === '見本 一郎');
 const shiro = c.rows.find((r) => r.name === '見本 四郎');
 ok('離反：翌月の同じ日（一郎）', ichiro?.churnDate === `${ym}-10` && ichiro.lastVisit === `${prevYm}-10` && ichiro.kind === '既存' && ichiro.visits === '', JSON.stringify(ichiro));
 ok('続けて通院の方は出ない（二郎）', !c.rows.some((r) => r.name === '見本 二郎'));
-ok('新患継続率から自動（四郎：カルテNo・性・年・症状・施術・新患・通院回数・管理＝中止）', shiro && shiro.cardNo === '1500' && shiro.sex === '♂' && shiro.age === 50 && shiro.kind === '新患' && shiro.visits === '1' && shiro.treatment === '矯正' && shiro.manage === '中止' && shiro.symptom.includes('腰'), JSON.stringify(shiro));
+ok('新患継続率から自動（四郎：カルテNo・性・年・症状・施術・新患・通院回数 2・管理＝中止）', shiro && shiro.cardNo === '1500' && shiro.sex === '♂' && shiro.age === 50 && shiro.kind === '新患' && shiro.visits === '2' && shiro.lastVisit === shiro2 && shiro.treatment === '矯正' && shiro.manage === '中止' && shiro.symptom.includes('腰'), JSON.stringify(shiro));
 ok('離反率 2 とおり（含む 2/3・除く 1/2）', c.stats.count === 2 && c.stats.active === 3 && c.stats.rate === 66.7 && c.stats.rateEx === 50, JSON.stringify(c.stats));
 // 店舗で入れる：理由・通院回数（既存の方は手打ち）
 await p.goto(`${B}/admin/churn?month=${ym}`); await p.waitForSelector('table[aria-label="離反者リスト"]');

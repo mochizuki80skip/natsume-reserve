@@ -153,8 +153,8 @@ final class Churn
         foreach ($cands as [$key, $v, $cd, $k]) {
             $count = '';
             if ($k) {
-                // ※ 今までと同じ結果にするため、カルテNo（数字）の患者様は数えない（前からの作りで 1 になる。直すかは依頼者に確認中）
-                $n = is_string($key) ? count(array_filter(array_keys($hist[$key] ?? []), fn($d) => $d >= $k['date'] && $d <= $v['date'])) : 0;
+                // カルテNo（数字だけ）の患者様も数える（配列のキーが数値になっても同じ患者様として引けるようにする）
+                $n = count(array_filter(array_keys($hist[(string)$key] ?? []), fn($d) => $d >= $k['date'] && $d <= $v['date']));
                 $count = $n >= 13 ? '13〜' : ($n >= 7 ? '7〜12' : (string)max($n, 1));
             }
             $want[$key . '|' . $v['date']] = [
