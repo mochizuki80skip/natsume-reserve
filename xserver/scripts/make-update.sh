@@ -6,6 +6,7 @@
 #   1_assets … public/assets に上げる（js・css）
 #   2_app    … app フォルダに上げる（BASE から変わった PHP・SQL。config.php は入れない）
 #   2_guide  … public/guide に上げる（使い方の画面写真）
+#   2_brand  … public/brand に上げる（ロゴ）
 #   3_root   … public の直下に最後に上げる（index.html・version.json・index.php）
 set -euo pipefail
 BASE="${1:?BASE のコミットを指定してください（前回まるごと入れた時点）}"
@@ -24,10 +25,11 @@ if ! grep -q "$V" "public/$JS"; then echo "画面（$JS）と version.json の�
 
 P="$OUT/$NAME"
 [ -e "$P" ] && { echo "$P はもうあります" >&2; exit 1; }
-mkdir -p "$P/1_assets" "$P/2_app" "$P/2_guide" "$P/3_root"
+mkdir -p "$P/1_assets" "$P/2_app" "$P/2_guide" "$P/2_brand" "$P/3_root"
 for a in $(grep -o 'assets/[^"]*' public/index.html); do cp "public/$a" "$P/1_assets/"; done
 cp public/index.html public/version.json public/index.php "$P/3_root/"
 cp public/guide/*.png "$P/2_guide/" 2>/dev/null || true
+cp public/brand/* "$P/2_brand/" 2>/dev/null || true
 # BASE から変わったサーバー側のファイル（消えたファイルは入れない）
 git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- app | while read -r f; do
   r="${f#*app/}"; case "$r" in config.php) continue;; esac

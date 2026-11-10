@@ -26,11 +26,14 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
 }
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}（${WEEKDAY_JA[weekdayOf(d)]}）`;
 
+/** 「なつめ接骨院」と名の付く店舗か（全角・半角や空白の違いは見ない） */
+export const isNatsume = (name: string) => name.normalize('NFKC').replace(/[\s　]/g, '').includes('なつめ接骨院');
+
 function Logo() {
   return (
     <div className="flex justify-center px-4 pb-4 pt-5">
-      {/* ロゴは元データ（横長の画像）をそのまま使う。なつめ接骨院グループのロゴができたら差し替え */}
-      <img src="/brand/hachimaru-skip-yoko.png" alt="HACHIMARU SKIP　80歳になっても、スキップしよう！" width={960} height={264} className="h-auto w-full max-w-[300px]" />
+      {/* なつめ接骨院のロゴ（マーク＋なつめ接骨院の横並び。依頼者からいただいた PDF のベクターをそのまま SVG にしたもの） */}
+      <img src="/brand/natsume-logo-yoko.svg" alt="なつめ接骨院" width={1623} height={190} className="h-auto w-full max-w-[280px]" />
     </div>
   );
 }
@@ -152,7 +155,11 @@ export default function Stores() {
                 <article key={s.code} className="rounded-2xl border bg-white p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="text-base font-bold leading-snug">{s.name}</h3>
+                      <h3 className="text-base font-bold leading-snug">
+                        {/* 「なつめ接骨院」と名の付かない店舗はグループ院（オレンジの帯に白い字） */}
+                        {!isNatsume(s.name) && <span className="mr-1.5 inline-block rounded bg-orange-500 px-1.5 py-px align-[2px] text-xs font-bold text-white">グループ院</span>}
+                        {s.name}
+                      </h3>
                       {(s.closures ?? []).map((c) => <span key={c.date} className="mr-1 mt-0.5 inline-block rounded bg-red-600 px-1.5 text-xs font-bold text-white">{closureBadge(c, today)}</span>)}
                     </div>
                     {dist !== null && <span className="whitespace-nowrap text-xs font-bold text-sky-800">約 {dist < 10 ? dist.toFixed(1) : Math.round(dist)} km</span>}
