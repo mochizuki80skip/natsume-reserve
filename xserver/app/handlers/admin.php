@@ -890,7 +890,16 @@ function adm_kind_block_post(): never
     $raw = (string)($b['kinds'] ?? 'NR');
     $kinds = implode('', array_filter(['N', 'R', 'E'], fn($k) => str_contains($raw, $k)));
     if ($kinds === '' || preg_match('/[^NRE]/', $raw)) Http::error('止めるもの（新規・再来・既存）を選んでください', 400);
-    Db::exec('INSERT INTO kind_block (id, storeId, date, startTime, endTime, label, kinds) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, mb_substr(trim((string)($b['label'] ?? '')), 0, 30), $kinds]);
+    // 止めるベッド（従来のブロックと同じ選び方）。送られてこない・全部選んだときは全ベッド（空で持つ）
+    $all = Settings::allBeds($ctx['store']);
+    $beds = '';
+    if (array_key_exists('beds', $b)) {
+        $list = is_array($b['beds']) ? array_values(array_unique(array_map('intval', $b['beds']))) : [];
+        sort($list);
+        if (!$list || array_diff($list, $all)) Http::error('ベッドを選んでください', 400);
+        if (count($list) < count($all)) $beds = implode(',', $list);
+    }
+    Db::exec('INSERT INTO kind_block (id, storeId, date, startTime, endTime, label, kinds, beds) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $ctx['store']['id'], $date, $start, $end, mb_substr(trim((string)($b['label'] ?? '')), 0, 30), $kinds, $beds]);
     BlockSuggest::sync($ctx['store'], Settings::global(), $date);
     Http::json(['ok' => true]);
 }

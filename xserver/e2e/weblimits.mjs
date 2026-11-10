@@ -76,6 +76,29 @@ ok('3 つとも止めた時間は初診も×', (await st('NEW', 900)) === 'close
 for (const b of kb) await api('DELETE', '/api/admin/kind-blocks', { id: b.id });
 ok('外すと通院中も取れる', (await st('RETURN', 615)) !== 'closed');
 
+// ---- 2c. ベッドを選んで止める（従来のブロックと同じ選び方。枠の中のベッドの数だけ、その区分の枠が減る）
+ok('ベッドが空・知らないベッドは断る', (await api('POST', '/api/admin/kind-blocks', { date: D, start: 600, end: 660, kinds: 'E', beds: [] }))[0] === 400 && (await api('POST', '/api/admin/kind-blocks', { date: D, start: 600, end: 660, kinds: 'E', beds: [99] }))[0] === 400);
+await p.reload(); await p.waitForSelector('#grid');
+if (!(await ks.isVisible())) await p.getByRole('button', { name: /枠数・ブロック/ }).click();
+await ks.getByRole('button', { name: '＋ 止める時間を追加' }).click();
+const bedGroup = ks.getByRole('group', { name: '止めるベッド' });
+ok('ベッドは最初は全部選ばれている', (await bedGroup.getByRole('button', { name: '全部外す' }).count()) === 1);
+await ks.getByLabel('新規（初診）').uncheck(); await ks.getByLabel('再来（1か月以上ぶり）').uncheck(); await ks.getByLabel('既存（現在通院中）').check();
+await ks.getByLabel('止める開始').selectOption('600'); await ks.getByLabel('止める終了').selectOption('660');
+await bedGroup.getByRole('button', { name: '全部外す' }).click();
+for (const n of [1, 2, 3, 4]) await bedGroup.getByText(`ベッド${n}`, { exact: true }).click();
+await ks.getByRole('button', { name: '追加' }).click(); await p.waitForTimeout(800);
+ok('「既存✕ 10:00〜11:00 ベッド1・2・3・4」と出る', (await ks.textContent()).includes('既存✕ 10:00〜11:00 ベッド1・2・3・4'), await ks.textContent());
+ok('選んだベッドの空いたセルに「既✕」', (await p.locator('#grid tbody tr').filter({ has: p.locator('td', { hasText: /^10:15/ }) }).first().locator('[placeholder="既✕"]').count()) === 4);
+ok('枠の中のベッド（1〜4）を全部止めると、通院中は×', (await st('RETURN', 615)) === 'closed');
+ok('ほかの区分（初診）は取れる', (await st('NEW', 690)) !== 'closed' && (await st('REVISIT', 615)) !== 'closed');
+await p.screenshot({ path: O + 'kindstop-beds.png', clip: { x: 0, y: 0, width: 1366, height: 760 } });
+for (const b of (await api('GET', `/api/admin/day?date=${D}`))[1].data.kindBlocks) await api('DELETE', '/api/admin/kind-blocks', { id: b.id });
+await api('POST', '/api/admin/kind-blocks', { date: D, start: 600, end: 660, kinds: 'E', beds: [1, 2] });
+const ret2 = (await api('GET', `/api/public/S001/slots?date=${D}&kind=RETURN`))[1].slots.find((x) => x.time === 615);
+ok('2 台だけ止めると、通院中はまだ取れる', ret2.status !== 'closed', JSON.stringify(ret2));
+for (const b of (await api('GET', `/api/admin/day?date=${D}`))[1].data.kindBlocks) await api('DELETE', '/api/admin/kind-blocks', { id: b.id });
+
 // ---- 3. 1 人が持てる予約（既定 4 件）と、WEB で予約できる日数（既定 14 日）
 const s0 = (await api('GET', '/api/admin/settings'))[1].store;
 ok('既定：4 件・14 日', s0.maxActiveBookings === 4 && s0.bookDaysAhead === 14, JSON.stringify([s0.maxActiveBookings, s0.bookDaysAhead]));

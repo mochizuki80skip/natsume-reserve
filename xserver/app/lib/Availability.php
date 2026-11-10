@@ -21,6 +21,7 @@
 //   'revisitCount' => ['time' => int],  その時間に入っている再来の人数
 //   'countsAsRevisit' => bool,          今回の予約が再来か
 //   'eitherCap' => ['am' => ?int, 'pm' => ?int],   新規と再来を合わせた上限（初回か再来を担当できる人数。1 人が 1 人を受ける）
+//   'kindBedStop' => ['time:bed' => true], WEB の受付を止めたベッド（ベッドを選んだとき。今回の予約の区分だけ）
 //   'kindStop' => ['time' => true],     新規・再来を止める時間（予約表の「新規・再来を止める」。今回の予約が初診・再来のとき）
 //   'webFar' => bool,                   WEB で予約できる日数より先の日（空いていても電話マーク）
 // ]
@@ -49,6 +50,7 @@ final class Availability
             $t = $time + $k * $in['slotMinutes'];
             if ($t > $session['lastAdmin']) return false; // 2枠目以降は管理側の追加枠まで使える
             if (isset($in['occupied'][self::key($t, $bed)])) return false;
+            if (isset($in['kindBedStop'][self::key($t, $bed)])) return false; // WEB の受付を止めたベッド（この区分だけ）
         }
         return true;
     }
@@ -73,6 +75,22 @@ final class Availability
         return $n;
     }
 
+    /**
+     * WEB の受付を止めたベッド（今回の区分）のうち、顧客に見せる枠の中で、まだ患者様の入っていないベッドの数。
+     * 従来のブロックと同じく、枠の中のベッドならその区分の枠を 1 つ減らす
+     */
+    public static function kindBedCutAt(array $in, int $time): int
+    {
+        if (empty($in['kindBedStop'])) return 0;
+        $cap = self::capacityAt($in, $time);
+        $n = 0;
+        foreach ($in['beds'] as $b) {
+            $k = self::key($time, $b);
+            if ($b <= $cap && isset($in['kindBedStop'][$k]) && !(isset($in['occupied'][$k]) && !isset($in['blocked'][$k]))) $n++;
+        }
+        return $n;
+    }
+
     /** 顧客に見せる残り枠数 */
     public static function remainingAt(array $in, int $time): int
     {
@@ -82,7 +100,7 @@ final class Availability
         $half = Hours::isAm($in['sessions'], $time) ? 'am' : 'pm';
         for ($k = 0; $k < $in['neededSlots']; $k++) {
             $t = $time + $k * $in['slotMinutes'];
-            $byCapacity = min($byCapacity, self::capacityAt($in, $time) - self::occupiedCountAt($in, $t));
+            $byCapacity = min($byCapacity, self::capacityAt($in, $time) - self::occupiedCountAt($in, $t) - self::kindBedCutAt($in, $t));
             // 新規の同時対応数：新規の予約は、その時間にすでに入っている新規の人数が上限に達していたら受けない
             // （上限に達するまでは通常どおり。残り 1 人でも「残りわずか」の電話マークにはしない）
             if (!empty($in['countsAsNew']) && ($lim = self::kindLimit($in['newLimit'] ?? null, $in['newCap'] ?? null, $half)) !== null && (int)($in['newCount'][$t] ?? 0) >= $lim) {

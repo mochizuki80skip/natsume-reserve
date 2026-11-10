@@ -71,24 +71,26 @@ export default function BlockPanel({ date, times, slotMinutes, beds, blocks, kin
         </form>
       )}
     </div>
-    <KindStop date={date} times={times} slotMinutes={slotMinutes} kindBlocks={kindBlocks} onRefresh={onRefresh} />
+    <KindStop date={date} times={times} slotMinutes={slotMinutes} beds={beds} kindBlocks={kindBlocks} onRefresh={onRefresh} />
     </>
   );
 }
 
 /** WEB の受付を止める時間帯（院長不在など）。新規（初診）・再来・既存（現在通院中）から選んで、1日まるごとか時間を決めて止める。
  *  電話・予約表への手入力はできる。新自（交通事故の初診）は止めない */
-function KindStop({ date, times, slotMinutes, kindBlocks, onRefresh }: { date: string; times: number[]; slotMinutes: number; kindBlocks: KindBlock[]; onRefresh: () => void }) {
+function KindStop({ date, times, slotMinutes, beds, kindBlocks, onRefresh }: { date: string; times: number[]; slotMinutes: number; beds: number[]; kindBlocks: KindBlock[]; onRefresh: () => void }) {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ start: times[0] ?? 540, end: (times[0] ?? 540) + slotMinutes * 8, label: '', kinds: 'NR', allDay: false });
+  const [f, setF] = useState({ start: times[0] ?? 540, end: (times[0] ?? 540) + slotMinutes * 8, label: '', kinds: 'NR', allDay: false, beds: [...beds] });
+  const toggleBed = (b: number) => setF({ ...f, beds: f.beds.includes(b) ? f.beds.filter((x) => x !== b) : [...f.beds, b].sort((x, y) => x - y) });
   const [err, setErr] = useState('');
   const toggle = (k: string) => setF({ ...f, kinds: ['N', 'R', 'E'].filter((x) => (x === k ? !f.kinds.includes(x) : f.kinds.includes(x))).join('') });
   async function add(e: React.FormEvent) {
     e.preventDefault();
     if (!f.kinds) { setErr('止めるもの（新規・再来・既存）を選んでください'); return; }
+    if (f.beds.length === 0) { setErr('ベッドを選んでください'); return; }
     const r = await fetch('/api/admin/kind-blocks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date, ...f }) });
     if (!r.ok) { setErr((await r.json().catch(() => ({}))).error ?? '追加できませんでした'); return; }
-    setOpen(false); setErr(''); setF({ ...f, label: '' });
+    setOpen(false); setErr(''); setF({ ...f, label: '', beds: [...beds] });
     onRefresh();
   }
   async function remove(id: string) {
@@ -102,7 +104,7 @@ function KindStop({ date, times, slotMinutes, kindBlocks, onRefresh }: { date: s
       <span className="text-slate-500">（新規・再来・既存から選んで、WEB 予約だけ取れなくします。電話・予約表への入力と新自はできます）</span>
       {kindBlocks.map((b) => (
         <span key={b.id} className="inline-flex items-center gap-1 rounded border border-amber-400 bg-amber-100 px-2 py-0.5 text-amber-900">
-          {kindStopText(b.kinds)}✕ {isAllDay(b) ? '1日まるごと' : `${minToHm(b.start)}〜${minToHm(b.end)}`} {b.label && <b>{b.label}</b>}{b.auto && <span className="text-[10px]">（自動で外れます）</span>}
+          {kindStopText(b.kinds)}✕ {isAllDay(b) ? '1日まるごと' : `${minToHm(b.start)}〜${minToHm(b.end)}`} {blockBedsText(b.beds ?? beds, beds)} {b.label && <b>{b.label}</b>}{b.auto && <span className="text-[10px]">（自動で外れます）</span>}
           <button type="button" onClick={() => remove(b.id)} className="ml-1 text-amber-700 hover:text-red-700" aria-label="受付を止めるのをやめる">✕</button>
         </span>
       ))}
@@ -127,6 +129,15 @@ function KindStop({ date, times, slotMinutes, kindBlocks, onRefresh }: { date: s
                 {times.map((t) => t + slotMinutes).map((t) => <option key={t} value={t}>{minToHm(t)}</option>)}
               </select>
             </>}
+          </span>
+          <span className="inline-flex flex-wrap items-center gap-1" role="group" aria-label="止めるベッド">
+            <b>ベッド</b>
+            {beds.map((b) => (
+              <label key={b} className={`cursor-pointer rounded border px-1.5 py-0.5 ${f.beds.includes(b) ? 'border-amber-600 bg-amber-600 text-white' : 'bg-white'}`}>
+                <input type="checkbox" className="sr-only" checked={f.beds.includes(b)} onChange={() => toggleBed(b)} />ベッド{b}
+              </label>
+            ))}
+            <button type="button" onClick={() => setF({ ...f, beds: f.beds.length === beds.length ? [] : [...beds] })} className="rounded border bg-white px-1.5 py-0.5 text-slate-600">{f.beds.length === beds.length ? '全部外す' : '全部選ぶ'}</button>
           </span>
           <input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} maxLength={30} placeholder="理由（例：院長不在）" className="w-32 rounded border px-1 py-0.5" />
           <button type="submit" className="rounded bg-brand px-2 py-0.5 font-bold text-white">追加</button>

@@ -109,8 +109,8 @@ final class BlockSuggest
             }
             // すでにブロックしている時間（手で入れたもの・自動）は提案しない
             $covered = [];
-            foreach (Db::all('SELECT startTime, endTime, kinds FROM kind_block WHERE storeId = ? AND date = ?', [$sid, $date]) as $b) {
-                if (!str_contains((string)$b['kinds'], $k)) continue;
+            foreach (Db::all('SELECT startTime, endTime, kinds, beds FROM kind_block WHERE storeId = ? AND date = ?', [$sid, $date]) as $b) {
+                if (!str_contains((string)$b['kinds'], $k) || (string)($b['beds'] ?? '') !== '') continue; // ベッドを選んだものは、その時間を止めていない
                 for ($t = (int)$b['startTime']; $t < (int)$b['endTime']; $t += $slot) $covered[$t] = true;
             }
             $existing = [];

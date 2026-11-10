@@ -8,7 +8,7 @@ export interface WebCampaign { route: string; name: string; description: string;
 export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAt: string }
 export interface SlotBlock { id: string; start: number; end: number; beds: number[]; label: string }
 /** 新規・再来を止める時間帯（WEB の初診・再来だけ止める） */
-export interface KindBlock { id: string; start: number; end: number; label: string; kinds?: string; auto?: boolean } // kinds：N＝新規・R＝再来・E＝既存（現在通院中）の組み合わせ。start 0・end 1440＝1日まるごと
+export interface KindBlock { id: string; start: number; end: number; label: string; kinds?: string; auto?: boolean; beds?: number[] } // kinds：N＝新規・R＝再来・E＝既存（現在通院中）の組み合わせ。start 0・end 1440＝1日まるごと。beds＝止めるベッド（全ベッドのときは全部入る）
 export interface DayCapacity { am: number; pm: number; autoAm: number; autoPm: number; namesAm: string[]; namesPm: string[]; firstAm?: number | null; firstPm?: number | null; revisitAm?: number | null; revisitPm?: number | null; eitherAm?: number | null; eitherPm?: number | null }
 
 export interface DayData {

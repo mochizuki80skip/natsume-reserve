@@ -11,8 +11,8 @@ const errs = [];
 const p = await br.newPage({ viewport: { width: 1366, height: 1000 } }); p.on('pageerror', (e) => errs.push(e.message)); p.on('dialog', (d) => d.accept());
 const api = (m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
 await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\/day/);
-// 2 日以上先の月〜金（祝日を除く）
-const D = (() => { const d = new Date(); d.setDate(d.getDate() + 2); for (;;) { const s = d.toISOString().slice(0, 10); if (d.getDay() >= 1 && d.getDay() <= 5 && !['2026-11-03', '2026-11-23'].includes(s)) return s; d.setDate(d.getDate() + 1); } })();
+// 2 日以上先の月〜金（木曜・祝日を除く）
+const D = (() => { const d = new Date(); d.setDate(d.getDate() + 2); for (;;) { const s = d.toISOString().slice(0, 10); if (d.getDay() >= 1 && d.getDay() <= 5 && d.getDay() !== 4 && !['2026-11-03', '2026-11-23'].includes(s)) return s; d.setDate(d.getDate() + 1); } })();
 await api('PUT', '/api/admin/cells', { date: D, cells: [{ time: 615, bed: 3, text: '見本 予約' }] });
 await p.goto(`${B}/admin/day/${D}`); await p.waitForSelector('td[data-cell="600:1"] input'); await p.waitForTimeout(800);
 const cell = (t, b) => p.locator(`td[data-cell="${t}:${b}"]`);

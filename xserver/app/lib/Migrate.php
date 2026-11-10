@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 50;
+    private const VERSION = 51;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -363,6 +363,10 @@ final class Migrate
                 // 集計API のキー（統合ダッシュボード用。キーはハッシュだけを残す）
                 $pdo->exec(self::API_KEY_DDL);
             }
+            if ($ver < 51) {
+                // WEB の受付を止める：ベッドを選べるように（空＝全ベッド）
+                if (self::hasTable($pdo, 'kind_block') && !self::hasColumn($pdo, 'kind_block', 'beds')) $pdo->exec("ALTER TABLE `kind_block` ADD COLUMN `beds` VARCHAR(100) NOT NULL DEFAULT ''");
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -500,6 +504,7 @@ final class Migrate
   `label` VARCHAR(30) NOT NULL DEFAULT '',
   `kinds` VARCHAR(4) NOT NULL DEFAULT 'NR',
   `auto` TINYINT(1) NOT NULL DEFAULT 0,
+  `beds` VARCHAR(100) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`),
   KEY `kind_block_store_date` (`storeId`, `date`),
   CONSTRAINT `fk_kind_block_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE

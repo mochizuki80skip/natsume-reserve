@@ -123,17 +123,23 @@ final class PublicApi
         }
         // 受付を止める時間帯（新規＝初診・再来・既存＝現在通院中のうち、選んだものだけ。新自は止めない）
         $kindStop = [];
+        $kindBedStop = [];
         $stopKey = ['NEW' => 'N', 'REVISIT' => 'R', 'RETURN' => 'E'][$kind] ?? null;
         if ($stopKey !== null) {
-            foreach (Db::all('SELECT startTime, endTime, kinds FROM kind_block WHERE storeId = ? AND date = ?', [$store['id'], $date]) as $kb) {
+            foreach (Db::all('SELECT startTime, endTime, kinds, beds FROM kind_block WHERE storeId = ? AND date = ?', [$store['id'], $date]) as $kb) {
                 if (!str_contains((string)$kb['kinds'], $stopKey)) continue; // 止めるものに入っていない区分
-                for ($t = (int)$kb['startTime']; $t < (int)$kb['endTime']; $t += $setting['slotMinutes']) $kindStop[$t] = true;
+                $kbBeds = self::blockBeds((string)($kb['beds'] ?? ''), $allBeds);
+                for ($t = (int)$kb['startTime']; $t < (int)$kb['endTime']; $t += $setting['slotMinutes']) {
+                    if (count($kbBeds) >= count($allBeds)) $kindStop[$t] = true; // 全ベッド：その時間はこの区分を受けない
+                    else foreach ($kbBeds as $bb) $kindBedStop[Availability::key($t, $bb)] = true; // 選んだベッドだけ、この区分には使わせない
+                }
             }
         }
         return [
             'sessions' => $sessions,
             'slotMinutes' => $setting['slotMinutes'],
             'kindStop' => $kindStop,
+            'kindBedStop' => $kindBedStop,
             // WEB で予約できる日数より先の日：空いていても電話マーク（電話で受ける）
             'webFar' => self::beyondBookDays($store, $date, $now['date'], $kind),
             'beds' => Settings::allBeds($store),

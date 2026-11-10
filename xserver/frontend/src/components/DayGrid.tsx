@@ -1056,13 +1056,14 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                 const isPmStart = r > 0 && am(rows[r - 1]) && !am(t);
                 const adminOnly = !customerSet.has(t);
                 const blk = (data.blocks ?? []).filter((b) => t >= b.start && t < b.end);
-                const kblk = (data.kindBlocks ?? []).find((b) => t >= b.start && t < b.end);
+                const kblks = (data.kindBlocks ?? []).filter((b) => t >= b.start && t < b.end);
+                const kblk = kblks.find((b) => !b.beds || b.beds.length >= cols.length) ?? kblks[0];
                 return (
                   <tr key={t} className={isPmStart ? 'border-t-4 border-t-slate-300' : ''}>
                     <td className={`whitespace-nowrap border px-1 text-center font-mono max-sm:px-0 max-sm:text-[9px] ${blk.length ? 'bg-slate-300 text-slate-800' : adminOnly ? 'bg-amber-50 text-amber-800' : 'bg-slate-50'}`}
                       title={blk.length ? `ブロック中：${blk.map((b) => `${b.label || '（内容なし）'} ${blockBedsText(b.beds, cols)}`).join('、')}` : adminOnly ? '管理側のみの枠（顧客は予約できません）' : undefined}>
                       {blk.length > 0 && <span className="no-print mr-0.5 text-[10px]">🔒</span>}{minToHm(t)}
-                      {kblk && <span className="no-print ml-0.5 rounded bg-amber-400 px-0.5 font-sans text-[9px] font-bold text-white max-sm:hidden" title={`WEB の${kindStopText(kblk.kinds)}を止めています${kblk.label ? `（${kblk.label}）` : ''}`}>{kindStopShort(kblk.kinds)}</span>}
+                      {kblk && <span className="no-print ml-0.5 rounded bg-amber-400 px-0.5 font-sans text-[9px] font-bold text-white max-sm:hidden" title={kblks.map((x) => `WEB の${kindStopText(x.kinds)}を止めています（${blockBedsText(x.beds ?? cols, cols)}）${x.label ? ` ${x.label}` : ''}`).join('、')}>{kindStopShort(kblk.kinds)}</span>}
                     </td>
                     {cols.map((b, c) => {
                       const k = key(t, b);
@@ -1071,6 +1072,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                       const cont = isContinuationText(text);
                       const st = stateOf(t, b);
                       const bBlock = blk.find((x) => x.beds.includes(b));
+                      const kBed = kblks.find((x) => x.beds && x.beds.length < cols.length && x.beds.includes(b)); // ベッドを選んで WEB の受付を止めている
                       const hasName = text.trim() !== '' && !cont;
                       const cellMenus = hasName ? menus.get(k) ?? [] : [];
                       // セルの色：初診・再来・新自 → 回数（2・3・6回目）。2 枠目は 1 枠目に合わせる
@@ -1155,7 +1157,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                                 if (extending.current) extending.current = false; else { anchor.current = { r, c }; setRange(null); if (picks.size) setPicks(new Set()); }
                               }}
                               onMouseUp={(e) => { if (justFocused.current) { e.preventDefault(); justFocused.current = false; } }}
-                              placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : undefined}
+                              placeholder={bBlock ? `🔒${bBlock.label || 'ブロック'}` : kBed ? `${kindStopShort(kBed.kinds)}${kBed.label ? ` ${kBed.label}` : ''}` : undefined}
                               className={`min-w-0 flex-1 sm:min-w-[3rem] ${bBlock ? 'placeholder:text-slate-600' : ''}`}
                             />
                             {fillHere && <span aria-label="選んだ範囲を広げる" title="ドラッグすると、選ぶ範囲を広げられます（Excel のオートフィルと同じ）" onMouseDown={(e) => startFill(e, r, c)}
