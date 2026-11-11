@@ -12,8 +12,24 @@ final class DayData
         $members = array_values(array_filter($allMembers, fn($m) => Settings::inPeriod($m, $date))); // 入社前・異動後の人は出さない
         $helpIn = Db::one('SELECT status, name FROM help_in WHERE storeId = ? AND date = ?', [$sid, $date]);
         $shifts = Db::all('SELECT staffId, status FROM shift WHERE storeId = ? AND date = ?', [$sid, $date]);
-        $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, c.menus, c.staff, c.phone, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo, r.campaign AS rCampaign
+        $cells = Db::all('SELECT c.time, c.bed, c.text, c.visited, c.menus, c.staff, c.phone, r.id AS rId, r.kind AS rKind, r.phone AS rPhone, r.cardNo AS rCardNo, r.campaign AS rCampaign, r.groupId AS rGroup
             FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date = ? AND c.bed > 0', [$sid, $date]);
+        // ご家族（お連れ様）と一緒の WEB 予約：同じグループのほかの方（キャンセルしていない予約）
+        $groupIds = array_values(array_unique(array_filter(array_column($cells, 'rGroup'))));
+        $groupMembers = [];
+        if ($groupIds) {
+            foreach (Db::all('SELECT id, groupId, name, date, time, status FROM reservation WHERE groupId IN (' . Db::inList($groupIds) . ") ORDER BY (id = groupId) DESC, createdAt ASC", $groupIds) as $g) $groupMembers[$g['groupId']][] = $g;
+        }
+        $groupOf = function (?string $gid, string $rid) use (&$groupMembers): ?array {
+            if (!$gid) return null;
+            $all = $groupMembers[$gid] ?? [];
+            $leader = null;
+            foreach ($all as $m) if ($m['id'] === $gid) $leader = $m['name'];
+            return [
+                'leader' => $rid !== $gid ? ($leader ?? '') : null, // お連れ様のときは 1人目の氏名（「お連れ様：氏名」に出す）
+                'others' => array_values(array_map(fn($m) => ['id' => $m['id'], 'name' => $m['name'], 'date' => $m['date'], 'time' => (int)$m['time'], 'leader' => $m['id'] === $gid], array_filter($all, fn($m) => $m['id'] !== $rid && $m['status'] === 'BOOKED'))), // キャンセルした方は出さない
+            ];
+        };
         $blocks = Db::all('SELECT id, startTime, endTime, beds, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $kindBlocks = Db::all('SELECT id, startTime, endTime, label, kinds, auto, beds FROM kind_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? ORDER BY time ASC, createdAt ASC', [$sid, $date]);
@@ -58,7 +74,7 @@ final class DayData
                 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'text' => $c['text'], 'visited' => (bool)$c['visited'], 'menus' => self::menusOf((string)($c['menus'] ?? '')),
                 'staff' => (string)($c['staff'] ?? ''), 'staffCheck' => isset($staffCheck[(int)$c['time'] . ':' . (int)$c['bed']]),
                 'phone' => $c['phone'] ?? null, // 電話で取った予約の電話番号
-                'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo'], 'campaign' => Campaign::forStore($c['rCampaign'] ?? null)] : null,
+                'web' => $c['rId'] ? ['id' => $c['rId'], 'kind' => $c['rKind'], 'phone' => $c['rPhone'], 'cardNo' => $c['rCardNo'], 'campaign' => Campaign::forStore($c['rCampaign'] ?? null), 'group' => $groupOf($c['rGroup'] ?? null, (string)$c['rId'])] : null,
             ], $cells),
             // メニューと物販はセルには同じように付く（色・印・人数はまとめて扱う）。予約表の帯では物販を別の段に出す
             'menuOptions' => array_values(array_unique(array_merge(Karte::options()['menu'] ?? [], Karte::options()['goods'] ?? []))),

@@ -6,7 +6,7 @@ import { formatDateJa, minToHm } from '@/lib/time';
 
 export type ChangeKind = 'CHANGE' | 'ADVANCE' | 'NOSHOW';
 interface Slot { time: number; left: number; beds: number }
-export interface ChangeFrom { date: string; time: number; bed: number; name: string; twoSlots: boolean }
+export interface ChangeFrom { date: string; time: number; bed: number; name: string; twoSlots: boolean; /** ご家族（お連れ様）と一緒の WEB 予約のほかの方 */ group?: { name: string; date: string; time: number; leader: boolean }[] }
 
 interface Props {
   from: ChangeFrom;
@@ -29,6 +29,8 @@ export default function ChangeDialog({ from, onClose, onMoved, onCancelled }: Pr
   const [over, setOver] = useState(false);
   const [nextDate, setNextDate] = useState('');
   const [memo, setMemo] = useState('');
+  const [withGroup, setWithGroup] = useState(false);
+  const others = from.group ?? [];
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -68,7 +70,7 @@ export default function ChangeDialog({ from, onClose, onMoved, onCancelled }: Pr
       return;
     }
     setBusy(true);
-    const r = await fetch('/api/admin/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: from.date, time: from.time, bed: from.bed, kind, memo, nextDate }) });
+    const r = await fetch('/api/admin/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: from.date, time: from.time, bed: from.bed, kind, memo, nextDate, withGroup: withGroup && others.length > 0 }) });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
     if (!r.ok) { setErr(j.error ?? 'キャンセルできませんでした'); return; }
@@ -119,6 +121,13 @@ export default function ChangeDialog({ from, onClose, onMoved, onCancelled }: Pr
           </label>
         )}
 
+        {kind !== 'CHANGE' && others.length > 0 && (
+          <label className="mt-3 flex items-start gap-1.5 rounded border border-sky-300 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+            <input type="checkbox" checked={withGroup} onChange={(e) => setWithGroup(e.target.checked)} className="mt-0.5" aria-label="お連れ様もまとめてキャンセル" />
+            <span><b>お連れ様もまとめてキャンセル</b>（一緒に WEB 予約した方）<span className="block">{others.map((o) => `${o.name}${o.leader ? '（1人目）' : ''} ${formatDateJa(o.date)} ${minToHm(o.time)}〜`).join('、')}</span></span>
+          </label>
+        )}
+        {kind === 'CHANGE' && others.length > 0 && <p className="mt-3 rounded bg-sky-50 px-3 py-2 text-xs text-sky-900">お連れ様（{others.map((o) => o.name).join('・')}）の予約は変わりません。一緒に変えるときは、お連れ様のセルからも変更してください。</p>}
         <label className="mt-3 block">メモ<span className="ml-1 text-xs text-slate-500">（空欄可）</span>
           <input value={memo} onChange={(e) => setMemo(e.target.value)} maxLength={200} className="mt-1 w-full rounded border px-2 py-1" placeholder={kind === 'CHANGE' ? '例）仕事の都合で夕方に変更' : '例）体調不良のため'} />
         </label>

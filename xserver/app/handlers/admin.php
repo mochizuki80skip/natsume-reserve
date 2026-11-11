@@ -335,18 +335,36 @@ function adm_cancel_post(): never
     $step = Settings::global()['slotMinutes'];
     $cell = Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
     if (!$cell || trim($cell['text']) === '') Http::error('セルが空です', 404);
-    $next = Text::isTwoSlotName($cell['text']) ? Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time + $step, $bed]) : null;
-    $cont = ($next && Text::isContinuationText($next['text'])) ? $next : null;
-    $logId = Db::newId();
-    Db::transaction(function () use ($logId, $sid, $date, $time, $bed, $cell, $cont, $kind, $ctx, $memo, $nextDate) {
-        Db::exec('INSERT INTO cancel_log (id, storeId, date, time, bed, name, contText, kind, source, reservationId, byCode, memo, nextDate, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-            $logId, $sid, $date, $time, $bed, $cell['text'], $cont['text'] ?? null, $kind, $cell['reservationId'] ? 'WEB' : 'MANUAL', $cell['reservationId'], $ctx['session']['code'], $memo !== '' ? $memo : null, $nextDate !== '' ? $nextDate : null, Time::nowJstDateTime(),
-        ]);
-        Db::exec('DELETE FROM cell WHERE id = ?', [$cell['id']]);
-        if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
-        if ($cell['reservationId']) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $cell['reservationId']]);
+    // ご家族（お連れ様）と一緒の WEB 予約は、同じグループのほかの方もまとめてキャンセルできる（withGroup）
+    $others = [];
+    if (!empty($b['withGroup']) && $cell['reservationId']) {
+        $g = Db::one('SELECT groupId FROM reservation WHERE id = ?', [$cell['reservationId']]);
+        if ($g && $g['groupId']) {
+            foreach (Db::all("SELECT id FROM reservation WHERE groupId = ? AND id <> ? AND status = 'BOOKED'", [$g['groupId'], $cell['reservationId']]) as $r) {
+                // その方の 1 枠目のセル（2 枠目の「上記初診対応」などは一緒に消える）
+                foreach (Db::all('SELECT * FROM cell WHERE storeId = ? AND reservationId = ? ORDER BY date ASC, time ASC', [$sid, $r['id']]) as $oc) {
+                    if (!Text::isContinuationText($oc['text'])) { $others[] = $oc; break; }
+                }
+            }
+        }
+    }
+    $logIds = [];
+    Db::transaction(function () use (&$logIds, $sid, $step, $cell, $others, $kind, $ctx, $memo, $nextDate) {
+        foreach (array_merge([$cell], $others) as $i => $c) {
+            $next = Text::isTwoSlotName($c['text']) ? Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $c['date'], (int)$c['time'] + $step, (int)$c['bed']]) : null;
+            $cont = ($next && Text::isContinuationText($next['text'])) ? $next : null;
+            $logId = Db::newId();
+            $logIds[] = $logId;
+            Db::exec('INSERT INTO cancel_log (id, storeId, date, time, bed, name, contText, kind, source, reservationId, byCode, memo, nextDate, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                $logId, $sid, $c['date'], (int)$c['time'], (int)$c['bed'], $c['text'], $cont['text'] ?? null, $kind, $c['reservationId'] ? 'WEB' : 'MANUAL', $c['reservationId'], $ctx['session']['code'],
+                $i === 0 ? ($memo !== '' ? $memo : null) : 'お連れ様とまとめてキャンセル', $i === 0 && $nextDate !== '' ? $nextDate : null, Time::nowJstDateTime(),
+            ]);
+            Db::exec('DELETE FROM cell WHERE id = ?', [$c['id']]);
+            if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
+            if ($c['reservationId']) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $c['reservationId']]);
+        }
     });
-    Http::json(['ok' => true, 'log' => Db::one('SELECT * FROM cancel_log WHERE id = ?', [$logId])]);
+    Http::json(['ok' => true, 'log' => Db::one('SELECT * FROM cancel_log WHERE id = ?', [$logIds[0]]), 'count' => count($logIds)]);
 }
 
 /**

@@ -156,6 +156,39 @@ final class Availability
         return $out;
     }
 
+    /**
+     * ご家族（お連れ様）と同じ時間に予約できるか。inputs は区分ごとの入力（buildInput）、kinds は 1人目から順の区分。
+     * 1 人ずつ空いているベッドに仮に入れて（同じ時間・別のベッド）、次の人の空きを見る。全員入れば open（残りわずかがあれば few）
+     */
+    public static function groupStatusAt(array $inputs, array $kinds, int $time): string
+    {
+        $virtual = [];
+        $worst = 'open';
+        foreach ($kinds as $k) {
+            $in = $inputs[$k];
+            foreach ($virtual as $v) self::addVirtual($in, ...$v);
+            if (self::newByPhoneOnly($in) || !empty($in['webFar'])) return 'phone';
+            $st = self::statusFor($in, $time, self::remainingAt($in, $time));
+            if ($st !== 'open' && $st !== 'few') return $st === 'phone' ? 'phone' : 'closed';
+            if ($st === 'few') $worst = 'few';
+            $free = self::freeBedsAt($in, $time);
+            if (!$free) return 'closed';
+            $virtual[] = [$time, $free[0], $k, (int)$in['neededSlots']];
+        }
+        return $worst;
+    }
+
+    /** 仮に 1 人入れる（そのベッドを必要な枠ぶん埋め、新規・再来の人数にも足す。予約表のセルと同じ数え方） */
+    private static function addVirtual(array &$in, int $time, int $bed, string $kind, int $needed): void
+    {
+        for ($k = 0; $k < $needed; $k++) {
+            $t = $time + $k * $in['slotMinutes'];
+            $in['occupied'][self::key($t, $bed)] = true;
+            if ($kind === 'NEW' || $kind === 'ACCIDENT') $in['newCount'][$t] = ($in['newCount'][$t] ?? 0) + 1;
+            elseif ($kind === 'REVISIT') $in['revisitCount'][$t] = ($in['revisitCount'][$t] ?? 0) + 1;
+        }
+    }
+
     /** 店舗設定の上限とシフトから決まる上限の小さいほう（どちらも無ければ null＝上限なし） */
     private static function kindLimit(?int $storeLimit, ?array $cap, string $half): ?int
     {

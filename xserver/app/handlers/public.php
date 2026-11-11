@@ -27,7 +27,9 @@ function pub_week(array $p): never
     $ctx = pub_load_store($p[1]);
     $startParam = Http::query('start');
     $start = ($startParam && Time::isValidDate($startParam)) ? Time::mondayOf($startParam) : Time::mondayOf(Time::nowJst()['date']);
-    Http::json(PublicApi::weekForCustomer($ctx['store'], $ctx['setting'], $start, PublicApi::parseKind(Http::query('kind'))));
+    // お連れ様の区分（同じ日時でまとめて取るとき。最大 3 人）
+    $group = array_slice(array_values(array_filter(explode(',', (string)Http::query('group', '')), fn($k) => in_array($k, PublicApi::KINDS, true))), 0, 3);
+    Http::json(PublicApi::weekForCustomer($ctx['store'], $ctx['setting'], $start, PublicApi::parseKind(Http::query('kind')), $group));
 }
 
 function pub_slots(array $p): never
@@ -97,7 +99,8 @@ function pub_reserve(array $p): never
             }
             // 1 人が WEB で持てる予約の件数（同じ店舗・同じ電話番号と氏名・まだ来ていない予約）
             if (($max = $store['maxActiveBookings'] ?? null) !== null) {
-                $mine = array_filter(Db::all('SELECT name FROM reservation WHERE storeId = ? AND phone = ? AND status = ? AND date >= ?', [$store['id'], $phone, 'BOOKED', Time::nowJst()['date']]), fn($r) => Text::isSameName($r['name'], $name));
+                // お連れ様として取った予約（2人目以降）は数えない
+                $mine = array_filter(Db::all('SELECT name FROM reservation WHERE storeId = ? AND phone = ? AND status = ? AND date >= ? AND (groupId IS NULL OR groupId = id)', [$store['id'], $phone, 'BOOKED', Time::nowJst()['date']]), fn($r) => Text::isSameName($r['name'], $name));
                 if (count($mine) >= (int)$max) throw new HttpError(409, 'WEB でお取りいただけるご予約は ' . (int)$max . ' 件までです。次のご予約は、今のご予約のあとでお取りください（お電話でも承ります：' . $store['phone'] . '）。');
             }
             $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
@@ -141,6 +144,126 @@ function pub_reserve(array $p): never
         if ($to) Sms::send($to, '【WEB予約】' . Time::formatDateJa($date, false) . ' ' . Time::minToHm($time) . ' ' . PublicApi::KIND_JA[$kind] . " {$safeName} 様");
     }
     Http::json(['ok' => true, 'id' => $result['id'], 'token' => $result['token'], 'date' => $date, 'time' => $time, 'smsStatus' => $smsStatus, 'campaign' => Campaign::forCustomer(Campaign::decode($campJson))]);
+}
+
+/** 確認だけ（dryRun）のときに、入れた予約を取り消すための印 */
+final class GroupDryRun extends RuntimeException {}
+
+/**
+ * ご家族（お連れ様）と一緒の予約（2〜4 名）。{ people: [{ kind, date, time, name, cardNo }], phone, via, ref, c, dryRun }
+ * 1人目から順に入れていき、1 人でも取れなければ全員取らない（途中までの予約も残さない）。
+ * お連れ様（2人目以降）の予約は「WEB で持てる予約の件数」に数えない。SMS は送らない（確認ページは完了画面から）。
+ * dryRun：同じ確認をして、最後に取り消す（日時を選んだときに「全員一緒に取れるか」を確かめる）
+ */
+function pub_reserve_group(array $p): never
+{
+    $b = Http::body();
+    $dry = !empty($b['dryRun']);
+    if (!RateLimit::allow(($dry ? 'reservecheck:' : 'reserve:') . Http::clientIp(), $dry ? 120 : 10, 10 * 60)) Http::error('短時間に多くの操作がありました。しばらくしてからお試しください。', 429);
+    $ctx = pub_load_store($p[1]);
+    $store = $ctx['store'];
+    $setting = $ctx['setting'];
+    Http::requireJson();
+    $list = is_array($b['people'] ?? null) ? array_values($b['people']) : [];
+    if (count($list) < 2 || count($list) > 4) Http::error('ご予約の人数は 2〜4 名です', 400);
+    $phoneRaw = is_string($b['phone'] ?? null) ? trim($b['phone']) : '';
+    if (!$dry && strlen($phoneRaw) < 10) Http::error('電話番号を入力してください', 400);
+    $phone = $dry ? (Text::normalizeJpPhone($phoneRaw) ?? '') : Text::normalizeJpPhone($phoneRaw);
+    if (!$dry && !$phone) Http::error('電話番号の形式が正しくありません', 400);
+    $viaCard = ($b['via'] ?? '') === 'card';
+    $refCode = is_string($b['ref'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $b['ref']) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$b['ref']]) ? $b['ref'] : null;
+    $entry = Campaign::entryOf($viaCard ? 'card' : null, $refCode, is_string($b['c'] ?? null) ? $b['c'] : null);
+    $campJson = $entry ? json_encode(Campaign::snapshot($entry, (string)$store['code'], Time::nowJst()['date']), JSON_UNESCAPED_UNICODE) : null;
+    $today = Time::nowJst()['date'];
+    $who = fn(int $i, string $name = '') => ($i === 0 ? '1人目（ご本人）' : ($i + 1) . '人目（お連れ様）') . ($name !== '' ? "・{$name} 様" : '');
+    $people = [];
+    foreach ($list as $i => $x) {
+        if (!is_array($x)) Http::error('入力内容を確認してください', 400);
+        $kind = $x['kind'] ?? '';
+        if (!in_array($kind, PublicApi::KINDS, true)) Http::error($who($i) . 'の来院区分を選んでください', 400);
+        $date = $x['date'] ?? '';
+        if (!is_string($date) || !Time::isValidDate($date)) Http::error($who($i) . 'の日にちを選んでください', 400);
+        $time = Http::int($x, 'time', 0, 24 * 60);
+        $name = is_string($x['name'] ?? null) ? trim(Text::dropHonorific(trim($x['name']))) : '';
+        if (!$dry && $name === '') Http::error($who($i) . 'のお名前を入力してください', 400);
+        if (mb_strlen($name) > 40) Http::error($who($i) . 'のお名前が長すぎます', 400);
+        $cardNo = is_string($x['cardNo'] ?? null) ? mb_substr(trim($x['cardNo']), 0, 20) : '';
+        if (!$dry && $kind === 'RETURN' && $cardNo === '') Http::error($who($i, $name) . 'の診察券番号を入力してください', 400);
+        foreach ($people as $q) if ($name !== '' && Text::isSameName($q['name'], $name)) Http::error('同じお名前の方が 2 人入っています。お名前をご確認ください', 400);
+        $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$store['id'], $date]));
+        if (!PublicApi::isPublished($store, $date, $today, $day['published'] ?? null)) Http::error($who($i, $name) . '：この日は現在WEB予約を受け付けていません', 409);
+        if (PublicApi::beyondBookDays($store, $date, $today, $kind)) Http::error($who($i, $name) . '：WEB でのご予約は ' . (int)$store['bookDaysAhead'] . ' 日先までです。この日のご予約はお電話（' . $store['phone'] . '）で承ります', 409);
+        $people[] = ['kind' => $kind, 'date' => $date, 'time' => $time, 'name' => $name, 'cardNo' => $cardNo, 'day' => $day];
+    }
+    // 日にちごとに鍵をかける（同じ順番でかけて、ほかの予約と取り合いにならないように）
+    $dates = array_values(array_unique(array_column($people, 'date')));
+    sort($dates);
+    $locks = [];
+    try {
+        foreach ($dates as $d) {
+            $lockName = 'reserve:' . $store['id'] . ':' . $d;
+            $got = Db::one('SELECT GET_LOCK(?, 10) AS ok', [$lockName]);
+            if (!$got || (int)$got['ok'] !== 1) Http::error('混み合っています。しばらくしてからお試しください', 503);
+            $locks[] = $lockName;
+        }
+        try {
+            $result = Db::transaction(function () use ($store, $setting, $people, $phone, $viaCard, $refCode, $campJson, $who, $dry) {
+                $groupId = Db::newId();
+                $out = [];
+                foreach ($people as $i => $x) {
+                    [$kind, $date, $time, $name] = [$x['kind'], $x['date'], $x['time'], $x['name']];
+                    if ($phone !== '' && $name !== '') {
+                        foreach (Db::all('SELECT name FROM reservation WHERE storeId = ? AND date = ? AND phone = ? AND status = ?', [$store['id'], $date, $phone, 'BOOKED']) as $r) {
+                            if (Text::isSameName($r['name'], $name)) throw new HttpError(409, $who($i, $name) . '：同じお名前・電話番号でのご予約が ' . Time::formatDateJa($date, false) . ' にすでに入っています。ご予約の確認・変更はお電話（' . $store['phone'] . '）へお願いします。');
+                        }
+                    }
+                    // WEB で持てる予約の件数は 1人目だけ数える（お連れ様の予約は数えない）
+                    if ($i === 0 && $phone !== '' && $name !== '' && ($max = $store['maxActiveBookings'] ?? null) !== null) {
+                        $mine = array_filter(Db::all('SELECT name FROM reservation WHERE storeId = ? AND phone = ? AND status = ? AND date >= ? AND (groupId IS NULL OR groupId = id)', [$store['id'], $phone, 'BOOKED', Time::nowJst()['date']]), fn($r) => Text::isSameName($r['name'], $name));
+                        if (count($mine) >= (int)$max) throw new HttpError(409, 'WEB でお取りいただけるご予約は ' . (int)$max . ' 件までです。次のご予約は、今のご予約のあとでお取りください（お電話でも承ります：' . $store['phone'] . '）。');
+                    }
+                    // 前の人を入れたあとの予約表で空きを見る（同じ時間なら別のベッドに入る）
+                    $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
+                    $in = PublicApi::buildInput($store, $setting, $date, $kind, Settings::closedOf($x['day']), $cells);
+                    if (Availability::newByPhoneOnly($in)) throw new HttpError(409, $who($i, $name) . '：はじめての方のご予約はお電話（' . $store['phone'] . '）で承っております');
+                    $status = Availability::statusFor($in, $time, Availability::remainingAt($in, $time));
+                    if ($status !== 'open' && $status !== 'few') {
+                        $n = count($people);
+                        throw new HttpError(409, $status === 'phone' ? $who($i, $name) . '：この時間はお電話でのみ受付しております' : ($dry
+                            ? "{$n}名様ご一緒には、この時間は取れません（{$who($i)}の分の空きがありません）。別の時間をお選びください"
+                            : "申し訳ありません。ご予約の手続き中に、{$who($i, $name)}の時間がほかの方のご予約で埋まりました。全員分のご予約はまだ取れていません。お手数ですが、日時を選び直してください"));
+                    }
+                    $free = Availability::freeBedsAt($in, $time);
+                    $bed = $free[0];
+                    $rid = $i === 0 ? $groupId : Db::newId();
+                    $token = bin2hex(random_bytes(16));
+                    Db::exec('INSERT INTO reservation (id, storeId, date, time, bed, kind, cardNo, name, phone, status, viewToken, viaCard, refCode, campaign, groupId, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [$rid, $store['id'], $date, $time, $bed, $kind, ($kind === 'RETURN' || $kind === 'REVISIT') && $x['cardNo'] !== '' ? $x['cardNo'] : null, $name !== '' ? $name : '確認中', $phone !== '' ? $phone : '0', 'BOOKED', $token, $viaCard ? 1 : 0, $refCode, $campJson, $groupId, Time::nowJstDateTime()]);
+                    for ($k = 0; $k < $in['neededSlots']; $k++) {
+                        $text = $k === 0 ? PublicApi::cellName($kind, $name !== '' ? $name : '確認中') : PublicApi::contText($kind);
+                        Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                            [Db::newId(), $store['id'], $date, $time + $k * $setting['slotMinutes'], $bed, $text, $rid]);
+                    }
+                    $out[] = ['id' => $rid, 'token' => $token, 'kind' => $kind, 'date' => $date, 'time' => $time, 'name' => $name];
+                }
+                if ($dry) throw new GroupDryRun('ok');
+                return ['groupId' => $groupId, 'people' => $out];
+            });
+        } catch (GroupDryRun) {
+            $result = null; // 確認だけ：入れた予約は取り消し済み
+        }
+    } finally {
+        foreach ($locks as $l) Db::one('SELECT RELEASE_LOCK(?) AS r', [$l]);
+    }
+    if ($dry) Http::json(['ok' => true, 'dryRun' => true]);
+    // お客様への SMS は送らない（依頼者の決定）。店舗の携帯への知らせは 1 通にまとめる
+    if (!empty($store['notifyPhone'])) {
+        $to = Text::normalizeJpPhone($store['notifyPhone']);
+        $lines = array_map(fn($x) => Time::formatDateJa($x['date'], false) . ' ' . Time::minToHm($x['time']) . ' ' . PublicApi::KIND_JA[$x['kind']] . ' ' . (preg_replace('#(https?://|www\.)\S*#i', '', $x['name']) ?? '') . ' 様', $result['people']);
+        if ($to) Sms::send($to, '【WEB予約・' . count($lines) . "名】\n" . implode("\n", $lines));
+    }
+    Db::exec('UPDATE reservation SET smsStatus = ? WHERE groupId = ?', ['SKIPPED', $result['groupId']]);
+    Http::json(['ok' => true, 'groupId' => $result['groupId'], 'people' => $result['people'], 'campaign' => Campaign::forCustomer(Campaign::decode($campJson))]);
 }
 
 /** SMS に載せる URL の頭（APP_URL が空なら開かれている URL から作る） */

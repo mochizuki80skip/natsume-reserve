@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 51;
+    private const VERSION = 52;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -366,6 +366,10 @@ final class Migrate
             if ($ver < 51) {
                 // WEB の受付を止める：ベッドを選べるように（空＝全ベッド）
                 if (self::hasTable($pdo, 'kind_block') && !self::hasColumn($pdo, 'kind_block', 'beds')) $pdo->exec("ALTER TABLE `kind_block` ADD COLUMN `beds` VARCHAR(100) NOT NULL DEFAULT ''");
+            }
+            if ($ver < 52) {
+                // WEB 予約でご家族（お連れ様）を一緒に予約：同じグループの予約は groupId（1人目の予約の id）でまとめる
+                if (self::hasTable($pdo, 'reservation') && !self::hasColumn($pdo, 'reservation', 'groupId')) $pdo->exec("ALTER TABLE `reservation` ADD COLUMN `groupId` VARCHAR(32) NULL, ADD KEY `res_group` (`groupId`)");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

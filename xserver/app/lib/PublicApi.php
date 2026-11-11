@@ -227,7 +227,8 @@ final class PublicApi
     }
 
     /** 1 週間分（weekStart から 7 日）の枠状態。氏名は含まない */
-    public static function weekForCustomer(array $store, array $setting, string $weekStart, string $kind): array
+    /** @param string[] $companions お連れ様の区分（同じ日時でまとめて取るとき。全員入れる時間だけ〇・△にする） */
+    public static function weekForCustomer(array $store, array $setting, string $weekStart, string $kind, array $companions = []): array
     {
         $today = Time::nowJst()['date'];
         $dates = [];
@@ -244,7 +245,13 @@ final class PublicApi
             if ($label) { $out[] = ['date' => $date, 'label' => $label, 'slots' => []]; continue; }
             $in = self::buildInput($store, $setting, $date, $kind, Settings::closedOf($day), $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
             $slots = [];
-            foreach (Availability::compute($in) as $s) $slots[] = ['time' => $s['time'], 'status' => $s['status']];
+            $inputs = [$kind => $in];
+            foreach ($companions as $ck) $inputs[$ck] ??= self::buildInput($store, $setting, $date, $ck, Settings::closedOf($day), $r['cellsByDate'][$date] ?? [], $r['caps'][$date], $r['blocksByDate'][$date] ?? []);
+            foreach (Availability::compute($in) as $s) {
+                $st = $s['status'];
+                if ($companions && ($st === 'open' || $st === 'few')) $st = Availability::groupStatusAt($inputs, array_merge([$kind], $companions), $s['time']);
+                $slots[] = ['time' => $s['time'], 'status' => $st];
+            }
             $out[] = ['date' => $date, 'label' => null, 'slots' => $slots];
         }
         return ['today' => $today, 'weekStart' => $weekStart, 'publishDaysAhead' => (int)$store['publishDaysAhead'], 'days' => $out];

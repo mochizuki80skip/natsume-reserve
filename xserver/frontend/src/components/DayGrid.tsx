@@ -402,7 +402,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   async function openChange(time: number, bed: number) {
     setMenu(null);
     await flush();
-    setChangeDlg({ date: data.date, time, bed, name: cells.get(key(time, bed)) ?? '', twoSlots: isContinuationText(cells.get(key(time + data.slotMinutes, bed))) });
+    setChangeDlg({ date: data.date, time, bed, name: cells.get(key(time, bed)) ?? '', twoSlots: isContinuationText(cells.get(key(time + data.slotMinutes, bed))), group: webInfo.get(key(time, bed))?.group?.others ?? [] });
   }
   function cancelled() {
     if (!changeDlg) return;
@@ -1088,13 +1088,14 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                       return (
                         <td key={b} data-cell={k} className={`grid-cell border p-0 ${dragFrom === k ? 'opacity-40' : ''} ${dragOver === k && dragFrom && dragOver !== dragFrom ? (text.trim() && !(dragFrom && isOwnTwo(dragFrom, k)) ? 'outline-dashed outline-2 -outline-offset-2 outline-red-500' : 'outline-dashed outline-2 -outline-offset-2 outline-sky-600 !bg-sky-100') : ''} ${ranged ? 'bg-indigo-100' : bg} ${color?.dark && !ranged ? 'dark-cell' : ''} ${isSel || ranged ? 'outline outline-2 -outline-offset-2 outline-brand' : ''} ${st === 'visited' ? 'shadow-[inset_4px_0_0_#15803d]' : ''}`}
                           style={color && !ranged ? { background: color.bg } : undefined}
-                          title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}` : undefined}>
+                          title={web ? `WEB予約（${KIND_JA[web.kind] ?? web.kind}）${web.cardNo ? ` 診察券:${web.cardNo}` : ''} TEL:${web.phone}${web.group?.leader ? `　お連れ様：${web.group.leader}` : web.group?.others.length ? `　お連れ様あり（${web.group.others.map((o) => o.name).join('・')}）` : ''}` : undefined}>
                           <div className={`relative flex items-center ${hasName ? 'has-check pr-4 max-sm:pr-2' : ''}`}>
                             {hasName && (
                               <button type="button" tabIndex={-1} onClick={() => toggleVisit(t, b)} aria-label={visited.has(k) ? '来院チェックを外す' : '来院チェック'}
                                 className={`no-print ml-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-sm border text-[11px] max-sm:absolute max-sm:left-px max-sm:top-[3px] max-sm:z-[1] max-sm:ml-0 max-sm:h-2.5 max-sm:w-2.5 max-sm:text-[7px] ${visited.has(k) ? 'border-green-700 bg-green-700 text-white' : 'border-slate-400 bg-white text-transparent hover:text-slate-300'}`}>✓</button>
                             )}
                             {web && hasName && <span className="ml-0.5 min-w-0 shrink truncate rounded-sm border border-sky-600 bg-white px-[2px] text-[8px] font-bold leading-[12px] text-sky-700 max-sm:hidden" title="WEB予約">WEB</span>}
+                            {web?.group && !web.group.leader && hasName && <span className="ml-0.5 flex-none rounded-sm bg-sky-600 px-[2px] text-[8px] font-bold leading-[12px] text-white" title={`お連れ様：${web.group.others.map((o) => o.name).join('・')}`} aria-label="お連れ様あり">👥</span>}
                             {web?.campaign && hasName && <span className="ml-0.5 min-w-0 shrink truncate rounded-sm bg-orange-600 px-[2px] text-[8px] font-bold leading-[12px] text-white" title={`${web.campaign.route}特典：${web.campaign.name}（セルを選ぶと上に内容が出ます）`} aria-label={`キャンペーンの予約：${web.campaign.name}`}>🎁<span className="max-sm:hidden">特典</span></span>}
                             {cellMenus.length > 0 && (
                               <span className="ml-0.5 flex min-w-0 shrink gap-px overflow-hidden max-sm:hidden" title={`メニュー：${cellMenus.join('・')}`} aria-label={`メニュー：${cellMenus.join('・')}`}>
@@ -1194,7 +1195,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
                             )}
                           </div>
                           {web && hasName && (
-                            <div className="no-print px-1 pb-0.5 text-[7px] leading-none tabular-nums text-slate-500" title="WEB予約の電話番号（印刷には出ません）">{formatJpPhone(web.phone)}</div>
+                            <div className="no-print px-1 pb-0.5 text-[7px] leading-none tabular-nums text-slate-500" title="WEB予約の電話番号（印刷には出ません）">{formatJpPhone(web.phone)}{web.group?.leader && <span className="ml-1 font-bold text-sky-700" aria-label={`お連れ様：${web.group.leader}`}>お連れ様：{web.group.leader}</span>}</div>
                           )}
                           {!web && hasName && phoneInfo.get(k) && (
                             <div className="no-print px-1 pb-0.5 text-[7px] leading-none tabular-nums text-slate-500" title="電話予約の電話番号（印刷には出ません）">📞{formatJpPhone(phoneInfo.get(k))}</div>

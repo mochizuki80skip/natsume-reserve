@@ -25,6 +25,7 @@ function route_table(): array
         ['GET', '#^/api/public/([^/]+)/slots$#', 'pub_slots'],
         ['GET', '#^/api/public/([^/]+)/calendar$#', 'pub_calendar'],
         ['POST', '#^/api/public/([^/]+)/reserve$#', 'pub_reserve'],
+        ['POST', '#^/api/public/([^/]+)/reserve-group$#', 'pub_reserve_group'],
         ['GET', '#^/api/public-reservation/([0-9a-f]{32})$#', 'pub_reservation_view'],
         ['GET', '#^/api/public-stores$#', 'pub_stores'],
         ['GET', '#^/api/public-privacy$#', 'pub_privacy'],

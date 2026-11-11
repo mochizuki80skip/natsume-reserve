@@ -31,12 +31,21 @@ interface Props {
   onProceed: (sel: Selection) => void;
   phone: string;
   cardRemembered?: boolean; // この端末に診察券番号を覚えている（通院中の案内の文言を変える）
+  /** お連れ様の区分（同じ日時でまとめて取るとき）。全員一緒に取れる時間だけ 〇・△ にする */
+  companions?: Kind[];
+  /** 区分を選ぶ欄を出さない（お連れ様の日時を選ぶとき。区分は先に決めてある） */
+  lockKind?: boolean;
+  /** 区分の欄の代わりに出す見出し（lockKind のとき） */
+  title?: string;
+  /** ご家族と一緒の予約のとき（① の見出しを「1人目（ご本人）」にする） */
+  party?: boolean;
 }
 
 
 function md(date: string) { return `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`; }
 
-export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, phone, cardRemembered = false }: Props) {
+export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, phone, cardRemembered = false, companions = [], lockKind = false, title, party = false }: Props) {
+  const groupKey = companions.join(',');
   const [weekStart, setWeekStart] = useState<string | null>(null);
   const [data, setData] = useState<WeekData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,13 +74,14 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
     // はじめての方・未選択＝初診、ご通院したことがある方＝現在通院中（どちらも内容を選ぶまでは未選択のまま。選んだら、その区分の空き状況で確かめ直す）
     const q = new URLSearchParams({ kind: kind ?? (group === 'VISITED' ? 'RETURN' : 'NEW') });
     if (weekStart) q.set('start', weekStart);
+    if (groupKey) q.set('group', groupKey);
     fetch(`/api/public/${encodeURIComponent(storeCode)}/week?${q}`)
       .then((r) => r.json())
       .then((j: WeekData) => { if (!alive) return; setData(j); if (!weekStart) setWeekStart(j.weekStart); })
       .catch(() => alive && setError('読み込みに失敗しました'))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
-  }, [storeCode, kind, group, weekStart]);
+  }, [storeCode, kind, group, weekStart, groupKey]);
 
   useEffect(() => { setSel(null); setNotice(''); }, [weekStart]);
   useEffect(() => { if (kind) setNeedKind(false); }, [kind]);
@@ -109,7 +119,8 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
   return (
     <div className={sel ? 'pb-28' : ''}>
       <div className={`wk-head ${needKind ? 'ring-4 ring-red-400' : ''}`} ref={headRef}>
-        <p className={`mb-1 text-[14px] font-bold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>① どちらかを選択してください</p>
+        {lockKind ? <p className="mb-1 text-[14px] font-bold text-brand-dark">{title}</p> : <>
+        <p className={`mb-1 text-[14px] font-bold ${needKind ? 'text-red-600' : 'text-brand-dark'}`}>① {party ? '1人目（ご本人）の来院区分：' : ''}どちらかを選択してください</p>
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="来院区分">
           {(['FIRST', 'VISITED'] as Group[]).map((g) => (
             <button key={g} type="button" aria-pressed={group === g} onClick={() => { if (group === g) return; setGroup(g); onKindChange(null); }}
@@ -136,7 +147,9 @@ export default function WeekGrid({ storeCode, kind, onKindChange, onProceed, pho
             {group === 'VISITED' && <span className="block text-[11px] font-normal text-slate-500">（下の表は、現在通院中の方の空き状況です）</span>}
           </p>
         )}
-        <p className="mt-2.5 text-[14px] font-bold text-brand-dark">② ご希望の日時を選択してください</p>
+        </>}
+        <p className="mt-2.5 text-[14px] font-bold text-brand-dark">{lockKind ? 'ご希望の日時を選択してください' : '② ご希望の日時を選択してください'}</p>
+        {companions.length > 0 && <p className="text-[12px] text-slate-600" role="note" aria-label="人数分の空き">{companions.length + 1}名様ご一緒に取れる時間だけ 〇・△ になっています</p>}
         <div className="mt-1 flex items-center justify-between gap-2">
           <button type="button" disabled={prevDisabled} onClick={() => weekStart && setWeekStart(addDays(weekStart, -7))} className="rounded border bg-white px-2.5 py-1.5 text-sm disabled:opacity-40">‹ 前週</button>
           <div className="text-[15px] font-bold tabular-nums">

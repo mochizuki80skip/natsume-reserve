@@ -237,11 +237,13 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `viaCard` TINYINT(1) NOT NULL DEFAULT 0,  -- 紹介カード（店舗えらびページ）から来た予約
   `refCode` VARCHAR(16) NULL,  -- 紹介元（業者）の専用 QR から来た予約（referral.code）
   `campaign` TEXT NULL,  -- 予約したときのキャンペーンの内容（JSON。あとで設定を変えてもこの予約はそのまま）
+  `groupId` VARCHAR(32) NULL,  -- ご家族（お連れ様）と一緒に WEB 予約したとき、1人目の予約の id（1人目も同じ値）。1 人の予約は NULL
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `res_view_token` (`viewToken`),
   KEY `res_store_date` (`storeId`, `date`),
   KEY `res_created` (`createdAt`),
+  KEY `res_group` (`groupId`),
   CONSTRAINT `fk_res_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

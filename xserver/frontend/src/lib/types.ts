@@ -2,7 +2,9 @@
 
 export interface ResolvedSession { start: number; lastStart: number; lastAdmin: number }
 
-export interface GridCell { time: number; bed: number; text: string; visited: boolean; menus?: string[]; staff?: string; staffCheck?: boolean; /** 電話で取った予約の電話番号 */ phone?: string | null; web?: { id: string; kind: string; phone: string; cardNo: string | null; campaign?: WebCampaign | null } | null }
+export interface GridCell { time: number; bed: number; text: string; visited: boolean; menus?: string[]; staff?: string; staffCheck?: boolean; /** 電話で取った予約の電話番号 */ phone?: string | null; web?: { id: string; kind: string; phone: string; cardNo: string | null; campaign?: WebCampaign | null; group?: WebGroup | null } | null }
+/** ご家族（お連れ様）と一緒の WEB 予約。leader：お連れ様のときの 1人目の氏名（1人目なら null）。others：同じグループのほかの方 */
+export interface WebGroup { leader: string | null; others: { id: string; name: string; date: string; time: number; leader: boolean }[] }
 /** WEB 予約したときのキャンペーン（予約したときの内容。店舗向けメモつき） */
 export interface WebCampaign { route: string; name: string; description: string; insurance: { label: string; amount: number }[]; memo: string }
 export interface CancelRow { id: string; time: number; bed: number; name: string; contText: string | null; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAt: string }
