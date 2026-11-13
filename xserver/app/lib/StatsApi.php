@@ -28,7 +28,7 @@ final class StatsApi
             'retentionMaxVisit' => self::RETENTION_MAX_VISIT,
             'retentionRule' => '初回来院月の初回カルテ（新患継続率）の行のうち、N 回目（2〜6）の来院日が入っている人数',
             'newKinds' => ['NEW', 'ACCIDENT', 'THIRD_PARTY'],
-            'visitsRule' => '予約表で来院チェック済みの患者様の枠（日報の「来院」と同じ数え方）。新規・再来はセルの印（新患・新自・新三・再来）',
+            'visitsRule' => '予約表で来院チェック済みの患者様の枠（日報の「来院」と同じ数え方）。新規・再来はセルの印（新患・新自・新三・再来）。メニューの「自賠」が付いた初診は新自、「第三者」が付いた初診は新三',
             'salesTaxNote' => '税抜は窓口集計の『税抜』行と同じ計算（÷1.1 を四捨五入）。保険請求・自賠請求は税抜なし（null）',
             'achievementRateRule' => '売上 ÷ 売上目標 × 100 を小数第1位で四捨五入（画面は整数で表示）',
         ];
@@ -64,13 +64,13 @@ final class StatsApi
     private static function visitCounts(array $store, string $from, string $to): array
     {
         $out = [];
-        foreach (Db::all('SELECT date, text FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0 AND visited = 1', [$store['id'], $from, $to]) as $c) {
+        foreach (Db::all('SELECT date, text, menus FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0 AND visited = 1', [$store['id'], $from, $to]) as $c) {
             $text = (string)$c['text'];
             if (!Availability::isPatientText($text) || Text::isContinuationText($text)) continue;
             $n = &$out[$c['date']];
             $n ??= self::zeroVisits();
             $n['visits']++;
-            $cat = Text::categorize($text);
+            $cat = Text::categorize($text, DayData::menusOf((string)($c['menus'] ?? ''))); // 日報と同じく、メニューの「自賠」「第三者」も数える
             if ($cat['isThird']) $n['newThirdParty']++;
             elseif ($cat['isNew'] && $cat['isJibai']) $n['newJibai']++;
             elseif ($cat['isNew']) $n['newGeneral']++;

@@ -26,15 +26,17 @@ final class Text
      */
     public const THIRD_RE = '/[（(]新三[）)]|(?:^|\s)新三(?:\s|$)/u';
 
-    public static function categorize(?string $text): array
+    /** @param string[] $menus セルのメニュー（「自賠」が付いたら自賠、「第三者」が付いた初診は新三にも数える。画面と同じ） */
+    public static function categorize(?string $text, array $menus = []): array
     {
         $t = trim($text ?? '');
         if (self::isContinuationText($t)) return ['isNew' => false, 'isRevisit' => false, 'isJibai' => false, 'isThird' => false];
-        $third = (bool)preg_match(self::THIRD_RE, $t);
+        $new = (bool)preg_match('/[（(]初(診|自)?[）)]|初診|初自|新自/u', $t);
+        $third = (bool)preg_match(self::THIRD_RE, $t) || ($new && in_array('第三者', $menus, true));
         return [
-            'isNew' => $third || (bool)preg_match('/[（(]初(診|自)?[）)]|初診|初自|新自/u', $t),
+            'isNew' => $third || $new,
             'isRevisit' => (bool)preg_match('/[（(]再[）)]|再来|再診/u', $t),
-            'isJibai' => !$third && (bool)preg_match('/自賠|事故|初自|新自/u', $t),
+            'isJibai' => !$third && ((bool)preg_match('/自賠|事故|初自|新自/u', $t) || in_array('自賠', $menus, true)),
             'isThird' => $third,
         ];
     }

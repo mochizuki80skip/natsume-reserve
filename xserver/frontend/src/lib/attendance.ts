@@ -22,14 +22,17 @@ export interface CellCategories { isNew: boolean; isRevisit: boolean; isJibai: b
  */
 export const THIRD_RE = /[（(]新三[）)]|(?:^|\s)新三(?:\s|$)/;
 
-export function categorizeCell(text: string | null | undefined): CellCategories {
+export function categorizeCell(text: string | null | undefined, menus: readonly string[] = []): CellCategories {
   const t = (text ?? '').trim();
   if (isContinuationText(t)) return { isNew: false, isRevisit: false, isJibai: false, isThird: false };
-  const isThird = THIRD_RE.test(t);
+  const isNew = /[（(]初(診|自)?[）)]|初診|初自|新自/.test(t);
+  // メニューの「第三者」が付いた初診も新三に数える（文字で「（新三）」と入れたときと同じ）
+  const isThird = THIRD_RE.test(t) || (isNew && menus.includes('第三者'));
   return {
-    isNew: isThird || /[（(]初(診|自)?[）)]|初診|初自|新自/.test(t),
+    isNew: isThird || isNew,
     isRevisit: /[（(]再[）)]|再来|再診/.test(t),
-    isJibai: !isThird && /自賠|事故|初自|新自/.test(t),
+    // メニューの「自賠」が付いたセルも自賠に数える
+    isJibai: !isThird && (/自賠|事故|初自|新自/.test(t) || menus.includes('自賠')),
     isThird,
   };
 }

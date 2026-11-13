@@ -309,7 +309,7 @@ function hq_overview(): never
             if ($a) $r['rAm']++; else $r['rPm']++;
             if ($c['visited']) { if ($a) $r['vAm']++; else $r['vPm']++; }
             if ($c['web'] && !Text::isContinuationText($c['text'])) $r['web']++;
-            $cat = Text::categorize($c['text']);
+            $cat = Text::categorize($c['text'], $c['menus'] ?? []); // メニューの「自賠」「第三者」も数える（予約表と同じ）
             if ($cat['isNew']) $r['nw']++;
             if ($cat['isRevisit']) $r['re']++;
             if ($cat['isJibai']) $r['jb']++;

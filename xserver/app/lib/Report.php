@@ -127,7 +127,7 @@ final class Report
             $sessions = $cells ? Settings::storeSessions($store, $setting, $cells[0]['date']) : [];
             foreach ($cells as $c) {
                 if (Hours::isAm($sessions, (int)$c['time'])) $n['am']++; else $n['pm']++;
-                $cat = Text::categorize($c['text']);
+                $cat = Text::categorize($c['text'], DayData::menusOf((string)($c['menus'] ?? ''))); // メニューの「自賠」「第三者」も数える（予約表と同じ）
                 if ($cat['isJibai']) $n['jibai']++;
                 if (in_array('自費', DayData::menusOf((string)($c['menus'] ?? '')), true)) $n['self']++;
                 if ($cat['isThird']) $n['third']++;

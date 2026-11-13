@@ -245,7 +245,7 @@ function adm_staff_counts(): never
         $out[$s] ??= $row();
         $out[$s]['total']++;
         $out[$s]['days'][$c['date']] = ($out[$s]['days'][$c['date']] ?? 0) + 1; // 日ごとの人数
-        $cat = Text::categorize($text);
+        $cat = Text::categorize($text, DayData::menusOf((string)$c['menus'])); // メニューの「自賠」「第三者」も数える（予約表と同じ）
         if ($cat['isThird']) $out[$s]['third']++;
         elseif ($cat['isNew'] && !$cat['isJibai']) $out[$s]['new']++;
         if ($cat['isNew'] && $cat['isJibai']) $out[$s]['jibai']++;

@@ -55,8 +55,8 @@ await bar.getByRole('button', { name: '再来', exact: true }).click(); await p.
 ok('再来に付け替え', (await cell('11:00', 2).inputValue()) === '区分 太郎（再来）' && (await cell('11:15', 2).inputValue()) === '上記再来対応');
 await bar.getByRole('button', { name: '新自', exact: true }).click(); await p.waitForTimeout(800);
 ok('新自に付け替え', (await cell('11:00', 2).inputValue()) === '区分 太郎（新自）');
-const nums = await p.locator('table[title^="内訳"] tbody').textContent();
-ok('新自は初診と自賠に数える', /初診\d*1/.test(nums.replace(/\s/g, '')) && /自賠\d*1/.test(nums.replace(/\s/g, '')), nums);
+const statN = async (label) => Number(await p.locator(`[aria-label="${label}の人数"]`).getAttribute('data-all'));
+ok('新自は初診と自賠に数える', (await statN('初診')) >= 1 && (await statN('自賠')) === 1, `${await statN('初診')} ${await statN('自賠')}`);
 await bar.getByRole('button', { name: '新自', exact: true }).click(); await p.waitForTimeout(300);
 ok('もう一度押すと外れる', (await cell('11:00', 2).inputValue()) === '区分 太郎' && (await cell('11:15', 2).inputValue()) === '');
 

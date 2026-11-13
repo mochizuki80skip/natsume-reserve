@@ -19,7 +19,7 @@ await put('9:00', 1, '山田 初診');
 await put('9:00', 2, '佐藤 再来');
 await put('9:00', 3, '初美');
 await put('9:30', 1, '鈴木 初自');
-const num = async (label) => (await p.locator('table.text-sm').nth(1).locator('tr', { hasText: label }).locator('td').nth(3).textContent()).trim();
+const num = async (label) => (await p.locator(`[aria-label="${label}の人数"]`).getAttribute('data-all')).trim();
 ok('初診に数える（山田 初診・鈴木 初自）', await num('初診') === '2', await num('初診'));
 ok('再来に数える（佐藤 再来）', await num('再来') === '1');
 ok('自賠に数える（鈴木 初自）', await num('自賠') === '1');

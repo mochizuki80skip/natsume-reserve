@@ -169,7 +169,7 @@ await ap.waitForSelector('table');
 await ap.getByRole('button', { name: /枠数・ブロック/ }).click();
 const capText = await ap.locator('text=顧客に見える枠数').first().locator('..').textContent();
 ok('シフト(前休)が枠数に反映（午前2/午後3）', /シフトから 2/.test(capText) && /シフトから 3/.test(capText), capText);
-const amReserved = async () => Number((await ap.locator('table').first().locator('tr', { hasText: '予約' }).first().locator('td').nth(1).textContent()).trim());
+const amReserved = async () => Number(await ap.locator('[aria-label="予約の人数"]').getAttribute('data-am'));
 ok('管理側に12:00の行がある', (await ap.locator('#grid tbody td', { hasText: /^12:00$/ }).count()) === 1);
 {
   const before = await amReserved();
@@ -297,7 +297,7 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   await ap.reload(); await ap.waitForSelector('table');
   const vals2 = await ap.locator('#grid tbody input').evaluateAll((els) => els.map((e) => e.value));
   ok('予約表に「事故次郎（初自）」と「上記初診対応」', vals2.includes('事故次郎（初自）') && vals2.filter((v) => v === '上記初診対応').length >= 1);
-  const jibai = await ap.locator('tr:has(td:text-is("自賠")) td').nth(3).textContent();
+  const jibai = await ap.locator('[aria-label="自賠の人数"]').getAttribute('data-all');
   ok('（初自）は自賠の人数に入る', jibai.trim() === '1', jibai);
 }
 
@@ -310,7 +310,7 @@ await ap.screenshot({ path: 'e2e/out-admin-grid.png', fullPage: true });
   await rowOf('15:00').locator('button[aria-label="来院チェック"]').first().click();
   await ap.waitForTimeout(600);
   await ap.reload(); await ap.waitForSelector('table');
-  const visitedCount = await ap.locator('td.text-green-700').nth(1).textContent();
+  const visitedCount = await ap.locator('[aria-label="来院の人数"]').getAttribute('data-pm');
   ok('来院チェック → 午後の来院人数 1', visitedCount.trim() === '1', visitedCount);
   ok('来院チェック済みは2枠目も緑', (await rowOf('15:15').locator('td[class*="inset_4px_0_0"]').count()) === 1);
   // 名簿へ

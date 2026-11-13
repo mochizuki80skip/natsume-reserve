@@ -720,14 +720,14 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
       const a = isAm(data.sessions, time);
       if (a) c.rAm++; else c.rPm++;
       if (visited.has(k)) { if (a) c.vAm++; else c.vPm++; }
-      const cat = categorizeCell(v);
+      const cat = categorizeCell(v, menus.get(k) ?? []);
       if (cat.isNew) { if (a) c.nAm++; else c.nPm++; }
       if (cat.isRevisit) { if (a) c.reAm++; else c.rePm++; }
       if (cat.isJibai) { if (a) c.jAm++; else c.jPm++; }
       if (cat.isThird) { if (a) c.tAm++; else c.tPm++; }
     }
     return c;
-  }, [cells, visited, data.sessions]);
+  }, [cells, visited, data.sessions, menus]);
 
   // メニュー別の人数（午前・午後）
   const menuCounts = useMemo(() => {
@@ -779,7 +779,9 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
 
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('[data-menu]')) setMenu(null); }}>
-      <div ref={navRef} className="no-print sticky top-[var(--admin-head-h,0px)] z-20 -mx-2 mb-3 flex flex-wrap items-center gap-2 border-b max-sm:mx-0 max-sm:mb-1 max-sm:flex-nowrap max-sm:gap-1 max-sm:px-0.5 max-sm:py-1 max-sm:text-sm bg-slate-50/95 px-2 py-1.5 backdrop-blur" aria-label="日付の切り替え">
+      {/* 日付の帯と人数の帯をまとめて上に固定（スクロールしても見える） */}
+      <div ref={navRef} className="no-print sticky top-[var(--admin-head-h,0px)] z-20 -mx-2 mb-2 border-b bg-slate-50/95 backdrop-blur max-sm:mx-0 max-sm:mb-1">
+      <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 max-sm:flex-nowrap max-sm:gap-1 max-sm:px-0.5 max-sm:py-1 max-sm:text-sm" aria-label="日付の切り替え">
         <button type="button" className="rounded border bg-white px-3 py-1 max-sm:px-2" onClick={() => stepDay(-1)} title="前日">‹<span className="max-sm:hidden"> 前日</span></button>
         <DatePicker value={data.date} today={today} onSelect={(d) => navigate(`/admin/day/${d}`)} className="w-full rounded border bg-white px-2 py-1 tabular-nums max-sm:px-1" />
         <span className="font-bold sm:hidden">（{WEEKDAY_JA[weekdayOf(data.date)]}）</span>
@@ -794,35 +796,31 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
         <button type="button" onClick={() => setFindOpen(true)} className="rounded border bg-white px-3 py-1 max-sm:px-2" title="氏名または診察券番号で、いつ予約が入っているかを探します">🔍<span className="max-sm:hidden"> 予約を探す</span></button>
         <a href={`/admin/print/${data.date}`} target="_blank" rel="noreferrer" className="rounded bg-brand px-3 py-1 text-white max-sm:hidden">印刷／PDF</a>
       </div>
-
-      {/* スマホ：人数は 1 行にまとめ、そのほかは「その日の設定」に畳む */}
-      <div className="no-print mb-1 flex flex-wrap gap-x-2.5 gap-y-0.5 px-0.5 text-[11px] sm:hidden" aria-label="この日の人数">
-        <span>予約 <b className="text-[13px]">{counts.rAm + counts.rPm}</b>（午前{counts.rAm}・午後{counts.rPm}）</span>
-        <span>来院 <b className="text-[13px] text-green-700">{counts.vAm + counts.vPm}</b></span>
-        <span>初診{counts.nAm + counts.nPm} 再来{counts.reAm + counts.rePm} 自賠{counts.jAm + counts.jPm}{counts.tAm + counts.tPm > 0 ? ` 新三${counts.tAm + counts.tPm}` : ''}</span>
-        <span>キャンセル{cancelStat.all}（変更{cancelStat.changed}・未取得{cancelStat.none}）</span>
+      {/* この日の人数：1 行にまとめて高さを取らない（合計を大きく、午前・午後は小さく） */}
+      <div className="flex flex-wrap items-stretch gap-1 border-t border-slate-200 px-2 py-1 max-sm:gap-0.5 max-sm:px-0.5" aria-label="この日の人数">
+        <Stat label="予約" am={counts.rAm} pm={counts.rPm} />
+        <Stat label="来院" am={counts.vAm} pm={counts.vPm} tone="text-green-700" />
+        <span className="mx-0.5 w-px self-stretch bg-slate-300 max-sm:hidden" aria-hidden />
+        <Stat label="初診" am={counts.nAm} pm={counts.nPm} />
+        <Stat label="再来" am={counts.reAm} pm={counts.rePm} />
+        <Stat label="自賠" am={counts.jAm} pm={counts.jPm} tone="text-amber-800" />
+        <Stat label="新三" am={counts.tAm} pm={counts.tPm} tone="text-amber-800" />
+        <span className="mx-0.5 w-px self-stretch bg-slate-300 max-sm:hidden" aria-hidden />
+        {/* キャンセルの人数（予約変更＝次回予約が入っている、予約未取得＝次回予約なし） */}
+        <div className="flex items-center gap-1.5 rounded border bg-white px-2 py-0.5 text-sm max-sm:px-1 max-sm:text-[11px]" aria-label="キャンセルの人数">
+          <span className="font-bold">キャンセル {cancelStat.all}人</span>
+          <span className="text-xs text-slate-500 max-sm:hidden">うち</span>
+          <span className="rounded bg-violet-100 px-1.5 text-xs text-violet-800 max-sm:px-1 max-sm:text-[10px]">予約変更 {cancelStat.changed}人</span>
+          <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-700 max-sm:px-1 max-sm:text-[10px]">予約未取得 {cancelStat.none}人</span>
+        </div>
       </div>
+      </div>
+
       <button type="button" onClick={() => setMobSet(!mobSet)} aria-expanded={mobSet} className="no-print mb-1 w-full rounded border bg-white px-2 py-1 text-left text-xs text-brand-dark sm:hidden">
         {mobSet ? '▾' : '▸'} その日の設定（{day.closed ? <b className="text-red-700">臨時休業</b> : day.closedPart ? <b className="text-red-700">{day.closedPart === 'AM' ? '午前' : '午後'} 臨時休業</b> : published ? '公開中' : '非公開'}・枠数・凡例）
       </button>
       <div className={mobSet ? '' : 'max-sm:hidden'}>
       <div className="mb-2 flex flex-wrap items-end gap-x-6 gap-y-2">
-        <table className="text-sm">
-          <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
-          <tbody>
-            <tr><td className="pr-2 text-slate-500">予約</td><td className="px-2 text-right text-lg font-bold tabular-nums">{counts.rAm}</td><td className="px-2 text-right text-lg font-bold tabular-nums">{counts.rPm}</td><td className="px-2 text-right text-lg font-bold tabular-nums">{counts.rAm + counts.rPm}</td></tr>
-            <tr><td className="pr-2 text-slate-500">来院</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vPm}</td><td className="px-2 text-right text-lg font-bold tabular-nums text-green-700">{counts.vAm + counts.vPm}</td></tr>
-          </tbody>
-        </table>
-        <table className="text-sm" title="内訳。初診＝「（初診）」「（初自）」「（初）」または括弧なしの「初診」「初自」、再来＝「（再）」または括弧なしの「再来」「再診」、自賠＝「初自」「自賠」「事故」を含むセル、新三＝「（新三）」のセル（初診にも数える。手入力可）">
-          <thead><tr className="text-[11px] text-slate-500"><th></th><th className="px-2 text-right font-normal">午前</th><th className="px-2 text-right font-normal">午後</th><th className="px-2 text-right font-normal">合計</th></tr></thead>
-          <tbody>
-            <tr><td className="pr-2 text-slate-500">初診</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nPm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.nAm + counts.nPm}</td></tr>
-            <tr><td className="pr-2 text-slate-500">再来</td><td className="px-2 text-right font-bold tabular-nums">{counts.reAm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.rePm}</td><td className="px-2 text-right font-bold tabular-nums">{counts.reAm + counts.rePm}</td></tr>
-            <tr><td className="pr-2 text-slate-500">自賠</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jPm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.jAm + counts.jPm}</td></tr>
-            <tr><td className="pr-2 text-slate-500">新三</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.tAm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.tPm}</td><td className="px-2 text-right font-bold tabular-nums text-amber-800">{counts.tAm + counts.tPm}</td></tr>
-          </tbody>
-        </table>
         {menuOptions.length > 0 && panels.menu && (
           // メニュー別の人数：行は午前・午後・合計で固定（メニューが増えても高さは変わらない）
           <div className="max-w-full overflow-x-auto">
@@ -840,13 +838,6 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
             </table>
           </div>
         )}
-        {/* キャンセルの人数（予約変更＝次回予約が入っている、予約未取得＝次回予約なし） */}
-        <div className="flex flex-wrap items-center gap-2 text-sm" aria-label="キャンセルの人数">
-          <span className="font-bold">キャンセル {cancelStat.all}人</span>
-          <span className="text-slate-500">うち</span>
-          <span className="rounded bg-violet-100 px-2 py-0.5 text-violet-800">予約変更 {cancelStat.changed}人</span>
-          <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-700">予約未取得 {cancelStat.none}人</span>
-        </div>
         <div className="no-print flex flex-wrap items-center gap-3 text-sm">
           <span className={`rounded px-2 py-0.5 ${published && !day.closed ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>
             顧客サイト：{day.closed ? '臨時休業' : published ? '公開中' : '非公開'}{!day.closed && day.closedPart ? `（${day.closedPart === 'AM' ? '午前' : '午後'} 臨時休業）` : ''}
@@ -1297,6 +1288,18 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
         氏名の左の □ で来院チェック、右の「⋯」でキャンセル・予約変更や削除。Shift＋クリック（または Shift＋矢印）で複数のセルを選んで Ctrl+C／Ctrl+X／Delete、貼り付けは左上のセルで Ctrl+V。間違えたら「↶ 元に戻す」（Ctrl+Z）。初診の 2 枠目「上記初診対応」、再来の「上記再来対応」は 1 枠目と同じ色になり、人数には数えません。初診・再来は「山田 初診」「山田 再来」のように括弧なしでも数えます（「初」「再」1文字のときは「（初）」「（再）」と括弧が必要）。内訳の「自賠」は、セルに「自賠」または「事故」と入力すると数えます（例：山田 自賠）。
         黄色の時間（12:00 / 19:30 など）は管理側だけの枠で、顧客は予約できません。
       </p>
+    </div>
+  );
+}
+
+/** 予約表の上の人数（合計を大きく、午前・午後は小さく）。テスト用に data-am・data-pm・data-all を持つ */
+function Stat({ label, am, pm, tone = '' }: { label: string; am: number; pm: number; tone?: string }) {
+  return (
+    <div className="flex items-center gap-1.5 rounded border bg-white px-2 py-0.5 leading-none max-sm:gap-1 max-sm:px-1" aria-label={`${label}の人数`} data-am={am} data-pm={pm} data-all={am + pm}
+      title={`${label}：午前 ${am}・午後 ${pm}・合計 ${am + pm}`}>
+      <span className="text-xs text-slate-500 max-sm:text-[10px]">{label}</span>
+      <b className={`text-lg tabular-nums max-sm:text-sm ${tone}`}>{am + pm}</b>
+      <span className="flex flex-col text-[10px] leading-[11px] tabular-nums text-slate-500 max-sm:hidden"><span>前 {am}</span><span>後 {pm}</span></span>
     </div>
   );
 }
