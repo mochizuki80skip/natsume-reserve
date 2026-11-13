@@ -28,7 +28,8 @@ const key = (time: number, bed: number) => `${time}:${bed}`;
 const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 
 type CellChange = { k: string; before: string; after: string };
-type MoveStep = { move: { fromTime: number; fromBed: number; toTime: number; toBed: number; twoSlots: boolean; name: string; logId: string | null } };
+// toDate：動かした先の日（ダイアログで別の日に変えたとき。同じ日なら表示中の日）。cont：2 枠目（上記初診対応など）の文字
+type MoveStep = { move: { fromTime: number; fromBed: number; toDate: string; toTime: number; toBed: number; twoSlots: boolean; name: string; cont: string; logId: string | null } };
 
 export default function DayGrid({ data, published, today, onRefresh, onEdited }: Props) {
   const navigate = useNavigate();
@@ -413,10 +414,13 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     setChangeDlg(null);
     onRefresh();
   }
-  function moved(to: { date: string; time: number; bed: number; slots: number }) {
+  function moved(to: { date: string; time: number; bed: number; slots: number; logId?: string | null }) {
     if (!changeDlg) return;
+    const cont = changeDlg.twoSlots ? cells.get(key(changeDlg.time + data.slotMinutes, changeDlg.bed)) ?? '' : '';
     applyMoveLocal(changeDlg, to);
-    setMoveMsg({ text: `${changeDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に変更しました`, date: to.date });
+    // ダイアログで変えた予約も「元に戻す」で戻せるようにする（記録しないと、元に戻すで 1 つ前の入力が戻ってしまう）
+    pushMove({ fromTime: changeDlg.time, fromBed: changeDlg.bed, toDate: to.date, toTime: to.time, toBed: to.bed, twoSlots: changeDlg.twoSlots, name: changeDlg.name, cont, logId: to.logId ?? null });
+    setMoveMsg({ text: `${changeDlg.name} を ${formatDateJa(to.date)} ${minToHm(to.time)}〜（ベッド${to.bed}）に変更しました`, date: to.date, undo: true });
     setChangeDlg(null);
     onRefresh();
   }
@@ -476,16 +480,22 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
       onRefresh();
       return;
     }
+    const contText = twoSlots ? cells.get(key(ft + step, fb)) ?? '' : '';
     applyMoveLocal({ time: ft, bed: fb, twoSlots }, j.moved);
-    pushMove({ fromTime: ft, fromBed: fb, toTime: j.moved.time, toBed: j.moved.bed, twoSlots, name, logId: j.moved.logId ?? null });
+    pushMove({ fromTime: ft, fromBed: fb, toDate: data.date, toTime: j.moved.time, toBed: j.moved.bed, twoSlots, name, cont: contText, logId: j.moved.logId ?? null });
     setMoveMsg({ text: `${name} を ${minToHm(ft)}（ベッド${fb}）→ ${minToHm(j.moved.time)}（ベッド${j.moved.bed}）に動かしました`, date: data.date, undo: true });
     onRefresh();
   }
   async function revertMove(m: MoveStep['move']) {
-    const r = await fetch('/api/admin/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, time: m.toTime, bed: m.toBed, toDate: data.date, toTime: m.fromTime, toBed: m.fromBed, allowOver: true, revertLogId: m.logId ?? '' }) });
+    await flush();
+    const r = await fetch('/api/admin/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: m.toDate, time: m.toTime, bed: m.toBed, toDate: data.date, toTime: m.fromTime, toBed: m.fromBed, allowOver: true, revertLogId: m.logId ?? '' }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { moveErr(`元に戻せませんでした：${j.error ?? ''}`); onRefresh(); return; }
-    applyMoveLocal({ time: m.toTime, bed: m.toBed, twoSlots: m.twoSlots }, j.moved);
+    if (m.toDate === data.date) applyMoveLocal({ time: m.toTime, bed: m.toBed, twoSlots: m.twoSlots }, j.moved);
+    // 戻した場所には、動かしたときの氏名（と 2 枠目）を必ず出す（画面の表がまだ新しくなっていなくても消えないように）
+    const back = j.moved as { time: number; bed: number };
+    for (const k of [key(back.time, back.bed), key(back.time + data.slotMinutes, back.bed)]) touchedAt.current.set(k, Date.now());
+    setCells((cur) => { const n = new Map(cur); n.set(key(back.time, back.bed), m.name); if (m.twoSlots) n.set(key(back.time + data.slotMinutes, back.bed), m.cont); return n; });
     setMoveMsg({ text: `${m.name} を元の ${minToHm(m.fromTime)}（ベッド${m.fromBed}）に戻しました`, date: data.date });
     onRefresh();
   }

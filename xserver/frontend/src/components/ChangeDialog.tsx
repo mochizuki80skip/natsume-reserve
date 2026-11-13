@@ -11,7 +11,7 @@ export interface ChangeFrom { date: string; time: number; bed: number; name: str
 interface Props {
   from: ChangeFrom;
   onClose: () => void;
-  onMoved: (to: { date: string; time: number; bed: number; slots: number }) => void;
+  onMoved: (to: { date: string; time: number; bed: number; slots: number; logId?: string | null }) => void;
   onCancelled: () => void;
 }
 
