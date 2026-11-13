@@ -25,7 +25,7 @@ await api(s1, 'PUT', '/api/admin/jibai/claims', { ym: cur, claims: [
   { patientNo: '000301a', patientName: '見本 遅れ一', invoiceYm: prev, days: 5, amount: 40000 },
   { patientNo: '000302b', patientName: '見本 遅れ二', invoiceYm: prev, days: 3, amount: 25000 },
 ] });
-await api(s1, 'POST', '/api/admin/jibai/submit', { ym: cur, action: 'submit' });
+await api(s1, 'POST', '/api/admin/jibai/submit', { ym: cur, action: 'submit', unclaimed: 0 });
 const hq = await login('', process.env.HQ_PASSWORD ?? 'hq-pass', 'HQ');
 const before = (await api(hq, 'GET', `/api/admin/hq/jibai?ym=${prev}`))[1].rows.find((r) => r.code === 'S001');
 ok('前：本部の前の月は「提出済み」ではない（今月の画面で提出したため）', before.status !== 'SUBMITTED', before.status);
@@ -44,7 +44,7 @@ ok('本部：今月は未提出に戻る（明細 0）', now.status !== 'SUBMITT
 ok('明細は前の月の画面へ移る', (await api(s1, 'GET', `/api/admin/jibai?ym=${prev}`))[1].claims.length === 2);
 // 移す先が提出済みなら断る・提出していない月は移せない
 await api(s1, 'PUT', '/api/admin/jibai/claims', { ym: cur, claims: [{ patientNo: '000303c', patientName: '見本 今月', invoiceYm: cur, days: 2, amount: 10000 }] });
-await api(s1, 'POST', '/api/admin/jibai/submit', { ym: cur, action: 'submit' });
+await api(s1, 'POST', '/api/admin/jibai/submit', { ym: cur, action: 'submit', unclaimed: 0 });
 ok('移す先が提出済みなら断る', (await api(s1, 'POST', '/api/admin/jibai/submit', { ym: cur, action: 'move', to: prev }))[0] === 409);
 ok('提出していない月は移せない', (await api(s1, 'POST', '/api/admin/jibai/submit', { ym: `${y + 1}-01`, action: 'move', to: cur }))[0] === 400);
 ok(`画面の表示（${fmt(prev)}）`, true);

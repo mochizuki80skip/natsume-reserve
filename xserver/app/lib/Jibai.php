@@ -29,7 +29,9 @@ final class Jibai
     /** 後から追加した列が無ければ足す（MySQL 8 は ADD COLUMN IF NOT EXISTS が使えないため自前で確認） */
     private static function ensureColumns(): void
     {
-        $added = [['jibai_claim', 'invoiceYm', 'ALTER TABLE `jibai_claim` ADD COLUMN `invoiceYm` CHAR(7) NULL AFTER `seq`']];
+        $added = [['jibai_claim', 'invoiceYm', 'ALTER TABLE `jibai_claim` ADD COLUMN `invoiceYm` CHAR(7) NULL AFTER `seq`'],
+            // 提出のときに入れる未請求者数（自賠の患者様のうち、請求ができていない人の人数）
+            ['jibai_month', 'unclaimed', 'ALTER TABLE `jibai_month` ADD COLUMN `unclaimed` INT NULL AFTER `submittedBy`']];
         foreach ($added as [$table, $col, $ddl]) {
             $r = Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$table, $col]);
             if (!$r) Db::pdo()->exec($ddl);
@@ -84,7 +86,7 @@ final class Jibai
     public static function monthRow(?array $r): ?array
     {
         if (!$r) return null;
-        return ['status' => (string)$r['status'], 'submittedAt' => $r['submittedAt'], 'submittedBy' => $r['submittedBy']];
+        return ['status' => (string)$r['status'], 'submittedAt' => $r['submittedAt'], 'submittedBy' => $r['submittedBy'], 'unclaimed' => isset($r['unclaimed']) ? (int)$r['unclaimed'] : null];
     }
 
     public static function claims(string $storeId, string $ym): array

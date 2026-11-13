@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS `jibai_month` (
   `status` VARCHAR(10) NOT NULL DEFAULT 'DRAFT',
   `submittedAt` DATETIME NULL,
   `submittedBy` VARCHAR(20) NULL,
+  `unclaimed` INT NULL,  -- 提出のときに入れる未請求者数（自賠の患者様のうち、請求ができていない人の人数）
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `jm_store_ym` (`storeId`, `ym`),

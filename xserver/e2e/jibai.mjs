@@ -88,7 +88,7 @@ const total = Number(EXPECT.amount) + 12000;
 ok('合計が表示される', (await page.locator('tfoot').textContent()).includes(total.toLocaleString('ja-JP')), await page.locator('tfoot').textContent());
 
 page.once('dialog', (d) => d.accept());
-await page.getByRole('button', { name: 'この月を提出する' }).click();
+await page.getByLabel('未請求者数', { exact: true }).fill('2'); await page.getByRole('button', { name: 'この月を提出する' }).click();
 await page.waitForSelector('text=提出済み', { timeout: 15000 });
 ok('提出できた', true);
 ok('提出後は入力欄が編集不可', await page.locator('tbody tr').first().locator('input').nth(3).isDisabled());
@@ -167,7 +167,7 @@ if (process.env.SHOT_NO_YM) {
   await page.waitForSelector('text=保存しました', { timeout: 15000 });
   await page.waitForFunction(() => !document.body.textContent.includes('未保存'));
   page.once('dialog', (d) => d.accept());
-  await page.getByRole('button', { name: 'この月を提出する' }).click();
+  await page.getByLabel('未請求者数', { exact: true }).fill('2'); await page.getByRole('button', { name: 'この月を提出する' }).click();
   await page.waitForSelector('text=提出済み', { timeout: 15000 });
   ok('請求月を選べば保存・提出できる', true);
   await page.screenshot({ path: 'e2e/out-jibai-noym.png', fullPage: true });

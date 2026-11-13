@@ -51,7 +51,7 @@ const mt = await mg.getByRole('alertdialog', { name: '自賠請求の提出の�
 ok('管轄MG：管轄の店舗だけ', mt.includes('サンプル駅前院') && !mt.includes('サンプル本店') && mt.includes('管轄の店舗'), mt.slice(0, 160));
 
 // 提出（請求者なし）すると出なくなる
-await api(s1, 'POST', '/api/admin/jibai/submit', { ym: a.ym, action: 'submit_empty' });
+await api(s1, 'POST', '/api/admin/jibai/submit', { ym: a.ym, action: 'submit_empty', unclaimed: 0 });
 ok('店舗：提出すると出なくなる', (await api(s1, 'GET', '/api/admin/me'))[1].jibaiAlert === null);
 const ha = (await api(hq, 'GET', '/api/admin/me'))[1].jibaiAlert;
 ok('本部：提出した店舗は一覧から外れる', ha && ha.stores.length === 1 && ha.stores[0].code === 'S002', JSON.stringify(ha));

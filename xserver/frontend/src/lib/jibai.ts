@@ -4,7 +4,7 @@ export interface JibaiClaim {
   id: string; ym: string; invoiceYm: string | null; patientNo: string; patientName: string | null; days: number | null; amount: number; source: 'OCR' | 'MANUAL';
   verifiedAmount: number | null; verifiedAt: string | null; verifiedBy: string | null; note: string; createdBy: string; createdAt: string; updatedAt: string;
 }
-export interface JibaiMonth { status: 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null }
+export interface JibaiMonth { status: 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; /** 提出のときに入れた未請求者数 */ unclaimed?: number | null }
 export interface JibaiLog { id: string; claimId: string | null; action: string; detail: string | null; byCode: string; createdAt: string }
 
 export function yen(n: number | null | undefined): string {

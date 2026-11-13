@@ -27,7 +27,12 @@ const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
 await s1.goto(`${B}/admin/jibai?ym=${next}`); await s1.waitForSelector('text=自賠請求（速報）'); await s1.waitForTimeout(600);
 const g = s1.getByRole('group', { name: '請求者なしで提出' });
 ok('店舗：明細 0 件の月に「請求者なし（0 件で提出）」', await g.getByRole('button', { name: '請求者なし（0 件で提出）' }).isVisible());
+// 未請求者数を入れないと提出できない（請求者なしでも入れる。請求できていない方がいれば人数を入れる）
+await g.getByRole('button', { name: '請求者なし（0 件で提出）' }).click(); await s1.waitForTimeout(800);
+ok('未請求者数が空なら提出できない', (await s1.textContent('main')).includes('未請求者数（請求ができていない') && !(await s1.textContent('main')).includes('提出済み（請求者なし）'));
+await s1.getByLabel('未請求者数', { exact: true }).fill('１');
 await g.getByRole('button', { name: '請求者なし（0 件で提出）' }).click(); await s1.waitForTimeout(1200);
+ok('請求者なしでも未請求者数を残す（全角の 1 も可）', (await s1.getByLabel('提出した未請求者数').textContent()).includes('未請求 1 人'));
 ok('店舗：提出済み（請求者なし）と出る', (await s1.textContent('main')).includes('提出済み（請求者なし）'));
 await s1.goto(`${B}/admin/jibai?ym=${ym}`); await s1.waitForSelector('text=自賠請求（速報）'); await s1.waitForTimeout(600);
 ok('店舗：明細のある月には出ない', (await s1.getByRole('group', { name: '請求者なしで提出' }).count()) === 0);
@@ -36,6 +41,12 @@ ok('店舗：明細のある月には出ない', (await s1.getByRole('group', { 
 const hq = await login('', process.env.HQ_PASSWORD ?? 'hq-pass', 'HQ');
 await hq.goto(`${B}/admin/hq/jibai?ym=${ym}`); await hq.waitForSelector('text=全店集計'); await hq.waitForTimeout(600);
 const bulk = hq.getByRole('group', { name: '請求者なしの店舗' });
+const hn = (await api(hq, 'GET', `/api/admin/hq/jibai?ym=${next}`))[1];
+ok('本部の自賠集計：店舗が入れた未請求者数と合計', hn.rows.find((r) => r.code === 'S001').unclaimed === 1 && hn.sum.unclaimed === 1, JSON.stringify([hn.rows.map((r) => r.unclaimed), hn.sum.unclaimed]));
+await hq.goto(`${B}/admin/hq/jibai?ym=${next}`); await hq.waitForSelector('text=全店集計'); await hq.waitForTimeout(600);
+ok('本部の画面に未請求者数の列', (await hq.getByLabel('サンプル本店 の未請求者数').textContent()).includes('1 人') && (await hq.getByLabel('全店の未請求者数').textContent()).includes('1 人'));
+await hq.screenshot({ path: new URL('./out-jibai-unclaimed-hq.png', import.meta.url).pathname });
+await hq.goto(`${B}/admin/hq/jibai?ym=${ym}`); await hq.waitForSelector('text=全店集計'); await hq.waitForTimeout(600);
 ok('本部：明細 0 件・未提出の店舗の欄（S002 だけ）', (await bulk.textContent()).includes('サンプル駅前院') && !(await bulk.textContent()).includes('サンプル本店'));
 ok('本部：明細のある店舗には「請求者なし」のボタンがない', (await hq.getByRole('button', { name: 'サンプル本店 を請求者なしにする' }).count()) === 0);
 await hq.screenshot({ path: new URL('./out-jibai-empty-hq.png', import.meta.url).pathname });

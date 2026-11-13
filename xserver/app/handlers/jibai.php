@@ -117,21 +117,28 @@ function jibai_submit(): never
     $action = (string)($b['action'] ?? 'submit');
     $sid = $ctx['store']['id'];
     $by = $ctx['session']['code'];
+    // 未請求者数（提出・請求者なしのときに必ず入れる。0 人も入れる）
+    $unclaimed = null;
+    if ($action === 'submit' || $action === 'submit_empty') {
+        $u = $b['unclaimed'] ?? null;
+        if ($u === null || $u === '' || !is_numeric($u) || (int)$u != $u || (int)$u < 0 || (int)$u > 999) Http::error('未請求者数（請求ができていない自賠の患者様の人数）を入れてください。いない場合は 0 です', 400);
+        $unclaimed = (int)$u;
+    }
     if ($action === 'submit') {
         $n = (int)Db::one('SELECT COUNT(*) AS n FROM jibai_claim WHERE storeId = ? AND ym = ?', [$sid, $ym])['n'];
         if ($n === 0) Http::error('明細が 1 件もありません。自賠請求が無い月は「0 件で提出」を押してください', 400);
         $missing = (int)Db::one('SELECT COUNT(*) AS n FROM jibai_claim WHERE storeId = ? AND ym = ? AND invoiceYm IS NULL', [$sid, $ym])['n'];
         if ($missing > 0) Http::error("請求月が未選択の明細が {$missing} 件あります。何年何月分かを選んで保存してから提出してください", 400);
-        Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy)',
-            [Db::newId(), $sid, $ym, 'SUBMITTED', Time::nowJstDateTime(), $by]);
+        Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy, unclaimed) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy), unclaimed = VALUES(unclaimed)',
+            [Db::newId(), $sid, $ym, 'SUBMITTED', Time::nowJstDateTime(), $by, $unclaimed]);
         $total = (int)Db::one('SELECT COALESCE(SUM(amount), 0) AS t FROM jibai_claim WHERE storeId = ? AND ym = ?', [$sid, $ym])['t'];
-        Jibai::log($sid, $ym, null, 'submit', sprintf('%d 件 %s円', $n, number_format($total)), $by);
+        Jibai::log($sid, $ym, null, 'submit', sprintf('%d 件 %s円・未請求 %d 人', $n, number_format($total), $unclaimed), $by);
     } elseif ($action === 'submit_empty') {
         $n = (int)Db::one('SELECT COUNT(*) AS n FROM jibai_claim WHERE storeId = ? AND ym = ?', [$sid, $ym])['n'];
         if ($n > 0) Http::error('明細があるので通常の「提出」を押してください', 400);
-        Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy)',
-            [Db::newId(), $sid, $ym, 'SUBMITTED', Time::nowJstDateTime(), $by]);
-        Jibai::log($sid, $ym, null, 'submit', '0 件（自賠請求なし）', $by);
+        Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy, unclaimed) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy), unclaimed = VALUES(unclaimed)',
+            [Db::newId(), $sid, $ym, 'SUBMITTED', Time::nowJstDateTime(), $by, $unclaimed]);
+        Jibai::log($sid, $ym, null, 'submit', sprintf('0 件（自賠請求なし）・未請求 %d 人', $unclaimed), $by);
     } elseif ($action === 'move') {
         // 提出月を変える：提出した明細と「提出済み」を、別の月（本来の提出月）へ移す（例：10 月分を 11 月の画面で提出してしまった）
         $to = (string)($b['to'] ?? '');
@@ -148,8 +155,8 @@ function jibai_submit(): never
                 Db::exec('UPDATE jibai_claim SET ym = ?, seq = ? WHERE id = ?', [$to, ++$seq, $c['id']]);
                 $n++;
             }
-            Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy)',
-                [Db::newId(), $sid, $to, 'SUBMITTED', $m['submittedAt'], $m['submittedBy']]);
+            Db::exec('INSERT INTO jibai_month (id, storeId, ym, status, submittedAt, submittedBy, unclaimed) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE status = VALUES(status), submittedAt = VALUES(submittedAt), submittedBy = VALUES(submittedBy), unclaimed = VALUES(unclaimed)',
+                [Db::newId(), $sid, $to, 'SUBMITTED', $m['submittedAt'], $m['submittedBy'], $m['unclaimed']]);
             Db::exec('DELETE FROM jibai_month WHERE storeId = ? AND ym = ?', [$sid, $ym]);
             Jibai::log($sid, $to, null, 'submit', sprintf('%s の画面から提出月を変更（%d 件）', $ym, $n), $by);
             Jibai::log($sid, $ym, null, 'reopen', sprintf('提出月を %s に変更（%d 件を移動）', $to, $n), $by);
@@ -158,7 +165,7 @@ function jibai_submit(): never
     } elseif ($action === 'reopen') {
         $m = Jibai::month($sid, $ym);
         if (!$m || $m['status'] !== 'SUBMITTED') Http::error('提出されていません', 400);
-        Db::exec('UPDATE jibai_month SET status = ?, submittedAt = NULL, submittedBy = NULL WHERE storeId = ? AND ym = ?', ['DRAFT', $sid, $ym]);
+        Db::exec('UPDATE jibai_month SET status = ?, submittedAt = NULL, submittedBy = NULL, unclaimed = NULL WHERE storeId = ? AND ym = ?', ['DRAFT', $sid, $ym]);
         Jibai::log($sid, $ym, null, 'reopen', null, $by);
     } else {
         Http::error('bad request', 400);
@@ -224,6 +231,7 @@ function hq_jibai(): never
             'status' => $m ? (string)$m['status'] : 'NONE',
             'submittedAt' => $m ? $m['submittedAt'] : null,
             'submittedBy' => $m ? $m['submittedBy'] : null,
+            'unclaimed' => $m && $m['status'] === 'SUBMITTED' && isset($m['unclaimed']) ? (int)$m['unclaimed'] : null, // 未請求者数（本部・MG の「請求者なし」では入らない）
             'count' => $a ? (int)$a['n'] : 0,
             'total' => $a ? (int)$a['total'] : 0,
             'ocrCount' => $a ? (int)$a['ocr'] : 0,
@@ -241,6 +249,7 @@ function hq_jibai(): never
         $sum['verifiedCount'] += $row['verifiedCount'];
         $sum['verifiedTotal'] += $row['verifiedTotal'];
         if ($row['status'] === 'SUBMITTED') $sum['submitted']++;
+        $sum['unclaimed'] = ($sum['unclaimed'] ?? 0) + (int)($row['unclaimed'] ?? 0);
         $rows[] = $row;
     }
     // 過去 12 か月の全社合計（推移）

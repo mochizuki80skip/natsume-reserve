@@ -5,9 +5,9 @@ import { useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, yen } from '@/lib/jibai';
 import { useAdmin } from './Layout';
 
-interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; lateCount: number; lateTotal: number; movedOut: number; verifiedCount: number; verifiedTotal: number; sentCount: number; sentTotal: number; sentLateCount: number; sentLateTotal: number }
+interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; lateCount: number; lateTotal: number; movedOut: number; verifiedCount: number; verifiedTotal: number; sentCount: number; sentTotal: number; sentLateCount: number; sentLateTotal: number; unclaimed?: number | null }
 interface Resp {
-  ym: string; currentYm: string; rows: Row[]; sum: { count: number; total: number; verifiedCount: number; verifiedTotal: number; sentCount: number; sentTotal: number; sentLateCount: number; sentLateTotal: number; submitted: number }; storeCount: number;
+  ym: string; currentYm: string; rows: Row[]; sum: { count: number; total: number; verifiedCount: number; verifiedTotal: number; sentCount: number; sentTotal: number; sentLateCount: number; sentLateTotal: number; submitted: number; unclaimed?: number }; storeCount: number;
   trend: { ym: string; count: number; total: number; verifiedTotal: number }[]; setting: { nameRetentionDays: number };
 }
 
@@ -71,6 +71,7 @@ export default function JibaiHqPage() {
         <div><span className="text-xs text-slate-500">提出済み店舗</span><div className="text-xl font-bold tabular-nums">{sum.submitted} / {data.storeCount}</div></div>
         <div><span className="text-xs text-slate-500">経理確認済み</span><div className="text-xl font-bold tabular-nums">{sum.verifiedCount} 件 / {yen(sum.verifiedTotal)}</div></div>
         <div aria-label="全店の月遅れ"><span className="text-xs text-slate-500">月遅れ（この月に出した前の月分）</span><div className={`text-xl font-bold tabular-nums ${sum.sentLateCount ? 'text-amber-800' : 'text-slate-400'}`}>{sum.sentLateCount} 件 / {yen(sum.sentLateTotal)}</div></div>
+        <div aria-label="全店の未請求者数"><span className="text-xs text-slate-500">未請求者数（提出した店舗）</span><div className={`text-xl font-bold tabular-nums ${sum.unclaimed ? 'text-amber-800' : 'text-slate-400'}`}>{sum.unclaimed ?? 0} 人</div></div>
         <div aria-label="全店のこの月に出した合計"><span className="text-xs text-slate-500">この月に出した合計（この月分＋月遅れ）</span><div className="text-xl font-bold tabular-nums">{sum.sentCount} 件 / {yen(sum.sentTotal)}</div></div>
       </div>
 
@@ -94,6 +95,7 @@ export default function JibaiHqPage() {
               <th className={num}>差額</th>
               <th className={`${num} bg-amber-50`} title="この月に出した明細のうち、請求月が前の月の分（月遅れ請求）">月遅れ（この月に出した）</th>
               <th className={`${num} bg-amber-50`} title="この月に出した明細の合計（この月分＋月遅れ）">この月に出した合計</th>
+              <th className={num} title="提出のときに店舗が入れた、請求ができていない自賠の患者様の人数">未請求者数</th>
               <th></th>
             </tr>
           </thead>
@@ -109,6 +111,7 @@ export default function JibaiHqPage() {
                 <td className={`${num} ${r.verifiedCount > 0 && r.verifiedCount === r.count && r.verifiedTotal !== r.total ? 'text-amber-700' : 'text-slate-500'}`}>{r.verifiedCount > 0 && r.verifiedCount === r.count ? (r.verifiedTotal - r.total).toLocaleString('ja-JP') : ''}</td>
                 <td className={`${num} bg-amber-50/60 ${r.sentLateCount > 0 ? 'font-bold text-amber-900' : ''}`}>{r.sentLateCount > 0 ? `${r.sentLateCount}件 ${r.sentLateTotal.toLocaleString('ja-JP')}` : ''}</td>
                 <td className={`${num} bg-amber-50/60`}>{r.sentCount > 0 ? `${r.sentCount}件 ${r.sentTotal.toLocaleString('ja-JP')}` : ''}</td>
+                <td className={`${num} ${r.unclaimed ? 'font-bold text-amber-900' : ''}`} aria-label={`${r.name} の未請求者数`}>{r.unclaimed != null ? `${r.unclaimed} 人` : ''}</td>
                 <td className="whitespace-nowrap px-2 py-1">
                   {canSwitch && r.status !== 'SUBMITTED' && r.sentCount === 0 && <button type="button" onClick={() => void submitEmpty([r])} className="mr-2 rounded border border-slate-400 bg-white px-1.5 text-xs" aria-label={`${r.name} を請求者なしにする`}>請求者なし</button>}
                   {canSwitch && <form action="/api/admin/switch" method="post" className="inline">
@@ -131,6 +134,7 @@ export default function JibaiHqPage() {
                 <td className={num}></td>
                 <td className={`${num} bg-amber-50`}>{sum.sentLateCount > 0 ? `${sum.sentLateCount}件 ${sum.sentLateTotal.toLocaleString('ja-JP')}` : ''}</td>
                 <td className={`${num} bg-amber-50`}>{sum.sentCount} 件 {sum.sentTotal.toLocaleString('ja-JP')}</td>
+                <td className={num} aria-label="未請求者数の合計">{sum.unclaimed ?? 0} 人</td>
                 <td></td>
               </tr>
             </tfoot>
