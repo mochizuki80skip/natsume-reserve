@@ -40,6 +40,15 @@ final class Availability
         return Hours::isAm($in['sessions'], $time) ? $in['capacityAm'] : $in['capacityPm'];
     }
 
+    /** その時刻が、その日の予約サイトの枠の時刻か（枠の始まりから slotMinutes きざみ。WEB 予約は枠の時刻だけ受ける） */
+    public static function onGrid(array $in, int $time): bool
+    {
+        foreach ($in['sessions'] as $s) {
+            if ($time >= $s['start'] && $time <= $s['lastStart'] && ($time - $s['start']) % $in['slotMinutes'] === 0) return true;
+        }
+        return false;
+    }
+
     /** そのベッドが time から neededSlots 枠連続で空いているか */
     public static function bedFreeAt(array $in, int $time, int $bed): bool
     {

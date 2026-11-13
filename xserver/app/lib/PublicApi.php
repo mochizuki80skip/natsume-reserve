@@ -109,9 +109,12 @@ final class PublicApi
         // 顧客に見せる枠の中のベッドなら枠も 1 つ減らし、枠の外のベッドならベッドが埋まるだけ（✖ と同じ扱い）
         $blocks ??= Db::all('SELECT startTime, endTime, beds FROM slot_block WHERE storeId = ? AND date = ?', [$store['id'], $date]);
         $allBeds = Settings::allBeds($store);
+        // その日の枠の時刻（管理側の枠も）。ブロックは「開始 ≦ 枠 ＜ 終了」の枠に効かせる（特別な営業日などで枠が 15 分の倍数から始まらなくても効くように）
+        $grid = Hours::slotTimes($sessions, (int)$setting['slotMinutes'], true);
+        $inRange = fn(array $r) => array_values(array_filter($grid, fn($t) => $t >= (int)$r['startTime'] && $t < (int)$r['endTime']));
         foreach ($blocks as $bk) {
             $beds = self::blockBeds((string)($bk['beds'] ?? ''), $allBeds);
-            for ($t = (int)$bk['startTime']; $t < (int)$bk['endTime']; $t += $setting['slotMinutes']) {
+            foreach ($inRange($bk) as $t) {
                 $cap = Hours::isAm($sessions, $t) ? $capacity['am'] : $capacity['pm'];
                 foreach ($beds as $b) {
                     $k = Availability::key($t, $b);
@@ -129,7 +132,7 @@ final class PublicApi
             foreach (Db::all('SELECT startTime, endTime, kinds, beds FROM kind_block WHERE storeId = ? AND date = ?', [$store['id'], $date]) as $kb) {
                 if (!str_contains((string)$kb['kinds'], $stopKey)) continue; // 止めるものに入っていない区分
                 $kbBeds = self::blockBeds((string)($kb['beds'] ?? ''), $allBeds);
-                for ($t = (int)$kb['startTime']; $t < (int)$kb['endTime']; $t += $setting['slotMinutes']) {
+                foreach ($inRange($kb) as $t) {
                     if (count($kbBeds) >= count($allBeds)) $kindStop[$t] = true; // 全ベッド：その時間はこの区分を受けない
                     else foreach ($kbBeds as $bb) $kindBedStop[Availability::key($t, $bb)] = true; // 選んだベッドだけ、この区分には使わせない
                 }

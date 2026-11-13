@@ -16,14 +16,14 @@ function churn_clean(array $patch, bool &$auto): array
 {
     $set = [];
     foreach ($patch as $k => $v) {
-        if ($k === 'churnDate') { if (!Time::isValidDate((string)$v)) Http::error('日付が正しくありません', 400); $set[$k] = (string)$v; $auto = true; continue; }
-        if ($k === 'sex') { if (!in_array($v, ['', '♂', '♀'], true)) Http::error('bad request', 400); $set[$k] = $v; $auto = true; continue; }
+        if ($k === 'churnDate') { if (!Time::isValidDate((string)$v)) throw new HttpError(400, '日付が正しくありません'); $set[$k] = (string)$v; $auto = true; continue; }
+        if ($k === 'sex') { if (!in_array($v, ['', '♂', '♀'], true)) throw new HttpError(400, 'bad request'); $set[$k] = $v; $auto = true; continue; }
         if ($k === 'age') {
             if ($v === null || $v === '') { $set[$k] = null; $auto = true; continue; }
-            if (!is_numeric($v) || (int)$v < 0 || (int)$v > 120) Http::error('年齢が正しくありません', 400);
+            if (!is_numeric($v) || (int)$v < 0 || (int)$v > 120) throw new HttpError(400, '年齢が正しくありません');
             $set[$k] = (int)$v; $auto = true; continue;
         }
-        if (!isset(CHURN_TEXT[$k])) Http::error('bad request', 400);
+        if (!isset(CHURN_TEXT[$k])) throw new HttpError(400, 'bad request');
         $set[$k] = mb_substr(trim((string)$v), 0, CHURN_TEXT[$k]);
         if ($k !== 'manage' && $k !== 'reason') $auto = true;
     }

@@ -148,15 +148,25 @@ function adm_cells_put(): never
                 if ($old && $old['reservationId']) $touched[$old['reservationId']] = true;
                 Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
             } else {
+                $old = Db::one('SELECT reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
                 Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE text = VALUES(text)', [Db::newId(), $sid, $date, $time, $bed, $text]);
-                // 別の人の名前に書き換えたら、前の人の電話番号は外す（（初診）を付けた・外しただけなら残す）
-                if ($wasText !== '' && Karte::nameOfText($wasText) !== Karte::nameOfText($text)) Db::exec('UPDATE cell SET phone = NULL WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
+                // 別の人の名前に書き換えたら、前の人の情報（電話番号・WEB予約・メニュー・担当・来院チェック）は外す
+                //（（初診）を付けた・外しただけなら残す。2 枠目の文字どうしの書き換えも残す）
+                if ($wasText !== '' && !Text::isContinuationText($wasText) && Karte::nameOfText($wasText) !== Karte::nameOfText($text)) {
+                    Db::exec("UPDATE cell SET phone = NULL, reservationId = NULL, menus = '', staff = '', visited = 0 WHERE storeId = ? AND date = ? AND time = ? AND bed = ?", [$sid, $date, $time, $bed]);
+                    if ($old && $old['reservationId']) $touched[$old['reservationId']] = true;
+                }
             }
         }
-        // WEB予約のセルがすべて消えたら、その予約は取消扱いにする
+        // WEB予約の氏名のセルが無くなったら（消した・別の人に書き換えた）、その予約は取消扱いにする。
+        // 残った 2 枠目（上記初診対応など）は、その予約から外す（WEB の印や予約の確認に出ないように）
         foreach (array_keys($touched) as $rid) {
-            $n = (int)Db::one('SELECT COUNT(*) AS n FROM cell WHERE reservationId = ?', [$rid])['n'];
-            if ($n === 0) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $rid]);
+            $n = 0;
+            foreach (Db::all('SELECT text FROM cell WHERE reservationId = ?', [$rid]) as $rc) if (!Text::isContinuationText((string)$rc['text'])) $n++;
+            if ($n === 0) {
+                Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $rid]);
+                Db::exec('UPDATE cell SET reservationId = NULL WHERE reservationId = ?', [$rid]);
+            }
         }
     });
     Http::json(['ok' => true, 'conflicts' => $conflicts]);
@@ -223,7 +233,7 @@ function adm_staff_counts(): never
     $ctx = Auth::context();
     $store = $ctx['store'];
     $ym = Http::query('month', '');
-    if (!preg_match('/^\d{4}-\d{2}$/', $ym)) Http::error('月が正しくありません', 400);
+    if (!Time::isValidMonth($ym)) Http::error('月が正しくありません', 400);
     $dates = Time::datesOfMonth($ym);
     $cells = Db::all('SELECT date, text, menus, staff FROM cell WHERE storeId = ? AND date BETWEEN ? AND ? AND bed > 0 AND visited = 1', [$store['id'], $dates[0], $dates[count($dates) - 1]]);
     $out = [];
@@ -351,7 +361,7 @@ function adm_cancel_post(): never
     $logIds = [];
     Db::transaction(function () use (&$logIds, $sid, $step, $cell, $others, $kind, $ctx, $memo, $nextDate) {
         foreach (array_merge([$cell], $others) as $i => $c) {
-            $next = Text::isTwoSlotName($c['text']) ? Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $c['date'], (int)$c['time'] + $step, (int)$c['bed']]) : null;
+            $next = Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $c['date'], (int)$c['time'] + $step, (int)$c['bed']]); // 下が 2 枠目の文字なら一緒に（画面と同じ決め方）
             $cont = ($next && Text::isContinuationText($next['text'])) ? $next : null;
             $logId = Db::newId();
             $logIds[] = $logId;
@@ -359,7 +369,8 @@ function adm_cancel_post(): never
                 $logId, $sid, $c['date'], (int)$c['time'], (int)$c['bed'], $c['text'], $cont['text'] ?? null, $kind, $c['reservationId'] ? 'WEB' : 'MANUAL', $c['reservationId'], $ctx['session']['code'],
                 $i === 0 ? ($memo !== '' ? $memo : null) : 'お連れ様とまとめてキャンセル', $i === 0 && $nextDate !== '' ? $nextDate : null, Time::nowJstDateTime(),
             ]);
-            Db::exec('DELETE FROM cell WHERE id = ?', [$c['id']]);
+            // 2 回押した・ほかの端末で先にキャンセルしたときは、名簿に 2 回残さない
+            if (Db::exec('DELETE FROM cell WHERE id = ?', [$c['id']]) === 0) throw new HttpError(409, 'この予約は、ほかの端末で先にキャンセルか移動されています。予約表を確かめてください');
             if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
             if ($c['reservationId']) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $c['reservationId']]);
         }
@@ -397,9 +408,13 @@ function adm_move_post(): never
     $step = $setting['slotMinutes'];
     $cell = Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
     if (!$cell || trim($cell['text']) === '') Http::error('セルが空です', 404);
-    $next = Text::isTwoSlotName($cell['text']) ? Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time + $step, $bed]) : null;
+    // 2 枠目：下のセルが「上記初診対応」などなら一緒に動かす（画面と同じ決め方。氏名に（初診）が無くても、下に 2 枠目があれば 2 枠）
+    $next = Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time + $step, $bed]);
     $cont = ($next && Text::isContinuationText($next['text'])) ? $next : null;
     $need = $cont ? 2 : 1;
+    // 元に戻すとき：動かした方と違う予約が入っていたら戻さない（ほかの端末で入れ替わったとき）
+    $expect = trim((string)($b['expectText'] ?? ''));
+    if ($expect !== '' && trim((string)$cell['text']) !== $expect) Http::error('動かした先の予約が、ほかの端末で別の内容に変わっているため元に戻せません。予約表を確かめてください', 409);
 
     // 移動先の時間が、その日の予約表にあるか（管理側だけの枠も可）
     $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$sid, $toDate]));
@@ -447,13 +462,21 @@ function adm_move_post(): never
             }
             // 同じ日の中で動かしたときは来院チェックもそのまま移す
             $visited = $toDate === $date ? (int)($cell['visited'] ?? 0) : 0;
-            Db::exec('DELETE FROM cell WHERE id = ?', [$cell['id']]);
+            // 同じ予約をほかの端末で同時に動かした・キャンセルしたときは、2 か所にできないよう止める
+            if (Db::exec('DELETE FROM cell WHERE id = ?', [$cell['id']]) === 0) throw new HttpError(409, 'この予約は、ほかの端末で先に動かされたかキャンセルされています。予約表を確かめてください');
             if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
             // 移動先に空文字のセルが残っていれば消してから入れる
             Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($targetTimes) . ')', array_merge([$sid, $toDate, $toBed], $targetTimes));
             Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus, staff, visited, phone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? ''), (string)($cell['staff'] ?? ''), $visited, $cell['phone'] ?? null]);
             if ($cont) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime + $step, $toBed, $cont['text'], $cont['reservationId']]);
             if ($cell['reservationId']) Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]);
+            // 新患継続率（初回カルテ）の自動の行も、予約と一緒に動かす（元の場所に残ると二重に数え、新自の知らせもまた出るため）。
+            // 別の日へ動かしたときは来院チェックが外れるので、手を加えていない行は消す（その日に来院したら、また自動で入る）
+            if ($toDate === $date) {
+                Db::exec('UPDATE IGNORE karte SET srcTime = ?, srcBed = ? WHERE storeId = ? AND date = ? AND srcTime = ? AND srcBed = ? AND auto = 1', [$toTime, $toBed, $sid, $date, (int)$cell['time'], (int)$cell['bed']]);
+            } else {
+                Db::exec('DELETE FROM karte WHERE storeId = ? AND date = ? AND srcTime = ? AND srcBed = ? AND auto = 1 AND edited = 0', [$sid, $date, (int)$cell['time'], (int)$cell['bed']]);
+            }
             // 元に戻す：動かしたときの「予約変更」の記録を消すだけ（新しい記録は作らない）
             if ($revertLogId !== '') {
                 Db::exec("DELETE FROM cancel_log WHERE id = ? AND storeId = ? AND kind = 'CHANGE'", [$revertLogId, $sid]);
@@ -484,7 +507,7 @@ function adm_slot_left(array $store, array $setting, string $date, int $time, in
     $left = PHP_INT_MAX;
     for ($k = 0; $k < $need; $k++) {
         $t = $time + $k * $setting['slotMinutes'];
-        $left = min($left, Availability::capacityAt($in, $time) - Availability::occupiedCountAt($in, $t));
+        $left = min($left, Availability::capacityAt($in, $t) - Availability::occupiedCountAt($in, $t));
     }
     return $left === PHP_INT_MAX ? null : $left;
 }
@@ -549,16 +572,25 @@ function adm_cancel_delete(): never
     if ($log['kind'] === 'CHANGE') Http::error('予約変更の記録は予約表に戻せません（変更先の日に予約があります）', 409);
     $step = Settings::global()['slotMinutes'];
     $times = $log['contText'] ? [(int)$log['time'], (int)$log['time'] + $step] : [(int)$log['time']];
+    // WEB 予約と同じ鍵をかけてから、元の枠が空いているかを確かめる（確かめたあとに WEB 予約が入って消してしまわないように）
+    $lock = 'reserve:' . $sid . ':' . $log['date'];
+    $g = Db::one('SELECT GET_LOCK(?, 10) AS ok', [$lock]);
+    if (!$g || (int)$g['ok'] !== 1) Http::error('混み合っています。もう一度お試しください', 503);
+    try {
     $busy = Db::all('SELECT text FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($times) . ')', array_merge([$sid, $log['date'], $log['bed']], $times));
     foreach ($busy as $c) if (trim($c['text']) !== '') Http::error('元の枠に別の予約が入っているため戻せません。空けてから戻してください。', 409);
+    if (!Db::one('SELECT id FROM cancel_log WHERE id = ?', [$log['id']])) Http::error('もう予約表に戻してあります', 409); // 2 回押したとき
     Db::transaction(function () use ($sid, $log, $times, $step) {
-        Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($times) . ')', array_merge([$sid, $log['date'], $log['bed']], $times));
+        Db::exec("DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND TRIM(text) = '' AND time IN (" . Db::inList($times) . ')', array_merge([$sid, $log['date'], $log['bed']], $times));
         $rid = $log['reservationId'] && Db::one('SELECT id FROM reservation WHERE id = ?', [$log['reservationId']]) ? $log['reservationId'] : null;
         Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $log['date'], $log['time'], $log['bed'], $log['name'], $rid]);
         if ($log['contText']) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $log['date'], (int)$log['time'] + $step, $log['bed'], $log['contText'], $rid]);
         if ($rid) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['BOOKED', $rid]);
         Db::exec('DELETE FROM cancel_log WHERE id = ?', [$log['id']]);
     });
+    } finally {
+        Db::one('SELECT RELEASE_LOCK(?) AS r', [$lock]);
+    }
     Http::json(['ok' => true]);
 }
 

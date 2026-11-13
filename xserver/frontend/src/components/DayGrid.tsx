@@ -81,6 +81,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   // 元に戻す：変更のまとまり（セルごとの「前」と「後」）を新しい順に積む。画面を開いている間だけ
   // セルをマウスで動かしたもの（move）も積む。戻すときはサーバーで元の場所へ動かし直す
   const history = useRef<(CellChange[] | MoveStep)[]>([]);
+  const lastCopied = useRef('');
   const [historyLen, setHistoryLen] = useState(0);
   const focusSnap = useRef<{ k: string; val: string } | null>(null);
   // 複数セルの選択（Shift＋クリック／Shift＋矢印）。家族・親子などをまとめてコピー・貼り付け
@@ -127,13 +128,22 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   const flush = useCallback(async () => {
     if (dirty.current.size === 0) return;
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    const batch = Array.from(dirty.current.entries()).map(([k, text]) => { const [time, bed] = k.split(':').map(Number); return { time, bed, text, prev: serverText.current.get(k) ?? '' }; });
+    const all = Array.from(dirty.current.entries()).map(([k, text]) => { const [time, bed] = k.split(':').map(Number); return { time, bed, text, prev: serverText.current.get(k) ?? '' }; });
     dirty.current.clear();
     setSaveState('saving');
+    // 保存できなかったら、入力を捨てずに待たせて少しあとにもう一度送る（そのあと同じセルを打ち直していれば新しい方を送る）
+    const requeue = (list: typeof all) => {
+      for (const c of list) { const k = key(c.time, c.bed); if (!dirty.current.has(k)) dirty.current.set(k, c.text); touchedAt.current.set(k, Date.now()); }
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => { void flushRef.current(); }, 5000);
+    };
+    // 一度に送れるのは 500 セルまで（Excel から 1 日分を貼り付けたときなど）。400 ずつに分けて送る
+    for (let i = 0; i < all.length; i += 400) {
+    const batch = all.slice(i, i + 400);
     try {
-      const r = await fetch('/api/admin/cells', { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: batch }) });
+      const r = await fetch('/api/admin/cells', { method: 'PUT', keepalive: batch.length < 100, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: batch }) });
       setSaveState(r.ok ? 'saved' : 'error');
-      if (!r.ok) return;
+      if (!r.ok) { if (r.status !== 400 && r.status !== 403) requeue(all.slice(i)); return; }
       const j = await r.json().catch(() => ({})) as { conflicts?: { time: number; bed: number; text: string }[] };
       const conflicts = j.conflicts ?? [];
       const lost = new Set(conflicts.map((c) => key(c.time, c.bed)));
@@ -145,8 +155,11 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
         setConflictMsg(`先に WEB予約が入っていたため、次のセルの入力は保存されませんでした：${conflicts.map((c) => `${minToHm(c.time)} ベッド${c.bed}（${c.text}）`).join('、')}。空いている別のセルに入れ直してください。`);
         onRefresh();
       }
-    } catch { setSaveState('error'); }
+    } catch { setSaveState('error'); requeue(all.slice(i)); return; }
+    }
   }, [data.date, onRefresh]);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
   const schedule = useCallback(() => { if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(flush, 200); }, [flush]);
   useEffect(() => {
     const onLeave = () => { void flush(); };
@@ -226,10 +239,14 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     setHistoryLen(history.current.length);
     if (!b) return;
     if ('move' in b) { void revertMove(b.move); return; }
-    for (const x of [...b].reverse()) { const [time, bed] = x.k.split(':').map(Number); setCell(time, bed, x.before); }
-    syncSnap(b.map((x) => { const [time, bed] = x.k.split(':').map(Number); return { time, bed, text: x.before }; }));
-    const first = b[0].k.split(':').map(Number);
-    setPasteInfo(`元に戻しました（${b.length} セル：${minToHm(first[0])} ベッド${first[1]} など）`);
+    // そのあとほかの端末・WEB予約などで内容が変わったセルは戻さない（ほかの人の入力を消さないように）
+    const ok = b.filter((x) => (cells.get(x.k) ?? '') === x.after);
+    const skipped = b.length - ok.length;
+    for (const x of [...ok].reverse()) { const [time, bed] = x.k.split(':').map(Number); setCell(time, bed, x.before); }
+    syncSnap(ok.map((x) => { const [time, bed] = x.k.split(':').map(Number); return { time, bed, text: x.before }; }));
+    if (!ok.length) { setPasteInfo('そのあと内容が変わっていたため、元に戻しませんでした（ほかの端末や WEB予約で変わったセル）'); return; }
+    const first = ok[0].k.split(':').map(Number);
+    setPasteInfo(`元に戻しました（${ok.length} セル：${minToHm(first[0])} ベッド${first[1]} など）${skipped ? `。そのあと内容が変わっていた ${skipped} セルは戻していません` : ''}`);
   }
 
   // ---------- 同じ日に同じお名前の予約（重複の注意） ----------
@@ -264,6 +281,8 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
       for (const k of new Set([...m.keys(), ...fresh.keys()])) {
         if (recent(k)) continue;
         const v = fresh.get(k) ?? '';
+        // 入力欄を選んだままのセルがほかで変わったときは、入力前の内容も合わせる（自分が入れたことにして「元に戻す」に積まない）
+        if (focusSnap.current?.k === k && (n.get(k) ?? '') !== v) focusSnap.current = { k, val: v };
         n.set(k, v);
         serverText.current.set(k, v);
       }
@@ -350,7 +369,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     const text = e.clipboardData.getData('text/plain');
     if (!text.includes('\n') && !text.includes('\t')) return;
     e.preventDefault();
-    const plan = planPaste(text, rows, r);
+    const plan = planPaste(text, rows, r, lastCopied.current !== '' && text.replace(/\r\n?/g, '\n').trim() === lastCopied.current.trim());
     const changes: { time: number; bed: number; text: string }[] = [];
     for (const cell of plan.cells) {
       const cc = c + cell.col;
@@ -383,6 +402,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     if (!range || rangeSize(range) <= 1) return;
     e.preventDefault();
     e.clipboardData.setData('text/plain', rangeText(range));
+    lastCopied.current = rangeText(range); // この予約表でコピーしたもの（貼り付けで列をまとめない）
     const n = rangeSize(range);
     if (cut) clearRange(range);
     else setPasteInfo(`${n} セルをコピーしました。貼り付けたい場所の左上のセルを押して Ctrl+V`);
@@ -390,6 +410,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
 
   // ---------- 来院チェック・キャンセル ----------
   async function toggleVisit(time: number, bed: number) {
+    await flush(); // 入れたばかりの氏名を先に保存（保存前だと「セルが空です」になる）
     const k = key(time, bed);
     const next = !visited.has(k);
     setVisited((s) => { const n = new Set(s); if (next) n.add(k); else n.delete(k); return n; });
@@ -488,7 +509,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   }
   async function revertMove(m: MoveStep['move']) {
     await flush();
-    const r = await fetch('/api/admin/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: m.toDate, time: m.toTime, bed: m.toBed, toDate: data.date, toTime: m.fromTime, toBed: m.fromBed, allowOver: true, revertLogId: m.logId ?? '' }) });
+    const r = await fetch('/api/admin/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: m.toDate, time: m.toTime, bed: m.toBed, toDate: data.date, toTime: m.fromTime, toBed: m.fromBed, allowOver: true, revertLogId: m.logId ?? '', expectText: m.name }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { moveErr(`元に戻せませんでした：${j.error ?? ''}`); onRefresh(); return; }
     if (m.toDate === data.date) applyMoveLocal({ time: m.toTime, bed: m.toBed, twoSlots: m.twoSlots }, j.moved);

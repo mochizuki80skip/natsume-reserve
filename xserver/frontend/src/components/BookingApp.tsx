@@ -220,7 +220,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
                     </div>
                   ))}
                   <button type="button" disabled={checking || comps.some((c) => !c.sel)} onClick={() => void proceedComps()} className="mt-3 w-full rounded-lg bg-brand px-4 py-3 text-base font-bold text-white disabled:opacity-50">お名前の入力へ進む</button>
-                  <button type="button" className="mt-3 text-sm text-brand underline" onClick={() => { setStage('leader'); setSel(null); setError(''); }}>← 1人目の日時を選び直す</button>
+                  <button type="button" className="mt-3 text-sm text-brand underline" onClick={() => { setStage('leader'); setSel(null); setComps((cur) => cur.map((c) => ({ ...c, sel: null }))); setError(''); }}>← 1人目の日時を選び直す</button>
                 </section>
           )}
           {notes}

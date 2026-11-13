@@ -54,7 +54,8 @@ export interface PastePlan {
  * @param gridTimes 予約表の行の時刻（分）
  * @param startRow 貼り付け位置の行番号（時刻列が無い場合の起点）
  */
-export function planPaste(text: string, gridTimes: number[], startRow: number): PastePlan {
+/** fromGrid：この予約表でコピーしたもの（空いたベッドの列があっても、結合セルとしてまとめない） */
+export function planPaste(text: string, gridTimes: number[], startRow: number, fromGrid = false): PastePlan {
   let matrix = parseTsv(text);
   const plan: PastePlan = { cells: [], timeAligned: false, mergedCollapsed: false, skippedTimes: [] };
   if (matrix.length === 0) return plan;
@@ -78,7 +79,7 @@ export function planPaste(text: string, gridTimes: number[], startRow: number): 
 
   // 2. 結合セルの検出：奇数番目の列（0 始まりで 1,3,5…）が全行空、かつ偶数列に値がある
   const width = Math.max(...matrix.map((r) => r.length));
-  if (width >= 2) {
+  if (width >= 2 && !fromGrid) {
     const oddAllEmpty = matrix.every((r) => r.every((v, i) => i % 2 === 0 || v === ''));
     const evenHasValue = matrix.some((r) => r.some((v, i) => i % 2 === 0 && v !== ''));
     if (oddAllEmpty && evenHasValue) {

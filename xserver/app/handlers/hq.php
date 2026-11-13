@@ -221,6 +221,14 @@ function hq_stores_put(): never
                     if (!in_array($store['code'], $codes, true)) continue;
                     Db::exec('UPDATE area SET storeCodes = ? WHERE id = ?', [implode(',', array_map(fn($c) => $c === $store['code'] ? $newCode : $c, $codes)), $a['id']]);
                 }
+                // WEB 予約の URL・QR（集客経路）・キャンペーン、紹介元・媒体の「使う店舗」もそろえる
+                foreach (['campaign', 'referral'] as $t) {
+                    foreach (Db::all("SELECT id, stores FROM `$t` WHERE stores IS NOT NULL AND stores <> ''") as $r) {
+                        $codes = array_filter(explode(',', (string)$r['stores']));
+                        if (!in_array($store['code'], $codes, true)) continue;
+                        Db::exec("UPDATE `$t` SET stores = ? WHERE id = ?", [implode(',', array_map(fn($c) => $c === $store['code'] ? $newCode : $c, $codes)), $r['id']]);
+                    }
+                }
             }
         });
     } elseif ($action === 'move') {

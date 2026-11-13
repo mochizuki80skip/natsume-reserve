@@ -65,6 +65,8 @@ function pub_reserve(array $p): never
     $name = is_string($b['name'] ?? null) ? trim(Text::dropHonorific(trim($b['name']))) : '';
     if ($name === '') Http::error('お名前を入力してください', 400);
     if (mb_strlen($name) > 40) Http::error('お名前が長すぎます', 400);
+    // 予約表で「休み」「×」などの印と同じ文字は、お名前として受けない（印として扱われ、人数に数えられなくなるため）
+    if (Availability::isBlockMark($name) || !Availability::isPatientText($name)) Http::error('お名前を入力してください', 400);
     $phoneRaw = is_string($b['phone'] ?? null) ? trim($b['phone']) : '';
     if (strlen($phoneRaw) < 10) Http::error('電話番号を入力してください', 400);
     $cardNo = is_string($b['cardNo'] ?? null) ? mb_substr(trim($b['cardNo']), 0, 20) : '';
@@ -105,6 +107,7 @@ function pub_reserve(array $p): never
             }
             $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
             $in = PublicApi::buildInput($store, $setting, $date, $kind, Settings::closedOf($day), $cells);
+            if (!Availability::onGrid($in, $time)) throw new HttpError(409, 'この時間はご予約いただけません。表から時間を選んでください');
             $free = Availability::freeBedsAt($in, $time);
             if (Availability::newByPhoneOnly($in)) {
                 throw new HttpError(409, 'はじめての方のご予約はお電話（' . $store['phone'] . '）で承っております');
@@ -168,7 +171,8 @@ function pub_reserve_group(array $p): never
     if (count($list) < 2 || count($list) > 4) Http::error('ご予約の人数は 2〜4 名です', 400);
     $phoneRaw = is_string($b['phone'] ?? null) ? trim($b['phone']) : '';
     if (!$dry && strlen($phoneRaw) < 10) Http::error('電話番号を入力してください', 400);
-    $phone = $dry ? (Text::normalizeJpPhone($phoneRaw) ?? '') : Text::normalizeJpPhone($phoneRaw);
+    // 確認だけ（dryRun）のときは、電話番号・お名前は使わない（ほかの方の予約があるかを調べられないように。空きだけを見る）
+    $phone = $dry ? '' : Text::normalizeJpPhone($phoneRaw);
     if (!$dry && !$phone) Http::error('電話番号の形式が正しくありません', 400);
     $viaCard = ($b['via'] ?? '') === 'card';
     $refCode = is_string($b['ref'] ?? null) && preg_match('/^[a-z0-9]{4,16}$/', $b['ref']) && Db::one('SELECT id FROM referral WHERE code = ? AND active = 1', [$b['ref']]) ? $b['ref'] : null;
@@ -184,9 +188,10 @@ function pub_reserve_group(array $p): never
         $date = $x['date'] ?? '';
         if (!is_string($date) || !Time::isValidDate($date)) Http::error($who($i) . 'の日にちを選んでください', 400);
         $time = Http::int($x, 'time', 0, 24 * 60);
-        $name = is_string($x['name'] ?? null) ? trim(Text::dropHonorific(trim($x['name']))) : '';
+        $name = !$dry && is_string($x['name'] ?? null) ? trim(Text::dropHonorific(trim($x['name']))) : '';
         if (!$dry && $name === '') Http::error($who($i) . 'のお名前を入力してください', 400);
         if (mb_strlen($name) > 40) Http::error($who($i) . 'のお名前が長すぎます', 400);
+        if ($name !== '' && (Availability::isBlockMark($name) || !Availability::isPatientText($name))) Http::error($who($i) . 'のお名前を入力してください', 400);
         $cardNo = is_string($x['cardNo'] ?? null) ? mb_substr(trim($x['cardNo']), 0, 20) : '';
         if (!$dry && $kind === 'RETURN' && $cardNo === '') Http::error($who($i, $name) . 'の診察券番号を入力してください', 400);
         foreach ($people as $q) if ($name !== '' && Text::isSameName($q['name'], $name)) Http::error('同じお名前の方が 2 人入っています。お名前をご確認ください', 400);
@@ -225,6 +230,7 @@ function pub_reserve_group(array $p): never
                     // 前の人を入れたあとの予約表で空きを見る（同じ時間なら別のベッドに入る）
                     $cells = Db::all('SELECT time, bed, text FROM cell WHERE storeId = ? AND date = ? AND bed > 0', [$store['id'], $date]);
                     $in = PublicApi::buildInput($store, $setting, $date, $kind, Settings::closedOf($x['day']), $cells);
+                    if (!Availability::onGrid($in, $time)) throw new HttpError(409, $who($i, $name) . '：この時間はご予約いただけません。表から時間を選んでください');
                     if (Availability::newByPhoneOnly($in)) throw new HttpError(409, $who($i, $name) . '：はじめての方のご予約はお電話（' . $store['phone'] . '）で承っております');
                     $status = Availability::statusFor($in, $time, Availability::remainingAt($in, $time));
                     if ($status !== 'open' && $status !== 'few') {

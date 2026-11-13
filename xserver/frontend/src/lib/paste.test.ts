@@ -43,4 +43,9 @@ describe('paste', () => {
     const p = planPaste('A\t\t\t\n', times, 0);
     expect(p.cells).toEqual([{ row: 0, col: 0, text: 'A' }]);
   });
+  it('この予約表でコピーしたもの（空いたベッドの列あり）は列をまとめない', () => {
+    const p = planPaste('山田\t\t佐藤', times, 0, true);
+    expect(p.mergedCollapsed).toBe(false);
+    expect(p.cells).toEqual([{ row: 0, col: 0, text: '山田' }, { row: 0, col: 1, text: '' }, { row: 0, col: 2, text: '佐藤' }]);
+  });
 });

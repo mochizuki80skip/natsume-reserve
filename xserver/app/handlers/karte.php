@@ -68,7 +68,8 @@ function karte_delete(): never
             $time = (int)$row['srcTime'];
             $bed = (int)$row['srcBed'];
             $cell = Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $row['date'], $time, $bed]);
-            if ($cell && trim((string)$cell['text']) !== '') {
+            // 元の枠に、いまは別の方の予約が入っていたら消さない（予約を動かしたあとなど）
+            if ($cell && trim((string)$cell['text']) !== '' && Text::normalizeName(Karte::karteName(Karte::nameOfText((string)$cell['text']))) === Text::normalizeName((string)$row['name'])) {
                 $step = Settings::global()['slotMinutes'];
                 $next = Text::isTwoSlotName($cell['text']) ? Db::one('SELECT * FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $row['date'], $time + $step, $bed]) : null;
                 $cont = ($next && Text::isContinuationText($next['text'])) ? $next : null;
@@ -218,7 +219,19 @@ function hq_areas_put(): never
     $areas = Http::body()['areas'] ?? null;
     if (!is_array($areas)) Http::error('bad request', 400);
     $codes = array_column(Db::all('SELECT code FROM store'), 'code');
-    Db::transaction(function () use ($areas, $codes) {
+    $oldNames = array_column(Db::all('SELECT id, name FROM area'), 'name', 'id');
+    Db::transaction(function () use ($areas, $codes, $oldNames) {
+        // エリアの名前を変えたら、管轄MG のアカウント・新自のお知らせ・自賠のお知らせの送り先のエリア名もそろえる（名前でつないでいるため）
+        foreach (array_values($areas) as $a) {
+            $id = (string)($a['id'] ?? '');
+            $new = mb_substr(trim((string)($a['name'] ?? '')), 0, 30);
+            $old = $oldNames[$id] ?? null;
+            if ($old === null || $new === '' || $new === $old) continue;
+            Db::exec("UPDATE admin_account SET area = ? WHERE role = 'mg' AND area = ?", [$new, $old]);
+            foreach (['jibai_notify', 'line_target', 'accident_notify'] as $t) {
+                if (Db::one('SELECT 1 AS x FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$t, 'area'])) Db::exec("UPDATE `$t` SET area = ? WHERE area = ?", [$new, $old]);
+            }
+        }
         Db::exec('DELETE FROM area');
         foreach (array_values($areas) as $i => $a) {
             $name = mb_substr(trim((string)($a['name'] ?? '')), 0, 30);

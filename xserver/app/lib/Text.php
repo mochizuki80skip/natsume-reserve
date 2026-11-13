@@ -52,7 +52,8 @@ final class Text
     /** 日本の電話番号を E.164 (+81...) に正規化。無効なら null */
     public static function normalizeJpPhone(string $raw): ?string
     {
-        $digits = preg_replace('/[^\d+]/', '', $raw);
+        // 全角の数字・＋（日本語入力のまま打ったとき）も半角にしてから見る
+        $digits = preg_replace('/[^\d+]/', '', mb_convert_kana($raw, 'a'));
         if (preg_match('/^\+81\d{9,10}$/', $digits)) return $digits;
         if (preg_match('/^0\d{9,10}$/', $digits)) return '+81' . substr($digits, 1);
         return null;
