@@ -57,7 +57,7 @@ function karte_delete(): never
     $ctx = Auth::context();
     Http::requireJson();
     $b = Http::body();
-    $row = Db::one('SELECT id, auto, date, srcTime, srcBed FROM karte WHERE id = ? AND storeId = ?', [(string)($b['id'] ?? ''), $ctx['store']['id']]);
+    $row = Db::one('SELECT id, auto, date, srcTime, srcBed, name FROM karte WHERE id = ? AND storeId = ?', [(string)($b['id'] ?? ''), $ctx['store']['id']]);
     if (!$row) Http::error('not found', 404);
     $sid = $ctx['store']['id'];
     $removed = false;
