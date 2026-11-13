@@ -43,13 +43,10 @@ ok('なつめ接骨院の店舗には「グループ院」が出ない', !(await
 const badge = card('サンプル駅前院').getByText('グループ院', { exact: true });
 ok('ほかの店舗には「グループ院」（オレンジに白い字）', (await badge.count()) === 1 && (await badge.evaluate((e) => [getComputedStyle(e).backgroundColor, getComputedStyle(e).color].join('|'))).includes('rgb(255, 255, 255)'));
 await pub.screenshot({ path: O + 'stores-logo.png', clip: { x: 0, y: 0, width: 420, height: 700 } });
-// 各店舗の予約ページにもロゴ。なつめ接骨院と名の付かない店舗は「なつめ接骨院グループ院」
-for (const [code, natsume] of [['S001', true], ['S002', false]]) {
+// 各店舗の予約ページには、ロゴ・グループ院の表示を出さない（店舗えらびページだけ）
+for (const code of ['S001', 'S002']) {
   await pub.goto(`${B}/s/${code}`); await pub.waitForSelector('table.wk tbody tr', { timeout: 15000 });
-  const head = pub.locator('main header');
-  ok(`予約ページ（${code}）にロゴ`, (await head.locator('img[alt="なつめ接骨院"]').count()) === 1 && await head.locator('img[alt="なつめ接骨院"]').evaluate((i) => i.complete && i.naturalWidth > 0));
-  ok(`予約ページ（${code}）の「なつめ接骨院グループ院」は${natsume ? '出ない' : '出る'}`, (await head.getByText('なつめ接骨院グループ院', { exact: true }).count()) === (natsume ? 0 : 1));
-  if (!natsume) await pub.screenshot({ path: O + 'booking-logo.png', clip: { x: 0, y: 0, width: 420, height: 420 } });
+  ok(`予約ページ（${code}）にはロゴ・グループ院の表示がない`, (await pub.locator('main header img').count()) === 0 && !(await pub.locator('main header').textContent()).includes('グループ院'));
 }
 execSync(`mysql -uroot --default-character-set=utf8mb4 ${process.env.DB_NAME ?? 'booking'}`, { input: "UPDATE store SET name = 'サンプル本店' WHERE code = 'S001';" });
 
