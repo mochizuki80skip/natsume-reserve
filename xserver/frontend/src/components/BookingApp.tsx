@@ -10,6 +10,7 @@ import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
 import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
 import { addMyReservation, loadMyReservations } from '@/lib/myReservations';
 import CampaignBox, { type PublicCampaign } from './CampaignBox';
+import { NATSUME_LOGO, isNatsume } from '@/lib/brand';
 
 interface Companion { kind: Kind | null; name: string; cardNo: string; sel: Selection | null }
 const KIND_SHORT: Record<Kind, string> = { NEW: 'はじめて（ケガ・痛み・不調など）', ACCIDENT: 'はじめて（交通事故）', RETURN: '現在通院中', REVISIT: '1ヶ月以上ご来院の無い方' };
@@ -161,8 +162,14 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
   return (
     <main className="pub mx-auto max-w-lg px-3 pb-6 pt-4">
       <header className="mb-3">
+        {/* なつめ接骨院グループのロゴ（マーク＋なつめ接骨院の横並び） */}
+        <div className="mb-2 flex justify-center"><img src={NATSUME_LOGO} alt="なつめ接骨院" width={1623} height={190} className="h-auto w-full max-w-[220px]" /></div>
         <div className="flex items-start justify-between gap-2">
-          <h1 className="text-lg font-bold">{store.name}　WEB予約</h1>
+          <h1 className="text-lg font-bold">
+            {/* 「なつめ接骨院」と名の付かない店舗は、なつめ接骨院グループ院と出す（オレンジに白い字） */}
+            {!isNatsume(store.name) && <span className="mb-0.5 block w-fit rounded bg-orange-500 px-1.5 py-px text-xs font-bold text-white">なつめ接骨院グループ院</span>}
+            {store.name}　WEB予約
+          </h1>
           {hasMine && <Link to={`/my?store=${encodeURIComponent(store.code)}`} className="flex-none whitespace-nowrap rounded-lg border border-brand bg-white px-2.5 py-1 text-xs font-bold text-brand no-underline">📅 ご予約の確認</Link>}
         </div>
         <ol className="mt-2 flex gap-1 text-xs text-slate-500">

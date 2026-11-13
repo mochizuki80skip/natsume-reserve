@@ -2,6 +2,7 @@
 // 全店舗をエリアごとに並べ、住所・地図・今日（休診日は次の営業日）の空いている時間帯を出す。店舗を選ぶと WEB 予約へ。
 // 本部が「公開する」にするまでは「準備中」の案内だけを出す
 import { useEffect, useMemo, useState } from 'react';
+import { NATSUME_LOGO, isNatsume } from '@/lib/brand';
 import ConsultLineBanner from '@/components/ConsultLineBanner';
 import { cityOf } from '@/lib/city';
 // 見出しの地域：本部が決めた地域、なければ住所の市・町
@@ -26,14 +27,11 @@ function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: numb
 }
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}（${WEEKDAY_JA[weekdayOf(d)]}）`;
 
-/** 「なつめ接骨院」と名の付く店舗か（全角・半角や空白の違いは見ない） */
-export const isNatsume = (name: string) => name.normalize('NFKC').replace(/[\s　]/g, '').includes('なつめ接骨院');
-
 function Logo() {
   return (
     <div className="flex justify-center px-4 pb-4 pt-5">
       {/* なつめ接骨院のロゴ（マーク＋なつめ接骨院の横並び。依頼者からいただいた PDF のベクターをそのまま SVG にしたもの） */}
-      <img src="/brand/natsume-logo-yoko.svg" alt="なつめ接骨院" width={1623} height={190} className="h-auto w-full max-w-[280px]" />
+      <img src={NATSUME_LOGO} alt="なつめ接骨院" width={1623} height={190} className="h-auto w-full max-w-[280px]" />
     </div>
   );
 }
