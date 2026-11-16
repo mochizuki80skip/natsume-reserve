@@ -508,14 +508,18 @@ function hq_campaigns_get(): never
 {
     Auth::requireHq();
     $rows = array_map(function ($c) {
-        $res = (int)(Db::one('SELECT COUNT(*) AS n FROM reservation WHERE campaign LIKE ?', ['%"id":"' . $c['id'] . '"%'])['n'] ?? 0);
+        // WEB 予約の件数（新規＝はじめて・交通事故／既存＝通院中・1ヶ月以上ぶり）
+        $byKind = [];
+        foreach (Db::all('SELECT kind, COUNT(*) AS n FROM reservation WHERE campaign LIKE ? GROUP BY kind', ['%"id":"' . $c['id'] . '"%']) as $r) $byKind[$r['kind']] = (int)$r['n'];
+        $res = array_sum($byKind);
+        $resNew = ($byKind['NEW'] ?? 0) + ($byKind['ACCIDENT'] ?? 0);
         $kar = $c['trig'] !== '' && $c['label'] !== '' ? (int)(Db::one('SELECT COUNT(*) AS n FROM karte WHERE trig = ? AND trigDetail = ?', [$c['trig'], $c['label']])['n'] ?? 0) : 0;
         return [
             'id' => $c['id'], 'code' => $c['code'], 'label' => $c['label'], 'trig' => (string)$c['trig'], 'stores' => Campaign::stores($c['stores'] ?? null),
             'hasContent' => (bool)(int)$c['hasContent'], 'active' => (bool)(int)$c['active'],
             'name' => $c['name'], 'description' => (string)($c['description'] ?? ''), 'showInsurance' => (bool)(int)$c['showInsurance'],
             'presetKind' => $c['presetKind'], 'from' => $c['fromDate'], 'to' => $c['toDate'], 'memo' => (string)($c['storeMemo'] ?? ''),
-            'reservations' => $res, 'kartes' => $kar,
+            'reservations' => $res, 'resNew' => $resNew, 'resExisting' => $res - $resNew, 'kartes' => $kar,
         ];
     }, Db::all('SELECT * FROM campaign WHERE code IS NOT NULL ORDER BY createdAt ASC, id ASC'));
     // きっかけ：新患継続率のきっかけの選択肢から（内訳つきのもの＝紹介他事業・キャンペーン・イベント・業者紹介は使わない）

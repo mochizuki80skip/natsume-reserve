@@ -150,6 +150,15 @@ await api(s2, 'PUT', '/api/admin/visit', { date: open[0], time: open[1], bed: ce
 const k2 = ((await api(s2, 'GET', `/api/admin/karte?month=${open[0].slice(0, 7)}`))[1].rows ?? []).find((r) => r.name.includes('経路'));
 ok('新患継続率：きっかけ その他・内訳 ポータルサイト A', k2?.trig === 'その他' && k2?.trigDetail === 'ポータルサイト A', JSON.stringify(k2 && [k2.trig, k2.trigDetail]));
 ok('一覧に新患継続率の数', (await api(hp, 'GET', '/api/admin/hq/campaigns'))[1].rows.find((c) => c.code === portal.code).kartes === 1);
+const prow = (await api(hp, 'GET', '/api/admin/hq/campaigns'))[1].rows.find((c) => c.code === portal.code);
+ok('URL の一覧：WEB 予約を新規・既存に分けて数える', prow.reservations === prow.resNew + prow.resExisting && prow.resNew >= 1, JSON.stringify([prow.reservations, prow.resNew, prow.resExisting]));
+// 新患継続率の集計：URL から来た方のいるきっかけは、押すと URL の名前ごとの内訳
+await hp.goto(`${B}/admin/hq/karte`); await hp.waitForLoadState('networkidle');
+await hp.getByRole('button', { name: '集計', exact: true }).click(); await hp.waitForTimeout(600);
+const want = `${Number(open[0].slice(0, 4))}年${Number(open[0].slice(5, 7))}月`;
+for (let i = 0; i < 3 && !(await hp.getByText(want, { exact: true }).count()); i++) { await hp.getByRole('button', { name: '›' }).first().click(); await hp.waitForTimeout(600); }
+await hp.getByRole('button', { name: 'その他', exact: true }).click(); await hp.waitForTimeout(300);
+ok('集計：「その他」を押すと URL の名前ごとの内訳', (await hp.getByText('「その他」の内訳').locator('..').textContent()).includes('ポータルサイト A'));
 // 名前を変えると新患継続率の内訳もそろう
 await api(hp, 'PUT', '/api/admin/hq/campaigns', { ...portal, label: 'ポータルサイト B' });
 const k3 = ((await api(s2, 'GET', `/api/admin/karte?month=${open[0].slice(0, 7)}`))[1].rows ?? []).find((r) => r.name.includes('経路'));
@@ -165,7 +174,7 @@ const [s5] = await api(hp, 'PUT', '/api/admin/hq/campaigns', { label: '交通事
 ok('キャンペーンなしで区分つきの URL を作れる', s5 === 200);
 const acc = (await api(hp, 'GET', '/api/admin/hq/campaigns'))[1].rows.find((c) => c.label === '交通事故の方');
 ok('区分が残る', acc?.presetKind === 'ACCIDENT' && !acc.hasContent);
-await hp.reload(); await hp.waitForLoadState('networkidle');
+await hp.goto(`${B}/admin/hq`); await hp.waitForLoadState('networkidle');
 ok('一覧に区分が出る', (await hp.getByRole('row', { name: 'URL 交通事故の方' }).textContent()).includes('区分：はじめて（交通事故）'));
 const ap = await br.newPage(); ap.on('pageerror', (e) => errs.push(e.message));
 await ap.goto(`${B}/stores?c=${acc.code}`); await ap.waitForSelector('article');

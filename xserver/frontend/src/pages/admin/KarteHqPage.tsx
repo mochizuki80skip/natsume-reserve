@@ -188,7 +188,7 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
               {trigList.filter((t) => trigCount(t) > 0).map((t) => (
                 <tr key={t} className="border-b border-slate-100">
                   <td className="whitespace-nowrap px-2 py-1 text-left">
-                    {t in opt.detailFor ? <button type="button" onClick={() => setOpenTrig(openTrig === t ? null : t)} className="text-brand underline">{t}</button> : t}
+                    {t in opt.detailFor || newCur.some((r) => r.trig === t && r.trigDetail) ? <button type="button" onClick={() => setOpenTrig(openTrig === t ? null : t)} className="text-brand underline">{t}</button> : t}
                   </td>
                   {trigBuckets.map((b) => <td key={b.label} className="px-2">{trigCount(t, b) || '－'}</td>)}
                   <td className="px-2 font-bold">{trigCount(t)}</td>
@@ -202,11 +202,11 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
             <div className="mt-2 rounded border bg-slate-50 p-2 text-xs">
               <b>「{openTrig}」の内訳</b>
               <ul className="mt-1 grid grid-cols-2 gap-x-4 sm:grid-cols-3">
-                {Object.entries(newCur.filter((r) => r.trig === openTrig).reduce<Record<string, number>>((a, r) => { const k = r.trigDetail || '（未入力）'; a[k] = (a[k] ?? 0) + 1; return a; }, {})).sort((a, b) => b[1] - a[1]).map(([k, v]) => <li key={k}>{k}　<b>{v}</b></li>)}
+                {Object.entries(newCur.filter((r) => r.trig === openTrig).reduce<Record<string, number>>((a, r) => { const k = r.trigDetail || (openTrig in opt.detailFor ? '（未入力）' : '（URL・QR 以外）'); a[k] = (a[k] ?? 0) + 1; return a; }, {})).sort((a, b) => b[1] - a[1]).map(([k, v]) => <li key={k}>{k}　<b>{v}</b></li>)}
               </ul>
             </div>
           )}
-          <p className="mt-1 text-[11px] text-slate-500">「紹介他事業」「キャンペーン」「イベント」を押すと内訳が見られます。</p>
+          <p className="mt-1 text-[11px] text-slate-500">「紹介他事業」「キャンペーン」「イベント」と、WEB 予約の URL・QR から来た方がいるきっかけ（下線つき）を押すと、内訳（URL・QR の名前ごと）が見られます。</p>
         </div>
         <div className="rounded-lg border bg-white p-3">
           <h2 className="mb-2 text-sm font-bold">きっかけの割合（{periodLabel}）</h2>

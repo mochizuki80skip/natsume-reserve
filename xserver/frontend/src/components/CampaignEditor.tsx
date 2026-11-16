@@ -15,7 +15,7 @@ interface StoreLite { code: string; name: string; area: string }
 interface Entry {
   id: string; code: string; label: string; trig: string; stores: string[]; hasContent: boolean; active: boolean;
   name: string; description: string; showInsurance: boolean; presetKind: string; from: string; to: string; memo: string;
-  reservations: number; kartes: number;
+  reservations: number; resNew?: number; resExisting?: number; kartes: number;
 }
 interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[] }
 
@@ -241,7 +241,7 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
             </>
           ) : <span className="rounded bg-slate-200 px-1.5 text-slate-600">なし</span>}
         </td>
-        <td className="py-1 pr-2 text-right tabular-nums">{c.reservations}</td>
+        <td className="py-1 pr-2 text-right tabular-nums">{c.reservations}{c.reservations > 0 && <span className="block whitespace-nowrap text-[11px] text-slate-500">新規 {c.resNew ?? 0}・既存 {c.resExisting ?? 0}</span>}</td>
         <td className="py-1 pr-2 text-right tabular-nums">{c.kartes}</td>
         <td className="whitespace-nowrap py-1 text-xs">
           <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mr-2 rounded border-2 border-brand px-2 font-bold text-brand-dark">{open ? '▲ URL・QR' : '▼ URL・QR'}</button>

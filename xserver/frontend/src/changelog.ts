@@ -5,6 +5,13 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 132, date: '2026-11-16', title: '新患継続率の集計：URL・QR ごとの内訳／URL の一覧に新規・既存の件数', audience: ['本部'],
+    items: [
+      '新患継続率の「集計」で、WEB 予約の URL・QR から来た方がいるきっかけ（下線つき）を押すと、URL・QR の名前ごとの人数が見られるようにしました（例：「交通事故HP」→「交通事故の方 2」「交通事故LINE 1」）。',
+      '「🔗 WEB 予約の URL・QR」の一覧の「WEB 予約」の件数の下に、新規（はじめて・交通事故）と既存（通院中・1ヶ月以上ぶり）の件数を出しました。既存の方がその URL から予約した分も分かります。',
+    ],
+  },
+  {
     id: 131, date: '2026-11-16', title: '相談LINEのバナーが押された回数・タブのマーク', audience: ['本部'],
     items: [
       '交通事故の相談LINEのバナーが押された回数を数えるようにしました。本部の「新自（交通事故）・新三（第三者行為）の通知・相談LINE」の欄で、月ごとに「店舗えらびページ」「各店舗の予約ページ」の回数と店舗別が見られます（どなたが押したかは残しません）。',
