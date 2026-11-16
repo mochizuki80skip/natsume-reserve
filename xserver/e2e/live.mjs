@@ -28,7 +28,7 @@ ok('WEB予約（11:00）', await web(660, 'ウェブ 二郎', '09011110002') ===
 
 // 画面が古いまま、WEB予約の入ったセルに電話予約を入れる → 保存されない
 await cell('10:00', 1).click(); await p.keyboard.type('電話 花子'); await p.keyboard.press('Enter');
-await p.waitForSelector('text=先に WEB予約が入っていたため', { timeout: 10000 });
+await p.waitForSelector('text=ほかの端末（WEB予約・別のパソコン）で先に入力されていたため', { timeout: 10000 });
 ok('上書きされずにお知らせ', true, (await p.locator('[role=alert]').first().textContent()).slice(0, 60));
 ok('セルは WEB予約の表示に戻る', (await cell('10:00', 1).inputValue()) === 'ウェブ 一郎（初診）');
 const day = await p.evaluate(async (d) => (await (await fetch(`/api/admin/day?date=${d}`)).json()).data.cells, D);

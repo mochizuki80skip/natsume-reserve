@@ -120,28 +120,36 @@ function adm_cells_put(): never
     $sid = $ctx['store']['id'];
     $beds = (int)$ctx['store']['beds'];
     $conflicts = [];
+    $back = [];
     $by = (string)($ctx['session']['code'] ?? '');
-    Db::transaction(function () use ($cells, $sid, $beds, $date, &$conflicts, $by) {
+    Db::transaction(function () use ($cells, $sid, $beds, $date, &$conflicts, &$back, $by) {
         $touched = [];
+        $restored = [];
         foreach ($cells as $c) {
             if (!is_array($c)) throw new HttpError(400, 'bad request');
             $time = Http::int($c, 'time', 0, 1440);
             $bed = Http::int($c, 'bed', 0, 20);
             $text = mb_substr(trim((string)($c['text'] ?? '')), 0, 100);
             if ($bed > $beds) continue;
-            // 画面が古いまま WEB予約のセルを上書きしないようにする（prev＝画面が最後に知っていた内容）
+            // 画面が古いまま WEB予約のセル・ほかの端末が先に入れたセルを上書きしないようにする（prev＝画面が最後に知っていた内容）
             if (array_key_exists('prev', $c)) {
                 $cur = Db::one('SELECT text, reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
-                if ($cur && $cur['reservationId'] && trim((string)$cur['text']) !== trim((string)$c['prev']) && trim((string)$cur['text']) !== $text) {
+                $ct = trim((string)($cur['text'] ?? '')); $pv = trim((string)$c['prev']);
+                // 画面では空きだったセルに、ほかの端末が先に別の内容を入れていたら、上書きしない（同じ人の打ち足し・打ち直しは OK）
+                $other = $pv === '' && $ct !== '' && ($text === '' || (!str_starts_with($text, $ct) && !str_starts_with($ct, $text)));
+                if ($cur && $ct !== $pv && $ct !== $text && ($cur['reservationId'] || $other)) {
                     $conflicts[] = ['time' => $time, 'bed' => $bed, 'text' => (string)$cur['text']];
                     continue;
                 }
             }
             // 消した・別の名前に書き換えた入力を記録する（「元に戻す」用。1 文字ずつの打ち直しは記録しない）
-            $was = Db::one('SELECT text FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
+            $was = Db::one('SELECT text, reservationId, menus, staff, visited, phone FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
             $wasText = trim((string)($was['text'] ?? ''));
             if ($wasText !== '' && !Text::isContinuationText($wasText) && $wasText !== $text && ($text === '' || (!str_starts_with($text, $wasText) && !str_starts_with($wasText, $text)))) {
-                Db::exec('INSERT INTO cell_log (id, storeId, date, time, bed, `before`, `after`, byCode, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $date, $time, $bed, $wasText, $text, $by, Time::nowJstDateTime()]);
+                // 消したときは、WEB 予約・メニュー・担当・来院チェック・電話番号も残す（「元に戻す」で同じ場所に入れ直したら一緒に戻す）
+                $snap = $text === '' && ($was['reservationId'] || (string)$was['menus'] !== '' || (string)$was['staff'] !== '' || (int)$was['visited'] || $was['phone'])
+                    ? json_encode(['rid' => $was['reservationId'], 'menus' => (string)$was['menus'], 'staff' => (string)$was['staff'], 'visited' => (int)$was['visited'], 'phone' => $was['phone']], JSON_UNESCAPED_UNICODE) : null;
+                Db::exec('INSERT INTO cell_log (id, storeId, date, time, bed, `before`, `after`, byCode, createdAt, snap) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $date, $time, $bed, $wasText, $text, $by, Time::nowJstDateTime(), $snap]);
             }
             if ($text === '') {
                 $old = Db::one('SELECT reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
@@ -150,6 +158,22 @@ function adm_cells_put(): never
             } else {
                 $old = Db::one('SELECT reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $time, $bed]);
                 Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE text = VALUES(text)', [Db::newId(), $sid, $date, $time, $bed, $text]);
+                // 消した予約を、同じ場所に同じ氏名で入れ直した（元に戻す）ときは、WEB 予約・メニュー・担当・来院チェックも戻す（1 時間以内）
+                if ($wasText === '') {
+                    $lg = Db::one("SELECT id, snap FROM cell_log WHERE storeId = ? AND date = ? AND time = ? AND bed = ? AND `after` = '' AND `before` = ? AND snap IS NOT NULL AND createdAt >= ? ORDER BY createdAt DESC LIMIT 1",
+                        [$sid, $date, $time, $bed, $text, date('Y-m-d H:i:s', strtotime(Time::nowJstDateTime()) - 3600)]);
+                    $sn = $lg ? json_decode((string)$lg['snap'], true) : null;
+                    if (is_array($sn)) {
+                        $rid = $sn['rid'] ?? null;
+                        // WEB 予約は、その予約がまだこの日時・ベッドのままのときだけつなぎ直す
+                        if ($rid && !Db::one('SELECT id FROM reservation WHERE id = ? AND storeId = ? AND date = ? AND time = ? AND bed = ?', [$rid, $sid, $date, $time, $bed])) $rid = null;
+                        Db::exec('UPDATE cell SET reservationId = ?, menus = ?, staff = ?, visited = ?, phone = ? WHERE storeId = ? AND date = ? AND time = ? AND bed = ?',
+                            [$rid, (string)($sn['menus'] ?? ''), (string)($sn['staff'] ?? ''), (int)($sn['visited'] ?? 0), $sn['phone'] ?? null, $sid, $date, $time, $bed]);
+                        if ($rid) { Db::exec("UPDATE reservation SET status = 'BOOKED' WHERE id = ?", [$rid]); $restored[$rid] = [$time, $bed]; }
+                        Db::exec('UPDATE cell_log SET snap = NULL WHERE id = ?', [$lg['id']]);
+                        $back[] = ['time' => $time, 'bed' => $bed, 'menus' => DayData::menusOf((string)($sn['menus'] ?? '')), 'staff' => (string)($sn['staff'] ?? ''), 'visited' => (bool)($sn['visited'] ?? 0), 'web' => (bool)$rid];
+                    }
+                }
                 // 別の人の名前に書き換えたら、前の人の情報（電話番号・WEB予約・メニュー・担当・来院チェック）は外す
                 //（（初診）を付けた・外しただけなら残す。2 枠目の文字どうしの書き換えも残す）
                 if ($wasText !== '' && !Text::isContinuationText($wasText) && Karte::nameOfText($wasText) !== Karte::nameOfText($text)) {
@@ -157,6 +181,13 @@ function adm_cells_put(): never
                     if ($old && $old['reservationId']) $touched[$old['reservationId']] = true;
                 }
             }
+        }
+        // 元に戻した WEB 予約の 2 枠目（上記初診対応など）も、その予約につなぎ直す
+        $step = (int)Settings::global()['slotMinutes'];
+        foreach ($restored as $rid => [$rt, $rb]) {
+            $nx = Db::one('SELECT id, text FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$sid, $date, $rt + $step, $rb]);
+            if ($nx && Text::isContinuationText((string)$nx['text'])) Db::exec('UPDATE cell SET reservationId = ? WHERE id = ?', [$rid, $nx['id']]);
+            unset($touched[$rid]);
         }
         // WEB予約の氏名のセルが無くなったら（消した・別の人に書き換えた）、その予約は取消扱いにする。
         // 残った 2 枠目（上記初診対応など）は、その予約から外す（WEB の印や予約の確認に出ないように）
@@ -169,7 +200,9 @@ function adm_cells_put(): never
             }
         }
     });
-    Http::json(['ok' => true, 'conflicts' => $conflicts]);
+    // 戻したセルのメニュー・来院チェックを新患継続率の行にも反映する
+    foreach ($back as $x) Karte::reflectCell(Auth::context()['store'], $date, $x['time'], $x['bed']);
+    Http::json(['ok' => true, 'conflicts' => $conflicts, 'restored' => $back]);
 }
 
 /** 予約表のセルのメニュー（{ date, time, bed, menus: ["矯正", ...] }）。氏名の入ったセルだけ */

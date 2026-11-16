@@ -81,11 +81,11 @@ await pub.locator('article').filter({ hasText: 'サンプル本店' }).getByRole
 await pub.waitForURL(/\/s\/S001\?from=card/);
 ok('WEB 予約へ（紹介カードの印を付けたまま）', true);
 // 紹介カード経由の予約 → 来院チェック → 初回カルテ集計のきっかけ「ギフトカード」
-const D2 = s1.quiet?.date ?? '2026-10-27';
+const D2 = s1.quiet?.date ?? new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 // 空きのある週を探す（土日に動かすと今週はもう空きがないため、2 週先まで）
 let open;
 for (let w = 0; w < 3 && !open; w++) {
-  const st = new Date(D + 'T12:00:00Z'); st.setUTCDate(st.getUTCDate() + w * 7);
+  const st = new Date(D2 + 'T12:00:00Z'); st.setUTCDate(st.getUTCDate() + w * 7);
   const wk = await (await fetch(`${B}/api/public/S001/week?start=${st.toISOString().slice(0, 10)}&kind=NEW`)).json();
   open = wk.days.flatMap((d) => d.slots.filter((x) => x.status === 'open').map((x) => [d.date, x.time]))[0];
 }

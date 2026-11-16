@@ -76,6 +76,8 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   const serverText = useRef(new Map<string, string>(data.cells.map((c) => [key(c.time, c.bed), c.text])));
   const touchedAt = useRef(new Map<string, number>());
   const [conflictMsg, setConflictMsg] = useState('');
+  /** サーバー側ですでに変わったセル（移動・キャンセル・取り消しなど）を画面に出す。保存時の「ほかの端末で先に入力」と間違えないよう、最後に知っている内容も合わせる */
+  const setCellsServer = (f: (n: Map<string, string>) => void) => setCells((m) => { const n = new Map(m); f(n); for (const [k, v] of n) if (m.get(k) !== v) serverText.current.set(k, v); return n; });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputs = useRef(new Map<string, HTMLInputElement>());
   // 元に戻す：変更のまとまり（セルごとの「前」と「後」）を新しい順に積む。画面を開いている間だけ
@@ -144,7 +146,16 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
       const r = await fetch('/api/admin/cells', { method: 'PUT', keepalive: batch.length < 100, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: data.date, cells: batch }) });
       setSaveState(r.ok ? 'saved' : 'error');
       if (!r.ok) { if (r.status !== 400 && r.status !== 403) requeue(all.slice(i)); return; }
-      const j = await r.json().catch(() => ({})) as { conflicts?: { time: number; bed: number; text: string }[] };
+      const j = await r.json().catch(() => ({})) as { conflicts?: { time: number; bed: number; text: string }[]; restored?: { time: number; bed: number; menus: string[]; staff: string; visited: boolean; web: boolean }[] };
+      // 消したセルを「元に戻す」で入れ直したときは、メニュー・担当・来院チェック（WEB 予約）もサーバーで戻っている
+      if (j.restored?.length) {
+        const back = j.restored;
+        setMenus((m) => { const n = new Map(m); for (const x of back) { if (x.menus.length) n.set(key(x.time, x.bed), x.menus); else n.delete(key(x.time, x.bed)); } return n; });
+        setStaffMap((m) => { const n = new Map(m); for (const x of back) { if (x.staff) n.set(key(x.time, x.bed), x.staff); else n.delete(key(x.time, x.bed)); } return n; });
+        setVisited((v) => { const n = new Set(v); for (const x of back) { if (x.visited) n.add(key(x.time, x.bed)); else n.delete(key(x.time, x.bed)); } return n; });
+        for (const x of back) touchedAt.current.delete(key(x.time, x.bed));
+        onRefresh();
+      }
       const conflicts = j.conflicts ?? [];
       const lost = new Set(conflicts.map((c) => key(c.time, c.bed)));
       for (const c of batch) if (!lost.has(key(c.time, c.bed))) serverText.current.set(key(c.time, c.bed), c.text);
@@ -152,7 +163,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
         // 先に WEB予約が入っていたセル：入力は保存せず、WEB予約を表示し直す
         setCells((m) => { const n = new Map(m); for (const c of conflicts) n.set(key(c.time, c.bed), c.text); return n; });
         for (const c of conflicts) { serverText.current.set(key(c.time, c.bed), c.text); touchedAt.current.delete(key(c.time, c.bed)); }
-        setConflictMsg(`先に WEB予約が入っていたため、次のセルの入力は保存されませんでした：${conflicts.map((c) => `${minToHm(c.time)} ベッド${c.bed}（${c.text}）`).join('、')}。空いている別のセルに入れ直してください。`);
+        setConflictMsg(`ほかの端末（WEB予約・別のパソコン）で先に入力されていたため、次のセルの入力は保存されませんでした：${conflicts.map((c) => `${minToHm(c.time)} ベッド${c.bed}（${c.text}）`).join('、')}。空いている別のセルに入れ直してください。`);
         onRefresh();
       }
     } catch { setSaveState('error'); requeue(all.slice(i)); return; }
@@ -430,7 +441,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     if (!changeDlg) return;
     const { time, bed } = changeDlg;
     touchedAt.current.set(key(time, bed), Date.now()); touchedAt.current.set(key(time + data.slotMinutes, bed), Date.now());
-    setCells((m) => { const n = new Map(m); n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); return n; });
+    setCellsServer((n) => { n.set(key(time, bed), ''); const k2 = key(time + data.slotMinutes, bed); if (isContinuationText(n.get(k2))) n.set(k2, ''); });
     setMenus((m) => { const n = new Map(m); n.delete(key(time, bed)); return n; });
     setChangeDlg(null);
     onRefresh();
@@ -448,15 +459,13 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   /** 動かした予約を画面にも反映する（氏名・2 枠目・メニュー・担当。同じ日の中なら来院チェックも） */
   function applyMoveLocal({ time, bed, twoSlots }: { time: number; bed: number; twoSlots: boolean }, to: { date: string; time: number; bed: number }) {
     for (const k of [key(time, bed), key(time + data.slotMinutes, bed), key(to.time, to.bed), key(to.time + data.slotMinutes, to.bed)]) touchedAt.current.set(k, Date.now());
-    setCells((m) => {
-      const n = new Map(m);
+    setCellsServer((n) => {
       const name = n.get(key(time, bed)) ?? '';
       const cont = n.get(key(time + data.slotMinutes, bed)) ?? '';
       n.set(key(time, bed), '');
       if (twoSlots) n.set(key(time + data.slotMinutes, bed), '');
       // 同じ日の中で動かしたときは、変更先にも表示する
       if (to.date === data.date) { n.set(key(to.time, to.bed), name); if (twoSlots) n.set(key(to.time + data.slotMinutes, to.bed), cont); }
-      return n;
     });
     setVisited((v) => { const n = new Set(v); const was = n.delete(key(time, bed)); if (was && to.date === data.date) n.add(key(to.time, to.bed)); return n; });
     setMenus((m) => {
@@ -516,7 +525,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     // 戻した場所には、動かしたときの氏名（と 2 枠目）を必ず出す（画面の表がまだ新しくなっていなくても消えないように）
     const back = j.moved as { time: number; bed: number };
     for (const k of [key(back.time, back.bed), key(back.time + data.slotMinutes, back.bed)]) touchedAt.current.set(k, Date.now());
-    setCells((cur) => { const n = new Map(cur); n.set(key(back.time, back.bed), m.name); if (m.twoSlots) n.set(key(back.time + data.slotMinutes, back.bed), m.cont); return n; });
+    setCellsServer((n) => { n.set(key(back.time, back.bed), m.name); if (m.twoSlots) n.set(key(back.time + data.slotMinutes, back.bed), m.cont); });
     setMoveMsg({ text: `${m.name} を元の ${minToHm(m.fromTime)}（ベッド${m.fromBed}）に戻しました`, date: data.date });
     onRefresh();
   }
@@ -693,7 +702,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
     // 画面のセルにも即反映
     const c = data.cancels.find((x) => x.id === id);
     if (c) { touchedAt.current.set(key(c.time, c.bed), Date.now()); touchedAt.current.set(key(c.time + data.slotMinutes, c.bed), Date.now()); }
-    if (c) setCells((m) => { const n = new Map(m); n.set(key(c.time, c.bed), c.name); if (c.contText) n.set(key(c.time + data.slotMinutes, c.bed), c.contText); return n; });
+    if (c) setCellsServer((n) => { n.set(key(c.time, c.bed), c.name); if (c.contText) n.set(key(c.time + data.slotMinutes, c.bed), c.contText); });
   }
   async function saveMemo(id: string, memo: string) {
     await fetch('/api/admin/cancel', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, memo }) });

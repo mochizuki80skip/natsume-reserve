@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 52;
+    private const VERSION = 53;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -371,6 +371,10 @@ final class Migrate
                 // WEB 予約でご家族（お連れ様）を一緒に予約：同じグループの予約は groupId（1人目の予約の id）でまとめる
                 if (self::hasTable($pdo, 'reservation') && !self::hasColumn($pdo, 'reservation', 'groupId')) $pdo->exec("ALTER TABLE `reservation` ADD COLUMN `groupId` VARCHAR(32) NULL, ADD KEY `res_group` (`groupId`)");
             }
+            if ($ver < 53) {
+                // 予約表で消したセルの WEB 予約・メニュー・担当・来院チェック（「元に戻す」で一緒に戻すため）
+                if (self::hasTable($pdo, 'cell_log') && !self::hasColumn($pdo, 'cell_log', 'snap')) $pdo->exec('ALTER TABLE `cell_log` ADD COLUMN `snap` TEXT NULL');
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -672,6 +676,7 @@ final class Migrate
   `before` VARCHAR(100) NOT NULL,
   `after` VARCHAR(100) NOT NULL DEFAULT \'\',
   `byCode` VARCHAR(20) NOT NULL,
+  `snap` TEXT NULL,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `cell_log_store_date` (`storeId`, `date`),

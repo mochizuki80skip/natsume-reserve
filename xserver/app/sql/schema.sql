@@ -298,6 +298,7 @@ CREATE TABLE IF NOT EXISTS `cell_log` (
   `before` VARCHAR(100) NOT NULL,
   `after` VARCHAR(100) NOT NULL DEFAULT '',
   `byCode` VARCHAR(20) NOT NULL,
+  `snap` TEXT NULL,  -- 消したときの WEB 予約・メニュー・担当・来院チェック・電話番号（JSON。元に戻したら空にする）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `cell_log_store_date` (`storeId`, `date`),
