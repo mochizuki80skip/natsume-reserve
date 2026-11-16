@@ -3,7 +3,7 @@
 // 本部が「公開する」にするまでは「準備中」の案内だけを出す
 import { useEffect, useMemo, useState } from 'react';
 import { NATSUME_LOGO, isNatsume } from '@/lib/brand';
-import ConsultLineBanner from '@/components/ConsultLineBanner';
+import ConsultLineBanner, { countLineClick } from '@/components/ConsultLineBanner';
 import { cityOf } from '@/lib/city';
 // 見出しの地域：本部が決めた地域、なければ住所の市・町
 const cityOfStore = (s: { city?: string; address: string }) => s.city || cityOf(s.address);
@@ -113,7 +113,7 @@ export default function Stores() {
           <CampaignBox c={data.campaign} />
         </div>
       )}
-      <ConsultLineBanner url={data.consultLineUrl ?? ''} className="mx-3 mt-3" />
+      <ConsultLineBanner url={data.consultLineUrl ?? ''} className="mx-3 mt-3" onOpen={() => countLineClick('stores')} />
 
       {data.hours && (
         <section className="mx-3 mt-3 rounded-xl border bg-white px-3 py-2 text-sm" aria-label="営業時間">

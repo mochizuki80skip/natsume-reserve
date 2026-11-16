@@ -4,6 +4,7 @@ import type { Closure } from '@/lib/closure';
 import { useFetch } from '@/lib/api';
 import BookingApp from '@/components/BookingApp';
 import type { PublicCampaign } from '@/components/CampaignBox';
+import { countLineClick } from '@/components/ConsultLineBanner';
 
 interface StoreInfo { code: string; name: string; phone: string; smsEnabled: boolean; jibaiOnly?: boolean; closures?: Closure[]; consultLineUrl?: string; campaign?: PublicCampaign | null; presetKind?: string }
 
@@ -40,7 +41,7 @@ export default function Booking() {
             <span aria-hidden>📞</span><span className="truncate">予約・変更・キャンセル</span>
           </a>
           {hasLine && (
-            <a href={consult} target="_blank" rel="noopener noreferrer" aria-label="交通事故のご相談はLINEで（LINE が開きます）"
+            <a href={consult} target="_blank" rel="noopener noreferrer" onClick={() => countLineClick('store', data.code)} aria-label="交通事故のご相談はLINEで（LINE が開きます）"
               className="flex h-10 min-w-0 flex-1 items-center justify-center gap-1 rounded-[9px] bg-[#06c755] px-1 text-[12.5px] font-bold text-white no-underline">
               <span className="flex-none rounded bg-white px-1 text-[8.5px] font-black leading-[14px] text-[#06c755]" aria-hidden>LINE</span><span className="truncate">交通事故のご相談</span>
             </a>

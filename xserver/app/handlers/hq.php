@@ -655,3 +655,26 @@ function hq_setup_check(): never
     }
     Http::json(['stores' => $out, 'checkedAt' => Time::nowJstDateTime()]);
 }
+
+/** 本部：相談 LINE のバナーが押された回数（直近 6 か月。月ごと・店舗えらびページ／各店舗の予約ページ） */
+function hq_line_clicks(): never
+{
+    Auth::requireHq();
+    $today = Time::nowJst()['date'];
+    $from = date('Y-m-01', strtotime(substr($today, 0, 7) . '-01 -5 months'));
+    $names = array_column(Db::all('SELECT code, name FROM store'), 'name', 'code');
+    $months = [];
+    foreach (Db::all('SELECT SUBSTRING(date, 1, 7) AS m, page, storeCode, SUM(n) AS n FROM line_click WHERE date >= ? GROUP BY m, page, storeCode', [$from]) as $r) {
+        $m = $r['m'];
+        $months[$m] ??= ['month' => $m, 'stores' => 0, 'storePages' => 0, 'byStore' => []];
+        if ($r['page'] === 'stores') $months[$m]['stores'] += (int)$r['n'];
+        else {
+            $months[$m]['storePages'] += (int)$r['n'];
+            $months[$m]['byStore'][] = ['name' => $names[$r['storeCode']] ?? $r['storeCode'], 'n' => (int)$r['n']];
+        }
+    }
+    foreach ($months as &$x) usort($x['byStore'], fn($a, $b) => $b['n'] <=> $a['n']);
+    unset($x);
+    krsort($months);
+    Http::json(['months' => array_values($months)]);
+}

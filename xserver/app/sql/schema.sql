@@ -603,3 +603,12 @@ CREATE TABLE IF NOT EXISTS `api_key` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `api_key_hash` (`keyHash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 交通事故の相談 LINE のバナーが押された回数（日・ページ別。page：stores＝店舗えらびページ／store＝各店舗の予約ページ。個人の情報は残さない）
+CREATE TABLE IF NOT EXISTS `line_click` (
+  `date` CHAR(10) NOT NULL,
+  `page` VARCHAR(10) NOT NULL,
+  `storeCode` VARCHAR(20) NOT NULL DEFAULT '',
+  `n` INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`date`, `page`, `storeCode`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

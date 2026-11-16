@@ -423,3 +423,21 @@ function line_webhook(): never
     }
     Http::json(['ok' => true]);
 }
+
+/** 交通事故の相談 LINE のバナーが押された（{ page: 'stores' | 'store', store?: 店舗コード }）。日・ページ別の回数だけ数える（個人の情報は残さない） */
+function pub_line_click(): never
+{
+    $b = json_decode((string)file_get_contents('php://input'), true);
+    $page = is_array($b) ? (string)($b['page'] ?? '') : '';
+    if (!in_array($page, ['stores', 'store'], true)) Http::error('bad request', 400);
+    $code = '';
+    if ($page === 'store') {
+        $code = (string)($b['store'] ?? '');
+        if (!preg_match('/^[A-Za-z0-9_-]{1,20}$/', $code) || !Db::one('SELECT id FROM store WHERE code = ?', [$code])) Http::error('bad request', 400);
+    }
+    // 同じ接続元からの連打は数えない（10 分に 20 回まで）
+    if (RateLimit::allow('lineclick:' . Http::clientIp(), 20, 10 * 60)) {
+        Db::exec('INSERT INTO line_click (date, page, storeCode, n) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE n = n + 1', [Time::nowJst()['date'], $page, $code]);
+    }
+    Http::json(['ok' => true]);
+}

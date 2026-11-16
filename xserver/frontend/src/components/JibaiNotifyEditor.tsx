@@ -71,6 +71,41 @@ export default function JibaiNotifyEditor() {
         <input value={url} onChange={(e) => setUrl(e.target.value)} maxLength={300} placeholder="https://lin.ee/…" aria-label="相談LINEのURL" className="w-96 max-w-full rounded border px-2 py-1" />
         <button type="button" onClick={() => call('PUT', '/api/admin/hq/consult-line', { url }, url.trim() ? '相談LINEの URL を保存しました（バナーが出ます）' : 'URL を消しました（バナーは出ません）')} disabled={url === data.consultLineUrl} className="rounded bg-brand px-4 py-1 font-bold text-white disabled:opacity-40">URL を保存</button>
       </div>
+      <LineClicks />
     </section>
+  );
+}
+
+interface ClickMonth { month: string; stores: number; storePages: number; byStore: { name: string; n: number }[] }
+/** 相談 LINE のバナーが押された回数（直近 6 か月） */
+function LineClicks() {
+  const { data } = useFetch<{ months: ClickMonth[] }>('/api/admin/hq/line-clicks');
+  const [open, setOpen] = useState<string | null>(null);
+  const months = data?.months ?? [];
+  return (
+    <div className="mt-3" role="group" aria-label="バナーが押された回数">
+      <p className="font-bold">バナーが押された回数</p>
+      <p className="text-xs text-slate-500">押された回数だけを数えます（どなたが押したかは残しません。同じ方が何度も押すと、その分も数えます）。LINE で友だち追加・相談まで進んだかは、LINE 公式アカウントの管理画面で見てください。</p>
+      {data && months.length === 0 && <p className="mt-1 text-xs text-slate-400">まだ押されていません</p>}
+      {months.length > 0 && (
+        <table className="mt-1 text-sm">
+          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-4">月</th><th className="pr-4 text-right">店舗えらびページ</th><th className="pr-4 text-right">各店舗の予約ページ</th><th className="pr-4 text-right">合計</th><th /></tr></thead>
+          <tbody>
+            {months.map((m) => (
+              <tr key={m.month} className="border-t align-top" aria-label={`${m.month} の回数`}>
+                <td className="py-0.5 pr-4">{Number(m.month.slice(0, 4))}年{Number(m.month.slice(5))}月</td>
+                <td className="py-0.5 pr-4 text-right tabular-nums">{m.stores}</td>
+                <td className="py-0.5 pr-4 text-right tabular-nums">{m.storePages}</td>
+                <td className="py-0.5 pr-4 text-right font-bold tabular-nums">{m.stores + m.storePages}</td>
+                <td className="py-0.5 text-xs">
+                  {m.byStore.length > 0 && <button type="button" onClick={() => setOpen(open === m.month ? null : m.month)} aria-expanded={open === m.month} className="underline">店舗別</button>}
+                  {open === m.month && <ul className="mt-0.5">{m.byStore.map((s) => <li key={s.name}>{s.name}　<b>{s.n}</b></li>)}</ul>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   );
 }

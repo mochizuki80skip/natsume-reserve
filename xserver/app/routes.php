@@ -28,6 +28,7 @@ function route_table(): array
         ['POST', '#^/api/public/([^/]+)/reserve-group$#', 'pub_reserve_group'],
         ['GET', '#^/api/public-reservation/([0-9a-f]{32})$#', 'pub_reservation_view'],
         ['GET', '#^/api/public-stores$#', 'pub_stores'],
+        ['POST', '#^/api/public/line-click$#', 'pub_line_click'],
         ['GET', '#^/api/public-privacy$#', 'pub_privacy'],
         // ログイン
         ['POST', '#^/api/admin/login$#', 'adm_login'],
@@ -114,6 +115,7 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/accidents$#', 'hq_accidents'],
         // 集計API のキー（本部・アカウント管理の権限がある人）
         ['GET', '#^/api/admin/hq/setup-check$#', 'hq_setup_check'],
+        ['GET', '#^/api/admin/hq/line-clicks$#', 'hq_line_clicks'],
         ['GET', '#^/api/admin/hq/api-keys$#', 'hq_api_keys_get'],
         ['POST', '#^/api/admin/hq/api-keys$#', 'hq_api_keys_post'],
         ['PUT', '#^/api/admin/hq/api-keys$#', 'hq_api_keys_put'],
