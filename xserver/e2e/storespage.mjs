@@ -34,7 +34,7 @@ await hq.locator('tr', { has: hq.getByLabel('サンプル本店 の地域') }).g
 h = await heads();
 ok('地域を入れるとその見出しになる', h.includes('静岡市（葵区）') && !h.includes('静岡市'), JSON.stringify(h));
 await pub.screenshot({ path: O + 'stores-city.png' });
-// ロゴ（なつめ接骨院・横並び）と、「なつめ接骨院」と名の付かない店舗の「グループ院」
+// ロゴ（なつめ接骨院・横並び。マークは C100 の青）と、「なつめ接骨院」と名の付かない店舗の「グループ院」
 execSync(`mysql -uroot --default-character-set=utf8mb4 ${process.env.DB_NAME ?? 'booking'}`, { input: "UPDATE store SET name = 'なつめ接骨院 見本院' WHERE code = 'S001';" });
 await pub.goto(`${B}/stores`); await pub.waitForSelector('article'); await pub.waitForTimeout(500);
 ok('ロゴはなつめ接骨院（80SKIP のロゴは出ない）', (await pub.locator('img[alt="なつめ接骨院"]').count()) === 1 && (await pub.locator('img[src*="hachimaru"]').count()) === 0 && await pub.locator('img[alt="なつめ接骨院"]').evaluate((i) => i.complete && i.naturalWidth > 0));
@@ -42,6 +42,8 @@ const card = (name) => pub.locator('article', { hasText: name }).first();
 ok('なつめ接骨院の店舗には「グループ院」が出ない', !(await card('なつめ接骨院 見本院').textContent()).includes('グループ院'));
 const badge = card('サンプル駅前院').getByText('グループ院', { exact: true });
 ok('ほかの店舗には「グループ院」（オレンジに白い字）', (await badge.count()) === 1 && (await badge.evaluate((e) => [getComputedStyle(e).backgroundColor, getComputedStyle(e).color].join('|'))).includes('rgb(255, 255, 255)'));
+ok('「グループ院」は店舗名の右隣', await badge.evaluate((e) => (e.previousSibling?.textContent ?? '').includes('サンプル駅前院') && !e.nextSibling));
+ok('ロゴのマークは最終版の青（C100）', (await (await fetch(`${B}/brand/natsume-logo-yoko.svg`)).text()).includes('rgb(0%, 62.69989%, 91.398621%)'));
 await pub.screenshot({ path: O + 'stores-logo.png', clip: { x: 0, y: 0, width: 420, height: 700 } });
 // 各店舗の予約ページには、ロゴ・グループ院の表示を出さない（店舗えらびページだけ）
 for (const code of ['S001', 'S002']) {

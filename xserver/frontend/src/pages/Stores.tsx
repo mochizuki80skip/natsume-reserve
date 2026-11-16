@@ -154,9 +154,9 @@ export default function Stores() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="text-base font-bold leading-snug">
-                        {/* 「なつめ接骨院」と名の付かない店舗はグループ院（オレンジの帯に白い字） */}
-                        {!isNatsume(s.name) && <span className="mr-1.5 inline-block rounded bg-orange-500 px-1.5 py-px align-[2px] text-xs font-bold text-white">グループ院</span>}
+                        {/* 「なつめ接骨院」と名の付かない店舗はグループ院（店舗名の右隣に、オレンジの帯に白い字） */}
                         {s.name}
+                        {!isNatsume(s.name) && <span className="ml-1.5 inline-block rounded bg-orange-500 px-1.5 py-px align-[2px] text-xs font-bold text-white">グループ院</span>}
                       </h3>
                       {(s.closures ?? []).map((c) => <span key={c.date} className="mr-1 mt-0.5 inline-block rounded bg-red-600 px-1.5 text-xs font-bold text-white">{closureBadge(c, today)}</span>)}
                     </div>
