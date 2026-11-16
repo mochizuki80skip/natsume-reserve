@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 55;
+    private const VERSION = 56;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -390,6 +390,10 @@ CREATE TABLE IF NOT EXISTS `line_click` (
   PRIMARY KEY (`date`, `page`, `storeCode`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
+            }
+            if ($ver < 56) {
+                // 同じ日の中の予約変更（時間・ベッドの変更）は名簿に残さないことにしたため、今までの記録も外す
+                if (self::hasTable($pdo, 'cancel_log')) $pdo->exec("DELETE FROM `cancel_log` WHERE kind = 'CHANGE' AND nextDate = date");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

@@ -60,6 +60,13 @@ const mo = sc.rows.find((r) => r.staff === '望月'), sa = sc.rows.find((r) => r
 ok('担当数（来院チェック済み）', mo?.total === 3 && mo.new === 1 && mo.revisit === 1 && mo.counts['2回目'] === 1 && sa?.total === 1, JSON.stringify(sc.rows));
 ok('2回目到達率の元', mo?.firsts === 2 && mo.reached2 === 1, JSON.stringify(mo));
 ok('日ごとの人数', mo?.days?.[D1] === 2 && mo.days[D2] === 1 && sa?.days?.[D1] === 1, JSON.stringify(mo?.days));
+// 並び順は店舗設定のスタッフの順（担当の多い順ではない）。佐藤を先に並べ替えると佐藤が上
+{
+  const { execSync } = await import('node:child_process');
+  execSync(`mysql -uroot --default-character-set=utf8mb4 ${process.env.DB_NAME ?? 'booking'}`, { input: "UPDATE staff_member SET sortOrder = -1 WHERE name = '佐藤';" });
+  const names = (await api('GET', `/api/admin/staff-counts?month=${D1.slice(0, 7)}`))[1].rows.map((r) => r.staff).filter((n) => n === '望月' || n === '佐藤');
+  ok('担当数はスタッフの登録順（人数の多い順ではない）', names.join(',') === '佐藤,望月', names.join(','));
+}
 await p.goto(`${B}/admin/staff-counts`); await p.waitForTimeout(1200);
 // 月が変わっていたら 10 月へ戻す
 for (let i = 0; i < 24 && !(await p.textContent('main')).includes('2026年10月'); i++) { await p.getByRole('button', { name: '‹ 前月' }).click(); await p.waitForTimeout(500); }

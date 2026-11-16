@@ -296,7 +296,10 @@ function adm_staff_counts(): never
     }
     $rows = [];
     foreach ($out as $name => $r) $rows[] = ['staff' => $name] + $r;
-    usort($rows, fn($a, $b) => ($a['staff'] === '') <=> ($b['staff'] === '') ?: $b['total'] <=> $a['total']);
+    // 店舗設定のスタッフの並び順（登録されていない名前・担当なしは後ろ、その中は多い順）
+    $order = array_flip(array_column(Db::all('SELECT name FROM staff_member WHERE storeId = ? ORDER BY sortOrder ASC, id ASC', [$store['id']]), 'name'));
+    $pos = fn($r) => $r['staff'] === '' ? PHP_INT_MAX : ($order[$r['staff']] ?? PHP_INT_MAX - 1);
+    usort($rows, fn($a, $b) => $pos($a) <=> $pos($b) ?: $b['total'] <=> $a['total']);
     $oldest = Time::addDays(Time::nowJst()['date'], -Settings::global()['retentionDays']);
     Http::json(['month' => $ym, 'dates' => $dates, 'rows' => array_map(fn($r) => ['days' => (object)$r['days']] + $r, $rows), 'partial' => $dates[0] < $oldest]);
 }
@@ -515,7 +518,9 @@ function adm_move_post(): never
                 Db::exec("DELETE FROM cancel_log WHERE id = ? AND storeId = ? AND kind = 'CHANGE'", [$revertLogId, $sid]);
                 return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need, 'logId' => null];
             }
-            // キャンセル・変更名簿に「予約変更」として残す（元の日の名簿に出る。予約表には戻せない）
+            // 同じ日の中で動かしたとき（時間・ベッドの変更）は、キャンセル・変更名簿に残さない
+            if ($toDate === $date) return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need, 'logId' => null];
+            // 別の日へ動かしたときは、キャンセル・変更名簿に「予約変更」として残す（元の日の名簿に出る。予約表には戻せない）
             $logId = Db::newId();
             Db::exec('INSERT INTO cancel_log (id, storeId, date, time, bed, name, contText, kind, source, reservationId, byCode, memo, nextDate, nextTime, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
                 $logId, $sid, $date, (int)$cell['time'], (int)$cell['bed'], $cell['text'], $cont['text'] ?? null, 'CHANGE', $cell['reservationId'] ? 'WEB' : 'MANUAL', $cell['reservationId'], $ctx['session']['code'], $memo !== '' ? $memo : null, $toDate, $toTime, Time::nowJstDateTime(),

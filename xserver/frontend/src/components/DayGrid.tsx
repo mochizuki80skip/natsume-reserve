@@ -485,7 +485,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   }
 
   // ---------- セルをマウスで動かす（同じ日の中の時間・ベッドの変更。確認なしですぐ動かす） ----------
-  // 予約の入ったセルを押したまま、別のセルの上まで動かして離すと移動。予約変更として名簿に残り、「元に戻す」で戻せる
+  // 予約の入ったセルを押したまま、別のセルの上まで動かして離すと移動（同じ日の中なので名簿には残さない）。「元に戻す」で戻せる
   const drag = useRef<{ t: number; b: number; x: number; y: number; active: boolean } | null>(null);
   const [dragFrom, setDragFrom] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
