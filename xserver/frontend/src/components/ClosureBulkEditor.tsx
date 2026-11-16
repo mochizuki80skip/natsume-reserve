@@ -34,7 +34,7 @@ export default function ClosureBulkEditor() {
   const toggle = (codes: string[], on: boolean) => setSel((s) => { const n = new Set(s); codes.forEach((c) => (on ? n.add(c) : n.delete(c))); return n; });
 
   return (
-    <section className="mb-6 rounded border bg-white p-4 text-sm" aria-label="臨時休業（まとめて）">
+    <section className="mt-6 rounded border bg-white p-4 text-sm" aria-label="臨時休業（まとめて）">
       <h2 className="font-bold">臨時休業（まとめて）</h2>
       <p className="mt-1 text-xs text-slate-600">台風などで、いくつかの店舗をまとめて臨時休業にします。えらんだ店舗の予約ページ・店舗えらびのページにお知らせが出て、店舗の画面にも通知が出ます。あとから店舗の予約表で 1 店舗ずつ変えることもできます。</p>
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1" role="status">{msg}</p>}

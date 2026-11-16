@@ -87,3 +87,7 @@ body { @apply bg-slate-50 text-slate-800; }
 
 /* 患者様のページ：iPhone は文字が 16px より小さい入力欄を押すと画面を拡大して戻さないので、入力欄の文字は 16px 以上にする */
 .pub input:not([type='checkbox']):not([type='radio']), .pub select, .pub textarea { font-size: max(16px, 1em); }
+
+/* 本部管理の折りたたみ（Fold）：閉じているときは見出し（h2）だけ出す */
+.fold[data-closed] > :not(button) > :not(h2):not(:has(h2)) { display: none !important; }
+.fold h2 { cursor: pointer; padding-right: 5.5rem; }

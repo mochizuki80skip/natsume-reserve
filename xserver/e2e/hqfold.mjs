@@ -1,0 +1,30 @@
+// Xserver（PHP）版：本部管理の各項目を折りたためる（見出し・右上のボタン・すべて閉じる／開く。この端末に覚える）
+// 例：BASE_URL=http://127.0.0.1:3003 HQ_PASSWORD=... CHROMIUM_PATH=... node e2e/hqfold.mjs
+import { createRequire } from 'node:module';
+const { chromium } = createRequire(new URL('../frontend/package.json', import.meta.url))('playwright');
+import { skipWhatsNew } from './seen.mjs';
+const B = process.env.BASE_URL ?? 'http://127.0.0.1:3003';
+const O = new URL('./', import.meta.url).pathname + 'out-';
+const br = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+skipWhatsNew(br);
+const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
+const p = await br.newPage({ viewport: { width: 1300, height: 1000 } });
+const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+await p.goto(`${B}/admin/login`); await p.fill('input[autocomplete="username"]', 'HQ'); await p.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hq-pass'); await p.click('button[type=submit]'); await p.waitForURL(/admin\//);
+await p.goto(`${B}/admin/hq`); await p.waitForLoadState('networkidle');
+const goods = p.getByRole('region', { name: '物販の商品' });
+ok('はじめは開いている', await goods.getByLabel('新しい商品名').isVisible());
+await p.getByRole('button', { name: '物販の商品を閉じる' }).click();
+ok('閉じると見出しだけ', !(await goods.getByLabel('新しい商品名').isVisible()) && await goods.getByRole('heading', { name: /物販の商品/ }).isVisible());
+await p.reload(); await p.waitForLoadState('networkidle');
+ok('閉じたことを覚えている', !(await goods.getByLabel('新しい商品名').isVisible()));
+await goods.getByRole('heading', { name: /物販の商品/ }).click();
+ok('見出しを押しても開く', await goods.getByLabel('新しい商品名').isVisible());
+await p.getByRole('button', { name: 'すべて閉じる' }).click();
+ok('すべて閉じる', !(await goods.getByLabel('新しい商品名').isVisible()) && !(await p.getByRole('button', { name: '店舗を追加' }).isVisible()) && (await p.getByRole('button', { name: /を開く$/ }).count()) >= 10);
+await p.screenshot({ path: O + 'hqfold.png', fullPage: true });
+await p.getByRole('button', { name: 'すべて開く' }).click();
+ok('すべて開く', await goods.getByLabel('新しい商品名').isVisible() && await p.getByRole('button', { name: '店舗を追加' }).isVisible());
+ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
+await br.close();
+console.log(process.exitCode ? 'HQFOLD FAILED' : 'HQFOLD OK');

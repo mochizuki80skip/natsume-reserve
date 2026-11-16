@@ -1,3 +1,4 @@
+import Fold, { FoldAllButtons } from './Fold';
 import { useState } from 'react';
 import { StoreUrlCards } from './UrlQrCard';
 import HoursEditor from './HoursEditor';
@@ -70,9 +71,10 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3"><h1 className="text-xl font-bold">本部管理</h1><a href="/admin/hq/overview" className="rounded border bg-white px-3 py-1 text-sm text-brand">全店状況（今日の予約・来院）を見る →</a></div>
+      <div className="flex flex-wrap items-center gap-3"><h1 className="text-xl font-bold">本部管理</h1><a href="/admin/hq/overview" className="rounded border bg-white px-3 py-1 text-sm text-brand">全店状況（今日の予約・来院）を見る →</a><FoldAllButtons /></div>
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
 
+      <Fold id="stores" title="店舗一覧">
       <section className="rounded border bg-white p-4">
         <h2 className="mb-1 font-bold">店舗一覧（{main.length} 店舗）</h2>
         <p className="mb-3 text-xs text-slate-500">各店舗には「管理URL」（/admin/login/店舗コード：パスワードだけでログイン）と「顧客URL」（/s/店舗コード）を配布してください。</p>
@@ -140,7 +142,9 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
           <button type="submit" className="rounded bg-brand px-3 py-1 text-white">店舗を追加</button>
         </form>
       </section>
+      </Fold>
 
+      <Fold id="setting" title="全店共通設定">
       <form onSubmit={saveSetting} className="space-y-3 rounded border bg-white p-4">
         <h2 className="font-bold">全店共通設定</h2>
         <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
@@ -181,6 +185,7 @@ export default function HqClient({ stores, areas = [], setting, onRefresh }: { s
         </div>
         <button type="submit" className="rounded bg-brand px-4 py-2 font-bold text-white">共通設定を保存</button>
       </form>
+      </Fold>
     </div>
   );
 }

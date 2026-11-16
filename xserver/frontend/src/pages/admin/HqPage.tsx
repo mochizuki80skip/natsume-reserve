@@ -11,6 +11,7 @@ import ClosureBulkEditor from '@/components/ClosureBulkEditor';
 import SpecialBulkEditor from '@/components/SpecialBulkEditor';
 import JibaiNotifyEditor from '@/components/JibaiNotifyEditor';
 import SetupCheck from '@/components/SetupCheck';
+import Fold from '@/components/Fold';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -29,16 +30,16 @@ export default function HqPage() {
   return (
     <>
       <HqClient key={data.stores.map((s) => `${s.code}:${s.name}:${s.active}`).join(',')} stores={data.stores} areas={data.areas ?? []} setting={data.setting} onRefresh={() => { reload(); refreshMe(); }} />
-      <SetupCheck />
-      <ClosureBulkEditor />
-      <SpecialBulkEditor />
-      <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
-      <CampaignEditor />
-      <ReferralEditor pageOpen={!!data.storesPageOpen} />
-      <JibaiNotifyEditor />
-      <GoodsEditor />
-      <ReportItemsEditor />
-      <PrivacyEditor />
+      <Fold id="setup" title="WEB予約の設定チェック"><SetupCheck /></Fold>
+      <Fold id="closure" title="臨時休業（まとめて）"><ClosureBulkEditor /></Fold>
+      <Fold id="special" title="特別な営業日"><SpecialBulkEditor /></Fold>
+      <Fold id="storesPage" title="店舗えらびページ"><StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} /></Fold>
+      <Fold id="campaign" title="WEB 予約の URL・QR"><CampaignEditor /></Fold>
+      <Fold id="referral" title="紹介元の専用 QR"><ReferralEditor pageOpen={!!data.storesPageOpen} /></Fold>
+      <Fold id="jibai" title="新自の通知・相談LINE"><JibaiNotifyEditor /></Fold>
+      <Fold id="goods" title="物販の商品"><GoodsEditor /></Fold>
+      <Fold id="report" title="日報の項目"><ReportItemsEditor /></Fold>
+      <Fold id="privacy" title="プライバシーポリシー"><PrivacyEditor /></Fold>
     </>
   );
 }
