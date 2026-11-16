@@ -608,3 +608,50 @@ function hq_campaigns_export(): never
     echo $bytes;
     exit;
 }
+
+/**
+ * 本部：WEB 予約の設定チェック（店舗ごとに、済んでいない設定を一覧にする。読み取りだけ）
+ * 電話番号・住所・地図の位置・店舗えらびへの掲載・施術者・初回／再来の担当・この先 2 週間のシフト・患者一覧・初期パスワード・見本の店舗
+ */
+function hq_setup_check(): never
+{
+    Auth::requireHq();
+    $setting = Settings::global();
+    $today = Time::nowJst()['date'];
+    $out = [];
+    foreach (Db::all('SELECT * FROM store WHERE active = 1 AND hqOnly = 0 AND jibaiOnly = 0 ORDER BY sortOrder, code') as $st) {
+        $sid = $st['id'];
+        $ng = [];
+        $add = function (string $key, string $label, string $fix) use (&$ng): void { $ng[] = ['key' => $key, 'label' => $label, 'fix' => $fix]; };
+        $digits = preg_replace('/\D/', '', (string)$st['phone']);
+        $sample = preg_match('/サンプル|見本/u', (string)$st['name']) === 1;
+        if ($sample) $add('sample', '見本の店舗が残っています', '本部の店舗一覧で停止・削除するか、店舗名・電話番号などを実際の店舗に直してください。');
+        if ($digits === '' || str_contains($digits, '000000')) $add('phone', '電話番号が空か、見本のままです', '本部の店舗一覧で電話番号を直してください（予約ページの電話の帯・確認メッセージに出ます）。');
+        if (trim((string)$st['address']) === '') $add('address', '住所が入っていません', '本部の「店舗えらびページ」で住所を入れてください。');
+        if ($st['lat'] === null || $st['lng'] === null) $add('map', '地図の位置が入っていません', '本部の「店舗えらびページ」で地図の位置を入れてください（近い順に並べるのに使います）。');
+        if (!(int)$st['listed']) $add('listed', '店舗えらびページに載せていません', '本部の「店舗えらびページ」で「載せる」にしてください。');
+        $members = Db::all("SELECT id, startDate, endDate, canFirst, canRevisit FROM staff_member WHERE storeId = ? AND role = 'THERAPIST' AND active = 1", [$sid]);
+        if (!$members) {
+            $add('staff', '施術者が登録されていません', '店舗の画面の「店舗設定」→「スタッフ・シフト」で施術者を登録してください（シフト・担当・WEB の枠数に使います）。');
+        } else {
+            if (!array_filter($members, fn($m) => (int)$m['canFirst'])) $add('first', '「初回を担当する」人がいません', '店舗の画面の「店舗設定」→「スタッフ・シフト」でチェックを付けてください（付けないと、新規の WEB 予約を同じ時間にいくつでも受けます）。');
+            if (!array_filter($members, fn($m) => (int)$m['canRevisit'])) $add('revisit', '「再来を担当する」人がいません', '店舗の画面の「店舗設定」→「スタッフ・シフト」でチェックを付けてください（付けないと、再来の WEB 予約を同じ時間にいくつでも受けます）。');
+            // この先 2 週間の営業日で、シフトが 1 人も入っていない日
+            $have = [];
+            foreach (Db::all('SELECT DISTINCT date FROM shift WHERE storeId = ? AND date BETWEEN ? AND ?', [$sid, $today, Time::addDays($today, 13)]) as $r) $have[$r['date']] = true;
+            $miss = [];
+            for ($i = 0; $i < 14; $i++) {
+                $d = Time::addDays($today, $i);
+                if (isset($have[$d])) continue;
+                $day = Settings::dayRow(Db::one('SELECT * FROM day_status WHERE storeId = ? AND date = ?', [$sid, $d]));
+                if (Settings::storeSessions($st, $setting, $d, Settings::closedOf($day))) $miss[] = $d;
+            }
+            if ($miss) $add('shift', 'この先 2 週間でシフトが入っていない日が ' . count($miss) . ' 日あります（' . implode('・', array_map(fn($d) => (int)substr($d, 5, 2) . '/' . (int)substr($d, 8, 2), array_slice($miss, 0, 5))) . (count($miss) > 5 ? ' ほか' : '') . '）', 'シフト表で入れてください（入っていない日は全員出勤として WEB の枠を数えるため、休みの人の分まで予約が入ります）。');
+        }
+        if (!$st['patientsImportedAt']) $add('patients', '患者一覧（診察券番号）を取り込んでいません', '店舗の画面の「店舗設定」→「患者一覧（診察券番号 → 氏名）」で取り込んでください（診察券番号から氏名が出ます）。');
+        $acc = Db::one("SELECT passwordHash FROM admin_account WHERE storeId = ? AND role = 'store' AND active = 1 LIMIT 1", [$sid]);
+        if ($acc && password_verify('password', (string)$acc['passwordHash'])) $add('password', '店舗のパスワードが初期のままです', '本部の店舗一覧の「PW再設定」で変えてください（初期のままだと、ほかの人がログインできてしまいます）。');
+        $out[] = ['code' => $st['code'], 'name' => $st['name'], 'issues' => $ng];
+    }
+    Http::json(['stores' => $out, 'checkedAt' => Time::nowJstDateTime()]);
+}

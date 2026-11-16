@@ -10,6 +10,7 @@ import ReportItemsEditor from '@/components/ReportItemsEditor';
 import ClosureBulkEditor from '@/components/ClosureBulkEditor';
 import SpecialBulkEditor from '@/components/SpecialBulkEditor';
 import JibaiNotifyEditor from '@/components/JibaiNotifyEditor';
+import SetupCheck from '@/components/SetupCheck';
 import { useAdmin } from './Layout';
 
 interface Resp {
@@ -28,6 +29,7 @@ export default function HqPage() {
   return (
     <>
       <HqClient key={data.stores.map((s) => `${s.code}:${s.name}:${s.active}`).join(',')} stores={data.stores} areas={data.areas ?? []} setting={data.setting} onRefresh={() => { reload(); refreshMe(); }} />
+      <SetupCheck />
       <ClosureBulkEditor />
       <SpecialBulkEditor />
       <StoresPageEditor stores={data.stores.filter((s) => !s.jibaiOnly)} open={!!data.storesPageOpen} onRefresh={reload} />
