@@ -10,7 +10,7 @@ interface UrlBooking { store: string; date: string; trig: string; detail: string
 interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean }
 interface Area { id?: string; name: string; stores: string[] }
 interface StoreInfo { code: string; name: string; active?: boolean }
-interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string; urlBookings?: UrlBooking[] }
+interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string; urlBookings?: UrlBooking[]; urls?: { label: string; trig: string }[] }
 interface OptResp { options: KarteOptions; detailFor: DetailFor; areas: Area[]; stores: StoreInfo[] }
 
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -240,6 +240,39 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
           </div>
         </div>
       </div>
+
+      {/* URL・QR 別：本部が作った WEB 予約の URL・QR ごとの WEB 予約・新患・継続（期間・エリア・店舗の選び方に合わせる） */}
+      {(() => {
+        const ub = (data.urlBookings ?? []).filter((u) => view.inTarget(u.store) && u.date >= view.cur.from && u.date <= view.cur.to);
+        const lines = (data.urls ?? []).map((u) => {
+          const ks = newCur.filter((r) => r.trig === u.trig && r.trigDetail === u.label);
+          const us = ub.filter((x) => x.detail === u.label);
+          return { ...u, resNew: us.filter((x) => x.isNew).length, resEx: us.filter((x) => !x.isNew).length, karte: ks.length, reached: [0, 1, 2, 3, 4].map((i) => ks.filter((r) => r.reached[i]).length) };
+        });
+        if (!lines.length) return null;
+        return (
+          <div className="mb-3 overflow-x-auto rounded-lg border bg-white p-3" role="region" aria-label="URL・QR 別">
+            <h2 className="mb-1 text-sm font-bold">URL・QR 別（{periodLabel}）</h2>
+            <table className="w-full whitespace-nowrap text-right text-xs tabular-nums">
+              <thead><tr className="text-slate-500"><th className="px-2 text-left">URL・QR</th><th className="px-2 text-left">きっかけ</th><th className="px-2">WEB 予約</th><th className="px-2">新規</th><th className="px-2">既存</th><th className="px-2">新患</th>{[2, 3, 4, 5, 6].map((i) => <th key={i} className="px-2">{i}回目</th>)}</tr></thead>
+              <tbody>
+                {lines.map((l) => (
+                  <tr key={l.label} className="border-t" aria-label={`URL ${l.label}`}>
+                    <td className="px-2 py-1 text-left font-bold">{l.label}</td>
+                    <td className="px-2 text-left text-slate-600">{l.trig}</td>
+                    <td className="px-2">{l.resNew + l.resEx}</td>
+                    <td className="px-2">{l.resNew}</td>
+                    <td className="px-2">{l.resEx}</td>
+                    <td className="px-2 font-bold">{l.karte}</td>
+                    {l.reached.map((v, i) => <td key={i} className="px-2">{l.karte ? <>{v} <span className="text-[10px] text-slate-500">{Math.round((v / l.karte) * 100)}%</span></> : '－'}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-1 text-[11px] text-slate-500">WEB 予約＝その URL・QR から入った予約（来院日が期間内・キャンセルを除く。既存＝通院中・1ヶ月以上ぶりの方）。新患＝新患継続率に入った人数。2〜6回目＝そのうち、その回まで来た人数と割合（継続）。</p>
+          </div>
+        );
+      })()}
 
       <div className="overflow-x-auto rounded-lg border bg-white p-3">
         <div className="mb-1 flex flex-wrap items-center gap-3">

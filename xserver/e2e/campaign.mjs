@@ -162,6 +162,10 @@ const ur = hp.getByRole('region', { name: 'その他の内訳' }).getByRole('row
 const urt = (await ur.textContent()).replace(/\s/g, '');
 ok('集計：「その他」を押すと URL の名前ごとに WEB 予約・新患・継続', urt.startsWith('ポータルサイトA1新規1・既存01') && urt.includes('0(0%)'), urt);
 ok('URL の一覧に継続（2回目〜）', prow.continued === 0 && prow.kartes === 1);
+const urow = hp.getByRole('region', { name: 'URL・QR 別' }).getByRole('row', { name: 'URL ポータルサイト A' });
+const urw = (await urow.locator('td').allTextContents()).map((x) => x.trim());
+ok('集計に「URL・QR 別」：URL ごとに WEB 予約・新規・既存・新患・継続', urw.slice(0, 6).join('|') === 'ポータルサイト A|その他|1|1|0|1' && urw[6].startsWith('0'), urw.join('|'));
+await hp.getByRole('region', { name: 'URL・QR 別' }).screenshot({ path: new URL('./out-url-table.png', import.meta.url).pathname });
 await hp.getByRole('region', { name: 'その他の内訳' }).screenshot({ path: new URL('./out-url-detail.png', import.meta.url).pathname });
 // 名前を変えると新患継続率の内訳もそろう
 await api(hp, 'PUT', '/api/admin/hq/campaigns', { ...portal, label: 'ポータルサイト B' });
