@@ -15,7 +15,7 @@ interface StoreLite { code: string; name: string; area: string }
 interface Entry {
   id: string; code: string; label: string; trig: string; stores: string[]; hasContent: boolean; active: boolean;
   name: string; description: string; showInsurance: boolean; presetKind: string; from: string; to: string; memo: string;
-  reservations: number; resNew?: number; resExisting?: number; kartes: number;
+  reservations: number; resNew?: number; resExisting?: number; kartes: number; continued?: number;
 }
 interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[] }
 
@@ -243,6 +243,7 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
         </td>
         <td className="py-1 pr-2 text-right tabular-nums">{c.reservations}{c.reservations > 0 && <span className="block whitespace-nowrap text-[11px] text-slate-500">新規 {c.resNew ?? 0}・既存 {c.resExisting ?? 0}</span>}</td>
         <td className="py-1 pr-2 text-right tabular-nums">{c.kartes}</td>
+        <td className="py-1 pr-2 text-right tabular-nums">{c.kartes ? <>{c.continued ?? 0}<span className="block text-[11px] text-slate-500">{Math.round(((c.continued ?? 0) / c.kartes) * 100)}%</span></> : '－'}</td>
         <td className="whitespace-nowrap py-1 text-xs">
           <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mr-2 rounded border-2 border-brand px-2 font-bold text-brand-dark">{open ? '▲ URL・QR' : '▼ URL・QR'}</button>
           <button type="button" onClick={onEdit} className="mr-2 underline">直す</button>
@@ -250,7 +251,7 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
           <button type="button" onClick={remove} className="text-red-700 underline">消す</button>
         </td>
       </tr>
-      {open && <tr><td colSpan={7}><EntryUrls c={c} stores={data.stores} onMsg={onMsg} /></td></tr>}
+      {open && <tr><td colSpan={8}><EntryUrls c={c} stores={data.stores} onMsg={onMsg} /></td></tr>}
     </>
   );
 }
@@ -270,10 +271,10 @@ export default function CampaignEditor() {
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}
       <div className="mt-3 overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">名前</th><th className="pr-2">きっかけ</th><th className="pr-2">店舗</th><th className="pr-2">キャンペーン</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right">新患継続率</th><th /></tr></thead>
+          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">名前</th><th className="pr-2">きっかけ</th><th className="pr-2">店舗</th><th className="pr-2">キャンペーン</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right" title="この URL・QR から来て新患継続率に入った人数">新患</th><th className="pr-2 text-right" title="新患のうち、2 回目以降も来た人数と割合">継続（2回目〜）</th><th /></tr></thead>
           <tbody>
             {(data?.rows ?? []).map((c) => <Row key={c.id} c={c} data={data!} onEdit={() => setEdit(c)} onMsg={setMsg} reload={reload} />)}
-            {data && data.rows.length === 0 && <tr><td colSpan={7} className="py-2 text-xs text-slate-400">まだありません。「＋ URL・QR を作る」から作ってください</td></tr>}
+            {data && data.rows.length === 0 && <tr><td colSpan={8} className="py-2 text-xs text-slate-400">まだありません。「＋ URL・QR を作る」から作ってください</td></tr>}
           </tbody>
         </table>
       </div>

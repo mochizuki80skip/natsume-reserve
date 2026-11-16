@@ -6,10 +6,11 @@ import { isDropped } from '@/components/KarteRetention';
 import { Donut, SERIES_COLORS, StackedColumns } from '@/components/charts';
 import { useAdmin } from './Layout';
 
+interface UrlBooking { store: string; date: string; trig: string; detail: string; isNew: boolean }
 interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean }
 interface Area { id?: string; name: string; stores: string[] }
 interface StoreInfo { code: string; name: string; active?: boolean }
-interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string }
+interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string; urlBookings?: UrlBooking[] }
 interface OptResp { options: KarteOptions; detailFor: DetailFor; areas: Area[]; stores: StoreInfo[] }
 
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -101,12 +102,12 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
     const curRows = rows.filter((r) => inR(r, cur));
     const prevRows = rows.filter((r) => inR(r, prev));
     const trigBuckets = unit === 'month' || unit === 'fy' ? buckets : weeksOf(ym).map((w) => ({ ...w, title: w.label }));
-    return { rows, curRows, prevRows, buckets, trigBuckets, area };
+    return { rows, curRows, prevRows, buckets, trigBuckets, area, inTarget, cur };
   }, [data, opt, target, areaIdx, storeCode, unit, ym, year, fy]);
 
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data || !opt || !view) return <p className="text-sm text-slate-500">読み込み中…</p>;
-  const { curRows, prevRows, buckets, trigBuckets } = view;
+  const { curRows, prevRows, buckets, trigBuckets, inTarget: inTargetCode, cur: curRange } = view;
   const kinds = [['NEW', '新患（初診・初）'], ['ACCIDENT', '初自（自賠）'], ['THIRD', '新三（第三者）'], ['REVISIT', '再来']] as const;
   const cnt = (list: HqRow[], k?: string) => (k ? list.filter((r) => r.kind === k).length : list.length);
   const diff = (a: number, b: number) => (a - b >= 0 ? `+${a - b}` : `${a - b}`);
@@ -198,14 +199,36 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
             </tbody>
           </table>
           {newCur.length === 0 && <p className="py-3 text-center text-xs text-slate-400">この期間はまだありません</p>}
-          {openTrig && (
-            <div className="mt-2 rounded border bg-slate-50 p-2 text-xs">
-              <b>「{openTrig}」の内訳</b>
-              <ul className="mt-1 grid grid-cols-2 gap-x-4 sm:grid-cols-3">
-                {Object.entries(newCur.filter((r) => r.trig === openTrig).reduce<Record<string, number>>((a, r) => { const k = r.trigDetail || (openTrig in opt.detailFor ? '（未入力）' : '（URL・QR 以外）'); a[k] = (a[k] ?? 0) + 1; return a; }, {})).sort((a, b) => b[1] - a[1]).map(([k, v]) => <li key={k}>{k}　<b>{v}</b></li>)}
-              </ul>
-            </div>
-          )}
+          {openTrig && (() => {
+            // 内訳ごとに：WEB 予約（URL・QR から。新規／既存）・新患・2〜6回目まで来た人数（継続）
+            const ub = (data.urlBookings ?? []).filter((u) => u.trig === openTrig && inTargetCode(u.store) && u.date >= curRange.from && u.date <= curRange.to);
+            const keyOf = (d: string) => d || (openTrig in opt.detailFor ? '（未入力）' : '（URL・QR 以外）');
+            const names = [...new Set([...newCur.filter((r) => r.trig === openTrig).map((r) => keyOf(r.trigDetail)), ...ub.map((u) => u.detail)])];
+            const lines = names.map((n) => {
+              const ks = newCur.filter((r) => r.trig === openTrig && keyOf(r.trigDetail) === n);
+              const us = ub.filter((u) => u.detail === n);
+              return { n, resNew: us.filter((u) => u.isNew).length, resEx: us.filter((u) => !u.isNew).length, karte: ks.length, reached: [0, 1, 2, 3, 4].map((i) => ks.filter((r) => r.reached[i]).length) };
+            }).sort((a, b) => b.karte - a.karte || (b.resNew + b.resEx) - (a.resNew + a.resEx));
+            return (
+              <div className="mt-2 overflow-x-auto rounded border bg-slate-50 p-2 text-xs" role="region" aria-label={`${openTrig}の内訳`}>
+                <b>「{openTrig}」の内訳（{periodLabel}）</b>
+                <table className="mt-1 whitespace-nowrap text-right">
+                  <thead><tr className="text-slate-500"><th className="pr-3 text-left">URL・QR の名前など</th><th className="pr-3">WEB 予約</th><th className="pr-3">新患</th>{[2, 3, 4, 5, 6].map((i) => <th key={i} className="pr-3">{i}回目</th>)}</tr></thead>
+                  <tbody>
+                    {lines.map((l) => (
+                      <tr key={l.n} className="border-t" aria-label={`内訳 ${l.n}`}>
+                        <td className="py-0.5 pr-3 text-left font-bold">{l.n}</td>
+                        <td className="pr-3">{l.resNew + l.resEx ? <>{l.resNew + l.resEx}<span className="ml-1 text-[10px] text-slate-500">新規{l.resNew}・既存{l.resEx}</span></> : '－'}</td>
+                        <td className="pr-3 font-bold">{l.karte || '－'}</td>
+                        {l.reached.map((v, i) => <td key={i} className="pr-3">{l.karte ? <>{v}<span className="ml-0.5 text-[10px] text-slate-500">({Math.round((v / l.karte) * 100)}%)</span></> : '－'}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-1 text-[10px] text-slate-500">WEB 予約＝その URL・QR から入った予約（来院日が期間内・キャンセルを除く。既存＝通院中・1ヶ月以上ぶりの方）。新患＝新患継続率に入った人数。2〜6回目＝そのうち、その回まで来た人数（継続）。</p>
+              </div>
+            );
+          })()}
           <p className="mt-1 text-[11px] text-slate-500">「紹介他事業」「キャンペーン」「イベント」と、WEB 予約の URL・QR から来た方がいるきっかけ（下線つき）を押すと、内訳（URL・QR の名前ごと）が見られます。</p>
         </div>
         <div className="rounded-lg border bg-white p-3">

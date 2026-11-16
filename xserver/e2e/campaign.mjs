@@ -158,7 +158,11 @@ await hp.getByRole('button', { name: '集計', exact: true }).click(); await hp.
 const want = `${Number(open[0].slice(0, 4))}年${Number(open[0].slice(5, 7))}月`;
 for (let i = 0; i < 3 && !(await hp.getByText(want, { exact: true }).count()); i++) { await hp.getByRole('button', { name: '›' }).first().click(); await hp.waitForTimeout(600); }
 await hp.getByRole('button', { name: 'その他', exact: true }).click(); await hp.waitForTimeout(300);
-ok('集計：「その他」を押すと URL の名前ごとの内訳', (await hp.getByText('「その他」の内訳').locator('..').textContent()).includes('ポータルサイト A'));
+const ur = hp.getByRole('region', { name: 'その他の内訳' }).getByRole('row', { name: '内訳 ポータルサイト A' });
+const urt = (await ur.textContent()).replace(/\s/g, '');
+ok('集計：「その他」を押すと URL の名前ごとに WEB 予約・新患・継続', urt.startsWith('ポータルサイトA1新規1・既存01') && urt.includes('0(0%)'), urt);
+ok('URL の一覧に継続（2回目〜）', prow.continued === 0 && prow.kartes === 1);
+await hp.getByRole('region', { name: 'その他の内訳' }).screenshot({ path: new URL('./out-url-detail.png', import.meta.url).pathname });
 // 名前を変えると新患継続率の内訳もそろう
 await api(hp, 'PUT', '/api/admin/hq/campaigns', { ...portal, label: 'ポータルサイト B' });
 const k3 = ((await api(s2, 'GET', `/api/admin/karte?month=${open[0].slice(0, 7)}`))[1].rows ?? []).find((r) => r.name.includes('経路'));
