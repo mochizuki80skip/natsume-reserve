@@ -283,6 +283,7 @@ CREATE TABLE IF NOT EXISTS `cancel_log` (
   `memo` VARCHAR(200) NULL,
   `nextDate` CHAR(10) NULL,
   `nextTime` INT NULL,
+  `listed` TINYINT(1) NOT NULL DEFAULT 1,  -- 0＝名簿に出さない（同じ日の中の予約変更。人数だけ数える）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `cancel_store_date` (`storeId`, `date`),

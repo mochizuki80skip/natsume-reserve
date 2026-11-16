@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 56;
+    private const VERSION = 57;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -394,6 +394,10 @@ SQL);
             if ($ver < 56) {
                 // 同じ日の中の予約変更（時間・ベッドの変更）は名簿に残さないことにしたため、今までの記録も外す
                 if (self::hasTable($pdo, 'cancel_log')) $pdo->exec("DELETE FROM `cancel_log` WHERE kind = 'CHANGE' AND nextDate = date");
+            }
+            if ($ver < 57) {
+                // 同じ日の中の予約変更：名簿には出さず、人数だけ数える
+                if (self::hasTable($pdo, 'cancel_log') && !self::hasColumn($pdo, 'cancel_log', 'listed')) $pdo->exec('ALTER TABLE `cancel_log` ADD COLUMN `listed` TINYINT(1) NOT NULL DEFAULT 1');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

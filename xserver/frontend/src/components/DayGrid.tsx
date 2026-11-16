@@ -65,9 +65,11 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   // キャンセル名簿で入れた次回予約日（画面上の集計にすぐ反映する）
   const [nextDates, setNextDates] = useState<Map<string, string>>(() => new Map());
   const cancelStat = useMemo(() => {
-    const changed = data.cancels.filter((c) => (nextDates.get(c.id) ?? c.nextDate ?? '') !== '').length;
-    return { all: data.cancels.length, changed, none: data.cancels.length - changed };
-  }, [data.cancels, nextDates]);
+    // 同じ日の中の予約変更（時間・ベッドの変更）は名簿には出さないが、予約変更の人数には入れる
+    const same = data.sameDayChanges ?? 0;
+    const changed = data.cancels.filter((c) => (nextDates.get(c.id) ?? c.nextDate ?? '') !== '').length + same;
+    return { all: data.cancels.length + same, changed, none: data.cancels.length + same - changed, same };
+  }, [data.cancels, data.sameDayChanges, nextDates]);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [menu, setMenu] = useState<string | null>(null);
   const [pasteInfo, setPasteInfo] = useState('');
@@ -819,7 +821,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
         <div className="flex items-center gap-1.5 rounded border bg-white px-2 py-0.5 text-sm max-sm:px-1 max-sm:text-[11px]" aria-label="キャンセルの人数">
           <span className="font-bold">キャンセル {cancelStat.all}人</span>
           <span className="text-xs text-slate-500 max-sm:hidden">うち</span>
-          <span className="rounded bg-violet-100 px-1.5 text-xs text-violet-800 max-sm:px-1 max-sm:text-[10px]">予約変更 {cancelStat.changed}人</span>
+          <span className="rounded bg-violet-100 px-1.5 text-xs text-violet-800 max-sm:px-1 max-sm:text-[10px]" title={cancelStat.same ? `同じ日の中の変更 ${cancelStat.same}人を含みます（名簿には出ません）` : undefined}>予約変更 {cancelStat.changed}人</span>
           <span className="rounded bg-slate-100 px-1.5 text-xs text-slate-700 max-sm:px-1 max-sm:text-[10px]">予約未取得 {cancelStat.none}人</span>
         </div>
       </div>

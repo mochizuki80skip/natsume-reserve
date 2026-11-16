@@ -518,12 +518,11 @@ function adm_move_post(): never
                 Db::exec("DELETE FROM cancel_log WHERE id = ? AND storeId = ? AND kind = 'CHANGE'", [$revertLogId, $sid]);
                 return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need, 'logId' => null];
             }
-            // 同じ日の中で動かしたとき（時間・ベッドの変更）は、キャンセル・変更名簿に残さない
-            if ($toDate === $date) return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need, 'logId' => null];
-            // 別の日へ動かしたときは、キャンセル・変更名簿に「予約変更」として残す（元の日の名簿に出る。予約表には戻せない）
+            // キャンセル・変更名簿に「予約変更」として残す（元の日の名簿に出る。予約表には戻せない）。
+            // 同じ日の中で動かしたとき（時間・ベッドの変更）は名簿には出さず（listed = 0）、予約変更の人数にだけ数える
             $logId = Db::newId();
-            Db::exec('INSERT INTO cancel_log (id, storeId, date, time, bed, name, contText, kind, source, reservationId, byCode, memo, nextDate, nextTime, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
-                $logId, $sid, $date, (int)$cell['time'], (int)$cell['bed'], $cell['text'], $cont['text'] ?? null, 'CHANGE', $cell['reservationId'] ? 'WEB' : 'MANUAL', $cell['reservationId'], $ctx['session']['code'], $memo !== '' ? $memo : null, $toDate, $toTime, Time::nowJstDateTime(),
+            Db::exec('INSERT INTO cancel_log (id, storeId, date, time, bed, name, contText, kind, source, reservationId, byCode, memo, nextDate, nextTime, createdAt, listed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [
+                $logId, $sid, $date, (int)$cell['time'], (int)$cell['bed'], $cell['text'], $cont['text'] ?? null, 'CHANGE', $cell['reservationId'] ? 'WEB' : 'MANUAL', $cell['reservationId'], $ctx['session']['code'], $memo !== '' ? $memo : null, $toDate, $toTime, Time::nowJstDateTime(), $toDate === $date ? 0 : 1,
             ]);
             return ['date' => $toDate, 'time' => $toTime, 'bed' => $toBed, 'slots' => $need, 'logId' => $logId];
         });
@@ -672,7 +671,7 @@ function adm_log_rows(array $store, array $f, int $take): array
 {
     $sid = $store['id'];
     if ($f['tab'] === 'cancel') {
-        $sql = 'SELECT * FROM cancel_log WHERE storeId = ? AND date BETWEEN ? AND ?';
+        $sql = 'SELECT * FROM cancel_log WHERE storeId = ? AND listed = 1 AND date BETWEEN ? AND ?';
         $params = [$sid, $f['from'], $f['to']];
         if ($f['q'] !== '') { $sql .= ' AND name LIKE ?'; $params[] = '%' . $f['q'] . '%'; }
         $sql .= " ORDER BY date DESC, time ASC LIMIT $take";

@@ -32,7 +32,9 @@ final class DayData
         };
         $blocks = Db::all('SELECT id, startTime, endTime, beds, label FROM slot_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
         $kindBlocks = Db::all('SELECT id, startTime, endTime, label, kinds, auto, beds FROM kind_block WHERE storeId = ? AND date = ? ORDER BY startTime ASC', [$sid, $date]);
-        $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? ORDER BY time ASC, createdAt ASC', [$sid, $date]);
+        $cancels = Db::all('SELECT * FROM cancel_log WHERE storeId = ? AND date = ? AND listed = 1 ORDER BY time ASC, createdAt ASC', [$sid, $date]);
+        // 同じ日の中の予約変更（名簿には出さない）の人数。同じ予約を何度動かしても 1 人
+        $sameDayChanges = (int)(Db::one("SELECT COUNT(DISTINCT COALESCE(reservationId, name)) AS n FROM cancel_log WHERE storeId = ? AND date = ? AND listed = 0 AND kind = 'CHANGE'", [$sid, $date])['n'] ?? 0);
 
         $closed = Settings::closedOf($day);
         // 臨時休業でも予約表は出す（入っている予約に連絡するため）。患者様に出す枠（customerTimes）だけ休みの分を外す
@@ -85,6 +87,7 @@ final class DayData
                 'id' => $c['id'], 'time' => (int)$c['time'], 'bed' => (int)$c['bed'], 'name' => $c['name'], 'contText' => $c['contText'], 'kind' => $c['kind'],
                 'source' => $c['source'], 'byCode' => $c['byCode'], 'memo' => $c['memo'], 'nextDate' => $c['nextDate'], 'nextTime' => isset($c['nextTime']) ? (int)$c['nextTime'] : null, 'createdAt' => Time::formatDateTimeShort($c['createdAt']),
             ], $cancels),
+            'sameDayChanges' => $sameDayChanges,
         ];
     }
 

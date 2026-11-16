@@ -42,6 +42,9 @@ ok('動かすと元が空き、置いた場所に入る', textAt(d, 540, 1) === 
 ok('画面にもすぐ出る', (await input(540, 1).inputValue()) === '' && (await input(630, 2).inputValue()) === 'ドラッグ 一郎（再来）');
 ok('来院チェックも一緒に移る', d.cells.find((x) => x.time === 630 && x.bed === 2)?.visited === true);
 ok('同じ日の中の変更は名簿に残らない', !d.cancels.some((x) => x.kind === 'CHANGE'), JSON.stringify(d.cancels));
+ok('名簿には出ないが、予約変更の人数には数える', d.sameDayChanges === 1, String(d.sameDayChanges));
+await p.waitForTimeout(800);
+ok('画面の「予約変更」の人数にも入る', (await p.getByLabel('キャンセルの人数').textContent()).includes('予約変更 1人'), await p.getByLabel('キャンセルの人数').textContent());
 ok('お知らせが出る', await p.getByText('に動かしました').isVisible());
 ok('確認の画面は出ない', errs.every((e) => !e.startsWith('dialog')) && (await p.locator('form[aria-label="キャンセル・予約変更"]').count()) === 0);
 await p.screenshot({ path: O + 'drag-moved.png' });
@@ -51,6 +54,7 @@ await p.getByRole('button', { name: /^↶ 元に戻す（/ }).click(); await p.w
 d = await day();
 ok('元に戻すで元の場所へ', textAt(d, 540, 1) === 'ドラッグ 一郎（再来）' && textAt(d, 630, 2) === '', `${textAt(d, 540, 1)} / ${textAt(d, 630, 2)}`);
 ok('元に戻しても名簿には何も残らない', !d.cancels.some((x) => x.kind === 'CHANGE' && x.name === 'ドラッグ 一郎（再来）'));
+ok('元に戻すと予約変更の人数も戻る', d.sameDayChanges === 0, String(d.sameDayChanges));
 
 // 3) 別の予約の上には置けない（何も変わらない）
 await dragCell('540:1', '600:4');

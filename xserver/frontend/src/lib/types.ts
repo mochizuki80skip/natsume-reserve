@@ -31,6 +31,8 @@ export interface DayData {
   /** 予約表の色を持つ施術者（初回・再来を担当する人。color が空なら自動） */
   colorStaff?: { name: string; color: string }[];
   cancels: CancelRow[];
+  /** 同じ日の中の予約変更の人数（名簿には出さない） */
+  sameDayChanges?: number;
   blocks: SlotBlock[];
   kindBlocks?: KindBlock[];
   /** 予約表で選べるメニュー（本部の「選択肢の設定」で変更） */
