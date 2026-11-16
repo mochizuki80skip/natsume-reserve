@@ -112,7 +112,7 @@ final class Auth
     {
         if (self::$account !== null) return self::$account ?: null;
         $s = self::session();
-        $a = $s ? Db::one('SELECT id, code, name, role, active, canManage, area FROM admin_account WHERE id = ?', [$s['accountId']]) : null;
+        $a = $s ? Db::one('SELECT id, code, name, role, active, canManage, area, canStaffing FROM admin_account WHERE id = ?', [$s['accountId']]) : null;
         $ok = $a && (int)$a['active'] === 1 && $a['role'] !== 'store' && $a['role'] === $s['role'];
         self::$account = $ok ? $a : [];
         return $ok ? $a : null;
@@ -147,6 +147,14 @@ final class Auth
         $s = self::requireSession();
         if (!in_array($s['role'], ['hq', 'acct', 'mg'], true)) throw new HttpError(403, 'forbidden');
         return $s;
+    }
+
+    /** 人員基準を入れられるか（本部・管轄MG で「人員基準」にチェックがある人。全店。管理者 HQ はいつでも） */
+    public static function canStaffing(array $session): bool
+    {
+        if (!in_array($session['role'], ['hq', 'mg'], true)) return false;
+        $a = self::account();
+        return (int)($a['canStaffing'] ?? 0) === 1 || ($a['code'] ?? '') === 'HQ';
     }
 
     /** 管轄MG が開ける店舗（管轄エリアの店舗。エリアの店舗が増えれば自動で増える） */

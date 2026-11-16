@@ -4,7 +4,7 @@ import { useFetch } from '@/lib/api';
 import { useAdmin } from './Layout';
 import ApiKeyEditor from '@/components/ApiKeyEditor';
 
-interface Account { id: string; code: string; name: string; role: 'hq' | 'mg' | 'acct'; area: string; active: boolean; canManage: boolean; lastLoginAt: string; owner: boolean }
+interface Account { id: string; code: string; name: string; role: 'hq' | 'mg' | 'acct'; area: string; active: boolean; canManage: boolean; canStaffing: boolean; lastLoginAt: string; owner: boolean }
 interface Resp { accounts: Account[]; me: { id: string; canManage: boolean }; areas: string[] }
 const ROLE_JA = { hq: '本部', mg: '管轄MG', acct: '経理' } as const;
 interface AuditRow { at: string; actor: string; store: string; action: string; detail: string; ok: boolean }
@@ -19,7 +19,7 @@ export default function AccountsPage() {
   const { me } = useAdmin();
   const { data, error, reload } = useFetch<Resp>('/api/admin/hq/accounts');
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [f, setF] = useState({ code: '', name: '', password: '', canManage: false, role: 'hq' as Account['role'], area: '' });
+  const [f, setF] = useState({ code: '', name: '', password: '', canManage: false, canStaffing: false, role: 'hq' as Account['role'], area: '' });
   if (me.session.role !== 'hq') return <p>本部アカウントでログインしてください。</p>;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
@@ -34,7 +34,7 @@ export default function AccountsPage() {
     e.preventDefault();
     const r = await send('POST', f);
     setMsg({ ok: r.ok, text: r.ok ? `「${f.name}」さんのアカウント（ID：${f.code}）を発行しました。ID とパスワードを本人に伝えてください。` : r.error });
-    if (r.ok) { setF({ code: '', name: '', password: '', canManage: false, role: 'hq', area: '' }); reload(); }
+    if (r.ok) { setF({ code: '', name: '', password: '', canManage: false, canStaffing: false, role: 'hq', area: '' }); reload(); }
   }
 
   return (
@@ -50,7 +50,7 @@ export default function AccountsPage() {
       <div className="overflow-x-auto rounded-lg border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-xs text-slate-500">
-            <tr><th className="px-3 py-2 text-left">名前</th><th className="px-3 py-2 text-left">ID</th><th className="px-3 py-2 text-left">種類</th><th className="px-3 py-2 text-left">状態</th><th className="px-3 py-2 text-left">発行・停止の権限</th><th className="px-3 py-2 text-left">最終ログイン</th>{can && <th className="px-3 py-2 text-left">操作</th>}</tr>
+            <tr><th className="px-3 py-2 text-left">名前</th><th className="px-3 py-2 text-left">ID</th><th className="px-3 py-2 text-left">種類</th><th className="px-3 py-2 text-left">状態</th><th className="px-3 py-2 text-left">発行・停止の権限</th><th className="px-3 py-2 text-left" title="人員配置の人員基準（施術者・受付の人数）を全店分入れられる">人員基準の設定</th><th className="px-3 py-2 text-left">最終ログイン</th>{can && <th className="px-3 py-2 text-left">操作</th>}</tr>
           </thead>
           <tbody>
             {data.accounts.map((a) => (
@@ -85,6 +85,11 @@ export default function AccountsPage() {
                     ? <label className="inline-flex cursor-pointer items-center gap-1"><input type="checkbox" checked={a.canManage} onChange={(e) => act({ id: a.id, canManage: e.target.checked }, e.target.checked ? '権限を付けました' : '権限を外しました')} />{a.canManage ? 'あり' : 'なし'}</label>
                     : a.canManage ? 'あり' : 'なし'}
                 </td>
+                <td className="px-3 py-2">
+                  {a.role === 'acct' ? '－' : can && !a.owner
+                    ? <label className="inline-flex cursor-pointer items-center gap-1"><input type="checkbox" checked={a.canStaffing} aria-label={`${a.name} の人員基準の設定`} onChange={(e) => act({ id: a.id, canStaffing: e.target.checked }, e.target.checked ? '人員基準を設定できるようにしました' : '人員基準の設定を外しました')} />{a.canStaffing ? 'あり' : 'なし'}</label>
+                    : a.canStaffing || a.owner ? 'あり' : 'なし'}
+                </td>
                 <td className="px-3 py-2 text-xs">{a.lastLoginAt || '－'}</td>
                 {can && (
                   <td className="whitespace-nowrap px-3 py-2">
@@ -109,7 +114,7 @@ export default function AccountsPage() {
             <label className="text-xs">ID（英数字）<input value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} required pattern="[A-Za-z0-9_\-]{2,20}" placeholder="例）yamada" className="mt-0.5 block w-32 rounded border px-2 py-1 font-mono text-sm" /></label>
             <label className="text-xs">初期パスワード（8文字以上）<input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} required minLength={8} className="mt-0.5 block w-40 rounded border px-2 py-1 text-sm" /></label>
             <label className="text-xs">種類
-              <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Account['role'], canManage: false })} aria-label="アカウントの種類" className="mt-0.5 block rounded border px-2 py-1 text-sm">
+              <select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Account['role'], canManage: false, canStaffing: e.target.value === 'acct' ? false : f.canStaffing })} aria-label="アカウントの種類" className="mt-0.5 block rounded border px-2 py-1 text-sm">
                 <option value="hq">本部</option><option value="mg">管轄MG</option><option value="acct">経理</option>
               </select>
             </label>
@@ -122,6 +127,7 @@ export default function AccountsPage() {
               </label>
             )}
             {f.role === 'hq' && <label className="flex items-center gap-1 pb-1.5 text-xs"><input type="checkbox" checked={f.canManage} onChange={(e) => setF({ ...f, canManage: e.target.checked })} />発行・停止の権限を付ける</label>}
+            {f.role !== 'acct' && <label className="flex items-center gap-1 pb-1.5 text-xs"><input type="checkbox" checked={f.canStaffing} onChange={(e) => setF({ ...f, canStaffing: e.target.checked })} />人員基準を設定できる</label>}
             <button type="submit" className="rounded bg-brand px-4 py-1.5 font-bold text-white">発行</button>
           </div>
           <p className="mt-2 text-xs text-slate-500">本人は、店舗設定の「パスワード変更」から自分のパスワードに変えられます。異動・退職のときは「停止」してください（記録は残ります）。</p>

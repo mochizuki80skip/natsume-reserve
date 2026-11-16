@@ -343,7 +343,7 @@ function staffing_get(): never
     $onLeave = fn(array $m, string $d) => $m['leaveStart'] && $d >= $m['leaveStart'] && (!$m['leaveEnd'] || $d <= $m['leaveEnd']);
     foreach (acct_stores($s) as $st) {
         $members = Db::all('SELECT name, role, active, startDate, endDate, joinType, isHead, leaveStart, leaveEnd FROM staff_member WHERE storeId = ? ORDER BY isHead DESC, sortOrder ASC', [$st['id']]);
-        $out = ['code' => $st['code'], 'name' => $st['name'], 'area' => $st['area'] ?? '', 'canEdit' => Auth::canEditStore($s, $st), 'changes' => [], 'paused' => [], 'people' => ['therapist' => [], 'reception' => []]];
+        $out = ['code' => $st['code'], 'name' => $st['name'], 'area' => $st['area'] ?? '', 'canEdit' => Auth::canStaffing($s), 'changes' => [], 'paused' => [], 'people' => ['therapist' => [], 'reception' => []]];
         foreach (['THERAPIST' => 'therapist', 'RECEPTION' => 'reception'] as $role => $k) {
             $act = array_filter($members, fn($m) => $m['role'] === $role && (int)$m['active'] === 1);
             $count = fn(string $d) => count(array_filter($act, fn($m) => Settings::inPeriod($m, $d) && !$onLeave($m, $d)));
@@ -373,7 +373,7 @@ function staffing_get(): never
     Http::json(['month' => $ym, 'rows' => $rows]);
 }
 
-/** 人員基準（{ store, therapists, reception }）。本部・管轄MG（管轄の店舗だけ） */
+/** 人員基準（{ store, therapists, reception }）。アカウントの「人員基準」にチェックがある本部・管轄MG（全店） */
 function staffing_std_put(): never
 {
     $s = Auth::requireSession();
@@ -381,7 +381,8 @@ function staffing_std_put(): never
     Http::requireJson();
     $b = Http::body();
     $st = Settings::findStoreByCode((string)($b['store'] ?? ''));
-    if (!$st || !Auth::canEditStore($s, $st)) Http::error('管轄外の店舗の人員基準は入れられません', 403);
+    if (!$st) Http::error('店舗が見つかりません', 404);
+    if (!Auth::canStaffing($s)) Http::error('人員基準を入れる権限がありません（本部の「アカウント」で付けてもらってください）', 403);
     $set = [];
     foreach (['therapists' => 'stdTherapists', 'reception' => 'stdReception'] as $k => $col) {
         if (!array_key_exists($k, $b)) continue;

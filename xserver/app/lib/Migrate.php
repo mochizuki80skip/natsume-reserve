@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 57;
+    private const VERSION = 58;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -398,6 +398,13 @@ SQL);
             if ($ver < 57) {
                 // 同じ日の中の予約変更：名簿には出さず、人数だけ数える
                 if (self::hasTable($pdo, 'cancel_log') && !self::hasColumn($pdo, 'cancel_log', 'listed')) $pdo->exec('ALTER TABLE `cancel_log` ADD COLUMN `listed` TINYINT(1) NOT NULL DEFAULT 1');
+            }
+            if ($ver < 58) {
+                // 人員基準を入れられるアカウント（チェックで付ける）。今までどおり本部は付けておく
+                if (self::hasTable($pdo, 'admin_account') && !self::hasColumn($pdo, 'admin_account', 'canStaffing')) {
+                    $pdo->exec('ALTER TABLE `admin_account` ADD COLUMN `canStaffing` TINYINT(1) NOT NULL DEFAULT 0');
+                    $pdo->exec("UPDATE `admin_account` SET canStaffing = 1 WHERE role = 'hq'");
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

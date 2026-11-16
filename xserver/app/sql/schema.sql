@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS `admin_account` (
   `name` VARCHAR(30) NOT NULL DEFAULT '',      -- 本部アカウントの使用者名
   `active` TINYINT(1) NOT NULL DEFAULT 1,      -- 0＝停止（ログインできない）
   `canManage` TINYINT(1) NOT NULL DEFAULT 0,   -- 1＝本部アカウントの発行・停止ができる
+  `canStaffing` TINYINT(1) NOT NULL DEFAULT 0, -- 1＝人員配置の人員基準を入れられる（本部・管轄MG。全店）
   `area` VARCHAR(40) NULL,                     -- 管轄MG（role = mg）の管轄エリアの名前
   `lastLoginAt` DATETIME NULL,
   `sessVer` INT NOT NULL DEFAULT 0,             -- パスワードの変更・停止で増やし、ログイン中の画面も使えなくする

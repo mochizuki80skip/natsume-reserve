@@ -63,5 +63,18 @@ const tStore = await titles(st), tMg = await titles(await login('', 'mgpass123',
 ok('店舗には本部だけのお知らせは出ない', !tStore.includes('人員の過不足：全体・エリア別と氏名') && tStore.includes('スタッフに院長'));
 ok('管轄MG にはすべて出る', tMg.includes('人員の過不足：全体・エリア別と氏名') && tMg.includes('スタッフに院長'));
 ok('経理には経理に関係するものだけ', tAcct.includes('窓口集計（月間窓口表・物販内訳・返戻）') && !tAcct.includes('スタッフに院長') && !tAcct.includes('人員配置：全体'));
+// ---- 人員基準を入れられるアカウント（チェックで付ける）
+const mg = await login('', 'mgpass123', 'mg1');
+ok('チェックのない MG は人員基準を入れられない', (await api(mg, 'PUT', '/api/admin/staffing/std', { store: 'S001', therapists: 5 }))[0] === 403);
+ok('チェックのない MG の画面は見るだけ', !(await api(mg, 'GET', `/api/admin/staffing?month=2026-11`))[1].rows.some((r) => r.canEdit));
+const acc = (await api(hq, 'GET', '/api/admin/hq/accounts'))[1];
+const mgRow = acc.accounts.find((a) => a.code === 'mg1');
+ok('本部（管理者）は人員基準の設定あり・MG ははじめなし', acc.accounts.find((a) => a.code === 'HQ').canStaffing === true && mgRow.canStaffing === false);
+await hq.goto(`${B}/admin/hq/accounts`); await hq.waitForLoadState('networkidle');
+await hq.getByLabel('見本 MG の人員基準の設定').click(); await hq.waitForTimeout(1000);
+ok('アカウントの画面のチェックで付けられる', (await api(hq, 'GET', '/api/admin/hq/accounts'))[1].accounts.find((a) => a.code === 'mg1').canStaffing === true);
+ok('付けた MG は管轄外の店舗も入れられる（S002）', (await api(mg, 'PUT', '/api/admin/staffing/std', { store: 'S002', therapists: 2 }))[0] === 200);
+ok('経理には付けられない', (await api(hq, 'PUT', '/api/admin/hq/accounts', { id: acc.accounts.find((a) => a.code === 'keiri1').id, canStaffing: true }))[0] === 400);
+ok('管理者（HQ）の権限は外せない', (await api(hq, 'PUT', '/api/admin/hq/accounts', { id: acc.accounts.find((a) => a.code === 'HQ').id, canStaffing: false }))[0] === 400);
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();

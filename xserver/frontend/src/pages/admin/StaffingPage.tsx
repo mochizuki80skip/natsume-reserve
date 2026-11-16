@@ -165,7 +165,7 @@ export default function StaffingPage() {
       </div>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
         在籍・氏名＝店舗設定の「スタッフ・シフト」に登録されている人（所属期間の中にいる人。休職の期間中・停止中は数えません）。過不足＝月の中でいちばん人が少ない日の人数 − 人員基準（月の途中で異動・退職・休職する人がいても、ひと月を通していられるかを見ます）。エリア・全体の在籍は、各店舗のいちばん少ない日の人数の合計です。
-        <span className="ml-1 inline-block rounded bg-red-500 px-1 text-white">赤</span>＝足りない（採用・異動が必要）、<span className="rounded bg-green-100 px-1 text-green-800">緑</span>＝ちょうど、<span className="rounded bg-blue-100 px-1 text-blue-800">青</span>＝多い。人員基準は本部と管轄MG（管轄の店舗だけ）が入れられます。院長・所属期間・休職の期間は、店舗設定のスタッフで入れます。
+        <span className="ml-1 inline-block rounded bg-red-500 px-1 text-white">赤</span>＝足りない（採用・異動が必要）、<span className="rounded bg-green-100 px-1 text-green-800">緑</span>＝ちょうど、<span className="rounded bg-blue-100 px-1 text-blue-800">青</span>＝多い。人員基準は、本部の「アカウント」で「人員基準の設定」にチェックがある本部・管轄MG が全店分入れられます。院長・所属期間・休職の期間は、店舗設定のスタッフで入れます。
       </p>
     </div>
   );

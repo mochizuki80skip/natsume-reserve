@@ -6,7 +6,7 @@ const OWNER_CODE = 'HQ'; // 最初の管理者アカウント。停止や権限�
 
 function acc_row(array $a): array
 {
-    return ['id' => $a['id'], 'code' => $a['code'], 'name' => $a['name'], 'role' => $a['role'], 'area' => (string)($a['area'] ?? ''), 'active' => (bool)$a['active'], 'canManage' => (bool)$a['canManage'],
+    return ['id' => $a['id'], 'code' => $a['code'], 'name' => $a['name'], 'role' => $a['role'], 'area' => (string)($a['area'] ?? ''), 'active' => (bool)$a['active'], 'canManage' => (bool)$a['canManage'], 'canStaffing' => (bool)(int)($a['canStaffing'] ?? 0) || $a['code'] === OWNER_CODE,
         'lastLoginAt' => $a['lastLoginAt'] ? Time::formatDateTimeShort($a['lastLoginAt']) : '', 'owner' => $a['code'] === OWNER_CODE];
 }
 
@@ -35,8 +35,8 @@ function hq_accounts_post(): never
     $area = $role === 'mg' ? trim((string)($b['area'] ?? '')) : null;
     if ($role === 'mg' && !Db::one('SELECT id FROM area WHERE name = ?', [$area])) Http::error('管轄エリアを選んでください', 400);
     if (Db::one('SELECT 1 AS x FROM admin_account WHERE code = ?', [$code]) || Db::one('SELECT 1 AS x FROM store WHERE code = ?', [$code])) Http::error('この ID はすでに使われています（店舗コードとも重ならないようにしてください）', 400);
-    Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId, name, active, canManage, area) VALUES (?, ?, ?, ?, NULL, ?, 1, ?, ?)',
-        [Db::newId(), $code, password_hash($password, PASSWORD_BCRYPT), $role, $name, $role === 'hq' && Http::bool($b, 'canManage') ? 1 : 0, $area]);
+    Db::exec('INSERT INTO admin_account (id, code, passwordHash, role, storeId, name, active, canManage, area, canStaffing) VALUES (?, ?, ?, ?, NULL, ?, 1, ?, ?, ?)',
+        [Db::newId(), $code, password_hash($password, PASSWORD_BCRYPT), $role, $name, $role === 'hq' && Http::bool($b, 'canManage') ? 1 : 0, $area, $role !== 'acct' && Http::bool($b, 'canStaffing', false) ? 1 : 0]);
     Http::json(['ok' => true]);
 }
 
@@ -73,6 +73,7 @@ function hq_accounts_put(): never
         $set[] = 'role = ?'; $params[] = $role;
         if ($role !== 'hq') { $set[] = 'canManage = 0'; }
         if ($role !== 'mg') { $set[] = 'area = NULL'; }
+        if ($role === 'acct') { $set[] = 'canStaffing = 0'; }
         $a['role'] = $role;
     }
     if (array_key_exists('area', $b)) {
@@ -80,6 +81,13 @@ function hq_accounts_put(): never
         $set[] = 'area = ?'; $params[] = (string)$b['area'];
     }
     if (array_key_exists('canManage', $b) && $a['role'] !== 'hq' && Http::bool($b, 'canManage')) Http::error('発行・停止の権限は本部アカウントだけに付けられます', 400);
+    // 人員基準を入れられる権限（本部・管轄MG）。管理者（HQ）は外せない
+    if (array_key_exists('canStaffing', $b)) {
+        $v = Http::bool($b, 'canStaffing');
+        if ($v && $a['role'] === 'acct') Http::error('人員基準の権限は本部・管轄MG のアカウントに付けられます', 400);
+        if (!$v && $a['code'] === OWNER_CODE) Http::error('管理者アカウント（HQ）の人員基準の権限は外せません', 400);
+        $set[] = 'canStaffing = ?'; $params[] = $v ? 1 : 0;
+    }
     if (array_key_exists('password', $b)) {
         // 管理者アカウント（HQ）のパスワードは本人しか変えられない（乗っ取りを防ぐ）
         if ($a['code'] === OWNER_CODE && $me['code'] !== OWNER_CODE) Http::error('管理者アカウント（HQ）のパスワードは、HQ 本人しか変えられません', 403);
