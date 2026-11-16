@@ -14,13 +14,13 @@ import CampaignBox, { type PublicCampaign } from './CampaignBox';
 interface Companion { kind: Kind | null; name: string; cardNo: string; sel: Selection | null }
 const KIND_SHORT: Record<Kind, string> = { NEW: 'はじめて（ケガ・痛み・不調など）', ACCIDENT: 'はじめて（交通事故）', RETURN: '現在通院中', REVISIT: '1ヶ月以上ご来院の無い方' };
 
-interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string; closures?: Closure[]; campaign?: PublicCampaign | null; campaignCode?: string }
+interface Props { store: { code: string; name: string; phone: string }; smsEnabled: boolean; via?: 'card'; refCode?: string; closures?: Closure[]; campaign?: PublicCampaign | null; campaignCode?: string; presetKind?: string }
 
-export default function BookingApp({ store, smsEnabled, via, refCode, closures = [], campaign = null, campaignCode }: Props) {
+export default function BookingApp({ store, smsEnabled, via, refCode, closures = [], campaign = null, campaignCode, presetKind: urlKind = '' }: Props) {
   // 1=日時（週間一覧。上部で来院区分を切替）, 2=入力, 3=確認, 4=完了
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   // 最初は未選択（キャンペーンの経路から来たときは、キャンペーンで決めた区分を選んだ状態で始める。変えることもできる）
-  const presetKind = (['NEW', 'ACCIDENT', 'RETURN', 'REVISIT'] as Kind[]).find((k) => k === campaign?.kind) ?? null;
+  const presetKind = (['NEW', 'ACCIDENT', 'RETURN', 'REVISIT'] as Kind[]).find((k) => k === (campaign?.kind ?? urlKind)) ?? null;
   const [kind, setKind] = useState<Kind | null>(presetKind);
   const submitKind = kind;
   const [sel, setSel] = useState<Selection | null>(null);

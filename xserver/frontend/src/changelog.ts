@@ -5,6 +5,13 @@ export interface ChangeEntry { id: number; date: string; title: string; audience
 
 export const CHANGELOG: ChangeEntry[] = [
   {
+    id: 130, date: '2026-11-16', title: 'WEB予約の URL：キャンペーンなしでも来院区分を選んだ状態で始められる', audience: ['本部'],
+    items: [
+      '本部の「🔗 WEB 予約の URL・QR」で、キャンペーンを付けない URL でも「はじめから選ぶ来院区分」を決められるようにしました（作る画面の 5 番）。例：交通事故の方向けの URL を「はじめて（交通事故）」にすると、その URL・QR から入った患者様は、キャンペーンの枠なしで「交通事故」を選んだ状態で予約を始めます。一覧の「きっかけ」の下に区分が出ます。',
+      '今までのキャンペーンなしの URL は、区分を「選ばない」のままです（動きは変わりません）。',
+    ],
+  },
+  {
     id: 129, date: '2026-11-16', title: '店舗えらびページ：ロゴを最終版の色に・「グループ院」を店舗名の右に', audience: ['本部'],
     items: [
       'ロゴのマークの青を、最終版（C100）の色にしました。',

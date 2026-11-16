@@ -107,6 +107,20 @@ final class Campaign
         ];
     }
 
+    /**
+     * はじめから選ぶ来院区分（キャンペーンを付けていない URL でも使う。例：交通事故の方向けの URL）。
+     * キャンペーンを付けた URL は、キャンペーンを出しているときだけ。店舗を決めた URL は、その店舗のときだけ
+     */
+    public static function presetKindFor(?array $e, ?string $storeCode, string $date): string
+    {
+        if (!$e || (string)($e['code'] ?? '') === '') return '';
+        $kind = (string)($e['presetKind'] ?? '');
+        if (!in_array($kind, self::KINDS, true)) return '';
+        if ((int)($e['hasContent'] ?? 0)) return self::showing($e, $storeCode, $date) ? $kind : '';
+        $st = self::stores($e['stores'] ?? null);
+        return $storeCode === null || !$st || in_array($storeCode, $st, true) ? $kind : '';
+    }
+
     /** 患者様に見せる内容（店舗向けメモは出さない）。キャンペーンを出さないときは null */
     public static function forCustomer(?array $snap, string $presetKind = ''): ?array
     {

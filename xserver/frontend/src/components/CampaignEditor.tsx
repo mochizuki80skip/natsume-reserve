@@ -23,7 +23,7 @@ interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers:
 const urlOf = (code: string, store?: string) => `${location.origin}${store ? `/s/${encodeURIComponent(store)}` : '/stores'}?c=${code}`;
 
 const KIND_OPTIONS: [string, string][] = [['', '選ばない（患者様が選ぶ）'], ['NEW', 'はじめて（ケガ・痛み・不調など）'], ['ACCIDENT', 'はじめて（交通事故）'], ['REVISIT', '再来（1ヶ月以上ぶり）'], ['RETURN', '現在通院中']];
-const EMPTY = { label: '', trig: '', stores: [] as string[], hasContent: false, name: '', description: '', showInsurance: true, presetKind: 'NEW', from: '', to: '', memo: '' };
+const EMPTY = { label: '', trig: '', stores: [] as string[], hasContent: false, name: '', description: '', showInsurance: true, presetKind: '', from: '', to: '', memo: '' };
 const isGift = (trig: string) => trig === 'ギフトカード';
 
 async function send(method: string, url: string, body: unknown): Promise<{ ok: boolean; j: { error?: string } }> {
@@ -133,6 +133,12 @@ function EntryForm({ init, data, onDone, onMsg }: { init: Entry | null; data: Re
           </div>
           <span className="text-xs text-slate-500">付けると、その URL から開いたページの上にキャンペーンの内容が出ます</span>
         </Step>
+        <Step n={5} title="はじめから選ぶ来院区分">
+          <select value={f.presetKind} onChange={(e) => setF({ ...f, presetKind: e.target.value })} aria-label="はじめから選ぶ区分" className="rounded border px-2 py-1">
+            {KIND_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <span className="block text-xs text-slate-500">この URL から開くと、予約ページでこの区分を選んだ状態で始まります（キャンペーンを付けなくても使えます。例：交通事故の方向けの URL は「はじめて（交通事故）」）。患者様はあとから変えることもできます</span>
+        </Step>
       </div>
       {f.hasContent && (
         <div className="mt-2 flex flex-wrap gap-4 rounded border border-orange-300 bg-orange-50/40 p-2" role="group" aria-label="キャンペーンの内容">
@@ -140,12 +146,6 @@ function EntryForm({ init, data, onDone, onMsg }: { init: Entry | null; data: Re
             <label className="block">キャンペーン名<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} maxLength={60} placeholder="例）初回 骨格・骨盤矯正 1,000円 → 無料" aria-label="キャンペーン名" className="mt-0.5 w-full rounded border px-2 py-1" /></label>
             <label className="block">説明（患者様に出す）<textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} maxLength={600} rows={3} placeholder={'例）初回の骨格・骨盤矯正が無料になります。\n※別途、保険の自己負担分がかかります。'} aria-label="説明" className="mt-0.5 w-full rounded border px-2 py-1" /></label>
             <label className="block"><input type="checkbox" checked={f.showInsurance} onChange={(e) => setF({ ...f, showInsurance: e.target.checked })} /> 保険のご負担の目安（共通の表）を出す</label>
-            <label className="block">はじめから選ぶ区分
-              <select value={f.presetKind} onChange={(e) => setF({ ...f, presetKind: e.target.value })} aria-label="はじめから選ぶ区分" className="ml-2 rounded border px-2 py-1">
-                {KIND_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-              </select>
-              <span className="block text-xs text-slate-500">患者様はあとから変えることもできます</span>
-            </label>
             <div>期間
               <input type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} aria-label="期間の始め" className="ml-2 rounded border px-1 py-0.5" /> 〜
               <input type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} aria-label="期間の終わり" className="ml-1 rounded border px-1 py-0.5" />
@@ -230,7 +230,7 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
     <>
       <tr className="border-t align-top" aria-label={`URL ${c.label}`}>
         <td className="py-1 pr-2 font-bold">{c.label}</td>
-        <td className="whitespace-nowrap py-1 pr-2">{c.trig}</td>
+        <td className="whitespace-nowrap py-1 pr-2">{c.trig}{c.presetKind && <span className="block text-xs text-slate-500">区分：{KIND_OPTIONS.find(([v]) => v === c.presetKind)?.[1]}</span>}</td>
         <td className="py-1 pr-2 text-xs" title={c.stores.map((s) => nameOf.get(s) ?? s).join('・')}>{c.stores.length ? `${c.stores.length} 店` : '全店'}</td>
         <td className="py-1 pr-2 text-xs">
           {c.hasContent ? (

@@ -19,7 +19,9 @@ function pub_store(array $p): never
     $e = Campaign::entryOf(Http::query('via'), Http::query('ref'), Http::query('c'));
     $show = Campaign::showing($e, (string)$ctx['store']['code'], $today);
     Http::json(['code' => $ctx['store']['code'], 'name' => $ctx['store']['name'], 'phone' => $ctx['store']['phone'], 'smsEnabled' => Sms::enabled(), 'jibaiOnly' => (bool)(int)($ctx['store']['jibaiOnly'] ?? 0), 'closures' => PublicApi::closures($ctx['store'], $today), 'consultLineUrl' => Settings::global()['consultLineUrl'],
-        'campaign' => $show ? Campaign::forCustomer(Campaign::snapshot($e, (string)$ctx['store']['code'], $today), (string)$e['presetKind']) : null]);
+        'campaign' => $show ? Campaign::forCustomer(Campaign::snapshot($e, (string)$ctx['store']['code'], $today), (string)$e['presetKind']) : null,
+        // URL で決めた、はじめから選ぶ来院区分（キャンペーンなしの URL でも）
+        'presetKind' => Campaign::presetKindFor($e, (string)$ctx['store']['code'], $today)]);
 }
 
 function pub_week(array $p): never

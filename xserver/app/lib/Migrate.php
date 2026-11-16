@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 53;
+    private const VERSION = 54;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -374,6 +374,10 @@ final class Migrate
             if ($ver < 53) {
                 // 予約表で消したセルの WEB 予約・メニュー・担当・来院チェック（「元に戻す」で一緒に戻すため）
                 if (self::hasTable($pdo, 'cell_log') && !self::hasColumn($pdo, 'cell_log', 'snap')) $pdo->exec('ALTER TABLE `cell_log` ADD COLUMN `snap` TEXT NULL');
+            }
+            if ($ver < 54) {
+                // キャンペーンなしの URL でも「はじめから選ぶ区分」を使うようにしたため、今まで使われていなかった値（初期値の NEW）は空にする
+                if (self::hasTable($pdo, 'campaign')) $pdo->exec("UPDATE `campaign` SET presetKind = '' WHERE hasContent = 0");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

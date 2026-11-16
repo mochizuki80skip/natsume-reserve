@@ -160,6 +160,23 @@ const pg = await br.newPage(); await pg.goto(`${B}/stores?c=${giftCode}`); await
 ok('キャンペーンを止めると出ない（URL は開ける）', (await pg.getByRole('region', { name: 'キャンペーンのお知らせ' }).count()) === 0 && (await pg.locator('article').count()) >= 2);
 ok('Excel の一覧', (await hp.evaluate(async () => (await fetch('/api/admin/hq/campaigns/export')).headers.get('content-type'))).includes('spreadsheet'));
 
+// キャンペーンなしでも「はじめから選ぶ区分」（交通事故の方向けの URL）
+const [s5] = await api(hp, 'PUT', '/api/admin/hq/campaigns', { label: '交通事故の方', trig: '交通事故HP', stores: [], hasContent: false, presetKind: 'ACCIDENT' });
+ok('キャンペーンなしで区分つきの URL を作れる', s5 === 200);
+const acc = (await api(hp, 'GET', '/api/admin/hq/campaigns'))[1].rows.find((c) => c.label === '交通事故の方');
+ok('区分が残る', acc?.presetKind === 'ACCIDENT' && !acc.hasContent);
+await hp.reload(); await hp.waitForLoadState('networkidle');
+ok('一覧に区分が出る', (await hp.getByRole('row', { name: 'URL 交通事故の方' }).textContent()).includes('区分：はじめて（交通事故）'));
+const ap = await br.newPage(); ap.on('pageerror', (e) => errs.push(e.message));
+await ap.goto(`${B}/stores?c=${acc.code}`); await ap.waitForSelector('article');
+ok('店舗えらびページにキャンペーンの枠は出ない', (await ap.getByRole('region', { name: 'キャンペーンのお知らせ' }).count()) === 0);
+const ah = await ap.locator('article').filter({ hasText: 'サンプル本店' }).getByRole('link', { name: 'WEB 予約' }).getAttribute('href');
+await ap.goto(B + ah); await ap.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+ok('予約ページは「交通事故」を選んだ状態（キャンペーンの枠なし）', (await ap.getByRole('radio', { name: /交通事故/ }).first().getAttribute('aria-checked')) === 'true' && (await ap.getByRole('note', { name: 'キャンペーンの内容' }).count()) === 0);
+const pk = async (code, st) => (await (await fetch(`${B}/api/public/${st}/store?c=${code}`)).json()).presetKind;
+ok('区分を決めていない URL は今まで通り（何も選ばない）', (await pk(portal.code, 'S002')) === '' && (await pk(acc.code, 'S002')) === 'ACCIDENT');
+await ap.close();
+
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();
 console.log(process.exitCode ? 'CAMPAIGN FAILED' : 'CAMPAIGN OK');
