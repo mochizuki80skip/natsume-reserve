@@ -7,7 +7,7 @@ interface Resp {
   month: string; dates: string[]; closedDates: string[];
   members: { id: string; name: string; role: string; startDate: string | null; endDate: string | null; joinType: string | null }[];
   shifts: { staffId: string; date: string; status: string }[];
-  helpIn: { date: string; status: string; name: string }[]; hasTherapists: boolean; defaultActiveBeds: number; beds: number;
+  helpIn: { date: string; status: string; name: string }[]; hasTherapists: boolean; defaultActiveBeds: number; bedAdjust?: number; beds: number;
 }
 
 export default function ShiftsPage() {
@@ -19,5 +19,5 @@ export default function ShiftsPage() {
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   return <ShiftTable key={data.month} month={data.month} dates={data.dates} closedDates={data.closedDates} members={data.members} shifts={data.shifts}
-    helpIn={data.helpIn} hasTherapists={data.hasTherapists} defaultActiveBeds={data.defaultActiveBeds} beds={data.beds} />;
+    helpIn={data.helpIn} hasTherapists={data.hasTherapists} defaultActiveBeds={data.defaultActiveBeds} bedAdjust={data.bedAdjust ?? 0} beds={data.beds} />;
 }

@@ -7,7 +7,7 @@ interface Member { id: string; name: string; role: string; startDate?: string | 
 interface HelpIn { date: string; status: string; name: string }
 interface Props {
   month: string; dates: string[]; closedDates: string[]; members: Member[]; shifts: { staffId: string; date: string; status: string }[];
-  helpIn: HelpIn[]; hasTherapists: boolean; defaultActiveBeds: number; beds: number;
+  helpIn: HelpIn[]; hasTherapists: boolean; defaultActiveBeds: number; bedAdjust?: number; beds: number;
 }
 const md = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8))}`;
 
@@ -16,7 +16,7 @@ function shiftMonth(ym: string, n: number) {
   return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
 }
 
-export default function ShiftTable({ month, dates, closedDates, members, shifts, helpIn, hasTherapists, defaultActiveBeds, beds }: Props) {
+export default function ShiftTable({ month, dates, closedDates, members, shifts, helpIn, hasTherapists, defaultActiveBeds, bedAdjust = 0, beds }: Props) {
   const [map, setMap] = useState<Map<string, string>>(() => new Map(shifts.map((s) => [`${s.staffId}:${s.date}`, s.status])));
   const [help, setHelp] = useState<Map<string, HelpIn>>(() => new Map(helpIn.map((h) => [h.date, h])));
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -42,9 +42,9 @@ export default function ShiftTable({ month, dates, closedDates, members, shifts,
 
   // 顧客に見える枠数：所属期間内で勤務の施術者の数（未登録なら既定値）＋応援
   const capFor = (date: string, am: boolean) => {
-    const base = hasTherapists
-      ? therapists.filter((m) => inPeriod(m, date) && (am ? worksAm : worksPm)(map.get(`${m.id}:${date}`))).length
-      : defaultActiveBeds;
+    // 施術者を登録している店舗：〇の人数に店舗設定の「WEB解放ベッドの足し引き」（〇が 0 人なら 0）
+    const working = therapists.filter((m) => inPeriod(m, date) && (am ? worksAm : worksPm)(map.get(`${m.id}:${date}`))).length;
+    const base = hasTherapists ? (working === 0 ? 0 : Math.max(0, working + bedAdjust)) : defaultActiveBeds;
     const h = help.get(date)?.status;
     const plus = h && (h === 'HELP_IN' || h === (am ? 'AM_HELP_IN' : 'PM_HELP_IN')) ? 1 : 0;
     return Math.min(base + plus, beds);

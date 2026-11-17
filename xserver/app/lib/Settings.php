@@ -217,8 +217,11 @@ final class Settings
                 if (self::worksAm($st)) { $namesAm[] = $m['name']; $firstAm += (int)($m['canFirst'] ?? 0); $revisitAm += (int)($m['canRevisit'] ?? 0); $eitherAm += $either; }
                 if (self::worksPm($st)) { $namesPm[] = $m['name']; $firstPm += (int)($m['canFirst'] ?? 0); $revisitPm += (int)($m['canRevisit'] ?? 0); $eitherPm += $either; }
             }
-            $autoAm = min(count($namesAm), $beds);
-            $autoPm = min(count($namesPm), $beds);
+            // シフトの〇の人数に、店舗設定の「WEB 解放ベッドの足し引き」を足す（〇が 0 人の時間は 0。ベッド数まで）
+            $bedAdj = (int)($store['bedAdjust'] ?? 0);
+            $withAdj = fn(int $n) => $n === 0 ? 0 : max(0, $n + $bedAdj);
+            $autoAm = min($withAdj(count($namesAm)), $beds);
+            $autoPm = min($withAdj(count($namesPm)), $beds);
         }
         if ($helpIn) {
             $label = 'ヘルプ' . ($helpIn['name'] !== '' ? '（' . $helpIn['name'] . '）' : '（他店から）');

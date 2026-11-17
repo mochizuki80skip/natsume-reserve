@@ -2,7 +2,7 @@ import { useState } from 'react';
 import HoursEditor from './HoursEditor';
 import WebConcurrentEditor, { type CapAll, type CapRaw } from './WebConcurrentEditor';
 
-interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; maxActiveBookings?: number | null; newAdjust?: number; revisitAdjust?: number; totalAdjust?: number; bookDaysAhead?: number | null; notifyPhone: string; hoursOverride: string }
+interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; maxActiveBookings?: number | null; newAdjust?: number; revisitAdjust?: number; totalAdjust?: number; bedAdjust?: number; bookDaysAhead?: number | null; notifyPhone: string; hoursOverride: string }
 interface Props { store: StoreForm; globalHours: string; slotMinutes: number; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void; capToday?: CapRaw; capAll?: CapAll }
 
 function UrlRow({ label, path }: { label: string; path: string }) {
@@ -62,7 +62,7 @@ export default function StoreSettingsForm({ capToday, capAll, store, globalHours
           <tbody>
             {([
               ['beds', 'ベッド数', '予約表の列数', 1, 20],
-              ['defaultActiveBeds', 'WEB解放ベッド数', 'シフト未入力の日に顧客へ見せる枠数（WEB で予約を受けるベッドの数）', 0, 20],
+              ['defaultActiveBeds', 'WEB解放ベッド数（施術者の登録なし）', '施術者をスタッフに登録していない店舗で、顧客へ見せる枠数（WEB で予約を受けるベッドの数）。施術者を登録している店舗は、下の「WEB解放ベッドの足し引き」を使います', 0, 20],
               ['publishDaysAhead', '公開する日数', '今日から何日先まで顧客が予約できるか', 0, 365],
               ['maxTherapists', '施術者の最大人数', 'スタッフ登録・シフト表の上限', 1, 20],
               ['maxReception', '受付の最大人数', 'スタッフ登録・シフト表の上限', 0, 20],
@@ -73,6 +73,12 @@ export default function StoreSettingsForm({ capToday, capAll, store, globalHours
                 <td className="py-1.5 text-xs text-slate-500">{help}</td>
               </tr>
             ))}
+            <tr className="border-t">
+              <td className="w-40 whitespace-nowrap py-1.5 pr-3 font-medium">WEB解放ベッドの足し引き</td>
+              <td className="w-24 whitespace-nowrap py-1.5 pr-3"><input type="number" min={-20} max={20} value={f.bedAdjust ?? 0} aria-label="WEB解放ベッドの足し引き"
+                onChange={(e) => setF({ ...f, bedAdjust: e.target.value === '' ? 0 : Number(e.target.value) })} className="w-16 rounded border px-2 py-1 text-right" /><span className="ml-1 text-xs">台</span></td>
+              <td className="py-1.5 text-xs text-slate-500">顧客へ見せる枠数（WEB解放ベッド数）は、その時間のシフトで〇の施術者の人数が基準です。ここで足し引きできます（例：施術者 3 人が〇で「+1」→ 4 ベッド。「-1」→ 2 ベッド）。〇が 0 人の時間は 0、ベッド数より多くはなりません</td>
+            </tr>
             {([
               ['maxActiveBookings', '1 人が持てる WEB 予約', '件まで', '同じ患者様（電話番号と氏名が同じ）が WEB で持てる、まだ来ていない予約の件数（この店舗だけ）。空欄＝制限なし', 1, 50],
               ['bookDaysAhead', 'WEB で予約できる日数', '日先まで', '現在通院中の方が今日から何日先まで WEB で予約できるか。それより先は、予約ページで見られますが電話マーク（お電話で受付）になります。はじめての方（初診・新自）と 1ヶ月以上ぶりの方は、公開する日数まで WEB で予約できます。空欄＝公開する日数まで', 0, 365],
@@ -86,7 +92,7 @@ export default function StoreSettingsForm({ capToday, capAll, store, globalHours
             ))}
           </tbody>
         </table>
-        <p className="text-xs text-slate-500">WEB で同じ時間に受ける新規・再来は、その時間のシフトに入っているスタッフで決まります（1 人が 1 人の患者様を受ける）：新規は「初回を担当する」人数まで、再来は「再来を担当する」人数まで、新規と再来を合わせて「初回か再来を担当する」人数まで（スタッフ・シフトのチェック）。下の「WEB で同時に受ける人数」で、その人数より多く・少なくできます。顧客に見える空き枠数は、その日のシフトに入力した施術者の人数です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
+        <p className="text-xs text-slate-500">WEB で同じ時間に受ける新規・再来は、その時間のシフトに入っているスタッフで決まります（1 人が 1 人の患者様を受ける）：新規は「初回を担当する」人数まで、再来は「再来を担当する」人数まで、新規と再来を合わせて「初回か再来を担当する」人数まで（スタッフ・シフトのチェック）。下の「WEB で同時に受ける人数」で、その人数より多く・少なくできます。顧客に見える空き枠数は、その日のシフトで〇の施術者の人数（＋「WEB解放ベッドの足し引き」）です。予約表にはベッド数ぶんの列があり、管理側は施術者数に関係なく入力できます。</p>
         {capToday && capAll && <WebConcurrentEditor value={{ newAdjust: f.newAdjust ?? 0, revisitAdjust: f.revisitAdjust ?? 0, totalAdjust: f.totalAdjust ?? 0 }} onChange={(v) => setF({ ...f, ...v })} capToday={capToday} capAll={capAll} />}
         {smsEnabled && <label className="block text-sm">WEB予約が入ったとき店舗へSMS通知する番号（任意）<input value={f.notifyPhone} onChange={str('notifyPhone')} className="mt-1 w-full rounded border px-2 py-1" placeholder="09012345678" /></label>}
         <div className="rounded border p-3">

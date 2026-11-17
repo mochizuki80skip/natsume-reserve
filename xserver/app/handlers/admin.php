@@ -815,7 +815,7 @@ function adm_shifts_get(): never
     $closedDates = array_values(array_filter($dates, fn($d) => count(Settings::storeSessions($store, $setting, $d, $closedMap[$d] ?? false)) === 0));
     Http::json(['month' => $ym, 'dates' => $dates, 'closedDates' => $closedDates, 'members' => $members, 'shifts' => $shifts, 'helpIn' => $helpIn,
         'hasTherapists' => (bool)Db::one('SELECT 1 AS x FROM staff_member WHERE storeId = ? AND role = ? AND active = 1 LIMIT 1', [$store['id'], 'THERAPIST']),
-        'defaultActiveBeds' => min((int)$store['defaultActiveBeds'], (int)$store['beds']), 'beds' => (int)$store['beds']]);
+        'defaultActiveBeds' => min((int)$store['defaultActiveBeds'], (int)$store['beds']), 'bedAdjust' => (int)($store['bedAdjust'] ?? 0), 'beds' => (int)$store['beds']]);
 }
 
 /** 予約表のブロック（打合せ・ミーティングなど）を追加。start〜end（end は含まない）の間、指定したベッドを使えなくする */
@@ -1188,7 +1188,7 @@ function adm_settings_get(): never
         'first' => $useF ? count(array_filter($all, fn($m) => (int)$m['canFirst'])) : null,
         'revisit' => $useR ? count(array_filter($all, fn($m) => (int)$m['canRevisit'])) : null,
         'either' => $useF && $useR ? count(array_filter($all, fn($m) => (int)$m['canFirst'] || (int)$m['canRevisit'])) : null,
-        'slots' => $all ? min(count($all), (int)$store['beds']) : min((int)$store['defaultActiveBeds'], (int)$store['beds']),
+        'slots' => $all ? min(max(0, count($all) + (int)($store['bedAdjust'] ?? 0)), (int)$store['beds']) : min((int)$store['defaultActiveBeds'], (int)$store['beds']),
     ];
     Http::json([
         'capToday' => ['date' => $today] + $capToday, 'capAll' => $capAll,
@@ -1196,7 +1196,7 @@ function adm_settings_get(): never
             'code' => $store['code'], 'name' => $store['name'], 'phone' => $store['phone'], 'beds' => $store['beds'], 'defaultActiveBeds' => $store['defaultActiveBeds'],
             'maxTherapists' => $store['maxTherapists'], 'maxReception' => $store['maxReception'], 'publishDaysAhead' => $store['publishDaysAhead'],
             'notifyPhone' => $store['notifyPhone'] ?? '', 'maxNewConcurrent' => ($store['maxNewConcurrent'] ?? null) === null ? null : (int)$store['maxNewConcurrent'], 'maxRevisitConcurrent' => ($store['maxRevisitConcurrent'] ?? null) === null ? null : (int)$store['maxRevisitConcurrent'],
-            'newAdjust' => (int)($store['newAdjust'] ?? 0), 'revisitAdjust' => (int)($store['revisitAdjust'] ?? 0), 'totalAdjust' => (int)($store['totalAdjust'] ?? 0),
+            'newAdjust' => (int)($store['newAdjust'] ?? 0), 'revisitAdjust' => (int)($store['revisitAdjust'] ?? 0), 'totalAdjust' => (int)($store['totalAdjust'] ?? 0), 'bedAdjust' => (int)($store['bedAdjust'] ?? 0),
             'maxActiveBookings' => ($store['maxActiveBookings'] ?? null) === null ? null : (int)$store['maxActiveBookings'], 'bookDaysAhead' => ($store['bookDaysAhead'] ?? null) === null ? null : (int)$store['bookDaysAhead'], 'hoursOverride' => ($ho = is_string($store['hoursOverride'] ?? null) ? json_decode($store['hoursOverride'], true) : ($store['hoursOverride'] ?? null)) ? json_encode($ho, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '',
         ],
         'globalHours' => json_encode($setting['hours'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
@@ -1234,6 +1234,7 @@ function adm_store_put(): never
         // WEB で同時に受ける人数の足し引き（-20〜+20）
         $adjOf = fn(string $k) => !array_key_exists($k, $b) ? (int)($ctx['store'][$k] ?? 0) : Http::int($b, $k, -20, 20);
         [$adjNew, $adjRe, $adjTotal] = [$adjOf('newAdjust'), $adjOf('revisitAdjust'), $adjOf('totalAdjust')];
+        $adjBed = $adjOf('bedAdjust');
         $bookDays = $opt('bookDaysAhead', 0, 365);
     } catch (HttpError) {
         Http::error('入力内容を確認してください', 400);
@@ -1244,8 +1245,8 @@ function adm_store_put(): never
         if (!$cfg) Http::error('営業時間の個別設定の形式が正しくありません（docs/SPEC.md 参照）', 400);
         $hoursOverride = json_encode($cfg, JSON_UNESCAPED_UNICODE);
     }
-    Db::exec('UPDATE store SET name = ?, phone = ?, beds = ?, defaultActiveBeds = ?, maxTherapists = ?, maxReception = ?, publishDaysAhead = ?, notifyPhone = ?, maxNewConcurrent = ?, maxRevisitConcurrent = ?, maxActiveBookings = ?, bookDaysAhead = ?, newAdjust = ?, revisitAdjust = ?, totalAdjust = ?, hoursOverride = ? WHERE id = ?',
-        [$name, $phone, $beds, min($dab, $beds), $maxT, $maxR, $pub, $notify !== '' ? $notify : null, $maxNew, $maxRe, $maxBook, $bookDays, $adjNew, $adjRe, $adjTotal, $hoursOverride, $ctx['store']['id']]);
+    Db::exec('UPDATE store SET name = ?, phone = ?, beds = ?, defaultActiveBeds = ?, maxTherapists = ?, maxReception = ?, publishDaysAhead = ?, notifyPhone = ?, maxNewConcurrent = ?, maxRevisitConcurrent = ?, maxActiveBookings = ?, bookDaysAhead = ?, newAdjust = ?, revisitAdjust = ?, totalAdjust = ?, bedAdjust = ?, hoursOverride = ? WHERE id = ?',
+        [$name, $phone, $beds, min($dab, $beds), $maxT, $maxR, $pub, $notify !== '' ? $notify : null, $maxNew, $maxRe, $maxBook, $bookDays, $adjNew, $adjRe, $adjTotal, $adjBed, $hoursOverride, $ctx['store']['id']]);
     Http::json(['ok' => true]);
 }
 

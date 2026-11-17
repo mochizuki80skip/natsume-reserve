@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS `store` (
   `newAdjust` INT NOT NULL DEFAULT 0,       -- WEB で同時に受ける新規：シフトの「初回を担当する」人数からの足し引き
   `revisitAdjust` INT NOT NULL DEFAULT 0,   -- 同じく再来：「再来を担当する」人数からの足し引き
   `totalAdjust` INT NOT NULL DEFAULT 0,     -- 同じく新規＋再来の合計：「初回か再来を担当する」人数からの足し引き
+  `bedAdjust` INT NOT NULL DEFAULT 0,       -- WEB 解放ベッド数：シフトの〇の施術者の人数からの足し引き（施術者を登録している店舗）
   `storyTheme` VARCHAR(20) NOT NULL DEFAULT '', -- ストーリー画像のテーマ（空＝おまかせ）
   PRIMARY KEY (`id`),
   UNIQUE KEY `store_code` (`code`)
