@@ -1,13 +1,13 @@
 // 新患・再来の集計。本部 /admin/hq/karte（全体・エリア・店舗 × 日別・週別・月別、きっかけ別、継続率）、店舗 /admin/karte/summary（自店舗だけ）
 import { useMemo, useState } from 'react';
 import { useFetch } from '@/lib/api';
-import { KIND_COLOR, isNewKind, pct, retentionOf, VISIT_COUNT, type DetailFor, type KarteOptions } from '@/lib/karte';
+import { KIND_COLOR, KIND_LABEL, isNewKind, missingLabels, pct, retentionOf, VISIT_COUNT, type DetailFor, type KarteOptions } from '@/lib/karte';
 import { isDropped } from '@/components/KarteRetention';
 import { Donut, SERIES_COLORS, StackedColumns } from '@/components/charts';
 import { useAdmin } from './Layout';
 
 interface UrlBooking { store: string; date: string; trig: string; detail: string; isNew: boolean }
-interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean }
+interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean; missingFields?: string[] }
 interface Area { id?: string; name: string; stores: string[] }
 interface StoreInfo { code: string; name: string; active?: boolean }
 interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string; urlBookings?: UrlBooking[]; urls?: { label: string; trig: string }[] }
@@ -68,6 +68,7 @@ export default function KarteHqPage() {
 }
 
 function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
+  const { me } = useAdmin();
   const now = new Date(Date.now() + 9 * 3600e3);
   const [target, setTarget] = useState<'all' | 'area' | 'store'>(storeOnly ? 'store' : 'all');
   const [areaIdx, setAreaIdx] = useState(0);
@@ -160,6 +161,8 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
           <><button type="button" onClick={() => setYm(shiftYm(ym, -1))} className="rounded border px-2">‹</button><b>{periodLabel}</b><button type="button" onClick={() => setYm(shiftYm(ym, 1))} className="rounded border px-2">›</button></>
         )}
       </div>
+
+      {!storeOnly && <MissingByStore rows={curRows} stores={data.stores} mine={me.session.role === 'mg' ? new Set(me.stores.filter((x) => x.mine).map((x) => x.code)) : null} periodLabel={periodLabel} />}
 
       <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
         {[...kinds.map(([k, l]) => ({ l, c: KIND_COLOR[k], a: cnt(curRows, k), b: cnt(prevRows, k) })), { l: '合計', c: '', a: curRows.length, b: prevRows.length }].map((t) => (
@@ -408,6 +411,42 @@ function AreasEditor({ areas, stores, onSaved }: { areas: Area[]; stores: StoreI
         <button type="button" onClick={save} className="rounded bg-brand px-3 py-1 text-xs font-bold text-white">エリアを保存</button>
         {err && <span className="text-xs text-red-700">{err}</span>}
       </div>
+    </div>
+  );
+}
+
+/** 未入力のある店舗（本部＝選んだ対象の店舗、管轄MG＝管轄の店舗）。店舗ごとに件数と、どの行のどの欄か（氏名は出さない）。押すとその店舗の新患継続率を開く */
+function MissingByStore({ rows, stores, mine, periodLabel }: { rows: HqRow[]; stores: StoreInfo[]; mine: Set<string> | null; periodLabel: string }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const list = stores
+    .filter((s) => !mine || mine.has(s.code))
+    .map((s) => ({ ...s, miss: rows.filter((r) => r.store === s.code && r.missing) }))
+    .filter((s) => s.miss.length > 0);
+  return (
+    <div className="mb-3 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm" role="region" aria-label="未入力のある店舗">
+      <b>{mine ? '管轄店舗の未入力' : '未入力のある店舗'}（{periodLabel}）</b>
+      {list.length === 0
+        ? <span className="ml-2 text-xs text-slate-600">{mine ? '管轄の店舗に未入力はありません' : '未入力はありません'}</span>
+        : (
+          <ul className="mt-1 space-y-1">
+            {list.map((s) => {
+              const months = [...new Set(s.miss.map((r) => r.date.slice(0, 7)))].sort();
+              return (
+                <li key={s.code} aria-label={`未入力 ${s.name}`}>
+                  <button type="button" onClick={() => setOpen(open === s.code ? null : s.code)} aria-expanded={open === s.code} className="font-bold hover:underline">{s.name}　<span className="text-yellow-900">未入力 {s.miss.length}件</span> {open === s.code ? '▲' : '▼'}</button>
+                  {months.map((m) => <a key={m} href={`/admin/karte?month=${m}&store=${encodeURIComponent(s.code)}`} className="ml-2 text-xs text-brand underline">{Number(m.slice(5))}月の新患継続率を開く</a>)}
+                  {open === s.code && (
+                    <ul className="ml-4 mt-0.5 text-xs">
+                      {s.miss.sort((a, b) => a.date.localeCompare(b.date)).map((r, i) => (
+                        <li key={i}>{Number(r.date.slice(5, 7))}/{Number(r.date.slice(8))}　{KIND_LABEL[r.kind] ?? r.kind}{r.staff && `（担当 ${r.staff}）`}　<span className="text-yellow-900">→ {missingLabels(r.missingFields ?? []).join('・') || '未入力あり'}</span></li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
     </div>
   );
 }

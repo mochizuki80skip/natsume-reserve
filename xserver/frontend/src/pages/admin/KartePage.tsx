@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
-import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, parseMd, type DetailFor, type KarteKind, type KarteOptions, type KarteRow, type KarteVisit } from '@/lib/karte';
+import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, missingLabels, parseMd, type DetailFor, type KarteKind, type KarteOptions, type KarteRow, type KarteVisit } from '@/lib/karte';
 import KarteRetention, { type RetRow } from '@/components/KarteRetention';
 import KarteImportDialog from '@/components/KarteImportDialog';
 import AccidentList from '@/components/AccidentList';
@@ -90,7 +90,7 @@ function Row({ row, data, onPatch, onDelete }: { row: KarteRow; data: Resp; onPa
   const setVisit = (i: number, v: Partial<KarteVisit>) => p({ visits: row.visits.map((x, j) => (j === i ? { ...x, ...v } : x)) });
   const autoCls = 'bg-slate-100';
   return (
-    <tr className="hover:bg-sky-50/40">
+    <tr id={`karte-row-${row.id}`} className="hover:bg-sky-50/40">
       <td className={`border ${autoCls}`}><DateTxt value={row.date} base={row.date} onSave={(v) => v && p({ date: v })} label="日付" /></td>
       <td className={`border ${e('karteNo')}`}><Txt value={row.karteNo} onSave={(v) => p({ karteNo: v })} label="カルテNo" maxLength={20} half /></td>
       <td className={`border ${isRe ? 'bg-sky-50' : ''} ${e('trig')}`}>
@@ -174,6 +174,7 @@ export default function KartePage() {
   const [pending, setPending] = useState<KarteRow[]>([]);
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [importOpen, setImportOpen] = useState<false | { text: string }>(false);
+  const [missOpen, setMissOpen] = useState(false);
   // 画面のどこで Ctrl+V しても、スプレッドシートの行（タブ区切り・複数行）なら取り込みの確認を開く
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
@@ -248,7 +249,7 @@ export default function KartePage() {
         <span className="rounded bg-orange-100 px-2 py-0.5 text-sm font-bold text-orange-900">新三 {count('THIRD')}</span>
         <span className="rounded bg-blue-100 px-2 py-0.5 text-sm font-bold text-blue-800">再 {count('REVISIT')}</span>
         <span className="rounded bg-slate-100 px-2 py-0.5 text-sm font-bold">合計 {rows.length}</span>
-        {missingRows > 0 && <span className="rounded bg-yellow-200 px-2 py-0.5 text-sm font-bold text-yellow-900">⚠ 未入力 {missingRows}件</span>}
+        {missingRows > 0 && <button type="button" onClick={() => setMissOpen(!missOpen)} aria-expanded={missOpen} className="rounded bg-yellow-200 px-2 py-0.5 text-sm font-bold text-yellow-900 underline decoration-dotted">⚠ 未入力 {missingRows}件 {missOpen ? '▲' : '▼'}</button>}
         {nameRows > 0 && <span className="rounded bg-amber-100 px-2 py-0.5 text-sm font-bold text-amber-900" title="名字だけ・ひらがなだけ・カタカナだけの氏名です。氏名の横の印を押して確認してください">氏名の確認 {nameRows}件</span>}
         <span className="ml-auto text-xs text-slate-500">{state === 'saving' ? '保存中…' : state === 'saved' ? '保存しました' : state === 'error' ? '保存に失敗しました' : '入力すると自動で保存されます'}</span>
         <a href={`/api/admin/karte/export?month=${ym}`} className="rounded border bg-white px-2 py-0.5 text-sm">Excelで保存</a>
@@ -256,6 +257,26 @@ export default function KartePage() {
         <button type="button" onClick={addRow} className="rounded border bg-white px-2 py-0.5 text-sm">＋ 行を追加</button>
         <button type="button" onClick={() => setImportOpen({ text: '' })} className="rounded border bg-white px-2 py-0.5 text-sm">📋 スプレッドシートから貼り付け</button>
       </div>
+      {missOpen && missingRows > 0 && (
+        // 未入力の中身：どの行（日付・氏名・区分）の、どの欄が空いているか。押すとその行へ
+        <div className="no-print mb-2 rounded border border-yellow-300 bg-yellow-50 p-2 text-sm" role="region" aria-label="未入力の中身">
+          <p className="mb-1 text-xs text-yellow-900">押すと、その行に移ります（黄色の欄が未入力です）。</p>
+          <ul className="space-y-0.5">
+            {rows.filter((r) => missingFields(r, data.detailFor).size > 0).map((r) => (
+              <li key={r.id}>
+                <button type="button" className="text-left hover:underline" onClick={() => {
+                  const el = document.getElementById(`karte-row-${r.id}`);
+                  el?.scrollIntoView({ block: 'center', inline: 'start', behavior: 'smooth' });
+                  el?.classList.add('bg-yellow-100'); setTimeout(() => el?.classList.remove('bg-yellow-100'), 2000);
+                }}>
+                  <b>{md(r.date)}</b>　{r.name || '（氏名なし）'}　<span className="text-xs text-slate-500">{KIND_LABEL[r.kind]}</span>
+                  <span className="ml-2 text-yellow-900">→ {missingLabels(missingFields(r, data.detailFor)).join('・')}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="max-h-[470px] overflow-auto rounded border border-slate-300 bg-white print:max-h-none">
         <table className="w-full border-collapse text-[11.5px]">
           <thead className="sticky top-0 z-10">

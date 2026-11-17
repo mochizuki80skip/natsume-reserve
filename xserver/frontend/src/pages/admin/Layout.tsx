@@ -128,6 +128,7 @@ export default function AdminLayout() {
               {me.session.role === 'mg' && (
                 <DropMenu label={<>MG（{me.session.area}）{hqN > 0 && <i className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600 align-middle" aria-hidden />}</>}>
                   <Link to="/admin/hq/overview">全店状況</Link>
+                  <Link to="/admin/hq/karte">新患・再来集計（未入力の店舗）</Link>
                   <Link to="/admin/acct">窓口集計・売上（全店）</Link>
                   <Link to="/admin/hq/jibai">自賠集計{hqJibaiBadge}</Link>
                   <Link to="/admin/hq/accidents">新自・新三（全店）</Link>

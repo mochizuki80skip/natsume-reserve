@@ -19,6 +19,11 @@ export const TREATMENTS = ['矯正', 'マッサ'];
 export const VISIT_COUNT = 5;
 
 /** 未入力（黄色）にする項目。再の人は、きっかけ（再来アクション）と内訳は空でもよい */
+/** 未入力の欄の名前（新患継続率の見出しと同じ） */
+export const MISSING_LABEL: Record<string, string> = { karteNo: 'カルテNo', trig: 'きっかけ', trigDetail: '内訳', name: '氏名', age: '年齢', sex: '性別', symptomCat: '症状ｶﾃｺﾞﾘｰ', symptom: '症状', staff: '担当', treatment: '施術' };
+export const MISSING_ORDER = ['karteNo', 'trig', 'trigDetail', 'name', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment'];
+export const missingLabels = (keys: Iterable<string>) => { const s = new Set(keys); return MISSING_ORDER.filter((k) => s.has(k)).map((k) => MISSING_LABEL[k]); };
+
 export function missingFields(r: KarteRow, detailFor: DetailFor): Set<string> {
   const m = new Set<string>();
   const req: (keyof KarteRow)[] = ['karteNo', 'name', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment'];

@@ -164,16 +164,16 @@ function hq_karte_get(): never
     if (!Time::isValidDate($from) || !Time::isValidDate($to) || $from > $to) Http::error('期間が正しくありません', 400);
     if ($s['role'] === 'hq') {
         $stores = Settings::storesInOrder('1 = 1', [], false);
-        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred, (CHAR_LENGTH(TRIM(name)) > 0) AS hasName FROM karte WHERE date BETWEEN ? AND ?', [$from, $to]);
     } elseif ($s['role'] === 'mg') {
         // 管轄MG：全店を見られる（本部専用の店舗は除く）
         $stores = Settings::storesInOrder('hqOnly = 0', [], false);
         $ids = array_column($stores, 'id') ?: [''];
-        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE storeId IN (' . Db::inList($ids) . ') AND date BETWEEN ? AND ?', array_merge($ids, [$from, $to]));
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred, (CHAR_LENGTH(TRIM(name)) > 0) AS hasName FROM karte WHERE storeId IN (' . Db::inList($ids) . ') AND date BETWEEN ? AND ?', array_merge($ids, [$from, $to]));
     } else {
         $own = Auth::context()['store'];
         $stores = [['id' => $own['id'], 'code' => $own['code'], 'name' => $own['name'], 'active' => $own['active']]];
-        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$own['id'], $from, $to]);
+        $rows = Db::all('SELECT storeId, date, kind, trig, trigDetail, staff, visits, karteNo, age, sex, symptomCat, symptom, treatment, stopped, transferred, (CHAR_LENGTH(TRIM(name)) > 0) AS hasName FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$own['id'], $from, $to]);
     }
     $codeOf = array_column($stores, 'code', 'id');
     $out = [];
@@ -181,9 +181,17 @@ function hq_karte_get(): never
         $v = json_decode((string)$r['visits'], true) ?: [];
         $reached = [];
         for ($i = 0; $i < Karte::VISITS; $i++) $reached[] = !empty($v[$i]['d']);
-        $missing = $r['karteNo'] === '' || $r['age'] === null || $r['sex'] === '' || $r['symptomCat'] === '' || $r['symptom'] === '' || $r['staff'] === '' || $r['treatment'] === ''
-            || ($r['kind'] !== 'REVISIT' && ($r['trig'] === '' || (array_key_exists($r['trig'], Karte::DETAIL_FOR) && $r['trigDetail'] === '')));
-        $out[] = ['store' => $codeOf[$r['storeId']] ?? '', 'date' => $r['date'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'staff' => $r['staff'], 'reached' => $reached, 'missing' => $missing, 'stopped' => (bool)(int)$r['stopped'], 'transferred' => (bool)(int)$r['transferred']];
+        // 未入力の欄（新患継続率の黄色の欄と同じ。氏名そのものは返さない）
+        $mf = [];
+        foreach (['karteNo', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment'] as $k) if (trim((string)$r[$k]) === '') $mf[] = $k;
+        if (!(int)$r['hasName']) $mf[] = 'name';
+        if ($r['age'] === null) $mf[] = 'age';
+        if ($r['kind'] !== 'REVISIT') {
+            if ($r['trig'] === '') $mf[] = 'trig';
+            elseif (array_key_exists($r['trig'], Karte::DETAIL_FOR) && trim((string)$r['trigDetail']) === '') $mf[] = 'trigDetail';
+        }
+        $missing = (bool)$mf;
+        $out[] = ['store' => $codeOf[$r['storeId']] ?? '', 'date' => $r['date'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'staff' => $r['staff'], 'reached' => $reached, 'missing' => $missing, 'stopped' => (bool)(int)$r['stopped'], 'transferred' => (bool)(int)$r['transferred'], 'missingFields' => $mf];
     }
     // WEB 予約の URL・QR から入った予約（来院日が期間内・キャンセルを除く）。店舗・日・きっかけ・URL の名前・新規か（氏名は返さない）
     $ids = array_column($stores, 'id') ?: [''];
