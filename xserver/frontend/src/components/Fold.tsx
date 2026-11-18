@@ -1,4 +1,4 @@
-// 本部管理の各項目を折りたたむ枠。見出し（h2）か右上のボタンで開け閉めする。開け閉めはこの端末に覚えておく
+// 本部管理・店舗設定・アカウントなどの各項目を折りたたむ枠。見出し（h2）か右上のボタンで開け閉めする。開け閉めはこの端末に覚えておく
 import { useEffect, useState, type ReactNode } from 'react';
 
 const KEY = 'hqFold:';
@@ -18,7 +18,7 @@ export function FoldAllButtons() {
   );
 }
 
-export default function Fold({ id, title, defaultOpen = true, children }: { id: string; title: string; defaultOpen?: boolean; children: ReactNode }) {
+export default function Fold({ id, title, defaultOpen = true, className = '', children }: { id: string; title: string; defaultOpen?: boolean; className?: string; children: ReactNode }) {
   const [open, setOpen] = useState(() => read(id, defaultOpen));
   const toggle = () => setOpen((o) => { save(id, !o); return !o; });
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function Fold({ id, title, defaultOpen = true, children }: { id: 
     return () => window.removeEventListener('hqfold', on);
   }, [id]);
   return (
-    <div className="fold relative" data-closed={open ? undefined : ''} data-fold={id}
+    <div className={`fold relative ${className}`} data-closed={open ? undefined : ''} data-fold={id}
       onClick={(e) => { if ((e.target as HTMLElement).closest('h2') && (e.currentTarget as HTMLElement).contains(e.target as Node)) toggle(); }}>
       <button type="button" onClick={(e) => { e.stopPropagation(); toggle(); }} aria-expanded={open} aria-label={`${title}を${open ? '閉じる' : '開く'}`}
         className="absolute right-3 top-3 z-10 rounded border bg-white px-2 py-0.5 text-xs font-bold text-brand-dark shadow-sm hover:bg-brand-light">{open ? '▲ 閉じる' : '▼ 開く'}</button>

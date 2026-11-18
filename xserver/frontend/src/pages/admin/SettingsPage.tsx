@@ -7,6 +7,7 @@ import PatientImport from '@/components/PatientImport';
 import SpecialDaysEditor from '@/components/SpecialDaysEditor';
 import { StoreMediaCards, StoreUrlCards } from '@/components/UrlQrCard';
 import { useAdmin } from './Layout';
+import Fold, { FoldAllButtons } from '@/components/Fold';
 
 interface Resp {
   capToday?: import('@/components/WebConcurrentEditor').CapRaw; capAll?: import('@/components/WebConcurrentEditor').CapAll;
@@ -43,18 +44,21 @@ function StoreSettings() {
   const refresh = () => { reload(); refreshMe(); };
   return (
     <div>
+      <div className="mb-2 flex justify-end"><FoldAllButtons /></div>
       {/* 画面が広いときは 2 列（左：店舗設定、右：スタッフ・シフト）、半面では 1 列 */}
       <div className="grid gap-6 xl:grid-cols-2 xl:items-start">
         <StoreSettingsForm capToday={data.capToday} capAll={data.capAll} store={data.store} globalHours={data.globalHours} slotMinutes={data.slotMinutes ?? 15} canChangePassword={data.canChangePassword} smsEnabled={data.smsEnabled} onRefresh={refresh} />
-        <StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}:${m.canFirst}:${m.canRevisit}:${m.color}:${m.isHead}:${m.leaveStart}:${m.leaveEnd}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} />
-        <section className="rounded-lg border bg-white p-4 text-sm xl:col-span-2" aria-label="この店舗の URL・QR コード">
+        <Fold id="settings.staff" title="スタッフ・シフト" className="order-first xl:order-none"><StaffList key={data.members.map((m) => `${m.id}:${m.name}:${m.active}:${m.startDate}:${m.endDate}:${m.joinType}:${m.canFirst}:${m.canRevisit}:${m.color}:${m.isHead}:${m.leaveStart}:${m.leaveEnd}`).join(',')} members={data.members} maxTherapists={data.store.maxTherapists} maxReception={data.store.maxReception} onRefresh={reload} /></Fold>
+        <Fold id="settings.qr" title="この店舗の URL・QR コード" className="xl:col-span-2">
+        <section className="rounded-lg border bg-white p-4 text-sm" aria-label="この店舗の URL・QR コード">
           <h2 className="mb-1 font-bold">この店舗の URL・QR コード</h2>
           <p className="mb-2 text-xs text-slate-500">「QR 画像を保存」で PNG 画像として保存できます（印刷物・掲示用）。店舗コードを変えると URL も変わるので、そのときは作り直してください。</p>
           <StoreUrlCards code={data.store.code} name={data.store.name} />
           <div className="mt-3"><StoreMediaCards code={data.store.code} name={data.store.name} /></div>
         </section>
-        <SpecialDaysEditor />
-        <PatientImport />
+        </Fold>
+        <Fold id="settings.special" title="特別な営業日"><SpecialDaysEditor /></Fold>
+        <Fold id="settings.patients" title="患者一覧"><PatientImport /></Fold>
       </div>
     </div>
   );

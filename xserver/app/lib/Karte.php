@@ -202,6 +202,30 @@ final class Karte
         return (int)(Db::one("SELECT COUNT(*) AS n FROM karte WHERE storeId = ? AND kind IN ('ACCIDENT', 'THIRD') AND (accidentDate IS NULL OR accidentNote = '')", [$storeId])['n'] ?? 0);
     }
 
+    /** 新患継続率の行の未入力の欄（画面の黄色の欄と同じ。karteNo・氏名・年齢・性別・症状・担当・施術・きっかけ） */
+    public static function missingFieldsOf(array $r): array
+    {
+        $mf = [];
+        foreach (['karteNo', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment'] as $k) if (trim((string)($r[$k] ?? '')) === '') $mf[] = $k;
+        if (array_key_exists('name', $r) ? trim((string)$r['name']) === '' : !(int)($r['hasName'] ?? 1)) $mf[] = 'name';
+        if (($r['age'] ?? null) === null) $mf[] = 'age';
+        if (($r['kind'] ?? '') !== 'REVISIT') {
+            if (trim((string)($r['trig'] ?? '')) === '') $mf[] = 'trig';
+            elseif (array_key_exists($r['trig'], self::DETAIL_FOR) && trim((string)($r['trigDetail'] ?? '')) === '') $mf[] = 'trigDetail';
+        }
+        return $mf;
+    }
+
+    /** 新患継続率（今月・先月）で未入力の欄がある行の数（メニューの「新患継続率」に出す） */
+    public static function missingRowCount(string $storeId): int
+    {
+        $today = Time::nowJst()['date'];
+        $from = substr(Time::addMonths(substr($today, 0, 7) . '-01', -1), 0, 7) . '-01';
+        $n = 0;
+        foreach (Db::all('SELECT kind, karteNo, name, age, sex, symptomCat, symptom, staff, treatment, trig, trigDetail FROM karte WHERE storeId = ? AND date BETWEEN ? AND ?', [$storeId, $from, $today]) as $r) if (self::missingFieldsOf($r)) $n++;
+        return $n;
+    }
+
     /**
      * 新自・新三で初診から 2ヶ月たった方（中止・終了を選んだ方は外す）。$storeIds が null なら全店
      * @return array<int, array> karte の行

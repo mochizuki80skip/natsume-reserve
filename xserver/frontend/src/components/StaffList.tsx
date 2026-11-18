@@ -92,7 +92,7 @@ export default function StaffList({ members, maxTherapists, maxReception, onRefr
   );
 
   return (
-    <section className="order-first rounded border bg-white p-4 text-sm xl:order-none">
+    <section className="rounded border bg-white p-4 text-sm">
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <h2 className="font-bold">スタッフ・シフト</h2>
         <Link to="/admin/shifts" className="rounded bg-brand px-3 py-1 text-white">月間シフト表を開く</Link>

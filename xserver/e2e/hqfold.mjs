@@ -10,7 +10,7 @@ skipWhatsNew(br);
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 const p = await br.newPage({ viewport: { width: 1300, height: 1000 } });
 const errs = []; p.on('pageerror', (e) => errs.push(e.message));
-await p.goto(`${B}/admin/login`); await p.fill('input[autocomplete="username"]', 'HQ'); await p.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hq-pass'); await p.click('button[type=submit]'); await p.waitForURL(/admin\//);
+await p.goto(`${B}/admin/login`); await p.fill('input[autocomplete="username"]', 'HQ'); await p.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hq-pass'); await p.click('button[type=submit]'); await p.waitForURL((u) => !u.pathname.includes('/login'));
 await p.goto(`${B}/admin/hq`); await p.waitForLoadState('networkidle');
 const goods = p.getByRole('region', { name: '物販の商品' });
 ok('はじめは開いている', await goods.getByLabel('新しい商品名').isVisible());
@@ -25,6 +25,16 @@ ok('すべて閉じる', !(await goods.getByLabel('新しい商品名').isVisibl
 await p.screenshot({ path: O + 'hqfold.png', fullPage: true });
 await p.getByRole('button', { name: 'すべて開く' }).click();
 ok('すべて開く', await goods.getByLabel('新しい商品名').isVisible() && await p.getByRole('button', { name: '店舗を追加' }).isVisible());
+// 店舗設定・アカウントも折りたためる
+const sp = await (await br.newContext({ viewport: { width: 1300, height: 1000 } })).newPage(); sp.on('pageerror', (e) => errs.push(e.message));
+await sp.goto(`${B}/admin/login/S001`); await sp.fill('input[type=password]', 'password'); await sp.click('button[type=submit]'); await sp.waitForURL(/admin\/day/);
+await sp.goto(`${B}/admin/settings`); await sp.waitForLoadState('networkidle');
+const before = await sp.getByRole('heading', { name: /患者一覧/ }).locator('..').locator('input[type=file], textarea, button').first().isVisible().catch(() => false);
+await sp.getByRole('button', { name: '患者一覧を閉じる' }).click();
+ok('店舗設定：患者一覧を閉じられる', await sp.getByRole('button', { name: '患者一覧を開く' }).isVisible() && await sp.getByRole('heading', { name: /患者一覧/ }).isVisible(), String(before));
+ok('店舗設定：すべて閉じる', (await sp.getByRole('button', { name: 'すべて閉じる' }).click(), await sp.getByRole('button', { name: /を開く$/ }).count()) >= 5);
+await p.goto(`${B}/admin/hq/accounts`); await p.waitForLoadState('networkidle');
+ok('アカウント：操作の記録などを開け閉めできる', await p.getByRole('button', { name: '操作の記録を開く' }).isVisible() && await p.getByRole('button', { name: 'アカウントを発行を閉じる' }).isVisible());
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();
 console.log(process.exitCode ? 'HQFOLD FAILED' : 'HQFOLD OK');

@@ -91,6 +91,8 @@ function adm_me(): never
         'smsEnabled' => Sms::enabled(),
         // 新自（交通事故）の事故日・事故内容の未入力（メニューの「新患継続率」に赤い数字で出す）
         'accidentMissing' => $store && !(int)($store['jibaiOnly'] ?? 0) ? Karte::accidentMissing($store['id']) : 0,
+        // 新患継続率（今月・先月）の未入力の行の数（メニューの「新患継続率」に黄色の数字）
+        'karteMissing' => $store && !(int)($store['jibaiOnly'] ?? 0) ? Karte::missingRowCount($store['id']) : 0,
         // 自賠請求の提出のアラート（店舗：今の店舗の分。本部・管轄MG：未提出の店舗の一覧。管轄MG は管轄の店舗だけ）
         'jibaiAlert' => adm_jibai_alert($s, $store),
         // 新自・新三の 2ヶ月経過で、継続・中止・終了をまだ選んでいない件数（店舗＝自店舗、管轄MG＝管轄の店舗、本部＝全店）

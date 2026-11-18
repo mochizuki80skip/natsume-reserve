@@ -182,14 +182,7 @@ function hq_karte_get(): never
         $reached = [];
         for ($i = 0; $i < Karte::VISITS; $i++) $reached[] = !empty($v[$i]['d']);
         // 未入力の欄（新患継続率の黄色の欄と同じ。氏名そのものは返さない）
-        $mf = [];
-        foreach (['karteNo', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment'] as $k) if (trim((string)$r[$k]) === '') $mf[] = $k;
-        if (!(int)$r['hasName']) $mf[] = 'name';
-        if ($r['age'] === null) $mf[] = 'age';
-        if ($r['kind'] !== 'REVISIT') {
-            if ($r['trig'] === '') $mf[] = 'trig';
-            elseif (array_key_exists($r['trig'], Karte::DETAIL_FOR) && trim((string)$r['trigDetail']) === '') $mf[] = 'trigDetail';
-        }
+        $mf = Karte::missingFieldsOf($r);
         $missing = (bool)$mf;
         $out[] = ['store' => $codeOf[$r['storeId']] ?? '', 'date' => $r['date'], 'kind' => $r['kind'], 'trig' => $r['trig'], 'trigDetail' => $r['trigDetail'], 'staff' => $r['staff'], 'reached' => $reached, 'missing' => $missing, 'stopped' => (bool)(int)$r['stopped'], 'transferred' => (bool)(int)$r['transferred'], 'missingFields' => $mf];
     }

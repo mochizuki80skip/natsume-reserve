@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { useAdmin } from './Layout';
 import ApiKeyEditor from '@/components/ApiKeyEditor';
+import Fold from '@/components/Fold';
 
 interface Account { id: string; code: string; name: string; role: 'hq' | 'mg' | 'acct'; area: string; active: boolean; canManage: boolean; canStaffing: boolean; lastLoginAt: string; owner: boolean }
 interface Resp { accounts: Account[]; me: { id: string; canManage: boolean }; areas: string[] }
@@ -107,6 +108,7 @@ export default function AccountsPage() {
       </div>
 
       {can && (
+        <Fold id="accounts.add" title="アカウントを発行">
         <form onSubmit={add} className="rounded-lg border bg-white p-3 text-sm">
           <h2 className="mb-2 font-bold">アカウントを発行</h2>
           <div className="flex flex-wrap items-end gap-2">
@@ -132,11 +134,12 @@ export default function AccountsPage() {
           </div>
           <p className="mt-2 text-xs text-slate-500">本人は、店舗設定の「パスワード変更」から自分のパスワードに変えられます。異動・退職のときは「停止」してください（記録は残ります）。</p>
         </form>
+        </Fold>
       )}
 
-      {can && <ApiKeyEditor />}
+      {can && <Fold id="accounts.api" title="集計API のキー"><ApiKeyEditor /></Fold>}
 
-      {can && <Audit />}
+      {can && <Fold id="accounts.audit" title="操作の記録" defaultOpen={false}><Audit /></Fold>}
     </div>
   );
 }

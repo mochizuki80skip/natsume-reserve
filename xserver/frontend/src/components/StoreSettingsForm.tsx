@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import HoursEditor from './HoursEditor';
 import WebConcurrentEditor, { type CapAll, type CapRaw } from './WebConcurrentEditor';
+import Fold from './Fold';
 
 interface StoreForm { code: string; name: string; phone: string; beds: number; defaultActiveBeds: number; maxTherapists: number; maxReception: number; publishDaysAhead: number; maxNewConcurrent: number | null; maxRevisitConcurrent?: number | null; maxActiveBookings?: number | null; newAdjust?: number; revisitAdjust?: number; totalAdjust?: number; bedAdjust?: number; bookDaysAhead?: number | null; notifyPhone: string; hoursOverride: string }
 interface Props { store: StoreForm; globalHours: string; slotMinutes: number; canChangePassword: boolean; smsEnabled: boolean; onRefresh: () => void; capToday?: CapRaw; capAll?: CapAll }
@@ -50,12 +51,16 @@ export default function StoreSettingsForm({ capToday, capAll, store, globalHours
   return (
     <div className="space-y-6">
       {msg && <p className="rounded bg-brand-light px-3 py-2 text-sm">{msg}</p>}
+      <Fold id="settings.url" title="この店舗のURL">
       <div className="rounded border bg-white p-4 text-sm">
         <h2 className="mb-2 font-bold">この店舗のURL</h2>
         <UrlRow label="管理画面（スタッフ用）" path={`/admin/login/${store.code}`} />
         <UrlRow label="患者様用（WEB予約）" path={`/s/${store.code}`} />
       </div>
+      </Fold>
+      <Fold id="settings.store" title="店舗の設定">
       <form onSubmit={save} className="space-y-3 rounded border bg-white p-4">
+        <h2 className="font-bold">店舗の設定（WEB 予約・枠数・営業時間）</h2>
         <label className="block text-sm">店舗名<input value={f.name} onChange={str('name')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
         <label className="block text-sm">電話番号（顧客サイトの電話マークに表示）<input value={f.phone} onChange={str('phone')} required className="mt-1 w-full rounded border px-2 py-1" /></label>
         <table className="w-full text-sm">
@@ -107,13 +112,16 @@ export default function StoreSettingsForm({ capToday, capAll, store, globalHours
         </div>
         <button type="submit" className="rounded bg-brand px-4 py-2 font-bold text-white">保存</button>
       </form>
+      </Fold>
       {canChangePassword && (
+        <Fold id="settings.password" title="パスワード変更">
         <form onSubmit={changePw} className="space-y-3 rounded border bg-white p-4">
           <h2 className="font-bold">パスワード変更（ログイン中のアカウント）</h2>
           <label className="block text-sm">現在のパスワード<input type="password" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} required className="mt-1 w-full rounded border px-2 py-1" /></label>
           <label className="block text-sm">新しいパスワード（8文字以上）<input type="password" minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} required className="mt-1 w-full rounded border px-2 py-1" /></label>
           <button type="submit" className="rounded border px-4 py-2">変更</button>
         </form>
+        </Fold>
       )}
     </div>
   );

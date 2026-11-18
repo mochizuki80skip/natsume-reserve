@@ -37,6 +37,7 @@ const bt = await box.textContent();
 ok('店舗：未入力を押すと、どの行のどの欄か出る', bt.includes('見本空き') && bt.includes('カルテNo・症状') && !bt.includes('見本全部'), bt);
 await box.getByRole('button', { name: /見本空き/ }).click(); await s1.waitForTimeout(600);
 ok('押すとその行へ', await s1.locator('tr[id^="karte-row-"].bg-yellow-100').count() === 1);
+ok('メニューの「新患継続率」に未入力の数（今月・先月）', (await api(s1, 'GET', '/api/admin/me'))[1].karteMissing === 1 && await s1.getByLabel('新患継続率の未入力 1件').isVisible());
 await s1.screenshot({ path: O + 'karte-missing-store.png', clip: { x: 0, y: 0, width: 1300, height: 360 } });
 
 // ---- 管轄MG：管轄店舗（S001）の未入力だけ。氏名は出さない

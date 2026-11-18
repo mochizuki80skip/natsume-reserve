@@ -56,6 +56,8 @@ export interface Me {
   accidentMissing?: number;
   /** 新自・新三の 2ヶ月経過で継続・中止・終了を選んでいない数 */
   accidentTwoMonths?: number;
+  /** 新患継続率（今月・先月）の未入力の行 */
+  karteMissing?: number;
   /** 離反者リスト（今月・先月）の管理・理由の未入力 */
   churnMissing?: number;
   /** 自賠請求の提出のアラート（店舗：自分の店舗の分／本部・管轄MG：未提出の店舗） */
