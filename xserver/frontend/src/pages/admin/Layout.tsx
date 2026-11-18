@@ -91,7 +91,7 @@ export default function AdminLayout() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap px-3 py-1.5">
           <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' || acct ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {acct && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">経理</span>}
-          <button type="button" onClick={() => setNavOpen(!navOpen)} aria-expanded={navOpen} aria-label="メニュー" className="relative ml-auto rounded border px-2.5 py-0.5 text-lg leading-6 sm:hidden">{navOpen ? '✕' : '☰'}{!navOpen && (me.accidentMissing ?? 0) > 0 && <i className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden />}</button>
+          <button type="button" onClick={() => setNavOpen(!navOpen)} aria-expanded={navOpen} aria-label="メニュー" className="relative ml-auto rounded border px-2.5 py-0.5 text-lg leading-6 sm:hidden">{navOpen ? '✕' : '☰'}{!navOpen && ((me.accidentMissing ?? 0) > 0 || (me.churnMissing ?? 0) > 0 || (me.accidentTwoMonths ?? 0) > 0) && <i className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden />}</button>
           {(me.session.role === 'hq' || me.session.role === 'mg') && (
             <form action="/api/admin/switch" method="post" className={`flex items-center gap-1 text-sm ${navOpen ? 'max-sm:w-full' : 'max-sm:hidden'}`}>
               <input type="hidden" name="back" value={location.pathname + location.search} />
@@ -117,9 +117,9 @@ export default function AdminLayout() {
               <Link to={`/admin/day/${today}`} className="hover:underline">予約表</Link>
               <Link to="/admin/shifts" className="hover:underline">シフト</Link>
               <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
-              <Link to="/admin/karte" className="hover:underline">新患継続率{(me.accidentMissing ?? 0) > 0 && <span className="ml-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 align-[1px] text-[10.5px] font-bold text-white" title="新自・新三の事故日・事故内容の未入力" aria-label={`新自の未入力 ${me.accidentMissing}件`}>{me.accidentMissing}</span>}</Link>
+              <Link to="/admin/karte" className="hover:underline">新患継続率{(me.accidentMissing ?? 0) > 0 && <span className="ml-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 align-[1px] text-[10.5px] font-bold text-white" title="新自・新三の事故日・事故内容の未入力" aria-label={`新自の未入力 ${me.accidentMissing}件`}>{me.accidentMissing}</span>}{(me.accidentTwoMonths ?? 0) > 0 && <span className="ml-0.5 inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-amber-500 px-1 align-[1px] text-[10.5px] font-bold text-white" title="新自・新三の 2ヶ月経過で、継続・中止・終了を選んでいない方" aria-label={`2ヶ月経過の未選択 ${me.accidentTwoMonths}件`}>{me.accidentTwoMonths}</span>}</Link>
               {me.session.role !== 'hq' && <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>}
-              <Link to="/admin/churn" className="hover:underline" title="離反者リスト・2週間フォロー">離反</Link>
+              <Link to="/admin/churn" className="hover:underline" title="離反者リスト・2週間フォロー">離反{(me.churnMissing ?? 0) > 0 && <span className="inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 align-[1px] text-[10.5px] font-bold text-white" title="離反者リスト（今月・先月）の管理・理由の未入力" aria-label={`離反の未入力 ${me.churnMissing}件`}>{me.churnMissing}</span>}</Link>
               <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
               <Link to="/admin/jibai" className="hover:underline">自賠請求{jibaiBadge}</Link>
               <Link to="/admin/madoguchi" className="hover:underline">窓口集計</Link>
@@ -131,7 +131,7 @@ export default function AdminLayout() {
                   <Link to="/admin/hq/karte">新患・再来集計（未入力の店舗）</Link>
                   <Link to="/admin/acct">窓口集計・売上（全店）</Link>
                   <Link to="/admin/hq/jibai">自賠集計{hqJibaiBadge}</Link>
-                  <Link to="/admin/hq/accidents">新自・新三（全店）</Link>
+                  <Link to="/admin/hq/accidents">新自・新三（全店）{(me.accidentTwoMonths ?? 0) > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10.5px] font-bold text-white" aria-label={`2ヶ月経過の未選択 ${me.accidentTwoMonths}件`}>{me.accidentTwoMonths}</span>}</Link>
                   <Link to="/admin/staffing">人員配置</Link>
                 </DropMenu>
               )}
@@ -141,7 +141,7 @@ export default function AdminLayout() {
                 <Link to="/admin/hq/overview">全店状況</Link>
                 <Link to="/admin/hq/karte">新患・再来集計（全店）</Link>
                 <Link to="/admin/hq/jibai">自賠集計{hqJibaiBadge}</Link>
-                <Link to="/admin/hq/accidents">新自・新三（全店）</Link>
+                <Link to="/admin/hq/accidents">新自・新三（全店）{(me.accidentTwoMonths ?? 0) > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10.5px] font-bold text-white" aria-label={`2ヶ月経過の未選択 ${me.accidentTwoMonths}件`}>{me.accidentTwoMonths}</span>}</Link>
                 <Link to="/admin/acct">窓口集計（全店）</Link>
                 <Link to="/admin/staffing">人員配置</Link>
                 <Link to="/admin/hq">本部（店舗・設定）</Link>

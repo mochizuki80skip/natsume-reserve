@@ -409,6 +409,8 @@ CREATE TABLE IF NOT EXISTS `karte` (
   `survey` TINYINT(1) NOT NULL DEFAULT 0,
   `accidentDate` CHAR(10) NULL,                    -- 新自：事故日
   `accidentNote` VARCHAR(200) NOT NULL DEFAULT '', -- 新自：事故内容
+  `accidentStatus` VARCHAR(10) NOT NULL DEFAULT '', -- 新自・新三の 2ヶ月経過の状態（''＝未選択・CONT＝継続・STOP＝中止・END＝終了）
+  `accidentStatusAt` DATETIME NULL,
   `notifiedAt` DATETIME NULL,                      -- 新自の通知（メール）を送った日時
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

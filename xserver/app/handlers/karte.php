@@ -351,3 +351,54 @@ function hq_accidents_export(): never
     echo $bytes;
     exit;
 }
+
+// ---------- 新自・新三：初診から 2ヶ月経過のリスト（店舗＝自店舗、本部・管轄MG＝全店。選べるのは直せる店舗だけ） ----------
+
+/** 見られる店舗（id → 店舗）。店舗＝自店舗、本部・管轄MG＝全店（自賠だけの店舗も含む・本部専用は本部だけ） */
+function accident2_stores(array $s): array
+{
+    if ($s['role'] === 'store') { $st = Auth::context()['store']; return [$st['id'] => $st]; }
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') throw new HttpError(403, 'forbidden');
+    $out = [];
+    foreach (Settings::storesInOrder($s['role'] === 'hq' ? 'active = 1' : 'active = 1 AND hqOnly = 0', [], false) as $st) $out[$st['id']] = $st;
+    return $out;
+}
+
+function accidents_two_months(): never
+{
+    $s = Auth::requireSession();
+    $stores = accident2_stores($s);
+    $areaOf = [];
+    foreach (Db::all('SELECT name, storeCodes FROM area ORDER BY sortOrder ASC, name ASC') as $a) foreach (array_filter(explode(',', (string)$a['storeCodes'])) as $c) $areaOf[$c] ??= $a['name'];
+    $today = Time::nowJst()['date'];
+    $rows = [];
+    foreach (Karte::twoMonthRows(array_keys($stores)) as $k) {
+        $st = $stores[$k['storeId']];
+        $v = json_decode((string)$k['visits'], true) ?: [];
+        $last = $k['date'];
+        foreach ($v as $x) if (!empty($x['d']) && $x['d'] > $last) $last = $x['d'];
+        $rows[] = [
+            'id' => $k['id'], 'store' => $st['code'], 'storeName' => $st['name'], 'area' => $areaOf[$st['code']] ?? '',
+            'date' => $k['date'], 'kind' => $k['kind'], 'karteNo' => (string)$k['karteNo'], 'name' => (string)$k['name'],
+            'trig' => (string)$k['trig'], 'trigDetail' => (string)$k['trigDetail'], 'staff' => (string)$k['staff'],
+            'lastVisit' => $last, 'status' => (string)$k['accidentStatus'], 'canEdit' => Auth::canEditStore($s, $st),
+        ];
+    }
+    Http::json(['today' => $today, 'rows' => $rows, 'mine' => $s['role'] === 'mg' ? array_column(Auth::mgStores(), 'code') : null]);
+}
+
+/** 継続・中止・終了を選ぶ（{ id, status: '' | CONT | STOP | END }）。中止・終了はリストから外れる */
+function accidents_status_put(): never
+{
+    $s = Auth::requireSession();
+    Http::requireJson();
+    $b = Http::body();
+    $status = (string)($b['status'] ?? '');
+    if (!in_array($status, ['', 'CONT', 'STOP', 'END'], true)) Http::error('状態が正しくありません', 400);
+    $k = Db::one("SELECT id, storeId FROM karte WHERE id = ? AND kind IN ('ACCIDENT', 'THIRD')", [(string)($b['id'] ?? '')]);
+    $stores = accident2_stores($s);
+    if (!$k || !isset($stores[$k['storeId']])) Http::error('見つかりません', 404);
+    if (!Auth::canEditStore($s, $stores[$k['storeId']])) Http::error('この店舗は見るだけです（直すことはできません）', 403);
+    Db::exec('UPDATE karte SET accidentStatus = ?, accidentStatusAt = ? WHERE id = ?', [$status, $status === '' ? null : Time::nowJstDateTime(), $k['id']]);
+    Http::json(['ok' => true]);
+}

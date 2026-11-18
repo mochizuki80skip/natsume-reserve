@@ -7,6 +7,7 @@ import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, missingLabels, 
 import KarteRetention, { type RetRow } from '@/components/KarteRetention';
 import KarteImportDialog from '@/components/KarteImportDialog';
 import AccidentList from '@/components/AccidentList';
+import AccidentTwoMonths from '@/components/AccidentTwoMonths';
 import { nameCheck } from '@/lib/nameText';
 import { halfNum, halfNumInput } from '@/lib/format';
 import { useAdmin } from './Layout';
@@ -321,6 +322,7 @@ export default function KartePage() {
         )}
       />
       <AccidentList rows={rows} pending={pending} monthLabel={monthLabel} onPatch={patch} />
+      <AccidentTwoMonths />
     </div>
   );
 }

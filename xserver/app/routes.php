@@ -113,6 +113,8 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/referrals/export$#', 'hq_referrals_export'],
         ['GET', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_get'],
         ['GET', '#^/api/admin/hq/accidents$#', 'hq_accidents'],
+        ['GET', '#^/api/admin/accidents/two-months$#', 'accidents_two_months'],
+        ['PUT', '#^/api/admin/accidents/status$#', 'accidents_status_put'],
         // 集計API のキー（本部・アカウント管理の権限がある人）
         ['GET', '#^/api/admin/hq/setup-check$#', 'hq_setup_check'],
         ['GET', '#^/api/admin/hq/line-clicks$#', 'hq_line_clicks'],

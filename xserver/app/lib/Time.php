@@ -35,6 +35,15 @@ final class Time
         return (int)(new DateTimeImmutable($date . ' 00:00:00', new DateTimeZone('UTC')))->format('w');
     }
 
+    /** n か月後の同じ日（ない日は月末）。例：2026-09-10 + 2 → 2026-11-10 */
+    public static function addMonths(string $date, int $n): string
+    {
+        [$y, $m, $d] = array_map('intval', explode('-', $date));
+        $t = $y * 12 + ($m - 1) + $n;
+        $y = intdiv($t, 12); $m = $t % 12 + 1;
+        return sprintf('%04d-%02d-%02d', $y, $m, min($d, (int)date('t', mktime(0, 0, 0, $m, 1, $y))));
+    }
+
     public static function addDays(string $date, int $n): string
     {
         $d = new DateTimeImmutable($date . ' 00:00:00', new DateTimeZone('UTC'));

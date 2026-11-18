@@ -202,6 +202,29 @@ final class Karte
         return (int)(Db::one("SELECT COUNT(*) AS n FROM karte WHERE storeId = ? AND kind IN ('ACCIDENT', 'THIRD') AND (accidentDate IS NULL OR accidentNote = '')", [$storeId])['n'] ?? 0);
     }
 
+    /**
+     * 新自・新三で初診から 2ヶ月たった方（中止・終了を選んだ方は外す）。$storeIds が null なら全店
+     * @return array<int, array> karte の行
+     */
+    public static function twoMonthRows(?array $storeIds): array
+    {
+        $cut = Time::addMonths(Time::nowJst()['date'], -2); // この日までに初診の方が 2ヶ月経過
+        $sql = "SELECT * FROM karte WHERE kind IN ('ACCIDENT', 'THIRD') AND date <= ? AND accidentStatus NOT IN ('STOP', 'END')";
+        $p = [$cut];
+        if ($storeIds !== null) {
+            if (!$storeIds) return [];
+            $sql .= ' AND storeId IN (' . Db::inList($storeIds) . ')';
+            $p = array_merge($p, $storeIds);
+        }
+        return Db::all($sql . ' ORDER BY date ASC, srcTime ASC', $p);
+    }
+
+    /** 2ヶ月経過で、継続・中止・終了をまだ選んでいない件数 */
+    public static function twoMonthPending(?array $storeIds): int
+    {
+        return count(array_filter(self::twoMonthRows($storeIds), fn($r) => $r['accidentStatus'] === ''));
+    }
+
     /** 店舗の入っているエリアの名前 */
     public static function areasOf(array $store): array
     {

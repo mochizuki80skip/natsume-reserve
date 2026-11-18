@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 59;
+    private const VERSION = 60;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -409,6 +409,13 @@ SQL);
             if ($ver < 59) {
                 // WEB 解放ベッド数：シフトの〇の人数からの足し引き
                 if (self::hasTable($pdo, 'store') && !self::hasColumn($pdo, 'store', 'bedAdjust')) $pdo->exec('ALTER TABLE `store` ADD COLUMN `bedAdjust` INT NOT NULL DEFAULT 0');
+            }
+            if ($ver < 60) {
+                // 新自・新三の 2ヶ月経過のリスト：継続・中止・終了
+                if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'accidentStatus')) {
+                    $pdo->exec("ALTER TABLE `karte` ADD COLUMN `accidentStatus` VARCHAR(10) NOT NULL DEFAULT ''");
+                    $pdo->exec('ALTER TABLE `karte` ADD COLUMN `accidentStatusAt` DATETIME NULL');
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

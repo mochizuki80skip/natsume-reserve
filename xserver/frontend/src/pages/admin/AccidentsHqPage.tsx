@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { useAdmin } from './Layout';
+import AccidentTwoMonths from '@/components/AccidentTwoMonths';
 
 interface Row {
   id: string; store: string; storeName: string; area: string; date: string; kind: 'ACCIDENT' | 'THIRD'; karteNo: string; name: string;
@@ -40,6 +41,7 @@ export default function AccidentsHqPage() {
         <button type="button" onClick={() => go(shiftYm(ym, 1))} className="rounded border bg-white px-3 py-1">翌月 ›</button>
         <a href={`/api/admin/hq/accidents/export?month=${ym}`} className="ml-auto rounded border bg-white px-3 py-1 font-bold no-underline">Excel で保存</a>
       </div>
+      <AccidentTwoMonths wide />
       <p className="text-xs text-slate-600">新規の交通事故（新自）・第三者行為（新三）の事故日・事故内容を、全店まとめて見る画面です（見るだけ。入力は店舗の「新患継続率」の下の一覧で行います）。前の月までの未入力も出します。<span className="rounded bg-yellow-300 px-1">黄色</span>は未入力です。</p>
       {data && (
         <div className="flex flex-wrap items-center gap-1.5 rounded border bg-white px-3 py-2" role="group" aria-label="店舗ごとの未入力">

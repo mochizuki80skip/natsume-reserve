@@ -93,7 +93,33 @@ function adm_me(): never
         'accidentMissing' => $store && !(int)($store['jibaiOnly'] ?? 0) ? Karte::accidentMissing($store['id']) : 0,
         // 自賠請求の提出のアラート（店舗：今の店舗の分。本部・管轄MG：未提出の店舗の一覧。管轄MG は管轄の店舗だけ）
         'jibaiAlert' => adm_jibai_alert($s, $store),
+        // 新自・新三の 2ヶ月経過で、継続・中止・終了をまだ選んでいない件数（店舗＝自店舗、管轄MG＝管轄の店舗、本部＝全店）
+        'accidentTwoMonths' => adm_two_month_count($s, $store),
+        // 離反者リストの管理・理由の未入力（今月と先月。店舗の画面の「離反」に赤い数字）
+        'churnMissing' => $store && !(int)($store['jibaiOnly'] ?? 0) ? adm_churn_missing($store) : 0,
     ]);
+}
+
+function adm_two_month_count(array $s, ?array $store): int
+{
+    if ($s['role'] === 'store') return $store ? Karte::twoMonthPending([$store['id']]) : 0;
+    if ($s['role'] === 'mg') return Karte::twoMonthPending(array_column(Auth::mgStores(), 'id'));
+    if ($s['role'] === 'hq') return Karte::twoMonthPending(null);
+    return 0;
+}
+
+/** 離反者リストの今月・先月で、管理も理由も入っていない件数。リストは 1 時間に 1 回まで予約表から作り直す */
+function adm_churn_missing(array $store): int
+{
+    $today = Time::nowJst()['date'];
+    $months = [substr(Time::addMonths(substr($today, 0, 7) . '-01', -1), 0, 7), substr($today, 0, 7)];
+    $key = 'churnSync:' . $store['id'];
+    $at = Db::one('SELECT v FROM app_meta WHERE k = ?', [$key])['v'] ?? '';
+    if ($at === '' || (int)$at < time() - 3600) {
+        try { foreach ($months as $ym) Churn::sync($store, $ym); } catch (Throwable $e) { error_log('[churn] ' . $e->getMessage()); }
+        Db::exec('REPLACE INTO app_meta (k, v) VALUES (?, ?)', [$key, (string)time()]);
+    }
+    return (int)(Db::one("SELECT COUNT(*) AS n FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND manage = '' AND reason = ''", [$store['id'], $months[0] . '-01', $today])['n'] ?? 0);
 }
 
 // ---------- 予約表 ----------
