@@ -27,7 +27,10 @@ ok('保険の目安のはじめの内容（3割 2,000）', (await sec.getByLabel
 await sec.getByLabel('金額 1').fill('2,100');
 await sec.getByRole('button', { name: '目安を保存' }).click(); await hp.waitForTimeout(800);
 ok('目安を保存できる', (await sec.textContent()).includes('保険のご負担の目安を保存しました'));
+// 開いたままの本部の画面でも、新患継続率の「選択肢・エリアの設定」で足した集客きっかけが、URL を作るときに出る
+{ const o = (await api(hp, 'GET', '/api/admin/hq/karte/options'))[1].options.trigger; await api(hp, 'PUT', '/api/admin/hq/karte/options', { category: 'trigger', labels: [...o, '見本媒体'] }); }
 await sec.getByRole('button', { name: '＋ URL・QR を作る' }).click();
+ok('足した集客きっかけが URL を作るときに選べる（画面を開き直さなくても）', (await sec.getByRole('form', { name: 'URL・QR を作る' }).getByLabel('新患継続率のきっかけ').locator('option').allTextContents()).includes('見本媒体'));
 let form = sec.getByRole('form', { name: 'URL・QR を作る' });
 ok('名前ときっかけを入れるまで保存できない', await form.getByRole('button', { name: '保存' }).isDisabled());
 await form.getByLabel('URL の名前').fill('ギフトカード');

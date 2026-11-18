@@ -2,7 +2,7 @@
 // 作るときは ① 名前 ② 新患継続率のきっかけ（媒体） ③ 使う店舗 ④ キャンペーンを付けるか の順。キャンペーンは付けても付けなくてもよい。
 // キャンペーンを付けると、その URL から開いた店舗えらびページ・予約ページに内容と保険の目安を出し、決めた区分を選んだ状態で始める。
 // 店舗向けメモは予約表にだけ出す（患者様には出さない）。保険のご負担の目安は全キャンペーン共通の表
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useFetch } from '@/lib/api';
 import { formatDateJa } from '@/lib/time';
 import QRCode from 'qrcode';
@@ -258,6 +258,12 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
 
 export default function CampaignEditor() {
   const { data, reload } = useFetch<Resp>('/api/admin/hq/campaigns');
+  // 新患継続率の「選択肢・エリアの設定」で集客きっかけを足したら、開いたままのこの画面にも出るように、画面に戻ったときに読み直す
+  useEffect(() => {
+    const on = () => { if (document.visibilityState === 'visible') reload(); };
+    window.addEventListener('focus', on); document.addEventListener('visibilitychange', on);
+    return () => { window.removeEventListener('focus', on); document.removeEventListener('visibilitychange', on); };
+  }, [reload]);
   const [msg, setMsg] = useState('');
   const [edit, setEdit] = useState<Entry | 'new' | null>(null);
   return (
@@ -273,13 +279,13 @@ export default function CampaignEditor() {
         <table className="w-full">
           <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">名前</th><th className="pr-2">きっかけ</th><th className="pr-2">店舗</th><th className="pr-2">キャンペーン</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right" title="この URL・QR から来て新患継続率に入った人数">新患</th><th className="pr-2 text-right" title="新患のうち、2 回目以降も来た人数と割合">継続（2回目〜）</th><th /></tr></thead>
           <tbody>
-            {(data?.rows ?? []).map((c) => <Row key={c.id} c={c} data={data!} onEdit={() => setEdit(c)} onMsg={setMsg} reload={reload} />)}
+            {(data?.rows ?? []).map((c) => <Row key={c.id} c={c} data={data!} onEdit={() => { reload(); setEdit(c); }} onMsg={setMsg} reload={reload} />)}
             {data && data.rows.length === 0 && <tr><td colSpan={8} className="py-2 text-xs text-slate-400">まだありません。「＋ URL・QR を作る」から作ってください</td></tr>}
           </tbody>
         </table>
       </div>
       <div className="mt-2 flex flex-wrap gap-2">
-        {edit === null && <button type="button" onClick={() => setEdit('new')} className="rounded bg-brand px-3 py-1 font-bold text-white">＋ URL・QR を作る</button>}
+        {edit === null && <button type="button" onClick={() => { reload(); setEdit('new'); }} className="rounded bg-brand px-3 py-1 font-bold text-white">＋ URL・QR を作る</button>}
         <a href="/api/admin/hq/campaigns/export" className="rounded border px-3 py-1 font-bold no-underline">URL の一覧を Excel で保存</a>
       </div>
       {data && edit !== null && <EntryForm key={edit === 'new' ? 'new' : edit.id} init={edit === 'new' ? null : edit} data={data} onDone={() => { setEdit(null); reload(); }} onMsg={setMsg} />}
