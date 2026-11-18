@@ -12,7 +12,7 @@ const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); 
 const api = (pg, m, u, b) => pg.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
 const hp = await br.newPage({ viewport: { width: 1366, height: 900 } });
 hp.on('pageerror', (e) => errs.push(e.message)); hp.on('dialog', (d) => d.accept());
-await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]', 'HQ'); await hp.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hqpass123'); await hp.getByRole('button', { name: 'ログイン' }).click(); await hp.waitForURL(/admin\//);
+await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]', 'HQ'); await hp.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hqpass123'); await hp.getByRole('button', { name: 'ログイン' }).click(); await hp.waitForURL((u) => !u.pathname.includes('/login'));
 
 // 1) 公開前：予約ページにリンクは出ない
 const cp = await br.newPage({ viewport: { width: 390, height: 800 } });

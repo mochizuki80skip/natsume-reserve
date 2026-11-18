@@ -14,7 +14,7 @@ async function login(code, pass, user) {
   await ctx.addInitScript(() => { try { localStorage.setItem('natsume.seenChangeId', '99999'); const t = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10); for (let i = 1; i <= 9; i++) localStorage.setItem(`natsume.blockSuggest.S00${i}.${t}`, '1'); } catch { /* */ } });
   const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); p.on('dialog', (d) => d.accept());
   if (user) { await p.goto(`${B}/admin/login`); await p.fill('input[autocomplete="username"]', user); } else await p.goto(`${B}/admin/login/${code}`);
-  await p.fill('input[type=password]', pass); await p.click('button[type=submit]'); await p.waitForURL(/admin\//); await p.waitForTimeout(1200);
+  await p.fill('input[type=password]', pass); await p.click('button[type=submit]'); await p.waitForURL((u) => !u.pathname.includes('/login')); await p.waitForTimeout(1200);
   return p;
 }
 const api = (p, m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);

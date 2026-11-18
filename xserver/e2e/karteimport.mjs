@@ -111,7 +111,7 @@ await p.screenshot({ path: O + 'karte-fy.png', fullPage: true });
 
 // 5) 本部：新患・再来集計の「年度（4月〜）」
 const h = await br.newPage({ viewport: { width: 1366, height: 900 } });
-await h.goto(`${B}/admin/login`); await h.fill('input[autocomplete="username"]', 'HQ'); await h.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hqpass123'); await h.getByRole('button', { name: 'ログイン' }).click(); await h.waitForURL(/admin\//);
+await h.goto(`${B}/admin/login`); await h.fill('input[autocomplete="username"]', 'HQ'); await h.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hqpass123'); await h.getByRole('button', { name: 'ログイン' }).click(); await h.waitForURL((u) => !u.pathname.includes('/login'));
 await h.goto(`${B}/admin/hq/karte`); await h.getByRole('button', { name: '年度（4月〜）' }).click();
 await h.waitForSelector('text=2026年度');
 const ht = await h.textContent('body');

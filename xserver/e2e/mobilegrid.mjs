@@ -9,7 +9,7 @@ skipWhatsNew(br);
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 const p = await (await br.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
 const errs = []; p.on('pageerror', (e) => errs.push(e.message));
-await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\//); await p.waitForLoadState('networkidle');
+await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL((u) => !u.pathname.includes('/login')); await p.waitForLoadState('networkidle');
 const D = '2026-11-02';
 await p.evaluate(async (d) => fetch('/api/admin/cells', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: d, cells: [{ time: 540, bed: 1, text: '見本 太郎（再）' }, { time: 540, bed: 8, text: '試験 花子' }] }) }), D);
 await p.goto(`${B}/admin/day/${D}`); await p.waitForSelector('#grid'); await p.waitForTimeout(500);

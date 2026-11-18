@@ -110,7 +110,7 @@ ok('1人ずつ：初診と通院中・別の日時', rows2.length === 2 && rows2
 // ---------- 5. 予約表：「お連れ様：氏名」・まとめてキャンセル ----------
 const st = await (await br.newContext({ viewport: { width: 1366, height: 1000 } })).newPage();
 st.on('pageerror', (e) => errs.push(e.message)); st.on('dialog', (d) => d.accept());
-await st.goto(`${B}/admin/login/S001`); await st.fill('input[type=password]', 'password'); await st.click('button[type=submit]'); await st.waitForURL(/admin\//);
+await st.goto(`${B}/admin/login/S001`); await st.fill('input[type=password]', 'password'); await st.click('button[type=submit]'); await st.waitForURL((u) => !u.pathname.includes('/login'));
 await st.goto(`${B}/admin/day/${D}`); await st.waitForSelector('#grid'); await st.waitForTimeout(600);
 const compBed = rows[1][3], leadBed = rows[0][3];
 const compCell = st.locator(`td[data-cell="${T}:${compBed}"]`);

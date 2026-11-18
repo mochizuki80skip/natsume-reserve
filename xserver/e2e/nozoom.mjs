@@ -16,7 +16,7 @@ await slot.click();
 await cp.getByRole('button', { name: 'この日時で予約へ進む' }).click(); await cp.waitForSelector('h2');
 const s1 = await sizes();
 ok('予約の入力欄（診察券番号・氏名・電話番号）は 16px 以上', s1.length >= 3 && s1.every((x) => x >= 16), JSON.stringify(s1));
-await cp.goto(`${B}/admin/login`); await cp.fill('input[autocomplete="username"]', 'HQ'); await cp.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hq-pass'); await cp.click('button[type=submit]'); await cp.waitForURL(/admin\//);
+await cp.goto(`${B}/admin/login`); await cp.fill('input[autocomplete="username"]', 'HQ'); await cp.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hq-pass'); await cp.click('button[type=submit]'); await cp.waitForURL((u) => !u.pathname.includes('/login'));
 await cp.goto(`${B}/stores?preview=1`); await cp.waitForTimeout(1200);
 const s2 = await sizes();
 ok('店舗えらびの検索欄も 16px 以上', s2.length >= 1 && s2.every((x) => x >= 16), JSON.stringify(s2));

@@ -9,7 +9,7 @@ skipWhatsNew(br);
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 const p = await br.newPage({ viewport: { width: 1366, height: 900 } });
 const errs = []; p.on('pageerror', (e) => errs.push(e.message));
-await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL(/admin\//); await p.waitForLoadState('networkidle');
+await p.goto(`${B}/admin/login/S001`); await p.fill('input[type=password]', 'password'); await p.click('button[type=submit]'); await p.waitForURL((u) => !u.pathname.includes('/login')); await p.waitForLoadState('networkidle');
 await p.goto(`${B}/admin/day/2026-11-02`); await p.waitForSelector('#grid'); await p.waitForTimeout(500);
 
 // カレンダー：月を送っても日付は変わらない

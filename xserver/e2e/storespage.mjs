@@ -11,7 +11,7 @@ const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); 
 const errs = [];
 const hq = await (await br.newContext({ viewport: { width: 1300, height: 1000 } })).newPage();
 hq.on('pageerror', (e) => errs.push(e.message)); hq.on('dialog', (d) => d.accept());
-await hq.goto(`${B}/admin/login`); await hq.fill('input[autocomplete="username"]', 'HQ'); await hq.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hq-pass'); await hq.click('button[type=submit]'); await hq.waitForURL(/admin\//); await hq.waitForLoadState('networkidle');
+await hq.goto(`${B}/admin/login`); await hq.fill('input[autocomplete="username"]', 'HQ'); await hq.fill('input[type=password]', process.env.HQ_PASSWORD ?? 'hq-pass'); await hq.click('button[type=submit]'); await hq.waitForURL((u) => !u.pathname.includes('/login')); await hq.waitForLoadState('networkidle');
 const api = (m, u, b) => hq.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
 await api('PUT', '/api/admin/hq/stores', { code: 'S001', action: 'listing', address: '静岡県静岡市葵区追手町9-6', lat: 34.9756, lng: 138.3828, listed: true });
 await api('PUT', '/api/admin/hq/stores', { code: 'S002', action: 'listing', address: '〒418-0047 静岡県富士宮市淀川町1-1', lat: 35.22, lng: 138.62, listed: true });
