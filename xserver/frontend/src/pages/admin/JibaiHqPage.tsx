@@ -4,6 +4,7 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { addMonths, formatDateTime, formatYm, yen } from '@/lib/jibai';
 import { useAdmin } from './Layout';
+import { JibaiUnclaimedHq } from '@/components/JibaiUnclaimed';
 
 interface Row { code: string; name: string; status: 'NONE' | 'DRAFT' | 'SUBMITTED'; submittedAt: string | null; submittedBy: string | null; count: number; total: number; ocrCount: number; lateCount: number; lateTotal: number; movedOut: number; verifiedCount: number; verifiedTotal: number; sentCount: number; sentTotal: number; sentLateCount: number; sentLateTotal: number; unclaimed?: number | null }
 interface Resp {
@@ -146,6 +147,7 @@ export default function JibaiHqPage() {
       <p className="text-xs text-slate-500">件数・速報合計は請求月（請求書に印字された「令和 ○年 ○月」）で集計しています。別の月の画面で登録・提出された明細も、請求月がこの月ならここに入ります（「他の月の画面で登録」の表示）。速報合計は店舗がスクショから登録した金額の合計（提出前の入力中の分も含む）。確定合計は経理が請求書コピーと照合して登録した金額。差額は全件の経理確認が終わった店舗だけ表示します。「明細・経理確認」を押すとその店舗に切り替えて明細を開きます。</p>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {me.session.role !== 'acct' && <div className="md:col-span-2"><JibaiUnclaimedHq /></div>}
         <section className="rounded border bg-white p-4">
           <h2 className="mb-2 font-bold">過去 12 か月の全社合計</h2>
           <table className="w-full text-sm">

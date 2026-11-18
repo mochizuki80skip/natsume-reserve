@@ -313,3 +313,68 @@ function hq_jibai_submit_empty(): never
     }
     Http::json(['ok' => true, 'done' => $done, 'skipped' => $skipped]);
 }
+
+// ---------- 自賠の未請求者リスト ----------
+// 新患継続率の新自（初診が自賠）の方のうち、自賠請求のスクショ（登録した明細）に同じカルテNo（患者番号）が 1 度も無い方。
+// 自賠請求を使い始めた月（全店でいちばん早い月）から、先月までの初診が対象（今月の初診は請求前なので数えない）。店舗は理由を入れる・除くを選べる
+
+/** 店舗ごとの未請求者（$storeIds の店舗）。[storeId => rows] と、使い始めた月 */
+function jibai_unclaimed_rows(array $storeIds): array
+{
+    Jibai::ensureTables();
+    $start = Db::one('SELECT MIN(ym) AS m FROM (SELECT ym FROM jibai_month UNION ALL SELECT ym FROM jibai_claim) t')['m'] ?? null;
+    if (!$start || !$storeIds) return [[], $start];
+    $thisMonth = substr(Time::nowJst()['date'], 0, 7) . '-01';
+    $claimed = [];
+    foreach (Db::all('SELECT storeId, patientNo FROM jibai_claim WHERE storeId IN (' . Db::inList($storeIds) . ')', $storeIds) as $c) {
+        $k = Churn::cardKey($c['patientNo']);
+        if ($k !== '') $claimed[$c['storeId']][$k] = true;
+    }
+    $out = [];
+    foreach (Db::all("SELECT id, storeId, date, karteNo, name, staff, unclaimedReason, unclaimedExcluded FROM karte WHERE kind = 'ACCIDENT' AND date >= ? AND date < ? AND storeId IN (" . Db::inList($storeIds) . ') ORDER BY date ASC', array_merge([$start . '-01', $thisMonth], $storeIds)) as $k) {
+        $key = Churn::cardKey($k['karteNo']);
+        if ($key !== '' && isset($claimed[$k['storeId']][$key])) continue;
+        $out[$k['storeId']][] = ['id' => $k['id'], 'date' => $k['date'], 'karteNo' => (string)$k['karteNo'], 'name' => (string)$k['name'], 'staff' => (string)$k['staff'],
+            'reason' => (string)$k['unclaimedReason'], 'excluded' => (bool)(int)$k['unclaimedExcluded'], 'noKarteNo' => $key === ''];
+    }
+    return [$out, $start];
+}
+
+/** 店舗：自店舗の未請求者。本部・管轄MG・経理：店舗ごとの人数（と一覧） */
+function jibai_unclaimed_get(): never
+{
+    $s = Auth::requireSession();
+    // 店舗の自賠請求のページ（本部・管轄MG が店舗を切り替えて開いたときも）：その店舗の一覧
+    if ($s['role'] === 'store' || Http::query('scope') === 'store') {
+        $st = Auth::context()['store'];
+        [$rows, $start] = jibai_unclaimed_rows([$st['id']]);
+        $list = $rows[$st['id']] ?? [];
+        Http::json(['start' => $start, 'rows' => $list, 'count' => count(array_filter($list, fn($r) => !$r['excluded'])), 'canEdit' => Auth::canEditStore($s, $st)]);
+    }
+    if (!in_array($s['role'], ['hq', 'mg', 'acct'], true)) Http::error('forbidden', 403);
+    $stores = Settings::storesInOrder($s['role'] === 'hq' ? 'active = 1 AND jibaiOnly = 0' : 'active = 1 AND jibaiOnly = 0 AND hqOnly = 0', [], false);
+    [$rows, $start] = jibai_unclaimed_rows(array_column($stores, 'id'));
+    $out = [];
+    foreach ($stores as $st) {
+        $list = $rows[$st['id']] ?? [];
+        $out[] = ['code' => $st['code'], 'name' => $st['name'], 'area' => $st['area'] ?? '', 'count' => count(array_filter($list, fn($r) => !$r['excluded'])), 'rows' => $list, 'canEdit' => Auth::canEditStore($s, $st)];
+    }
+    Http::json(['start' => $start, 'stores' => $out, 'mine' => $s['role'] === 'mg' ? array_column(Auth::mgStores(), 'code') : null]);
+}
+
+/** 理由・除く（{ id, reason?, excluded? }） */
+function jibai_unclaimed_put(): never
+{
+    $s = Auth::requireSession();
+    Http::requireJson();
+    $b = Http::body();
+    $k = Db::one("SELECT id, storeId FROM karte WHERE id = ? AND kind = 'ACCIDENT'", [(string)($b['id'] ?? '')]);
+    if (!$k) Http::error('見つかりません', 404);
+    $st = Db::one('SELECT * FROM store WHERE id = ?', [$k['storeId']]);
+    if ($s['role'] === 'store' ? Auth::context()['store']['id'] !== $k['storeId'] : !in_array($s['role'], ['hq', 'mg'], true)) Http::error('見つかりません', 404);
+    if (!$st) Http::error('見つかりません', 404);
+    if (!Auth::canEditStore($s, $st)) Http::error('この店舗は見るだけです', 403);
+    if (array_key_exists('reason', $b)) Db::exec('UPDATE karte SET unclaimedReason = ? WHERE id = ?', [mb_substr(trim((string)$b['reason']), 0, 200), $k['id']]);
+    if (array_key_exists('excluded', $b)) Db::exec('UPDATE karte SET unclaimedExcluded = ? WHERE id = ?', [!empty($b['excluded']) ? 1 : 0, $k['id']]);
+    Http::json(['ok' => true]);
+}

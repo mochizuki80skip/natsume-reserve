@@ -411,6 +411,8 @@ CREATE TABLE IF NOT EXISTS `karte` (
   `accidentNote` VARCHAR(200) NOT NULL DEFAULT '', -- 新自：事故内容
   `accidentStatus` VARCHAR(10) NOT NULL DEFAULT '', -- 新自・新三の 2ヶ月経過の状態（''＝未選択・CONT＝継続・STOP＝中止・END＝終了）
   `accidentStatusAt` DATETIME NULL,
+  `unclaimedReason` VARCHAR(200) NOT NULL DEFAULT '', -- 自賠の未請求者リストの理由（店舗が入れる）
+  `unclaimedExcluded` TINYINT(1) NOT NULL DEFAULT 0,   -- 1＝未請求者リストから除く（請求不要・番号違いなど）
   `notifiedAt` DATETIME NULL,                      -- 新自の通知（メール）を送った日時
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

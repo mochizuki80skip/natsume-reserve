@@ -189,6 +189,8 @@ function route_table(): array
         ['PUT', '#^/api/admin/closures/ack$#', 'closure_ack'],
         // 自賠責請求の速報集計
         ['GET', '#^/api/admin/jibai$#', 'jibai_get'],
+        ['GET', '#^/api/admin/jibai/unclaimed$#', 'jibai_unclaimed_get'],
+        ['PUT', '#^/api/admin/jibai/unclaimed$#', 'jibai_unclaimed_put'],
         ['PUT', '#^/api/admin/jibai/claims$#', 'jibai_claims_put'],
         ['DELETE', '#^/api/admin/jibai/claims$#', 'jibai_claims_delete'],
         ['POST', '#^/api/admin/jibai/submit$#', 'jibai_submit'],

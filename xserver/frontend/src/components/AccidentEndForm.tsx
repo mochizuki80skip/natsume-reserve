@@ -52,7 +52,7 @@ export default function AccidentEndForm() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [tried, setTried] = useState(false);
-  const two = useFetch<{ rows: Two[] }>('/api/admin/accidents/two-months').data;
+  const two = useFetch<{ rows: Two[] }>('/api/admin/accidents/two-months?scope=store').data;
   const ym = (me.today ?? new Date().toISOString()).slice(0, 7);
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(drafts)); } catch { /* 残せなくても入力はできる */ } }, [drafts, KEY]);
   const upd = (key: string, p: Partial<Draft>) => setDrafts((ds) => ds.map((d) => (d.key === key ? { ...d, ...p } : d)));

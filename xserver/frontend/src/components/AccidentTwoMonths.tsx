@@ -19,7 +19,7 @@ function elapsed(from: string, to: string) {
 
 export default function AccidentTwoMonths({ wide = false }: { wide?: boolean }) {
   const { me, refreshMe } = useAdmin();
-  const { data, reload } = useFetch<Resp>('/api/admin/accidents/two-months');
+  const { data, reload } = useFetch<Resp>(`/api/admin/accidents/two-months${wide ? '' : '?scope=store'}`);
   const [mineOnly, setMineOnly] = useState(true);
   const [msg, setMsg] = useState('');
   if (!data) return null;

@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 61;
+    private const VERSION = 62;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -446,6 +446,13 @@ CREATE TABLE IF NOT EXISTS `accident_end` (
   CONSTRAINT `fk_accident_end_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 SQL);
+            }
+            if ($ver < 62) {
+                // 自賠の未請求者リスト：理由・除く
+                if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'unclaimedReason')) {
+                    $pdo->exec("ALTER TABLE `karte` ADD COLUMN `unclaimedReason` VARCHAR(200) NOT NULL DEFAULT ''");
+                    $pdo->exec('ALTER TABLE `karte` ADD COLUMN `unclaimedExcluded` TINYINT(1) NOT NULL DEFAULT 0');
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

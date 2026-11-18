@@ -350,7 +350,8 @@ function hq_accidents_export(): never
 /** 見られる店舗（id → 店舗）。店舗＝自店舗、本部・管轄MG＝全店（自賠だけの店舗も含む・本部専用は本部だけ） */
 function accident2_stores(array $s): array
 {
-    if ($s['role'] === 'store') { $st = Auth::context()['store']; return [$st['id'] => $st]; }
+    // 店舗の画面（本部・管轄MG が店舗を切り替えて開いたときも）は、その店舗だけ（?scope=store）
+    if ($s['role'] === 'store' || Http::query('scope') === 'store') { $st = Auth::context()['store']; return [$st['id'] => $st]; }
     if ($s['role'] !== 'hq' && $s['role'] !== 'mg') throw new HttpError(403, 'forbidden');
     $out = [];
     foreach (Settings::storesInOrder($s['role'] === 'hq' ? 'active = 1' : 'active = 1 AND hqOnly = 0', [], false) as $st) $out[$st['id']] = $st;

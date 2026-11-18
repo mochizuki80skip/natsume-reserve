@@ -9,6 +9,7 @@ import { readInvoiceImage, warmUpOcr, type InvoiceReadResult, type OcrProgress }
 import JibaiSizeGuide from '@/components/JibaiSizeGuide';
 import { useAdmin } from './Layout';
 import AccidentEndForm from '@/components/AccidentEndForm';
+import { JibaiUnclaimedStore } from '@/components/JibaiUnclaimed';
 
 interface Resp {
   ym: string; currentYm: string; store: { code: string; name: string }; isHq: boolean; month: JibaiMonth | null;
@@ -430,6 +431,8 @@ export default function JibaiPage() {
           <span className="text-xs text-slate-500">保存してから「この月を提出する」を押すと本部の集計に反映されます。氏名は対象月の翌月から約 {data.nameRetentionDays} 日後に自動で消え、患者番号・実日数・金額は残ります。</span>
         </div>
       )}
+
+      <JibaiUnclaimedStore />
 
       <AccidentEndForm />
 
