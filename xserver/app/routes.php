@@ -14,6 +14,7 @@ require_once __DIR__ . '/handlers/churn.php';
 require_once __DIR__ . '/handlers/closure.php';
 require_once __DIR__ . '/handlers/report.php';
 require_once __DIR__ . '/handlers/stats.php';
+require_once __DIR__ . '/handlers/accidentend.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -114,6 +115,10 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_get'],
         ['GET', '#^/api/admin/hq/accidents$#', 'hq_accidents'],
         ['GET', '#^/api/admin/accidents/two-months$#', 'accidents_two_months'],
+        ['GET', '#^/api/admin/accident-ends$#', 'ae_get'],
+        ['POST', '#^/api/admin/accident-ends$#', 'ae_post'],
+        ['DELETE', '#^/api/admin/accident-ends$#', 'ae_delete'],
+        ['GET', '#^/api/admin/accident-ends/export$#', 'ae_export'],
         ['PUT', '#^/api/admin/accidents/status$#', 'accidents_status_put'],
         // 集計API のキー（本部・アカウント管理の権限がある人）
         ['GET', '#^/api/admin/hq/setup-check$#', 'hq_setup_check'],

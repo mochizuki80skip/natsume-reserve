@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 60;
+    private const VERSION = 61;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -416,6 +416,36 @@ SQL);
                     $pdo->exec("ALTER TABLE `karte` ADD COLUMN `accidentStatus` VARCHAR(10) NOT NULL DEFAULT ''");
                     $pdo->exec('ALTER TABLE `karte` ADD COLUMN `accidentStatusAt` DATETIME NULL');
                 }
+            }
+            if ($ver < 61) {
+                // 交通事故患者様の終了報告
+                $pdo->exec(<<<'SQL'
+CREATE TABLE IF NOT EXISTS `accident_end` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `karteId` VARCHAR(32) NULL,
+  `patientName` VARCHAR(40) NOT NULL,
+  `sex` VARCHAR(4) NOT NULL DEFAULT '',
+  `age` VARCHAR(20) NOT NULL DEFAULT '',
+  `job` VARCHAR(60) NOT NULL DEFAULT '',
+  `accidentDate` CHAR(10) NULL,
+  `place` VARCHAR(200) NOT NULL DEFAULT '',
+  `mechanism` TEXT NULL,
+  `fault` VARCHAR(60) NOT NULL DEFAULT '',
+  `parts` VARCHAR(200) NOT NULL DEFAULT '',
+  `period` VARCHAR(30) NOT NULL DEFAULT '',
+  `months` TEXT NULL,
+  `photo` VARCHAR(30) NOT NULL DEFAULT '',
+  `survey` VARCHAR(100) NOT NULL DEFAULT '',
+  `note` TEXT NULL,
+  `byCode` VARCHAR(40) NOT NULL DEFAULT '',
+  `submittedAt` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `accident_end_store` (`storeId`, `submittedAt`),
+  KEY `accident_end_at` (`submittedAt`),
+  CONSTRAINT `fk_accident_end_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL);
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

@@ -617,3 +617,30 @@ CREATE TABLE IF NOT EXISTS `line_click` (
   `n` INT NOT NULL DEFAULT 0,
   PRIMARY KEY (`date`, `page`, `storeCode`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 交通事故患者様の終了報告（店舗が入れて申請。本部・管轄MG が月・年ごとに見る。months＝1〜12ヶ月目の施術内容の JSON）
+CREATE TABLE IF NOT EXISTS `accident_end` (
+  `id` VARCHAR(32) NOT NULL,
+  `storeId` VARCHAR(32) NOT NULL,
+  `karteId` VARCHAR(32) NULL,
+  `patientName` VARCHAR(40) NOT NULL,
+  `sex` VARCHAR(4) NOT NULL DEFAULT '',
+  `age` VARCHAR(20) NOT NULL DEFAULT '',
+  `job` VARCHAR(60) NOT NULL DEFAULT '',
+  `accidentDate` CHAR(10) NULL,
+  `place` VARCHAR(200) NOT NULL DEFAULT '',
+  `mechanism` TEXT NULL,
+  `fault` VARCHAR(60) NOT NULL DEFAULT '',
+  `parts` VARCHAR(200) NOT NULL DEFAULT '',
+  `period` VARCHAR(30) NOT NULL DEFAULT '',
+  `months` TEXT NULL,
+  `photo` VARCHAR(30) NOT NULL DEFAULT '',
+  `survey` VARCHAR(100) NOT NULL DEFAULT '',
+  `note` TEXT NULL,
+  `byCode` VARCHAR(40) NOT NULL DEFAULT '',
+  `submittedAt` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `accident_end_store` (`storeId`, `submittedAt`),
+  KEY `accident_end_at` (`submittedAt`),
+  CONSTRAINT `fk_accident_end_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
