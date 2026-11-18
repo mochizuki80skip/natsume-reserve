@@ -553,7 +553,9 @@ function hq_campaigns_put(): never
     if ($label === '') Http::error('URL の名前を入れてください（例：Instagram 広告、ギフトカード）', 400);
     if (Db::one('SELECT id FROM campaign WHERE code IS NOT NULL AND label = ? AND id <> ?', [$label, $id])) Http::error('同じ名前の URL があります', 409);
     $trig = (string)($b['trig'] ?? '');
-    if (!in_array($trig, Karte::options()['trigger'], true) || array_key_exists($trig, Karte::DETAIL_FOR)) Http::error('新患継続率のきっかけ（媒体）を選んでください', 400);
+    // 空白＝きっかけを決めない（その URL から来た初診の方のきっかけは、店舗が新患継続率で選ぶ）
+    if (!array_key_exists('trig', $b)) Http::error('新患継続率のきっかけ（媒体）を選んでください', 400);
+    if ($trig !== '' && (!in_array($trig, Karte::options()['trigger'], true) || array_key_exists($trig, Karte::DETAIL_FOR))) Http::error('新患継続率のきっかけ（媒体）を選んでください', 400);
     $valid = array_column(Db::all('SELECT code FROM store'), 'code');
     $stores = is_array($b['stores'] ?? null) ? array_values(array_unique(array_filter(array_map('strval', $b['stores']), fn($c) => in_array($c, $valid, true)))) : [];
     $has = !empty($b['hasContent']);

@@ -197,6 +197,12 @@ const pk = async (code, st) => (await (await fetch(`${B}/api/public/${st}/store?
 ok('区分を決めていない URL は今まで通り（何も選ばない）', (await pk(portal.code, 'S002')) === '' && (await pk(acc.code, 'S002')) === 'ACCIDENT');
 await ap.close();
 
+// きっかけを空白にした URL も作れる（その URL から来た初診のきっかけは店舗が選ぶ）
+ok('きっかけ「空白」の URL を作れる', (await api(hp, 'PUT', '/api/admin/hq/campaigns', { label: '見本 空白', trig: '', stores: [], hasContent: false }))[0] === 200);
+await hp.goto(`${B}/admin/hq`); await hp.waitForLoadState('networkidle');
+ok('一覧のきっかけに（空白）', (await hp.getByRole('row', { name: 'URL 見本 空白' }).textContent()).includes('（空白）'));
+await hp.getByRole('button', { name: '＋ URL・QR を作る' }).click();
+ok('きっかけの選択肢に「空白」がある', (await hp.getByRole('form', { name: 'URL・QR を作る' }).getByLabel('新患継続率のきっかけ').locator('option').allTextContents()).some((t) => t.startsWith('（空白')));
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();
 console.log(process.exitCode ? 'CAMPAIGN FAILED' : 'CAMPAIGN OK');

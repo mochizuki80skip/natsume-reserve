@@ -22,6 +22,8 @@ interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers:
 /** URL（店舗えらび用・店舗別） */
 const urlOf = (code: string, store?: string) => `${location.origin}${store ? `/s/${encodeURIComponent(store)}` : '/stores'}?c=${code}`;
 
+/** きっかけの「空白」（選んでいない '' と分けるための印。送るときは '' にする） */
+const BLANK = '__blank';
 const KIND_OPTIONS: [string, string][] = [['', '選ばない（患者様が選ぶ）'], ['NEW', 'はじめて（ケガ・痛み・不調など）'], ['ACCIDENT', 'はじめて（交通事故）'], ['REVISIT', '再来（1ヶ月以上ぶり）'], ['RETURN', '現在通院中']];
 const EMPTY = { label: '', trig: '', stores: [] as string[], hasContent: false, name: '', description: '', showInsurance: true, presetKind: '', from: '', to: '', memo: '' };
 const isGift = (trig: string) => trig === 'ギフトカード';
@@ -97,10 +99,10 @@ const Step = ({ n, title, children }: { n: number; title: string; children: Reac
 );
 
 function EntryForm({ init, data, onDone, onMsg }: { init: Entry | null; data: Resp; onDone: () => void; onMsg: (m: string) => void }) {
-  const [f, setF] = useState(init ? { label: init.label, trig: init.trig, stores: init.stores, hasContent: init.hasContent, name: init.name, description: init.description, showInsurance: init.showInsurance, presetKind: init.presetKind, from: init.from, to: init.to, memo: init.memo } : EMPTY);
+  const [f, setF] = useState(init ? { label: init.label, trig: init.trig === '' ? BLANK : init.trig, stores: init.stores, hasContent: init.hasContent, name: init.name, description: init.description, showInsurance: init.showInsurance, presetKind: init.presetKind, from: init.from, to: init.to, memo: init.memo } : EMPTY);
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    const { ok, j } = await send('PUT', '/api/admin/hq/campaigns', { ...(init ? { id: init.id } : {}), ...f });
+    const { ok, j } = await send('PUT', '/api/admin/hq/campaigns', { ...(init ? { id: init.id } : {}), ...f, trig: f.trig === BLANK ? '' : f.trig });
     onMsg(ok ? `「${f.label.trim()}」を保存しました。${init ? '' : '一覧に URL・QR ができました（店舗えらび用＋店舗別）'}` : j.error ?? '保存できませんでした');
     if (ok) onDone();
   }
@@ -116,8 +118,10 @@ function EntryForm({ init, data, onDone, onMsg }: { init: Entry | null; data: Re
         <Step n={2} title="新患継続率のきっかけ（媒体）">
           <select value={f.trig} onChange={(e) => setF({ ...f, trig: e.target.value })} aria-label="新患継続率のきっかけ" className="rounded border px-2 py-1">
             <option value="">選ぶ</option>
+            <option value={BLANK}>（空白：きっかけは店舗が新患継続率で選ぶ）</option>
             {data.triggers.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
+          <span className="block text-xs text-slate-500">選択肢は、新患・再来集計の「選択肢・エリアの設定」の「集客きっかけ」と同じです（内訳を選ぶ「紹介他事業」「キャンペーン」「業者紹介」は除く）</span>
           <span className="block text-xs text-slate-500">この URL から予約した初診の方は、ここで選んだきっかけで自動で入ります</span>
         </Step>
         <Step n={3} title="使う店舗">
@@ -230,7 +234,7 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
     <>
       <tr className="border-t align-top" aria-label={`URL ${c.label}`}>
         <td className="py-1 pr-2 font-bold">{c.label}</td>
-        <td className="whitespace-nowrap py-1 pr-2">{c.trig}{c.presetKind && <span className="block text-xs text-slate-500">区分：{KIND_OPTIONS.find(([v]) => v === c.presetKind)?.[1]}</span>}</td>
+        <td className="whitespace-nowrap py-1 pr-2">{c.trig || <span className="text-slate-400">（空白）</span>}{c.presetKind && <span className="block text-xs text-slate-500">区分：{KIND_OPTIONS.find(([v]) => v === c.presetKind)?.[1]}</span>}</td>
         <td className="py-1 pr-2 text-xs" title={c.stores.map((s) => nameOf.get(s) ?? s).join('・')}>{c.stores.length ? `${c.stores.length} 店` : '全店'}</td>
         <td className="py-1 pr-2 text-xs">
           {c.hasContent ? (
