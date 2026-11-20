@@ -10,7 +10,7 @@ interface UrlBooking { store: string; date: string; trig: string; detail: string
 interface HqRow { store: string; date: string; kind: 'NEW' | 'ACCIDENT' | 'THIRD' | 'REVISIT'; trig: string; trigDetail: string; staff: string; reached: boolean[]; missing: boolean; stopped?: boolean; transferred?: boolean; missingFields?: string[] }
 interface Area { id?: string; name: string; stores: string[] }
 interface StoreInfo { code: string; name: string; active?: boolean }
-interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string; urlBookings?: UrlBooking[]; urls?: { label: string; trig: string }[] }
+interface DataResp { rows: HqRow[]; areas: Area[]; stores: StoreInfo[]; today: string; urlBookings?: UrlBooking[]; urls?: { label: string; trig: string; detail?: string }[] }
 interface OptResp { options: KarteOptions; detailFor: DetailFor; areas: Area[]; stores: StoreInfo[] }
 
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
@@ -253,8 +253,9 @@ function Summary({ storeOnly = false }: { storeOnly?: boolean }) {
       {(() => {
         const ub = (data.urlBookings ?? []).filter((u) => view.inTarget(u.store) && u.date >= view.cur.from && u.date <= view.cur.to);
         const lines = (data.urls ?? []).map((u) => {
-          const ks = newCur.filter((r) => r.trig === u.trig && r.trigDetail === u.label);
-          const us = ub.filter((x) => x.detail === u.label);
+          const det = u.detail ?? u.label;
+          const ks = newCur.filter((r) => r.trig === u.trig && r.trigDetail === det);
+          const us = ub.filter((x) => x.trig === u.trig && x.detail === det);
           return { ...u, resNew: us.filter((x) => x.isNew).length, resEx: us.filter((x) => !x.isNew).length, karte: ks.length, reached: [0, 1, 2, 3, 4].map((i) => ks.filter((r) => r.reached[i]).length) };
         });
         if (!lines.length) return null;

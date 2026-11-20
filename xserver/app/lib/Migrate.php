@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 62;
+    private const VERSION = 63;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -453,6 +453,10 @@ SQL);
                     $pdo->exec("ALTER TABLE `karte` ADD COLUMN `unclaimedReason` VARCHAR(200) NOT NULL DEFAULT ''");
                     $pdo->exec('ALTER TABLE `karte` ADD COLUMN `unclaimedExcluded` TINYINT(1) NOT NULL DEFAULT 0');
                 }
+            }
+            if ($ver < 63) {
+                // URL の内訳つきのきっかけ（紹介他事業・キャンペーン・イベント）
+                if (self::hasTable($pdo, 'campaign') && !self::hasColumn($pdo, 'campaign', 'trigDetail')) $pdo->exec("ALTER TABLE `campaign` ADD COLUMN `trigDetail` VARCHAR(60) NOT NULL DEFAULT ''");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

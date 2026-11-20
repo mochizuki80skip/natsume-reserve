@@ -140,6 +140,7 @@ function route_table(): array
         ['DELETE', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_delete'],
         ['PUT', '#^/api/admin/hq/insurance$#', 'hq_insurance_put'],
         ['GET', '#^/api/admin/story-theme$#', 'adm_story_theme_get'],
+        ['GET', '#^/api/admin/story-url$#', 'adm_story_url'],
         ['PUT', '#^/api/admin/story-theme$#', 'adm_story_theme_put'],
         ['GET', '#^/api/admin/special-bulk$#', 'hq_special_bulk_get'],
         ['PUT', '#^/api/admin/special-bulk$#', 'hq_special_bulk_put'],

@@ -103,7 +103,7 @@ final class Campaign
             'memo' => $show ? (string)($e['storeMemo'] ?? '') : '',
             // URL から来た初診の新患継続率（きっかけ・内訳＝URL の名前）
             'trig' => $own ? (string)($e['trig'] ?? '') : '',
-            'detail' => $own ? (string)($e['label'] ?? '') : '',
+            'detail' => $own ? self::detailOf($e) : '',
         ];
     }
 
@@ -128,6 +128,37 @@ final class Campaign
         $out = ['route' => $snap['route'] ?? '', 'name' => $snap['name'], 'description' => $snap['description'] ?? '', 'insurance' => $snap['insurance'] ?? []];
         if ($presetKind !== '') $out['kind'] = $presetKind;
         return $out;
+    }
+
+    /** 新患継続率の内訳（内訳つきのきっかけで内訳を選んだ URL はその内訳、ほかは URL の名前） */
+    public static function detailOf(array $e): string
+    {
+        $d = trim((string)($e['trigDetail'] ?? ''));
+        return $d !== '' ? $d : (string)($e['label'] ?? '');
+    }
+
+    /** URL で選べる内訳つきのきっかけ（業者紹介は紹介元の QR で使うので除く）→ 内訳の選択肢（null＝自由に書く） */
+    public static function detailChoices(): array
+    {
+        $opt = Karte::options();
+        $out = [];
+        foreach (Karte::DETAIL_FOR as $trig => $cat) if ($trig !== '業者紹介') $out[$trig] = $cat === null ? null : array_values($opt[$cat] ?? []);
+        return $out;
+    }
+
+    /** Instagram ストーリーズ用の URL（全店。無ければ作る。きっかけは本部が一覧で変えられる） */
+    public static function storyEntry(): array
+    {
+        $r = Db::one("SELECT * FROM campaign WHERE route = 'story' AND code IS NOT NULL LIMIT 1");
+        if ($r) return $r;
+        $trigs = Karte::options()['trigger'] ?? [];
+        $trig = in_array('Instagram', $trigs, true) ? 'Instagram' : (in_array('SNS', $trigs, true) ? 'SNS' : '');
+        $label = 'Instagram ストーリーズ';
+        if (Db::one('SELECT id FROM campaign WHERE code IS NOT NULL AND label = ?', [$label])) $label .= '（本日の空き状況）';
+        $id = Db::newId();
+        Db::exec("INSERT INTO campaign SET id = ?, route = 'story', code = ?, active = 1, createdAt = ?, label = ?, trig = ?, trigDetail = '', stores = NULL, hasContent = 0, name = '', description = '', showInsurance = 0, presetKind = '', fromDate = '', toDate = '', storeMemo = ''",
+            [$id, self::newCode(), Time::nowJstDateTime(), $label, $trig]);
+        return Db::one('SELECT * FROM campaign WHERE id = ?', [$id]);
     }
 
     /** URL（店舗えらび用・店舗別） */

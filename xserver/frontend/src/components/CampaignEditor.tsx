@@ -13,11 +13,11 @@ import { makeZip, safeFileName } from '@/lib/zip';
 interface Ins { label: string; amount: number }
 interface StoreLite { code: string; name: string; area: string }
 interface Entry {
-  id: string; code: string; label: string; trig: string; stores: string[]; hasContent: boolean; active: boolean;
+  id: string; code: string; label: string; trig: string; trigDetail?: string; story?: boolean; stores: string[]; hasContent: boolean; active: boolean;
   name: string; description: string; showInsurance: boolean; presetKind: string; from: string; to: string; memo: string;
   reservations: number; resNew?: number; resExisting?: number; kartes: number; continued?: number;
 }
-interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[] }
+interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[]; details?: Record<string, string[] | null> }
 
 /** URL（店舗えらび用・店舗別） */
 const urlOf = (code: string, store?: string) => `${location.origin}${store ? `/s/${encodeURIComponent(store)}` : '/stores'}?c=${code}`;
@@ -25,7 +25,7 @@ const urlOf = (code: string, store?: string) => `${location.origin}${store ? `/s
 /** きっかけの「空白」（選んでいない '' と分けるための印。送るときは '' にする） */
 const BLANK = '__blank';
 const KIND_OPTIONS: [string, string][] = [['', '選ばない（患者様が選ぶ）'], ['NEW', 'はじめて（ケガ・痛み・不調など）'], ['ACCIDENT', 'はじめて（交通事故）'], ['REVISIT', '再来（1ヶ月以上ぶり）'], ['RETURN', '現在通院中']];
-const EMPTY = { label: '', trig: '', stores: [] as string[], hasContent: false, name: '', description: '', showInsurance: true, presetKind: '', from: '', to: '', memo: '' };
+const EMPTY = { label: '', trig: '', trigDetail: '', stores: [] as string[], hasContent: false, name: '', description: '', showInsurance: true, presetKind: '', from: '', to: '', memo: '' };
 const isGift = (trig: string) => trig === 'ギフトカード';
 
 async function send(method: string, url: string, body: unknown): Promise<{ ok: boolean; j: { error?: string } }> {
@@ -98,30 +98,61 @@ const Step = ({ n, title, children }: { n: number; title: string; children: Reac
   </div>
 );
 
-function EntryForm({ init, data, onDone, onMsg }: { init: Entry | null; data: Resp; onDone: () => void; onMsg: (m: string) => void }) {
-  const [f, setF] = useState(init ? { label: init.label, trig: init.trig === '' ? BLANK : init.trig, stores: init.stores, hasContent: init.hasContent, name: init.name, description: init.description, showInsurance: init.showInsurance, presetKind: init.presetKind, from: init.from, to: init.to, memo: init.memo } : EMPTY);
+function EntryForm({ init, data, onDone, onMsg, onReload }: { init: Entry | null; data: Resp; onDone: () => void; onMsg: (m: string) => void; onReload: () => void }) {
+  const [f, setF] = useState(init ? { label: init.label, trig: init.trig === '' ? BLANK : init.trig, trigDetail: init.trigDetail ?? '', stores: init.stores, hasContent: init.hasContent, name: init.name, description: init.description, showInsurance: init.showInsurance, presetKind: init.presetKind, from: init.from, to: init.to, memo: init.memo } : EMPTY);
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    const { ok, j } = await send('PUT', '/api/admin/hq/campaigns', { ...(init ? { id: init.id } : {}), ...f, trig: f.trig === BLANK ? '' : f.trig });
+    const { ok, j } = await send('PUT', '/api/admin/hq/campaigns', { ...(init ? { id: init.id } : {}), ...f, trig: f.trig === BLANK ? '' : f.trig, trigDetail: detailOpts === undefined ? '' : f.trigDetail });
     onMsg(ok ? `「${f.label.trim()}」を保存しました。${init ? '' : '一覧に URL・QR ができました（店舗えらび用＋店舗別）'}` : j.error ?? '保存できませんでした');
     if (ok) onDone();
   }
-  const can = f.label.trim() !== '' && f.trig !== '' && (!f.hasContent || f.name.trim() !== '');
+  // 内訳つきのきっかけ（紹介他事業・キャンペーン・イベント）：内訳を選ぶ（イベントは書く）。undefined＝内訳なし（URL の名前が内訳）
+  const detailOpts = data.details && f.trig in data.details ? data.details[f.trig] : undefined;
+  const can = f.label.trim() !== '' && f.trig !== '' && (detailOpts === undefined || f.trigDetail.trim() !== '') && (!f.hasContent || f.name.trim() !== '');
+  /** 集客きっかけをその場で足す（新患継続率の「選択肢・エリアの設定」の集客きっかけにも入る） */
+  async function addTrigger() {
+    const t = window.prompt('足す集客きっかけ（例：Instagram、公式LINE）')?.trim();
+    if (!t) return;
+    if (data.triggers.includes(t)) { setF({ ...f, trig: t }); return; }
+    const r = await fetch('/api/admin/hq/karte/options');
+    const cur = ((await r.json().catch(() => ({}))) as { options?: { trigger?: string[] } }).options?.trigger ?? [];
+    const { ok, j } = await send('PUT', '/api/admin/hq/karte/options', { category: 'trigger', labels: [...cur, t] });
+    if (!ok) { onMsg(j.error ?? '足せませんでした'); return; }
+    onMsg(`集客きっかけに「${t}」を足しました（新患継続率のきっかけにも出ます）`);
+    setF({ ...f, trig: t, trigDetail: '' });
+    onReload();
+  }
   return (
     <form onSubmit={save} className="mt-3 rounded border-2 border-brand p-3" aria-label={init ? 'URL・QR を直す' : 'URL・QR を作る'}>
       <h3 className="font-bold">{init ? `「${init.label}」を直す` : 'URL・QR を作る'}<span className="ml-2 text-xs font-normal text-slate-500">上から順に入れてください</span></h3>
       <div className="mt-2 grid gap-2 md:grid-cols-2">
         <Step n={1} title="名前">
           <input value={f.label} onChange={(e) => setF({ ...f, label: e.target.value })} maxLength={60} placeholder="例）Instagram 広告（冬）、ギフトカード、ポータルサイト A" aria-label="URL の名前" className="w-full rounded border px-2 py-1" />
-          <span className="text-xs text-slate-500">新患継続率の「内訳」に入ります</span>
+          <span className="text-xs text-slate-500">新患継続率の「内訳」に入ります（内訳を選ぶきっかけのときは、選んだ内訳が入ります）</span>
         </Step>
         <Step n={2} title="新患継続率のきっかけ（媒体）">
-          <select value={f.trig} onChange={(e) => setF({ ...f, trig: e.target.value })} aria-label="新患継続率のきっかけ" className="rounded border px-2 py-1">
-            <option value="">選ぶ</option>
-            <option value={BLANK}>（空白：きっかけは店舗が新患継続率で選ぶ）</option>
-            {data.triggers.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <span className="block text-xs text-slate-500">選択肢は、新患・再来集計の「選択肢・エリアの設定」の「集客きっかけ」と同じです（内訳を選ぶ「紹介他事業」「キャンペーン」「業者紹介」は除く）</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <select value={f.trig} onChange={(e) => setF({ ...f, trig: e.target.value, trigDetail: '' })} aria-label="新患継続率のきっかけ" className="rounded border px-2 py-1">
+              <option value="">選ぶ</option>
+              <option value={BLANK}>（空白：きっかけは店舗が新患継続率で選ぶ）</option>
+              {data.triggers.map((t) => <option key={t} value={t}>{t}</option>)}
+              {f.trig && f.trig !== BLANK && !data.triggers.includes(f.trig) && <option value={f.trig}>{f.trig}</option>}
+            </select>
+            <button type="button" onClick={addTrigger} className="rounded border px-2 py-0.5 text-xs">＋ きっかけを足す</button>
+          </div>
+          {detailOpts !== undefined && (
+            <label className="mt-1 block text-xs">「{f.trig}」の内訳 *
+              {detailOpts === null
+                ? <input value={f.trigDetail} onChange={(e) => setF({ ...f, trigDetail: e.target.value })} maxLength={60} placeholder="例）〇〇祭り" aria-label="きっかけの内訳" className="ml-1 rounded border px-2 py-0.5" />
+                : <select value={f.trigDetail} onChange={(e) => setF({ ...f, trigDetail: e.target.value })} aria-label="きっかけの内訳" className="ml-1 rounded border px-2 py-0.5">
+                    <option value="">選ぶ</option>
+                    {detailOpts.map((d) => <option key={d} value={d}>{d}</option>)}
+                    {f.trigDetail && !detailOpts.includes(f.trigDetail) && <option value={f.trigDetail}>{f.trigDetail}</option>}
+                  </select>}
+              <span className="block text-slate-500">この URL から来た初診の方は「{f.trig}／内訳」で入ります（内訳の選択肢は「選択肢・エリアの設定」で足せます）</span>
+            </label>
+          )}
+          <span className="block text-xs text-slate-500">選択肢は、新患・再来集計の「選択肢・エリアの設定」の「集客きっかけ」と同じです（業者紹介は「紹介元の専用 QR」で使います）</span>
           <span className="block text-xs text-slate-500">この URL から予約した初診の方は、ここで選んだきっかけで自動で入ります</span>
         </Step>
         <Step n={3} title="使う店舗">
@@ -166,7 +197,7 @@ function EntryForm({ init, data, onDone, onMsg }: { init: Entry | null; data: Re
       <div className="mt-2 flex gap-2">
         <button type="submit" disabled={!can} className="rounded bg-brand px-4 py-1 font-bold text-white disabled:opacity-40">保存</button>
         <button type="button" onClick={onDone} className="rounded border px-3 py-1">やめる</button>
-        {!can && <span className="self-center text-xs text-slate-500">{!f.label.trim() ? '① 名前を入れてください' : !f.trig ? '② きっかけを選んでください' : 'キャンペーン名を入れてください'}</span>}
+        {!can && <span className="self-center text-xs text-slate-500">{!f.label.trim() ? '① 名前を入れてください' : !f.trig ? '② きっかけを選んでください' : detailOpts !== undefined && !f.trigDetail.trim() ? '② きっかけの内訳を選んでください' : 'キャンペーン名を入れてください'}</span>}
       </div>
     </form>
   );
@@ -233,8 +264,8 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
   return (
     <>
       <tr className="border-t align-top" aria-label={`URL ${c.label}`}>
-        <td className="py-1 pr-2 font-bold">{c.label}</td>
-        <td className="whitespace-nowrap py-1 pr-2">{c.trig || <span className="text-slate-400">（空白）</span>}{c.presetKind && <span className="block text-xs text-slate-500">区分：{KIND_OPTIONS.find(([v]) => v === c.presetKind)?.[1]}</span>}</td>
+        <td className="py-1 pr-2 font-bold">{c.label}{c.story && <span className="ml-1 rounded bg-pink-100 px-1 text-[10px] font-bold text-pink-800">ストーリーズ用・全店</span>}</td>
+        <td className="whitespace-nowrap py-1 pr-2">{c.trig || <span className="text-slate-400">（空白）</span>}{c.trigDetail && <span className="block text-xs text-slate-500">内訳：{c.trigDetail}</span>}{c.presetKind && <span className="block text-xs text-slate-500">区分：{KIND_OPTIONS.find(([v]) => v === c.presetKind)?.[1]}</span>}</td>
         <td className="py-1 pr-2 text-xs" title={c.stores.map((s) => nameOf.get(s) ?? s).join('・')}>{c.stores.length ? `${c.stores.length} 店` : '全店'}</td>
         <td className="py-1 pr-2 text-xs">
           {c.hasContent ? (
@@ -252,7 +283,7 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
           <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="mr-2 rounded border-2 border-brand px-2 font-bold text-brand-dark">{open ? '▲ URL・QR' : '▼ URL・QR'}</button>
           <button type="button" onClick={onEdit} className="mr-2 underline">直す</button>
           {c.hasContent && <button type="button" onClick={toggle} className="mr-2 underline">{c.active ? 'キャンペーンを止める' : 'キャンペーンを再開'}</button>}
-          <button type="button" onClick={remove} className="text-red-700 underline">消す</button>
+          {!c.story && <button type="button" onClick={remove} className="text-red-700 underline">消す</button>}
         </td>
       </tr>
       {open && <tr><td colSpan={8}><EntryUrls c={c} stores={data.stores} onMsg={onMsg} /></td></tr>}
@@ -292,7 +323,7 @@ export default function CampaignEditor() {
         {edit === null && <button type="button" onClick={() => { reload(); setEdit('new'); }} className="rounded bg-brand px-3 py-1 font-bold text-white">＋ URL・QR を作る</button>}
         <a href="/api/admin/hq/campaigns/export" className="rounded border px-3 py-1 font-bold no-underline">URL の一覧を Excel で保存</a>
       </div>
-      {data && edit !== null && <EntryForm key={edit === 'new' ? 'new' : edit.id} init={edit === 'new' ? null : edit} data={data} onDone={() => { setEdit(null); reload(); }} onMsg={setMsg} />}
+      {data && edit !== null && <EntryForm key={edit === 'new' ? 'new' : edit.id} init={edit === 'new' ? null : edit} data={data} onDone={() => { setEdit(null); reload(); }} onMsg={setMsg} onReload={reload} />}
       {data && <InsuranceEditor key={JSON.stringify(data.insurance)} rows={data.insurance} onSaved={reload} onMsg={setMsg} />}
     </section>
   );

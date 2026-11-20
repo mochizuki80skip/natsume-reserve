@@ -1,5 +1,6 @@
 // 本日の空き状況をストーリーズ用画像にして、共有（Instagram）または保存する画面
 import { useEffect, useRef, useState } from 'react';
+import { useFetch } from '@/lib/api';
 import { formatDateJa, minToHm, nowJst } from '@/lib/time';
 import { STORY_THEMES, autoThemeId, drawStory, themeOf, type SlotStatus, type StorySlot } from './StoryCanvas';
 
@@ -53,8 +54,9 @@ export default function StoryClient({ store, date }: Props) {
     } catch { setCanShare(false); }
   }, []);
 
-  // ストーリーズのリンクスタンプに貼る予約ページの URL
-  const bookingUrl = `${location.origin}/s/${encodeURIComponent(store.code)}`;
+  // ストーリーズのリンクスタンプに貼る予約ページの URL（本部の「Instagram ストーリーズ」用の URL。新規はきっかけ・内訳が入り、既存も何件使われたか数える）
+  const story = useFetch<{ url: string; label: string; trig: string }>('/api/admin/story-url').data;
+  const bookingUrl = story?.url ?? `${location.origin}/s/${encodeURIComponent(store.code)}`;
   const [copied, setCopied] = useState(false);
   async function copyUrl() {
     try { await navigator.clipboard.writeText(bookingUrl); setCopied(true); setTimeout(() => setCopied(false), 3000); }
@@ -123,7 +125,7 @@ export default function StoryClient({ store, date }: Props) {
                 <code className="min-w-0 flex-1 truncate rounded border bg-slate-50 px-2 py-1.5 text-xs">{bookingUrl}</code>
                 <button type="button" onClick={copyUrl} className="shrink-0 rounded-lg bg-brand px-3 py-1.5 font-bold text-white">{copied ? 'コピーしました' : 'コピー'}</button>
               </div>
-              <p className="mt-1 text-xs text-slate-500">あとでリンクのスタンプに貼り付けます。</p>
+              <p className="mt-1 text-xs text-slate-500">あとでリンクのスタンプに貼り付けます。{story && <>このURLから予約した方は数えられます（初診の方は新患継続率のきっかけ「{story.trig || '空白'}」・内訳「{story.label}」で入ります）。</>}</p>
             </Step>
             <Step n={2} title="画像を Instagram へ">
               <div className="mt-1 space-y-2">

@@ -1520,3 +1520,11 @@ function adm_story_theme_put(): never
     Db::exec('UPDATE store SET storyTheme = ? WHERE id = ?', [$t, $ctx['store']['id']]);
     Http::json(['ok' => true]);
 }
+
+/** ストーリー画像に貼る予約ページの URL（Instagram ストーリーズ用の URL。全店共通の印・この店舗の予約ページ） */
+function adm_story_url(): never
+{
+    $ctx = Auth::context();
+    $e = Campaign::storyEntry();
+    Http::json(['code' => $e['code'], 'label' => $e['label'], 'trig' => $e['trig'], 'url' => Campaign::url((string)$e['code'], (string)$ctx['store']['code'])]);
+}

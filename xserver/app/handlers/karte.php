@@ -198,7 +198,7 @@ function hq_karte_get(): never
     Http::json([
         'rows' => $out, 'areas' => $areas, 'urlBookings' => $ub,
         // 本部が作った WEB 予約の URL・QR（名前ときっかけだけ。集計の「URL・QR 別」に使う）
-        'urls' => array_map(fn($c) => ['label' => (string)$c['label'], 'trig' => (string)$c['trig']], Db::all('SELECT label, trig FROM campaign WHERE code IS NOT NULL ORDER BY createdAt ASC, id ASC')),
+        'urls' => array_map(fn($c) => ['label' => (string)$c['label'], 'trig' => (string)$c['trig'], 'detail' => Campaign::detailOf($c)], Db::all('SELECT label, trig, trigDetail FROM campaign WHERE code IS NOT NULL ORDER BY createdAt ASC, id ASC')),
         'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'active' => (bool)$s['active']], $stores),
         'today' => Time::nowJst()['date'],
     ]);

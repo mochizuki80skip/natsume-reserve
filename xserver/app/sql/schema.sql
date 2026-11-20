@@ -347,6 +347,7 @@ CREATE TABLE IF NOT EXISTS `campaign` (
   `code` VARCHAR(16) NULL, -- キャンペーン専用の URL の印（route = 'c:<code>'。/stores?c=…・/s/店舗?c=…）
   `trig` VARCHAR(30) NOT NULL DEFAULT '', -- URL から来た初診の新患継続率のきっかけ（内訳＝label）
   `label` VARCHAR(60) NOT NULL DEFAULT '', -- URL の名前（例：Instagram 広告（冬）。新患継続率の内訳に入る）
+  `trigDetail` VARCHAR(60) NOT NULL DEFAULT '', -- 内訳つきのきっかけ（紹介他事業・キャンペーン・イベント）の内訳。空＝URL の名前が内訳
   `hasContent` TINYINT(1) NOT NULL DEFAULT 1, -- キャンペーンを付けるか（0＝URL だけ。経路の計測用）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

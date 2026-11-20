@@ -515,15 +515,15 @@ function hq_campaigns_get(): never
         $resNew = ($byKind['NEW'] ?? 0) + ($byKind['ACCIDENT'] ?? 0);
         // 新患の人数と、そのうち 2 回目以降も来た（継続した）人数
         $kar = 0; $cont = 0;
-        if ($c['trig'] !== '' && $c['label'] !== '') {
-            foreach (Db::all("SELECT visits FROM karte WHERE trig = ? AND trigDetail = ? AND kind <> 'REVISIT'", [$c['trig'], $c['label']]) as $k) {
+        if ($c['trig'] !== '' && Campaign::detailOf($c) !== '') {
+            foreach (Db::all("SELECT visits FROM karte WHERE trig = ? AND trigDetail = ? AND kind <> 'REVISIT'", [$c['trig'], Campaign::detailOf($c)]) as $k) {
                 $kar++;
                 $v = json_decode((string)$k['visits'], true) ?: [];
                 if (!empty($v[0]['d'])) $cont++;
             }
         }
         return [
-            'id' => $c['id'], 'code' => $c['code'], 'label' => $c['label'], 'trig' => (string)$c['trig'], 'stores' => Campaign::stores($c['stores'] ?? null),
+            'id' => $c['id'], 'code' => $c['code'], 'label' => $c['label'], 'trig' => (string)$c['trig'], 'trigDetail' => (string)($c['trigDetail'] ?? ''), 'story' => $c['route'] === 'story', 'stores' => Campaign::stores($c['stores'] ?? null),
             'hasContent' => (bool)(int)$c['hasContent'], 'active' => (bool)(int)$c['active'],
             'name' => $c['name'], 'description' => (string)($c['description'] ?? ''), 'showInsurance' => (bool)(int)$c['showInsurance'],
             'presetKind' => $c['presetKind'], 'from' => $c['fromDate'], 'to' => $c['toDate'], 'memo' => (string)($c['storeMemo'] ?? ''),
@@ -531,8 +531,10 @@ function hq_campaigns_get(): never
         ];
     }, Db::all('SELECT * FROM campaign WHERE code IS NOT NULL ORDER BY createdAt ASC, id ASC'));
     // きっかけ：新患継続率のきっかけの選択肢から（内訳つきのもの＝紹介他事業・キャンペーン・イベント・業者紹介は使わない）
-    $triggers = array_values(array_filter(Karte::options()['trigger'], fn($t) => !array_key_exists($t, Karte::DETAIL_FOR)));
-    Http::json(['rows' => $rows, 'insurance' => Campaign::insurance(), 'triggers' => $triggers,
+    // 内訳つきのきっかけ（紹介他事業・キャンペーン・イベント）も選べる（内訳を選ぶ）。業者紹介は紹介元の QR で使う
+    $details = Campaign::detailChoices();
+    $triggers = array_values(array_filter(Karte::options()['trigger'], fn($t) => !array_key_exists($t, Karte::DETAIL_FOR) || array_key_exists($t, $details)));
+    Http::json(['rows' => $rows, 'insurance' => Campaign::insurance(), 'triggers' => $triggers, 'details' => (object)$details,
         'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'area' => $s['area']], Settings::storesInOrder('active = 1 AND hqOnly = 0 AND jibaiOnly = 0', [], false))]);
 }
 
@@ -555,7 +557,14 @@ function hq_campaigns_put(): never
     $trig = (string)($b['trig'] ?? '');
     // 空白＝きっかけを決めない（その URL から来た初診の方のきっかけは、店舗が新患継続率で選ぶ）
     if (!array_key_exists('trig', $b)) Http::error('新患継続率のきっかけ（媒体）を選んでください', 400);
-    if ($trig !== '' && (!in_array($trig, Karte::options()['trigger'], true) || array_key_exists($trig, Karte::DETAIL_FOR))) Http::error('新患継続率のきっかけ（媒体）を選んでください', 400);
+    $details = Campaign::detailChoices();
+    if ($trig !== '' && (!in_array($trig, Karte::options()['trigger'], true) || (array_key_exists($trig, Karte::DETAIL_FOR) && !array_key_exists($trig, $details)))) Http::error('新患継続率のきっかけ（媒体）を選んでください', 400);
+    // 内訳つきのきっかけは内訳を選ぶ（イベントは自由に書く）。ほかのきっかけの内訳は URL の名前
+    $tDetail = '';
+    if (array_key_exists($trig, $details)) {
+        $tDetail = mb_substr(trim((string)($b['trigDetail'] ?? '')), 0, 60);
+        if ($tDetail === '' || ($details[$trig] !== null && !in_array($tDetail, $details[$trig], true))) Http::error("「{$trig}」の内訳を選んでください", 400);
+    }
     $valid = array_column(Db::all('SELECT code FROM store'), 'code');
     $stores = is_array($b['stores'] ?? null) ? array_values(array_unique(array_filter(array_map('strval', $b['stores']), fn($c) => in_array($c, $valid, true)))) : [];
     $has = !empty($b['hasContent']);
@@ -569,10 +578,11 @@ function hq_campaigns_put(): never
     if (($from !== '' && !Time::isValidDate($from)) || ($to !== '' && !Time::isValidDate($to))) Http::error('期間の日付が正しくありません', 400);
     if ($from !== '' && $to !== '' && $to < $from) Http::error('期間の終わりは始めより後にしてください', 400);
     // 前のキャンペーン名で予約された分の新患継続率の内訳もそろえる（URL の名前を変えたとき）
-    if ($row && $row['label'] !== $label && $row['trig'] !== '') Db::exec('UPDATE karte SET trigDetail = ? WHERE trig = ? AND trigDetail = ?', [$label, $row['trig'], $row['label']]);
-    if ($row && $row['trig'] !== $trig && $row['trig'] !== '') Db::exec('UPDATE karte SET trig = ? WHERE trig = ? AND trigDetail = ?', [$trig, $row['trig'], $label]);
-    $vals = [$label, $trig, $stores ? implode(',', $stores) : null, $has ? 1 : 0, $name, $desc, !empty($b['showInsurance']) ? 1 : 0, $kind, $from, $to, $memo];
-    $cols = 'label = ?, trig = ?, stores = ?, hasContent = ?, name = ?, description = ?, showInsurance = ?, presetKind = ?, fromDate = ?, toDate = ?, storeMemo = ?';
+    // （内訳を URL の名前にしている URL だけ。内訳を選んだ URL は、ほかの入り方の方と見分けられないので直さない）
+    if ($row && trim((string)($row['trigDetail'] ?? '')) === '' && $tDetail === '' && $row['label'] !== $label && $row['trig'] !== '') Db::exec('UPDATE karte SET trigDetail = ? WHERE trig = ? AND trigDetail = ?', [$label, $row['trig'], $row['label']]);
+    if ($row && trim((string)($row['trigDetail'] ?? '')) === '' && $tDetail === '' && $row['trig'] !== $trig && $row['trig'] !== '' && $trig !== '') Db::exec('UPDATE karte SET trig = ? WHERE trig = ? AND trigDetail = ?', [$trig, $row['trig'], $label]);
+    $vals = [$label, $trig, $tDetail, $stores ? implode(',', $stores) : null, $has ? 1 : 0, $name, $desc, !empty($b['showInsurance']) ? 1 : 0, $kind, $from, $to, $memo];
+    $cols = 'label = ?, trig = ?, trigDetail = ?, stores = ?, hasContent = ?, name = ?, description = ?, showInsurance = ?, presetKind = ?, fromDate = ?, toDate = ?, storeMemo = ?';
     if ($row) {
         Db::exec("UPDATE campaign SET $cols WHERE id = ?", array_merge($vals, [$id]));
     } else {
@@ -588,6 +598,8 @@ function hq_campaigns_delete(): never
 {
     Auth::requireHq();
     Http::requireJson();
+    // ストーリーズ用の URL は消さない（店舗のストーリー画像の画面で使っている）
+    if (Db::one("SELECT id FROM campaign WHERE id = ? AND route = 'story'", [(string)(Http::body()['id'] ?? '')])) Http::error('ストーリーズ用の URL は消せません（名前・きっかけは「直す」で変えられます）', 400);
     Db::exec('DELETE FROM campaign WHERE id = ?', [(string)(Http::body()['id'] ?? '')]);
     Http::json(['ok' => true]);
 }
