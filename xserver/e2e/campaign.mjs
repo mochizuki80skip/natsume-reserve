@@ -30,6 +30,7 @@ ok('目安を保存できる', (await sec.textContent()).includes('保険のご�
 // 開いたままの本部の画面でも、新患継続率の「選択肢・エリアの設定」で足した集客きっかけが、URL を作るときに出る
 { const o = (await api(hp, 'GET', '/api/admin/hq/karte/options'))[1].options.trigger; await api(hp, 'PUT', '/api/admin/hq/karte/options', { category: 'trigger', labels: [...o, '見本媒体'] }); }
 await sec.getByRole('button', { name: '＋ URL・QR を作る' }).click();
+await sec.getByRole('form', { name: 'URL・QR を作る' }).getByLabel('新患継続率のきっかけ').locator('option', { hasText: '見本媒体' }).waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
 ok('足した集客きっかけが URL を作るときに選べる（画面を開き直さなくても）', (await sec.getByRole('form', { name: 'URL・QR を作る' }).getByLabel('新患継続率のきっかけ').locator('option').allTextContents()).includes('見本媒体'));
 let form = sec.getByRole('form', { name: 'URL・QR を作る' });
 ok('名前ときっかけを入れるまで保存できない', await form.getByRole('button', { name: '保存' }).isDisabled());
