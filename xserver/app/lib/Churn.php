@@ -33,7 +33,7 @@ final class Churn
     {
         $byName = [];
         $add = function (string $name, string $no) use (&$byName) {
-            $k = Text::normalizeName($name);
+            $k = Karte::personKey($name);
             $no = self::cardKey($no);
             if ($k === '' || $no === '') return;
             $byName[$k][$no] = true;
@@ -43,7 +43,7 @@ final class Churn
         foreach ($byName as $k => $nos) if (count($nos) === 1) $out[$k] = (string)array_key_first($nos);
         // 新患継続率のカルテNo は患者一覧より優先
         foreach (Db::all("SELECT name, karteNo FROM karte WHERE storeId = ? AND karteNo <> '' AND name <> ''", [$storeId]) as $r) {
-            $k = Text::normalizeName((string)$r['name']);
+            $k = Karte::personKey((string)$r['name']);
             $no = self::cardKey((string)$r['karteNo']);
             if ($k !== '' && $no !== '') $out[$k] = $no;
         }
@@ -61,11 +61,12 @@ final class Churn
         $rows = [];
         $push = function (string $date, string $text, string $staff, string $card) use (&$rows, $map) {
             if (Text::isContinuationText($text) || Availability::isBlockMark($text)) return;
+            // 氏名のあとの「様」「様6」（回数）や、前に書いたカルテNo（「1600 山田」）は外して同じ人と見る
             $name = Karte::nameOfText($text);
-            $nk = Text::normalizeName($name);
+            $nk = Karte::personKey($text);
             if ($nk === '') return;
-            $card = self::cardKey($card) ?: ($map[$nk] ?? '');
-            $rows[] = ['date' => $date, 'name' => $name, 'key' => $card !== '' ? $card : 'n:' . $nk, 'card' => $card, 'staff' => $staff];
+            $card = self::cardKey($card) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
+            $rows[] = ['date' => $date, 'name' => $name, 'key' => $card !== '' ? $card : 'n:' . $nk, 'card' => $card, 'staff' => $staff, 'nk' => $nk];
         };
         foreach (Db::all('SELECT c.date, c.text, c.staff, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0 AND c.visited = 1', [$sid, $from, $to]) as $c) {
             $push($c['date'], (string)$c['text'], (string)($c['staff'] ?? ''), (string)($c['cardNo'] ?? ''));
@@ -73,6 +74,13 @@ final class Churn
         foreach (Db::all('SELECT date, name, staff, cardNo FROM visit_archive WHERE storeId = ? AND date BETWEEN ? AND ?', [$sid, $from, $to]) as $v) {
             $push($v['date'], (string)$v['name'], (string)$v['staff'], (string)$v['cardNo']);
         }
+        // 番号と氏名をつなぐ：番号のある来院で「この氏名＝この番号」が 1 つに決まる氏名は、氏名だけの来院も同じ番号の人にまとめる
+        $cardsOf = [];
+        foreach ($rows as $r) if ($r['card'] !== '') $cardsOf[$r['nk']][$r['card']] = true;
+        foreach ($rows as &$r) {
+            if ($r['card'] === '' && isset($cardsOf[$r['nk']]) && count($cardsOf[$r['nk']]) === 1) { $r['card'] = (string)array_key_first($cardsOf[$r['nk']]); $r['key'] = $r['card']; }
+        }
+        unset($r);
         usort($rows, fn($a, $b) => strcmp($a['date'], $b['date']));
         return $rows;
     }
@@ -85,9 +93,9 @@ final class Churn
         foreach (Db::all('SELECT c.date, c.time, c.text, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date > ? AND c.bed > 0 ORDER BY c.date ASC, c.time ASC', [$store['id'], $from]) as $c) {
             $text = (string)$c['text'];
             if (Text::isContinuationText($text) || Availability::isBlockMark($text)) continue;
-            $nk = Text::normalizeName(Karte::nameOfText($text));
+            $nk = Karte::personKey($text);
             if ($nk === '') continue;
-            $card = self::cardKey((string)($c['cardNo'] ?? '')) ?: ($map[$nk] ?? '');
+            $card = self::cardKey((string)($c['cardNo'] ?? '')) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
             foreach (array_unique([$card !== '' ? $card : 'n:' . $nk, 'n:' . $nk]) as $key) $out[$key][] = ['date' => $c['date'], 'time' => (int)$c['time']];
         }
         return $out;
@@ -99,7 +107,7 @@ final class Churn
         $out = [];
         foreach (Db::all('SELECT * FROM karte WHERE storeId = ? ORDER BY date ASC', [$storeId]) as $k) {
             $no = self::cardKey((string)$k['karteNo']);
-            $nk = Text::normalizeName((string)$k['name']);
+            $nk = Karte::personKey((string)$k['name']);
             if ($no !== '') $out[$no] ??= $k;
             if ($nk !== '') $out['n:' . $nk] ??= $k;
         }
@@ -138,7 +146,7 @@ final class Churn
                 $next = $vs[$i + 1]['date'] ?? null;
                 if ($next !== null && $next < $cd) continue; // 離反の前に来院している
                 if ($next !== null && $next === $v['date']) continue;
-                $k = $karte[$key] ?? $karte['n:' . Text::normalizeName($v['name'])] ?? null;
+                $k = $karte[$key] ?? $karte['n:' . $v['nk']] ?? null;
                 $cands[] = [$key, $v, $cd, $k];
             }
         }
@@ -186,7 +194,7 @@ final class Churn
         // 取り込んだ行（スプレッドシート）と同じ日・同じ人なら作らない
         $imported = [];
         foreach (Db::all("SELECT churnDate, cardNo, name FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source IN ('import', 'manual')", [$store['id'], $first, $last]) as $r) {
-            $imported[$r['churnDate'] . '|' . (self::cardKey($r['cardNo']) ?: 'n:' . Text::normalizeName($r['name']))] = true;
+            $imported[$r['churnDate'] . '|' . (self::cardKey($r['cardNo']) ?: 'n:' . Karte::personKey((string)$r['name']))] = true;
         }
         foreach ($want as $id => $w) {
             if (isset($have[$id]) || isset($imported[$w['churnDate'] . '|' . $w['patientKey']])) continue;
@@ -219,7 +227,7 @@ final class Churn
         }
         $imported = [];
         foreach (Db::all("SELECT churnDate, cardNo, name FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source IN ('import', 'manual')", [$store['id'], $first, $last]) as $r) {
-            $imported[$r['churnDate'] . '|' . (self::cardKey($r['cardNo']) ?: 'n:' . Text::normalizeName($r['name']))] = true;
+            $imported[$r['churnDate'] . '|' . (self::cardKey($r['cardNo']) ?: 'n:' . Karte::personKey((string)$r['name']))] = true;
         }
         foreach ($want as $id => $w) {
             if (isset($have[$id]) || isset($imported[$w['churnDate'] . '|' . $w['patientKey']])) continue;
@@ -255,7 +263,7 @@ final class Churn
             foreach ($visits as $v) {
                 if ($v['date'] !== $target || isset($seen[$v['key']])) continue;
                 $seen[$v['key']] = true;
-                $nk = 'n:' . Text::normalizeName($v['name']);
+                $nk = 'n:' . $v['nk'];
                 $later = array_filter(array_merge($bookings[$v['key']] ?? [], $v['key'] !== $nk ? ($bookings[$nk] ?? []) : []), fn($b) => $b['date'] > $target);
                 if ($later) continue; // 次の来院・予約がある
                 Db::exec('INSERT IGNORE INTO follow (id, storeId, listDate, patientKey, lastVisit, cardNo, name, staff) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

@@ -11,7 +11,7 @@ const STATUS_JA: Record<string, string> = { BOOKED: '予約中', CANCELLED: '取
 const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 
 interface Filter { tab: 'web' | 'cancel'; from: string; to: string; status: string; q: string }
-interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string; campaign?: { route: string; name: string; memo: string } | null }
+interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string; cancelText?: string; campaign?: { route: string; name: string; memo: string } | null }
 interface CancelRow { id: string; date: string; time: number; bed: number; name: string; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAtText: string }
 interface Resp { filter: Filter; rows: (WebRow | CancelRow)[] }
 
@@ -106,7 +106,7 @@ export default function ReservationsPage() {
                   <td className="px-2 py-1">{r.name}</td>
                   <td className="px-2 py-1">{r.cardNo ?? ''}</td>
                   <td className="whitespace-nowrap px-2 py-1">{r.phoneText}</td>
-                  <td className="px-2 py-1">{STATUS_JA[r.status] ?? r.status}</td>
+                  <td className="px-2 py-1">{STATUS_JA[r.status] ?? r.status}{r.cancelText && <span className="block whitespace-nowrap text-[11px] text-red-700" title="取消になった日時・アカウント・操作">{r.cancelText}</span>}</td>
                   <td className="px-2 py-1 text-xs" title={r.campaign?.memo ? `店舗向け：${r.campaign.memo}` : undefined}>{r.campaign ? <span className="whitespace-nowrap font-bold text-orange-800">🎁 {r.campaign.name}</span> : ''}</td>
                   <td className="px-2 py-1"><Link to={`/admin/day/${r.date}`} className="text-brand underline">予約表</Link></td>
                 </tr>

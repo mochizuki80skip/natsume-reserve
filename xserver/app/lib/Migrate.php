@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 63;
+    private const VERSION = 64;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -458,6 +458,13 @@ SQL);
                 // URL の内訳つきのきっかけ（紹介他事業・キャンペーン・イベント）
                 if (self::hasTable($pdo, 'campaign') && !self::hasColumn($pdo, 'campaign', 'trigDetail')) $pdo->exec("ALTER TABLE `campaign` ADD COLUMN `trigDetail` VARCHAR(60) NOT NULL DEFAULT ''");
             }
+            if ($ver < 64) {
+                // WEB 予約の取消の記録（いつ・どのアカウントで・何をして）
+                if (self::hasTable($pdo, 'reservation') && !self::hasColumn($pdo, 'reservation', 'cancelledAt')) {
+                    $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `cancelledAt` DATETIME NULL, ADD COLUMN `cancelledBy` VARCHAR(60) NULL, ADD COLUMN `cancelNote` VARCHAR(100) NULL');
+                }
+                self::repairDetachedWeb($pdo);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -749,6 +756,34 @@ SQL);
   PRIMARY KEY (`storeId`, `cardNo`),
   CONSTRAINT `fk_patient_card_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
+
+    /**
+     * 2026-11-13〜の不具合の直し：予約表で WEB 予約の氏名に「様」や回数（様6 など）を足しただけで、別の人と見なして予約を取消にしていた。
+     * セルには同じ人の名前が残っているのに予約が取消（キャンセルの名簿にも無い）ものを、予約に戻してつなぎ直す
+     */
+    private static function repairDetachedWeb(PDO $pdo): void
+    {
+        if (!self::hasTable($pdo, 'cell') || !self::hasTable($pdo, 'cancel_log')) return;
+        $rs = $pdo->query("SELECT r.id, r.storeId, r.date, r.time, r.bed, r.name FROM reservation r WHERE r.status = 'CANCELLED' AND r.createdAt >= '2026-11-01'
+            AND NOT EXISTS (SELECT 1 FROM cancel_log l WHERE l.reservationId = r.id)")->fetchAll(PDO::FETCH_ASSOC);
+        $cell = $pdo->prepare('SELECT id, text, reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?');
+        $link = $pdo->prepare('UPDATE cell SET reservationId = ? WHERE id = ?');
+        $book = $pdo->prepare("UPDATE reservation SET status = 'BOOKED', cancelledAt = NULL, cancelledBy = NULL, cancelNote = NULL WHERE id = ?");
+        $step = 15;
+        try { $g = $pdo->query('SELECT slotMinutes FROM global_setting WHERE id = 1')->fetch(PDO::FETCH_ASSOC); if ($g && (int)$g['slotMinutes'] > 0) $step = (int)$g['slotMinutes']; } catch (Throwable) {}
+        foreach ($rs as $r) {
+            $cell->execute([$r['storeId'], $r['date'], (int)$r['time'], (int)$r['bed']]);
+            $c = $cell->fetch(PDO::FETCH_ASSOC);
+            if (!$c || $c['reservationId'] || Karte::personKey((string)$c['text']) === '' || Karte::personKey((string)$c['text']) !== Karte::personKey((string)$r['name'])) continue;
+            $link->execute([$r['id'], $c['id']]);
+            $book->execute([$r['id']]);
+            // 2 枠目（上記初診対応など）もつなぎ直す
+            $cell->execute([$r['storeId'], $r['date'], (int)$r['time'] + $step, (int)$r['bed']]);
+            $n = $cell->fetch(PDO::FETCH_ASSOC);
+            if ($n && !$n['reservationId'] && Text::isContinuationText((string)$n['text'])) $link->execute([$r['id'], $n['id']]);
+            error_log('[migrate] WEB 予約をつなぎ直しました: ' . $r['id']);
+        }
+    }
 
     public const CELL_LOG_DDL = 'CREATE TABLE IF NOT EXISTS `cell_log` (
   `id` VARCHAR(32) NOT NULL,

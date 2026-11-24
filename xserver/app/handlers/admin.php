@@ -197,14 +197,14 @@ function adm_cells_put(): never
                         if ($rid && !Db::one('SELECT id FROM reservation WHERE id = ? AND storeId = ? AND date = ? AND time = ? AND bed = ?', [$rid, $sid, $date, $time, $bed])) $rid = null;
                         Db::exec('UPDATE cell SET reservationId = ?, menus = ?, staff = ?, visited = ?, phone = ? WHERE storeId = ? AND date = ? AND time = ? AND bed = ?',
                             [$rid, (string)($sn['menus'] ?? ''), (string)($sn['staff'] ?? ''), (int)($sn['visited'] ?? 0), $sn['phone'] ?? null, $sid, $date, $time, $bed]);
-                        if ($rid) { Db::exec("UPDATE reservation SET status = 'BOOKED' WHERE id = ?", [$rid]); $restored[$rid] = [$time, $bed]; }
+                        if ($rid) { Db::exec("UPDATE reservation SET status = 'BOOKED', cancelledAt = NULL, cancelledBy = NULL, cancelNote = NULL WHERE id = ?", [$rid]); $restored[$rid] = [$time, $bed]; }
                         Db::exec('UPDATE cell_log SET snap = NULL WHERE id = ?', [$lg['id']]);
                         $back[] = ['time' => $time, 'bed' => $bed, 'menus' => DayData::menusOf((string)($sn['menus'] ?? '')), 'staff' => (string)($sn['staff'] ?? ''), 'visited' => (bool)($sn['visited'] ?? 0), 'web' => (bool)$rid];
                     }
                 }
                 // 別の人の名前に書き換えたら、前の人の情報（電話番号・WEB予約・メニュー・担当・来院チェック）は外す
-                //（（初診）を付けた・外しただけなら残す。2 枠目の文字どうしの書き換えも残す）
-                if ($wasText !== '' && !Text::isContinuationText($wasText) && Karte::nameOfText($wasText) !== Karte::nameOfText($text)) {
+                //（（初診）を付けた・外しただけ、「様」や回数（様6 など）を足した・打ち足しただけなら同じ人なので残す。2 枠目の文字どうしの書き換えも残す）
+                if ($wasText !== '' && !Text::isContinuationText($wasText) && !Karte::isSamePerson($wasText, $text)) {
                     Db::exec("UPDATE cell SET phone = NULL, reservationId = NULL, menus = '', staff = '', visited = 0 WHERE storeId = ? AND date = ? AND time = ? AND bed = ?", [$sid, $date, $time, $bed]);
                     if ($old && $old['reservationId']) $touched[$old['reservationId']] = true;
                 }
@@ -223,7 +223,7 @@ function adm_cells_put(): never
             $n = 0;
             foreach (Db::all('SELECT text FROM cell WHERE reservationId = ?', [$rid]) as $rc) if (!Text::isContinuationText((string)$rc['text'])) $n++;
             if ($n === 0) {
-                Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $rid]);
+                adm_res_cancelled($rid, $by, '予約表でセルを消した・別の人の名前に書き換えた');
                 Db::exec('UPDATE cell SET reservationId = NULL WHERE reservationId = ?', [$rid]);
             }
         }
@@ -436,7 +436,7 @@ function adm_cancel_post(): never
             // 2 回押した・ほかの端末で先にキャンセルしたときは、名簿に 2 回残さない
             if (Db::exec('DELETE FROM cell WHERE id = ?', [$c['id']]) === 0) throw new HttpError(409, 'この予約は、ほかの端末で先にキャンセルか移動されています。予約表を確かめてください');
             if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
-            if ($c['reservationId']) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $c['reservationId']]);
+            if ($c['reservationId']) adm_res_cancelled($c['reservationId'], (string)$ctx['session']['code'], $kind === 'NOSHOW' ? '無断キャンセル（予約表）' : 'キャンセル（予約表の「キャンセル・予約変更」）');
         }
     });
     Http::json(['ok' => true, 'log' => Db::one('SELECT * FROM cancel_log WHERE id = ?', [$logIds[0]]), 'count' => count($logIds)]);
@@ -650,7 +650,7 @@ function adm_cancel_delete(): never
         $rid = $log['reservationId'] && Db::one('SELECT id FROM reservation WHERE id = ?', [$log['reservationId']]) ? $log['reservationId'] : null;
         Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $log['date'], $log['time'], $log['bed'], $log['name'], $rid]);
         if ($log['contText']) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $log['date'], (int)$log['time'] + $step, $log['bed'], $log['contText'], $rid]);
-        if ($rid) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['BOOKED', $rid]);
+        if ($rid) Db::exec('UPDATE reservation SET status = ?, cancelledAt = NULL, cancelledBy = NULL, cancelNote = NULL WHERE id = ?', ['BOOKED', $rid]);
         Db::exec('DELETE FROM cancel_log WHERE id = ?', [$log['id']]);
     });
     } finally {
@@ -732,6 +732,9 @@ function adm_reservations_get(): never
             $r['phoneText'] = Text::formatJpPhone($r['phone']);
             $c = Campaign::forStore($r['campaign'] ?? null);
             $r['campaign'] = $c ? ['route' => $c['route'] ?? '', 'name' => $c['name'] ?? '', 'memo' => $c['memo'] ?? ''] : null;
+            // 取消になったとき：いつ・どのアカウントで・何をして（記録を始める前の取消は空）
+            $r['cancelText'] = $r['status'] === 'CANCELLED' && !empty($r['cancelledAt'])
+                ? Time::formatDateTimeShort($r['cancelledAt']) . '　' . (string)$r['cancelledBy'] . '　' . (string)$r['cancelNote'] : '';
         }
         return $r;
     }, $rows);
@@ -746,9 +749,9 @@ function adm_reservations_delete(): never
     $id = (string)(Http::body()['id'] ?? '');
     $r = Db::one('SELECT * FROM reservation WHERE id = ? AND storeId = ?', [$id, $ctx['store']['id']]);
     if (!$r) Http::error('not found', 404);
-    Db::transaction(function () use ($r) {
+    Db::transaction(function () use ($r, $ctx) {
         Db::exec('DELETE FROM cell WHERE reservationId = ?', [$r['id']]);
-        Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $r['id']]);
+        adm_res_cancelled($r['id'], (string)$ctx['session']['code'], '取り消し（予約・来院ログ）');
     });
     Http::json(['ok' => true]);
 }
@@ -769,9 +772,9 @@ function adm_reservations_export(): never
         $rows = array_map(fn($c) => [$c['date'], Time::minToHm((int)$c['time']), (int)$c['bed'], $c['name'], ($c['kind'] === 'ADVANCE' ? '事前連絡' : ($c['kind'] === 'CHANGE' ? '予約変更' : '無断')), $c['source'] === 'WEB' ? 'WEB予約' : '電話・窓口', $c['createdAt'], $c['byCode'], trim(($c['nextDate'] ?? '') . ($c['nextTime'] !== null ? ' ' . Time::minToHm((int)$c['nextTime']) : '')), $c['memo'] ?? ''], $list);
         $label = 'キャンセル・変更名簿';
     } else {
-        $header = ['受付日時', '予約日', '時刻', 'ベッド', '区分', '氏名', '診察券番号', '電話番号', '状態', '特典（キャンペーン）'];
+        $header = ['受付日時', '予約日', '時刻', 'ベッド', '区分', '氏名', '診察券番号', '電話番号', '状態', '取消の日時', '取消したアカウント', '取消の操作', '特典（キャンペーン）'];
         $camp = function (?string $j): string { $c = Campaign::forStore($j); return $c ? trim(($c['route'] ?? '') . '：' . ($c['name'] ?? ''), '：') : ''; };
-        $rows = array_map(fn($r) => [$r['createdAt'], $r['date'], Time::minToHm((int)$r['time']), (int)$r['bed'], ADM_KIND_JA[$r['kind']] ?? $r['kind'], $r['name'], $r['cardNo'] ?? '', Text::formatJpPhone($r['phone']), ADM_STATUS_JA[$r['status']] ?? $r['status'], $camp($r['campaign'] ?? null)], $list);
+        $rows = array_map(fn($r) => [$r['createdAt'], $r['date'], Time::minToHm((int)$r['time']), (int)$r['bed'], ADM_KIND_JA[$r['kind']] ?? $r['kind'], $r['name'], $r['cardNo'] ?? '', Text::formatJpPhone($r['phone']), ADM_STATUS_JA[$r['status']] ?? $r['status'], (string)($r['cancelledAt'] ?? ''), (string)($r['cancelledBy'] ?? ''), (string)($r['cancelNote'] ?? ''), $camp($r['campaign'] ?? null)], $list);
         $label = 'WEB予約一覧';
     }
     $base = "{$store['code']}_{$f['tab']}_{$f['from']}_{$f['to']}";
@@ -1527,4 +1530,10 @@ function adm_story_url(): never
     $ctx = Auth::context();
     $e = Campaign::storyEntry();
     Http::json(['code' => $e['code'], 'label' => $e['label'], 'trig' => $e['trig'], 'url' => Campaign::url((string)$e['code'], (string)$ctx['store']['code'])]);
+}
+
+/** WEB 予約を取消にして、いつ・どのアカウントで・何をして取消になったかを残す（予約・来院ログに出す） */
+function adm_res_cancelled(string $rid, string $by, string $note): void
+{
+    Db::exec("UPDATE reservation SET status = 'CANCELLED', cancelledAt = ?, cancelledBy = ?, cancelNote = ? WHERE id = ? AND status <> 'CANCELLED'", [Time::nowJstDateTime(), mb_substr($by, 0, 60), mb_substr($note, 0, 100), $rid]);
 }

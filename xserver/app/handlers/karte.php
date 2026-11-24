@@ -79,7 +79,7 @@ function karte_delete(): never
                     Db::exec('INSERT INTO cell_log (id, storeId, date, time, bed, `before`, `after`, byCode, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $row['date'], $time, $bed, trim((string)$cell['text']), '', $by, Time::nowJstDateTime()]);
                     Db::exec('DELETE FROM cell WHERE id = ?', [$cell['id']]);
                     if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
-                    if ($cell['reservationId']) Db::exec('UPDATE reservation SET status = ? WHERE id = ?', ['CANCELLED', $cell['reservationId']]);
+                    if ($cell['reservationId']) adm_res_cancelled($cell['reservationId'], $by, '新患継続率の行を削除（予約表の予約も消した）');
                 });
                 $removed = true;
             }

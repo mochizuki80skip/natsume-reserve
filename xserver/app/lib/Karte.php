@@ -115,6 +115,34 @@ final class Karte
     }
 
     /**
+     * 同じ人かを見分けるための氏名のキー。予約表で氏名のあとに付ける「様」「様6」「6」（回数）や、
+     * 前に付けるカルテNo（「1600 山田」）を外して、空白・全角半角をそろえる
+     */
+    public static function personKey(string $text): string
+    {
+        $t = self::nameOfText($text);
+        $t = preg_replace('/^[0-9０-９]+[\s\x{3000}]*/u', '', $t) ?? $t;
+        $t = preg_replace('/[\s\x{3000}]*(?:様|さま|さん)?[\s\x{3000}]*[0-9０-９]{1,3}[\s\x{3000}]*(?:回目?)?$/u', '', $t) ?? $t;
+        $t = preg_replace('/[\s\x{3000}]*(?:様|さま|さん)$/u', '', $t) ?? $t;
+        return Text::normalizeName($t);
+    }
+
+    /** セルの先頭に書いたカルテNo（「1600 山田」「1600山田」の 1600）。無ければ '' */
+    public static function leadingCardNo(string $text): string
+    {
+        return preg_match('/^[\s\x{3000}]*([0-9０-９]{2,8})[\s\x{3000}]*[^\s\x{3000}0-9０-９]/u', $text, $m) ? mb_convert_kana($m[1], 'n', 'UTF-8') : '';
+    }
+
+    /** 同じ人の書き直しか（「様」や回数を足した・消した、打ち足した・消し足りない、（初診）の付け外し） */
+    public static function isSamePerson(string $a, string $b): bool
+    {
+        $ka = self::personKey($a); $kb = self::personKey($b);
+        if ($ka !== '' && $ka === $kb) return true;
+        $na = Text::normalizeName(self::nameOfText($a)); $nb = Text::normalizeName(self::nameOfText($b));
+        return $na !== '' && $nb !== '' && (str_starts_with($na, $nb) || str_starts_with($nb, $na));
+    }
+
+    /**
      * その月の予約表から、来院チェック済みの初診・初・初自・再を取り込む。
      * 手を加えていない自動の行は、来院チェックが外れたり区分の印が消えたりしたら取り除く。
      */

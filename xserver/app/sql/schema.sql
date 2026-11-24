@@ -240,6 +240,9 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `refCode` VARCHAR(16) NULL,  -- 紹介元（業者）の専用 QR から来た予約（referral.code）
   `campaign` TEXT NULL,  -- 予約したときのキャンペーンの内容（JSON。あとで設定を変えてもこの予約はそのまま）
   `groupId` VARCHAR(32) NULL,  -- ご家族（お連れ様）と一緒に WEB 予約したとき、1人目の予約の id（1人目も同じ値）。1 人の予約は NULL
+  `cancelledAt` DATETIME NULL,      -- 取消になった日時
+  `cancelledBy` VARCHAR(60) NULL,   -- 取消にしたアカウント（店舗コード・本部の ID など）
+  `cancelNote` VARCHAR(100) NULL,   -- 何をして取消になったか（予約表でセルを消した・キャンセルの画面 など）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `res_view_token` (`viewToken`),
