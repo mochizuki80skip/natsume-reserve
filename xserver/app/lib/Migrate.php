@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 73;
+    private const VERSION = 74;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -518,6 +518,10 @@ SQL);
             if ($ver < 73) {
                 // きっかけ「キャンペーン」をやめて「イベント」の内訳（選ぶ）にまとめる。イベントの内訳は選ばなくてもよい（必須は紹介他事業だけ。ほかは本部が選ぶ）
                 if (self::hasTable($pdo, 'karte_option')) self::mergeCampaignIntoEvent($pdo);
+            }
+            if ($ver < 74) {
+                // 今までの新患継続率の「キャンペーン／○○」も「イベント／○○」に（内訳はそのまま）
+                if (self::hasTable($pdo, 'karte')) $pdo->exec("UPDATE karte SET trig = 'イベント' WHERE trig = 'キャンペーン'");
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
