@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 64;
+    private const VERSION = 65;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -465,6 +465,15 @@ SQL);
                 }
                 self::repairDetachedWeb($pdo);
             }
+            if ($ver < 65) {
+                // 予約表の変更の履歴：操作の種類（入力・書き換え・消した・キャンセル・移動・名簿から戻した）とメモ
+                if (self::hasTable($pdo, 'cell_log') && !self::hasColumn($pdo, 'cell_log', 'kind')) {
+                    $pdo->exec("ALTER TABLE `cell_log` ADD COLUMN `kind` VARCHAR(10) NOT NULL DEFAULT 'EDIT', ADD COLUMN `note` VARCHAR(100) NOT NULL DEFAULT ''");
+                    $pdo->exec("UPDATE `cell_log` SET `kind` = 'DELETE' WHERE `after` = ''");
+                    if (self::hasTable($pdo, 'cancel_log')) self::backfillCancelHistory($pdo);
+                }
+                if (self::hasTable($pdo, 'cell_log') && !self::hasIndex($pdo, 'cell_log', 'cell_log_store_created')) $pdo->exec('ALTER TABLE `cell_log` ADD KEY `cell_log_store_created` (`storeId`, `createdAt`)');
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -785,6 +794,19 @@ SQL);
         }
     }
 
+    /** これまでのキャンセル・予約変更（キャンセル名簿）を、変更の履歴にも入れる（v65 より前の分） */
+    private static function backfillCancelHistory(PDO $pdo): void
+    {
+        $ins = $pdo->prepare('INSERT INTO cell_log (id, storeId, date, time, bed, `before`, `after`, byCode, createdAt, kind, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        foreach ($pdo->query('SELECT * FROM cancel_log')->fetchAll(PDO::FETCH_ASSOC) as $c) {
+            $web = $c['source'] === 'WEB' ? '・WEB予約' : '';
+            $note = $c['kind'] === 'CHANGE'
+                ? '→ ' . ($c['nextDate'] && $c['nextDate'] !== $c['date'] ? Time::formatDateJa((string)$c['nextDate'], false) . ' ' : '') . ($c['nextTime'] !== null ? Time::minToHm((int)$c['nextTime']) : '') . $web
+                : ($c['kind'] === 'NOSHOW' ? '無断キャンセル' : 'キャンセル（事前連絡）') . $web;
+            $ins->execute([bin2hex(random_bytes(16)), $c['storeId'], $c['date'], (int)$c['time'], (int)$c['bed'], mb_substr((string)$c['name'], 0, 100), '', mb_substr((string)$c['byCode'], 0, 20), $c['createdAt'], $c['kind'] === 'CHANGE' ? 'MOVE' : 'CANCEL', mb_substr($note, 0, 100)]);
+        }
+    }
+
     public const CELL_LOG_DDL = 'CREATE TABLE IF NOT EXISTS `cell_log` (
   `id` VARCHAR(32) NOT NULL,
   `storeId` VARCHAR(32) NOT NULL,
@@ -795,9 +817,12 @@ SQL);
   `after` VARCHAR(100) NOT NULL DEFAULT \'\',
   `byCode` VARCHAR(20) NOT NULL,
   `snap` TEXT NULL,
+  `kind` VARCHAR(10) NOT NULL DEFAULT \'EDIT\',
+  `note` VARCHAR(100) NOT NULL DEFAULT \'\',
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `cell_log_store_date` (`storeId`, `date`),
+  KEY `cell_log_store_created` (`storeId`, `createdAt`),
   CONSTRAINT `fk_cell_log_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
@@ -895,6 +920,13 @@ SQL);
     {
         $st = $pdo->prepare('SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?');
         $st->execute([$t, $c]);
+        return (bool)$st->fetch();
+    }
+
+    private static function hasIndex(PDO $pdo, string $t, string $i): bool
+    {
+        $st = $pdo->prepare('SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?');
+        $st->execute([$t, $i]);
         return (bool)$st->fetch();
     }
 }

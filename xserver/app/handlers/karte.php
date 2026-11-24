@@ -76,7 +76,7 @@ function karte_delete(): never
                 $by = (string)($ctx['session']['code'] ?? '');
                 Db::transaction(function () use ($sid, $row, $time, $bed, $cell, $cont, $by) {
                     // 予約表の「消した入力を元に戻す」から戻せるように記録する
-                    Db::exec('INSERT INTO cell_log (id, storeId, date, time, bed, `before`, `after`, byCode, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $row['date'], $time, $bed, trim((string)$cell['text']), '', $by, Time::nowJstDateTime()]);
+                    adm_log_event($sid, $row['date'], $time, $bed, 'DELETE', trim((string)$cell['text']), '', $by, '新患継続率の行と一緒に削除');
                     Db::exec('DELETE FROM cell WHERE id = ?', [$cell['id']]);
                     if ($cont) Db::exec('DELETE FROM cell WHERE id = ?', [$cont['id']]);
                     if ($cell['reservationId']) adm_res_cancelled($cell['reservationId'], $by, '新患継続率の行を削除（予約表の予約も消した）');

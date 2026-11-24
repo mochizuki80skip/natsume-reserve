@@ -305,9 +305,12 @@ CREATE TABLE IF NOT EXISTS `cell_log` (
   `after` VARCHAR(100) NOT NULL DEFAULT '',
   `byCode` VARCHAR(20) NOT NULL,
   `snap` TEXT NULL,  -- 消したときの WEB 予約・メニュー・担当・来院チェック・電話番号（JSON。元に戻したら空にする）
+  `kind` VARCHAR(10) NOT NULL DEFAULT 'EDIT',  -- INPUT＝入力、EDIT＝書き換え、DELETE＝消した、CANCEL＝キャンセル、MOVE＝予約変更（移動）、RESTORE＝名簿から戻した
+  `note` VARCHAR(100) NOT NULL DEFAULT '',     -- 移動先・キャンセルの種類など
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `cell_log_store_date` (`storeId`, `date`),
+  KEY `cell_log_store_created` (`storeId`, `createdAt`),
   CONSTRAINT `fk_cell_log_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

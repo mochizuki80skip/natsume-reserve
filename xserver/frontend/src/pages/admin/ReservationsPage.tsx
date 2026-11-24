@@ -1,4 +1,4 @@
-// 予約・来院ログ（WEB予約一覧／キャンセル名簿）
+// 予約・来院ログ（WEB予約一覧／キャンセル名簿／変更履歴）
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
@@ -10,33 +10,37 @@ import { useAdmin } from './Layout';
 const STATUS_JA: Record<string, string> = { BOOKED: '予約中', CANCELLED: '取消' };
 const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交通事故）', REVISIT: '再来', RETURN: '通院中' };
 
-interface Filter { tab: 'web' | 'cancel'; from: string; to: string; status: string; q: string }
+interface Filter { tab: 'web' | 'cancel' | 'history'; basis: 'op' | 'date'; from: string; to: string; status: string; q: string }
+interface HistRow { createdAt: string; createdAtText: string; who: string; kind: string; kindText: string; date: string; time: number; bed: number; before: string; after: string; note: string }
+const HIST_CLASS: Record<string, string> = { INPUT: 'bg-sky-100 text-sky-800', EDIT: 'bg-amber-100 text-amber-800', DELETE: 'bg-red-100 text-red-800', CANCEL: 'bg-red-100 text-red-800', MOVE: 'bg-violet-100 text-violet-800', RESTORE: 'bg-emerald-100 text-emerald-800', WEB: 'bg-emerald-100 text-emerald-800' };
 interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string; cancelText?: string; campaign?: { route: string; name: string; memo: string } | null }
-interface CancelRow { id: string; date: string; time: number; bed: number; name: string; kind: string; source: string; byCode: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAtText: string }
-interface Resp { filter: Filter; rows: (WebRow | CancelRow)[] }
+interface CancelRow { id: string; date: string; time: number; bed: number; name: string; kind: string; source: string; byCode: string; who?: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAtText: string }
+interface Resp { filter: Filter; rows: (WebRow | CancelRow | HistRow)[] }
 
 export default function ReservationsPage() {
   const { me } = useAdmin();
   const [sp, setSp] = useSearchParams();
   const qs = sp.toString();
   const { data, error } = useFetch<Resp>(`/api/admin/reservations?${qs}`);
-  const [form, setForm] = useState<{ from: string; to: string; status: string; q: string } | null>(null);
+  const [form, setForm] = useState<{ from: string; to: string; status: string; q: string; basis: string } | null>(null);
   if (!me.store) return <p>店舗が登録されていません。</p>;
   if (error) return <p className="text-sm text-red-700">{error.message}</p>;
   if (!data) return <p className="text-sm text-slate-500">読み込み中…</p>;
   const f = data.filter;
-  const cur = form ?? { from: f.from, to: f.to, status: f.status, q: f.q };
+  const cur = form ?? { from: f.from, to: f.to, status: f.status, q: f.q, basis: f.basis };
   const tab = f.tab;
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const p = new URLSearchParams({ tab, from: cur.from, to: cur.to });
     if (cur.status) p.set('status', cur.status);
     if (cur.q) p.set('q', cur.q);
+    if (tab === 'history' && cur.basis === 'date') p.set('basis', 'date');
     setSp(p);
   };
   const exportHref = (format: 'csv' | 'xlsx') => `/api/admin/reservations/export?${qs}&format=${format}`;
   const cancels = tab === 'cancel' ? (data.rows as CancelRow[]) : [];
   const rows = tab === 'web' ? (data.rows as WebRow[]) : [];
+  const hist = tab === 'history' ? (data.rows as HistRow[]) : [];
 
   return (
     <div>
@@ -44,9 +48,17 @@ export default function ReservationsPage() {
       <div className="mb-3 flex gap-2 text-sm">
         <Link to={`/admin/reservations?from=${f.from}&to=${f.to}`} className={`rounded px-3 py-1 ${tab === 'web' ? 'bg-brand text-white' : 'border bg-white'}`}>WEB予約一覧</Link>
         <Link to={`/admin/reservations?tab=cancel&from=${f.from}&to=${f.to}`} className={`rounded px-3 py-1 ${tab === 'cancel' ? 'bg-brand text-white' : 'border bg-white'}`}>キャンセル名簿</Link>
+        <Link to="/admin/reservations?tab=history" className={`rounded px-3 py-1 ${tab === 'history' ? 'bg-brand text-white' : 'border bg-white'}`}>変更履歴</Link>
       </div>
       <form onSubmit={submit} className="mb-3 flex flex-wrap items-end gap-2 rounded border bg-white p-3 text-sm">
-        <label>予約日（from）<input type="date" value={cur.from} onChange={(e) => setForm({ ...cur, from: e.target.value })} className="ml-1 rounded border px-2 py-1" /></label>
+        {tab === 'history' && (
+          <label>日付の見方
+            <select aria-label="日付の見方" value={cur.basis} onChange={(e) => setForm({ ...cur, basis: e.target.value })} className="ml-1 rounded border px-2 py-1">
+              <option value="op">操作した日</option><option value="date">予約日</option>
+            </select>
+          </label>
+        )}
+        <label>{tab === 'history' && cur.basis !== 'date' ? '操作した日' : '予約日'}（from）<input type="date" value={cur.from} onChange={(e) => setForm({ ...cur, from: e.target.value })} className="ml-1 rounded border px-2 py-1" /></label>
         <label>〜（to）<input type="date" value={cur.to} onChange={(e) => setForm({ ...cur, to: e.target.value })} className="ml-1 rounded border px-2 py-1" /></label>
         {tab === 'web' && (
           <label>状態
@@ -62,6 +74,7 @@ export default function ReservationsPage() {
           <a href={exportHref('csv')} className="rounded border bg-white px-3 py-1">CSV で保存</a>
           <a href={exportHref('xlsx')} className="rounded border bg-white px-3 py-1">Excel で保存</a>
         </span>
+        {tab === 'history' && <span className="w-full text-xs text-slate-600">予約表の入力・書き換え・消した・キャンセル・予約変更（移動）と、WEB 予約の受付を、操作したアカウント（店舗・本部・管轄MG）と一緒に新しい順に出します。同じセルを続けて打ち直したときは 1 行にまとめます。</span>}
         <span className="w-full text-xs text-slate-500">{data.rows.length} 件（最大 500 件表示）。保存は今の絞り込み条件で行います。個人情報は保持期間（既定 60 日）を過ぎると自動削除されます。</span>
       </form>
       {tab === 'cancel' && (
@@ -76,13 +89,35 @@ export default function ReservationsPage() {
                   <td className="px-2 py-1">{c.name}</td>
                   <td className="px-2 py-1"><span className={`rounded px-1.5 text-xs ${CANCEL_KIND_CLASS[c.kind] ?? ''}`}>{CANCEL_KIND_JA[c.kind] ?? c.kind}</span></td>
                   <td className="px-2 py-1 text-xs">{c.source === 'WEB' ? 'WEB予約' : '電話・窓口'}</td>
-                  <td className="whitespace-nowrap px-2 py-1 text-xs text-slate-500">{c.createdAtText} {c.byCode}</td>
+                  <td className="whitespace-nowrap px-2 py-1 text-xs text-slate-500">{c.createdAtText} {c.who ?? c.byCode}</td>
                   <td className="whitespace-nowrap px-2 py-1">{c.kind === 'CHANGE' ? <span className="text-xs">→ {changeTargetText(c.nextDate, c.nextTime)}</span> : <NextDateInput id={c.id} value={c.nextDate} />}</td>
                   <td className="px-2 py-1 text-xs">{c.memo ?? ''}</td>
                   <td className="px-2 py-1"><Link to={`/admin/day/${c.date}`} className="text-brand underline">予約表</Link></td>
                 </tr>
               ))}
               {cancels.length === 0 && <tr><td colSpan={9} className="px-2 py-4 text-center text-slate-500">該当するキャンセルはありません</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {tab === 'history' && (
+        <div className="overflow-x-auto rounded border bg-white">
+          <table className="w-full text-sm" aria-label="変更履歴">
+            <thead><tr className="bg-slate-100 text-left"><th className="px-2 py-1">操作日時</th><th className="px-2 py-1">アカウント</th><th className="px-2 py-1">操作</th><th className="px-2 py-1">予約日時・ベッド</th><th className="px-2 py-1">変更前</th><th className="px-2 py-1">変更後</th><th className="px-2 py-1">詳細</th><th></th></tr></thead>
+            <tbody>
+              {hist.map((h, i) => (
+                <tr key={i} className="border-t">
+                  <td className="whitespace-nowrap px-2 py-1 text-xs">{h.createdAtText}</td>
+                  <td className="whitespace-nowrap px-2 py-1 text-xs">{h.who}</td>
+                  <td className="whitespace-nowrap px-2 py-1"><span className={`rounded px-1.5 text-xs ${HIST_CLASS[h.kind] ?? 'bg-slate-100'}`}>{h.kindText}</span></td>
+                  <td className="whitespace-nowrap px-2 py-1 text-xs">{formatDateShort(h.date)} {minToHm(h.time)}　ベッド{h.bed}</td>
+                  <td className="px-2 py-1">{h.before}</td>
+                  <td className="px-2 py-1">{h.after}</td>
+                  <td className="px-2 py-1 text-xs text-slate-600">{h.note}</td>
+                  <td className="px-2 py-1"><Link to={`/admin/day/${h.date}`} className="text-brand underline">予約表</Link></td>
+                </tr>
+              ))}
+              {hist.length === 0 && <tr><td colSpan={8} className="px-2 py-4 text-center text-slate-500">該当する履歴はありません</td></tr>}
             </tbody>
           </table>
         </div>
