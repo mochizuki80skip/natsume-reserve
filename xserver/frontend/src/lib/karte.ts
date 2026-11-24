@@ -9,7 +9,9 @@ export interface KarteRow {
   /** 新自（交通事故）・新三（第三者行為）：事故日・事故内容 */
   accidentDate?: string | null; accidentNote?: string; weeklyPlan?: number | null;
 }
-export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[]; partner?: string[] }
+export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[]; partner?: string[]; [detail: `d:${string}`]: string[] | undefined }
+/** ほかのきっかけ（チラシなど）の内訳の選択肢（本部が作ったもの。選ばなくてもよい） */
+export const genericDetails = (o: KarteOptions, trig: string): string[] => o[`d:${trig}`] ?? [];
 /** 内訳が必要なきっかけ → 内訳の選択肢の種類（null は記入のみ） */
 export type DetailFor = Record<string, 'otherBiz' | 'campaign' | 'partner' | null>;
 

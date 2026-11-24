@@ -143,6 +143,8 @@ final class Campaign
         $opt = Karte::options();
         $out = [];
         foreach (Karte::DETAIL_FOR as $trig => $cat) if ($trig !== '業者紹介') $out[$trig] = $cat === null ? null : array_values($opt[$cat] ?? []);
+        // ほかのきっかけ（チラシなど）で本部が内訳を作ったもの（選ばなくてもよい）
+        foreach ($opt['trigger'] ?? [] as $t) if (!isset($out[$t]) && !empty($opt[Karte::DETAIL_PREFIX . $t])) $out[$t] = array_values($opt[Karte::DETAIL_PREFIX . $t]);
         return $out;
     }
 

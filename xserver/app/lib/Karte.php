@@ -42,9 +42,16 @@ final class Karte
         return $out;
     }
 
+    /** ほかのきっかけ（チラシ・SNS など）の内訳の選択肢の種類：「d:きっかけ」。選ばなくてもよい（URL で入れる・店舗は空でもよい） */
+    public const DETAIL_PREFIX = 'd:';
+
     public static function setOptions(string $cat, array $labels): void
     {
-        if (!array_key_exists($cat, self::OPTION_DEFAULTS)) throw new HttpError(400, 'bad request');
+        $generic = str_starts_with($cat, self::DETAIL_PREFIX) && mb_strlen($cat) <= 40;
+        if ($generic) {
+            $t = mb_substr($cat, mb_strlen(self::DETAIL_PREFIX));
+            if (!in_array($t, self::options()['trigger'] ?? [], true) || array_key_exists($t, self::DETAIL_FOR)) throw new HttpError(400, 'そのきっかけには内訳を付けられません');
+        } elseif (!array_key_exists($cat, self::OPTION_DEFAULTS)) throw new HttpError(400, 'bad request');
         $labels = array_values(array_unique(array_filter(array_map(fn($l) => mb_substr(trim((string)$l), 0, 60), $labels), fn($l) => $l !== '')));
         Db::transaction(function () use ($cat, $labels) {
             Db::exec('DELETE FROM karte_option WHERE category = ?', [$cat]);

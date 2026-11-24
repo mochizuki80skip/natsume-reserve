@@ -435,7 +435,7 @@ CREATE TABLE IF NOT EXISTS `karte` (
 -- カルテ集計の選択肢（きっかけ・他事業紹介・キャンペーン・症状カテゴリー・再来アクション）
 CREATE TABLE IF NOT EXISTS `karte_option` (
   `id` INT NOT NULL AUTO_INCREMENT,
-  `category` VARCHAR(20) NOT NULL,
+  `category` VARCHAR(40) NOT NULL,
   `label` VARCHAR(60) NOT NULL,
   `sortOrder` INT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),

@@ -18,7 +18,7 @@ interface Entry {
   reservations: number; resNew?: number; resExisting?: number; kartes: number; continued?: number;
   came?: { visited: number; visitedNew: number; upcoming: number; unchecked: number; cancelled: number };
 }
-interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[]; details?: Record<string, string[] | null> }
+interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[]; details?: Record<string, string[] | null>; detailRequired?: string[] }
 
 /** URL（店舗えらび用・店舗別） */
 const urlOf = (code: string, store?: string) => `${location.origin}${store ? `/s/${encodeURIComponent(store)}` : '/stores'}?c=${code}`;
@@ -109,7 +109,9 @@ function EntryForm({ init, data, onDone, onMsg, onReload }: { init: Entry | null
   }
   // 内訳つきのきっかけ（紹介他事業・キャンペーン・イベント）：内訳を選ぶ（イベントは書く）。undefined＝内訳なし（URL の名前が内訳）
   const detailOpts = data.details && f.trig in data.details ? data.details[f.trig] : undefined;
-  const can = f.label.trim() !== '' && f.trig !== '' && (detailOpts === undefined || f.trigDetail.trim() !== '') && (!f.hasContent || f.name.trim() !== '');
+  // 紹介他事業・キャンペーン・イベントは内訳が必ず要る。チラシなど本部が内訳を作ったきっかけは選ばなくてもよい（なし＝URL の名前が内訳）
+  const detailNeed = detailOpts !== undefined && (data.detailRequired ?? Object.keys(data.details ?? {})).includes(f.trig);
+  const can = f.label.trim() !== '' && f.trig !== '' && (!detailNeed || f.trigDetail.trim() !== '') && (!f.hasContent || f.name.trim() !== '');
   /** 集客きっかけをその場で足す（新患継続率の「選択肢・エリアの設定」の集客きっかけにも入る） */
   async function addTrigger() {
     const t = window.prompt('足す集客きっかけ（例：Instagram、公式LINE）')?.trim();
@@ -142,11 +144,11 @@ function EntryForm({ init, data, onDone, onMsg, onReload }: { init: Entry | null
             <button type="button" onClick={addTrigger} className="rounded border px-2 py-0.5 text-xs">＋ きっかけを足す</button>
           </div>
           {detailOpts !== undefined && (
-            <label className="mt-1 block text-xs">「{f.trig}」の内訳 *
+            <label className="mt-1 block text-xs">「{f.trig}」の内訳 {detailNeed ? '*' : '（任意）'}
               {detailOpts === null
                 ? <input value={f.trigDetail} onChange={(e) => setF({ ...f, trigDetail: e.target.value })} maxLength={60} placeholder="例）〇〇祭り" aria-label="きっかけの内訳" className="ml-1 rounded border px-2 py-0.5" />
                 : <select value={f.trigDetail} onChange={(e) => setF({ ...f, trigDetail: e.target.value })} aria-label="きっかけの内訳" className="ml-1 rounded border px-2 py-0.5">
-                    <option value="">選ぶ</option>
+                    <option value="">{detailNeed ? '選ぶ' : 'なし（URL の名前が内訳）'}</option>
                     {detailOpts.map((d) => <option key={d} value={d}>{d}</option>)}
                     {f.trigDetail && !detailOpts.includes(f.trigDetail) && <option value={f.trigDetail}>{f.trigDetail}</option>}
                   </select>}
@@ -248,6 +250,35 @@ function EntryUrls({ c, stores, onMsg }: { c: Entry; stores: StoreLite[]; onMsg:
   );
 }
 
+/** きっかけ（大項目）ごとにまとめる。並びは集客きっかけの順、空白は最後 */
+function groupByTrig(data: Resp): [string, Entry[]][] {
+  const m = new Map<string, Entry[]>();
+  for (const c of data.rows) { const l = m.get(c.trig) ?? []; l.push(c); m.set(c.trig, l); }
+  const order = (t: string) => (t === '' ? 1e9 : data.triggers.indexOf(t) === -1 ? 1e8 : data.triggers.indexOf(t));
+  return [...m.entries()].sort((a, b) => order(a[0]) - order(b[0]));
+}
+
+/** きっかけの見出しの行：URL の数と、WEB 予約・来院・新患・継続の合計。押すと閉じる・開く */
+function TrigGroup({ trig, list, closed, onToggle, children }: { trig: string; list: Entry[]; closed: boolean; onToggle: () => void; children: React.ReactNode }) {
+  const sum = (f: (c: Entry) => number) => list.reduce((a, c) => a + f(c), 0);
+  const res = sum((c) => c.reservations), came = sum((c) => c.came?.visited ?? 0), kar = sum((c) => c.kartes), cont = sum((c) => c.continued ?? 0);
+  return (
+    <>
+      <tr className="border-t-2 border-slate-300 bg-slate-50" aria-label={`きっかけ ${trig || '空白'}`}>
+        <td colSpan={4} className="py-1 pr-2">
+          <button type="button" onClick={onToggle} aria-expanded={!closed} className="font-bold">{closed ? '▶' : '▼'} {trig || '（空白：店舗が選ぶ）'}<span className="ml-1 text-xs font-normal text-slate-500">{list.length} 本</span></button>
+        </td>
+        <td className="py-1 pr-2 text-right font-bold tabular-nums">{res}</td>
+        <td className="py-1 pr-2 text-right font-bold tabular-nums">{res ? came : '－'}</td>
+        <td className="py-1 pr-2 text-right font-bold tabular-nums">{kar}</td>
+        <td className="py-1 pr-2 text-right font-bold tabular-nums">{kar ? <>{cont}<span className="ml-1 text-[11px] font-normal text-slate-500">{Math.round((cont / kar) * 100)}%</span></> : '－'}</td>
+        <td />
+      </tr>
+      {!closed && children}
+    </>
+  );
+}
+
 function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit: () => void; onMsg: (m: string) => void; reload: () => void }) {
   const [open, setOpen] = useState(false);
   const nameOf = new Map(data.stores.map((s) => [s.code, s.name]));
@@ -306,6 +337,7 @@ export default function CampaignEditor() {
   }, [reload]);
   const [msg, setMsg] = useState('');
   const [edit, setEdit] = useState<Entry | 'new' | null>(null);
+  const [closed, setClosed] = useState<Set<string>>(new Set());
   return (
     <section className="mt-6 rounded border bg-white p-4 text-sm" aria-label="WEB 予約の URL・QR">
       <h2 className="font-bold">🔗 WEB 予約の URL・QR（集客経路）とキャンペーン</h2>
@@ -319,7 +351,11 @@ export default function CampaignEditor() {
         <table className="w-full">
           <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">名前</th><th className="pr-2">きっかけ</th><th className="pr-2">店舗</th><th className="pr-2">キャンペーン</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right" title="WEB 予約のうち、実際に来院した件数（予約表の来院チェック）。これから＝まだ来院日が来ていない予約、チェックなし＝来院日が過ぎたのに来院チェックがない予約">来院</th><th className="pr-2 text-right" title="この URL・QR から来て新患継続率に入った人数">新患</th><th className="pr-2 text-right" title="新患のうち、2 回目以降も来た人数と割合">継続（2回目〜）</th><th /></tr></thead>
           <tbody>
-            {(data?.rows ?? []).map((c) => <Row key={c.id} c={c} data={data!} onEdit={() => { reload(); setEdit(c); }} onMsg={setMsg} reload={reload} />)}
+            {data && groupByTrig(data).map(([t, list]) => (
+              <TrigGroup key={t || 'blank'} trig={t} list={list} closed={closed.has(t)} onToggle={() => setClosed((s) => { const n = new Set(s); if (n.has(t)) n.delete(t); else n.add(t); return n; })}>
+                {list.map((c) => <Row key={c.id} c={c} data={data} onEdit={() => { reload(); setEdit(c); }} onMsg={setMsg} reload={reload} />)}
+              </TrigGroup>
+            ))}
             {data && data.rows.length === 0 && <tr><td colSpan={9} className="py-2 text-xs text-slate-400">まだありません。「＋ URL・QR を作る」から作ってください</td></tr>}
           </tbody>
         </table>

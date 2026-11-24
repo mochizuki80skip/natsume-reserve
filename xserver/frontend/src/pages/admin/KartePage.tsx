@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
-import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, missingLabels, parseMd, type DetailFor, type KarteKind, type KarteOptions, type KarteRow, type KarteVisit } from '@/lib/karte';
+import { KIND_LABEL, TREATMENTS, VISIT_COUNT, md, missingFields, missingLabels, parseMd, type DetailFor, type KarteKind, type KarteOptions, type KarteRow, type KarteVisit, genericDetails } from '@/lib/karte';
 import KarteRetention, { type RetRow } from '@/components/KarteRetention';
 import KarteImportDialog from '@/components/KarteImportDialog';
 import AccidentList from '@/components/AccidentList';
@@ -58,6 +58,9 @@ function DetailCell({ row, detailFor, options, onSave, err }: { row: KarteRow; d
   const kind = row.kind !== 'REVISIT' && row.trig in detailFor ? detailFor[row.trig] : undefined;
   const [other, setOther] = useState(false);
   // 内訳のないきっかけでも、媒体の URL から入った行は媒体の名前が入っている（直せる・消せる）
+  // チラシなど、本部が内訳を作ったきっかけは選べる（選ばなくてもよい）
+  const gen = row.kind !== 'REVISIT' ? genericDetails(options, row.trig) : [];
+  if (kind === undefined && gen.length) return <td className="border"><Sel value={row.trigDetail} options={row.trigDetail && !gen.includes(row.trigDetail) ? [...gen, row.trigDetail] : gen} onChange={onSave} label="内訳" /></td>;
   if (kind === undefined) return row.trigDetail ? <td className="border"><Txt value={row.trigDetail} onSave={onSave} label="内訳" maxLength={60} align="left" /></td> : <td className="border bg-slate-50 text-center text-slate-300">—</td>;
   if (kind === 'otherBiz') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.otherBiz} onChange={onSave} label="内訳" /></td>;
   if (kind === 'partner') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.partner ?? []} onChange={onSave} label="内訳（紹介元）" /></td>;

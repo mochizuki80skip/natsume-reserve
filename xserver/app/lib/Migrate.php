@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 71;
+    private const VERSION = 72;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -501,6 +501,19 @@ SQL);
             if ($ver < 71) {
                 // 離反者リスト：次の予約がある方は外す（その予約日。来院しないまま過ぎたら戻す）
                 if (self::hasTable($pdo, 'churn') && !self::hasColumn($pdo, 'churn', 'bookedDate')) $pdo->exec('ALTER TABLE `churn` ADD COLUMN `bookedDate` CHAR(10) NULL');
+            }
+            if ($ver < 72) {
+                // どのきっかけにも内訳を付けられるように（選択肢の種類「d:きっかけ」が入る長さに）。ワンコインはチラシの内訳に
+                if (self::hasTable($pdo, 'karte_option')) {
+                    $pdo->exec('ALTER TABLE `karte_option` MODIFY `category` VARCHAR(40) NOT NULL');
+                    $hasFlyer = (int)$pdo->query("SELECT COUNT(*) FROM karte_option WHERE category = 'trigger' AND label = 'チラシ'")->fetchColumn() > 0;
+                    if ($hasFlyer && (int)$pdo->query("SELECT COUNT(*) FROM karte_option WHERE category = 'd:チラシ'")->fetchColumn() === 0) {
+                        $pdo->exec("INSERT INTO karte_option (category, label, sortOrder) VALUES ('d:チラシ', 'ワンコイン', 0)");
+                        $pdo->exec("DELETE FROM karte_option WHERE category = 'campaign' AND label = 'ワンコイン'");
+                        // ワンコインの URL・QR は「チラシ／ワンコイン」に（今までの新患継続率の記録はそのまま）
+                        if (self::hasTable($pdo, 'campaign') && self::hasColumn($pdo, 'campaign', 'trigDetail')) $pdo->exec("UPDATE campaign SET trig = 'チラシ' WHERE trig = 'キャンペーン' AND trigDetail = 'ワンコイン'");
+                    }
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

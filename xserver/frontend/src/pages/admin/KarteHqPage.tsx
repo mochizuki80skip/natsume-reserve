@@ -1,7 +1,7 @@
 // 新患・再来の集計。本部 /admin/hq/karte（全体・エリア・店舗 × 日別・週別・月別、きっかけ別、継続率）、店舗 /admin/karte/summary（自店舗だけ）
 import { useMemo, useState } from 'react';
 import { useFetch } from '@/lib/api';
-import { KIND_COLOR, KIND_LABEL, isNewKind, missingLabels, pct, retentionOf, VISIT_COUNT, type DetailFor, type KarteOptions } from '@/lib/karte';
+import { KIND_COLOR, KIND_LABEL, isNewKind, missingLabels, pct, retentionOf, VISIT_COUNT, type DetailFor, type KarteOptions, genericDetails } from '@/lib/karte';
 import { isDropped } from '@/components/KarteRetention';
 import { Donut, SERIES_COLORS, StackedColumns } from '@/components/charts';
 import { useAdmin } from './Layout';
@@ -363,6 +363,30 @@ function SettingsTab() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
           {CAT_LABEL.map(([cat, label, help]) => <OptBox key={cat + (data.options[cat] ?? []).join()} label={label} help={help} initial={(data.options[cat] ?? []).join('\n')} onSave={(t) => saveOpt(cat, t)} />)}
         </div>
+      </div>
+      <TrigDetailEditor options={data.options} detailFor={data.detailFor} onSave={saveOpt} />
+    </div>
+  );
+}
+
+/** きっかけごとの内訳（チラシ→ワンコイン など）。使うきっかけだけ作る。選ばなくてもよい内訳（URL・QR で選ぶ・店舗は空でもよい） */
+function TrigDetailEditor({ options, detailFor, onSave }: { options: KarteOptions; detailFor: Record<string, unknown>; onSave: (cat: string, text: string) => void }) {
+  const trigs = options.trigger.filter((t) => !(t in detailFor));
+  const has = trigs.filter((t) => genericDetails(options, t).length > 0);
+  const [pick, setPick] = useState('');
+  const open = [...has, ...(pick && !has.includes(pick) ? [pick] : [])];
+  return (
+    <div className="rounded-lg border bg-white p-3" aria-label="きっかけごとの内訳">
+      <h2 className="text-sm font-bold">きっかけごとの内訳</h2>
+      <p className="mb-2 text-xs text-slate-500">チラシ→ワンコインのように、きっかけの中を分けたいときだけ作ります（使わないきっかけは作らなくて大丈夫です）。URL・QR を作るときに選べ、新患・再来集計でそのきっかけを押すと内訳ごとの人数が出ます。店舗が手で入れるときは選ばなくても未入力になりません。店舗ごとの違いは店舗の集計で分かるので、店舗名の内訳は要りません。消しても、今までの記録は残ります。</p>
+      <div className="mb-2 flex items-center gap-2 text-sm">
+        <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="内訳を作るきっかけ" className="rounded border px-2 py-1">
+          <option value="">内訳を作るきっかけを選ぶ</option>
+          {trigs.filter((t) => !has.includes(t)).map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {open.map((t) => <OptBox key={t + genericDetails(options, t).join()} label={`${t} の内訳`} help="1行に1つ（例：ワンコイン／通常）" initial={genericDetails(options, t).join('\n')} onSave={(x) => onSave(`d:${t}`, x)} />)}
       </div>
     </div>
   );
