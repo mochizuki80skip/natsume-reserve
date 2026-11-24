@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 69;
+    private const VERSION = 70;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -490,6 +490,14 @@ SQL);
                 // 新自・新三の週の通院予定（1〜5 回。店舗・本部・管轄MG が入れる）
                 if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'weeklyPlan')) $pdo->exec('ALTER TABLE `karte` ADD COLUMN `weeklyPlan` TINYINT NULL');
             }
+            if ($ver < 70) {
+                // WEB 予約が実際に来院したか（URL・QR ごとの来院の数。予約表のセルが保持期間で消えても残す）
+                if (self::hasTable($pdo, 'reservation') && !self::hasColumn($pdo, 'reservation', 'visited')) {
+                    $pdo->exec('ALTER TABLE `reservation` ADD COLUMN `visited` TINYINT(1) NOT NULL DEFAULT 0');
+                    $pdo->exec('UPDATE reservation r SET visited = 1 WHERE EXISTS (SELECT 1 FROM cell c WHERE c.reservationId = r.id AND c.visited = 1)');
+                    self::backfillResVisited($pdo);
+                }
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -808,6 +816,24 @@ SQL);
             $n = $cell->fetch(PDO::FETCH_ASSOC);
             if ($n && !$n['reservationId'] && Text::isContinuationText((string)$n['text'])) $link->execute([$r['id'], $n['id']]);
             error_log('[migrate] WEB 予約をつなぎ直しました: ' . $r['id']);
+        }
+    }
+
+    /** 予約表のセルがもう消えた WEB 予約は、消す前に残した来院の記録（同じ店舗・同じ日・同じ人）で来院したかを入れる */
+    private static function backfillResVisited(PDO $pdo): void
+    {
+        if (!self::hasTable($pdo, 'visit_archive')) return;
+        $arch = [];
+        foreach ($pdo->query('SELECT storeId, date, name, cardNo FROM visit_archive')->fetchAll(PDO::FETCH_ASSOC) as $v) {
+            $arch[$v['storeId'] . '|' . $v['date']][] = [Karte::personKey((string)$v['name']), (string)$v['cardNo']];
+        }
+        if (!$arch) return;
+        $up = $pdo->prepare('UPDATE reservation SET visited = 1 WHERE id = ?');
+        foreach ($pdo->query("SELECT r.id, r.storeId, r.date, r.name, r.cardNo FROM reservation r WHERE r.visited = 0 AND r.status = 'BOOKED' AND NOT EXISTS (SELECT 1 FROM cell c WHERE c.reservationId = r.id)")->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $nk = Karte::personKey((string)$r['name']);
+            foreach ($arch[$r['storeId'] . '|' . $r['date']] ?? [] as [$k, $card]) {
+                if (($nk !== '' && $k === $nk) || ($r['cardNo'] && $card !== '' && ltrim((string)$card, '0') === ltrim((string)$r['cardNo'], '0'))) { $up->execute([$r['id']]); break; }
+            }
         }
     }
 

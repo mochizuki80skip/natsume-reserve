@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS `reservation` (
   `name` VARCHAR(40) NOT NULL,
   `phone` VARCHAR(20) NOT NULL,
   `status` VARCHAR(10) NOT NULL DEFAULT 'BOOKED',
+  `visited` TINYINT(1) NOT NULL DEFAULT 0,  -- 1＝実際に来院した（予約表の来院チェック。URL・QR ごとの来院の数）
   `smsStatus` VARCHAR(10) NULL,
   `viewToken` VARCHAR(40) NULL,
   `viaCard` TINYINT(1) NOT NULL DEFAULT 0,  -- 紹介カード（店舗えらびページ）から来た予約

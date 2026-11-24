@@ -513,6 +513,15 @@ function hq_campaigns_get(): never
         foreach (Db::all('SELECT kind, COUNT(*) AS n FROM reservation WHERE campaign LIKE ? GROUP BY kind', ['%"id":"' . $c['id'] . '"%']) as $r) $byKind[$r['kind']] = (int)$r['n'];
         $res = array_sum($byKind);
         $resNew = ($byKind['NEW'] ?? 0) + ($byKind['ACCIDENT'] ?? 0);
+        // 実際に来院したか（予約表の来院チェック）：来院・これからの予約・来院チェックなし（過ぎた日）・取消
+        $today = Time::nowJst()['date'];
+        $came = ['visited' => 0, 'visitedNew' => 0, 'upcoming' => 0, 'unchecked' => 0, 'cancelled' => 0];
+        foreach (Db::all('SELECT kind, status, visited, date FROM reservation WHERE campaign LIKE ?', ['%"id":"' . $c['id'] . '"%']) as $r) {
+            if ((int)$r['visited']) { $came['visited']++; if ($r['kind'] === 'NEW' || $r['kind'] === 'ACCIDENT') $came['visitedNew']++; }
+            elseif ($r['status'] === 'CANCELLED') $came['cancelled']++;
+            elseif ($r['date'] >= $today) $came['upcoming']++;
+            else $came['unchecked']++;
+        }
         // 新患の人数と、そのうち 2 回目以降も来た（継続した）人数
         $kar = 0; $cont = 0;
         if ($c['trig'] !== '' && Campaign::detailOf($c) !== '') {
@@ -527,7 +536,7 @@ function hq_campaigns_get(): never
             'hasContent' => (bool)(int)$c['hasContent'], 'active' => (bool)(int)$c['active'],
             'name' => $c['name'], 'description' => (string)($c['description'] ?? ''), 'showInsurance' => (bool)(int)$c['showInsurance'],
             'presetKind' => $c['presetKind'], 'from' => $c['fromDate'], 'to' => $c['toDate'], 'memo' => (string)($c['storeMemo'] ?? ''),
-            'reservations' => $res, 'resNew' => $resNew, 'resExisting' => $res - $resNew, 'kartes' => $kar, 'continued' => $cont,
+            'reservations' => $res, 'resNew' => $resNew, 'resExisting' => $res - $resNew, 'kartes' => $kar, 'continued' => $cont, 'came' => $came,
         ];
     }, Db::all('SELECT * FROM campaign WHERE code IS NOT NULL ORDER BY createdAt ASC, id ASC'));
     // きっかけ：新患継続率のきっかけの選択肢から（内訳つきのもの＝紹介他事業・キャンペーン・イベント・業者紹介は使わない）

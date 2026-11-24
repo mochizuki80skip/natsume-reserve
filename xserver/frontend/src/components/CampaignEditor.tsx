@@ -16,6 +16,7 @@ interface Entry {
   id: string; code: string; label: string; trig: string; trigDetail?: string; story?: boolean; stores: string[]; hasContent: boolean; active: boolean;
   name: string; description: string; showInsurance: boolean; presetKind: string; from: string; to: string; memo: string;
   reservations: number; resNew?: number; resExisting?: number; kartes: number; continued?: number;
+  came?: { visited: number; visitedNew: number; upcoming: number; unchecked: number; cancelled: number };
 }
 interface Resp { rows: Entry[]; insurance: Ins[]; stores: StoreLite[]; triggers: string[]; details?: Record<string, string[] | null> }
 
@@ -277,6 +278,10 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
           ) : <span className="rounded bg-slate-200 px-1.5 text-slate-600">なし</span>}
         </td>
         <td className="py-1 pr-2 text-right tabular-nums">{c.reservations}{c.reservations > 0 && <span className="block whitespace-nowrap text-[11px] text-slate-500">新規 {c.resNew ?? 0}・既存 {c.resExisting ?? 0}</span>}</td>
+        <td className="py-1 pr-2 text-right tabular-nums" aria-label="来院">{c.came && c.reservations > 0 ? <>
+          <b>{c.came.visited}</b>{c.came.visited > 0 && <span className="text-[11px] text-slate-500">（新規 {c.came.visitedNew}）</span>}
+          <span className="block whitespace-nowrap text-[11px] text-slate-500">{[c.came.upcoming && `これから ${c.came.upcoming}`, c.came.unchecked && `チェックなし ${c.came.unchecked}`, c.came.cancelled && `取消 ${c.came.cancelled}`].filter(Boolean).join('・')}</span>
+        </> : '－'}</td>
         <td className="py-1 pr-2 text-right tabular-nums">{c.kartes}</td>
         <td className="py-1 pr-2 text-right tabular-nums">{c.kartes ? <>{c.continued ?? 0}<span className="block text-[11px] text-slate-500">{Math.round(((c.continued ?? 0) / c.kartes) * 100)}%</span></> : '－'}</td>
         <td className="whitespace-nowrap py-1 text-xs">
@@ -286,7 +291,7 @@ function Row({ c, data, onEdit, onMsg, reload }: { c: Entry; data: Resp; onEdit:
           {!c.story && <button type="button" onClick={remove} className="text-red-700 underline">消す</button>}
         </td>
       </tr>
-      {open && <tr><td colSpan={8}><EntryUrls c={c} stores={data.stores} onMsg={onMsg} /></td></tr>}
+      {open && <tr><td colSpan={9}><EntryUrls c={c} stores={data.stores} onMsg={onMsg} /></td></tr>}
     </>
   );
 }
@@ -312,10 +317,10 @@ export default function CampaignEditor() {
       {msg && <p className="mt-2 rounded bg-brand-light px-3 py-1">{msg}</p>}
       <div className="mt-3 overflow-x-auto">
         <table className="w-full">
-          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">名前</th><th className="pr-2">きっかけ</th><th className="pr-2">店舗</th><th className="pr-2">キャンペーン</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right" title="この URL・QR から来て新患継続率に入った人数">新患</th><th className="pr-2 text-right" title="新患のうち、2 回目以降も来た人数と割合">継続（2回目〜）</th><th /></tr></thead>
+          <thead><tr className="text-left text-xs text-slate-500"><th className="pr-2">名前</th><th className="pr-2">きっかけ</th><th className="pr-2">店舗</th><th className="pr-2">キャンペーン</th><th className="pr-2 text-right">WEB 予約</th><th className="pr-2 text-right" title="WEB 予約のうち、実際に来院した件数（予約表の来院チェック）。これから＝まだ来院日が来ていない予約、チェックなし＝来院日が過ぎたのに来院チェックがない予約">来院</th><th className="pr-2 text-right" title="この URL・QR から来て新患継続率に入った人数">新患</th><th className="pr-2 text-right" title="新患のうち、2 回目以降も来た人数と割合">継続（2回目〜）</th><th /></tr></thead>
           <tbody>
             {(data?.rows ?? []).map((c) => <Row key={c.id} c={c} data={data!} onEdit={() => { reload(); setEdit(c); }} onMsg={setMsg} reload={reload} />)}
-            {data && data.rows.length === 0 && <tr><td colSpan={8} className="py-2 text-xs text-slate-400">まだありません。「＋ URL・QR を作る」から作ってください</td></tr>}
+            {data && data.rows.length === 0 && <tr><td colSpan={9} className="py-2 text-xs text-slate-400">まだありません。「＋ URL・QR を作る」から作ってください</td></tr>}
           </tbody>
         </table>
       </div>

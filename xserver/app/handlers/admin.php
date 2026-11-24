@@ -194,7 +194,7 @@ function adm_cells_put(): never
                         if ($rid && !Db::one('SELECT id FROM reservation WHERE id = ? AND storeId = ? AND date = ? AND time = ? AND bed = ?', [$rid, $sid, $date, $time, $bed])) $rid = null;
                         Db::exec('UPDATE cell SET reservationId = ?, menus = ?, staff = ?, visited = ?, phone = ?, cardNo = ? WHERE storeId = ? AND date = ? AND time = ? AND bed = ?',
                             [$rid, (string)($sn['menus'] ?? ''), (string)($sn['staff'] ?? ''), (int)($sn['visited'] ?? 0), $sn['phone'] ?? null, $sn['cardNo'] ?? null, $sid, $date, $time, $bed]);
-                        if ($rid) { Db::exec("UPDATE reservation SET status = 'BOOKED', cancelledAt = NULL, cancelledBy = NULL, cancelNote = NULL WHERE id = ?", [$rid]); $restored[$rid] = [$time, $bed]; }
+                        if ($rid) { Db::exec("UPDATE reservation SET status = 'BOOKED', cancelledAt = NULL, cancelledBy = NULL, cancelNote = NULL WHERE id = ?", [$rid]); $restored[$rid] = [$time, $bed]; adm_res_visited_sync($rid); }
                         Db::exec('UPDATE cell_log SET snap = NULL WHERE id = ?', [$lg['id']]);
                         $back[] = ['time' => $time, 'bed' => $bed, 'menus' => DayData::menusOf((string)($sn['menus'] ?? '')), 'staff' => (string)($sn['staff'] ?? ''), 'visited' => (bool)($sn['visited'] ?? 0), 'web' => (bool)$rid];
                     }
@@ -203,7 +203,7 @@ function adm_cells_put(): never
                 //（（初診）を付けた・外しただけ、「様」や回数（様6 など）を足した・打ち足しただけなら同じ人なので残す。2 枠目の文字どうしの書き換えも残す）
                 if ($wasText !== '' && !Text::isContinuationText($wasText) && !Karte::isSamePerson($wasText, $text)) {
                     Db::exec("UPDATE cell SET phone = NULL, cardNo = NULL, reservationId = NULL, menus = '', staff = '', visited = 0 WHERE storeId = ? AND date = ? AND time = ? AND bed = ?", [$sid, $date, $time, $bed]);
-                    if ($old && $old['reservationId']) $touched[$old['reservationId']] = true;
+                    if ($old && $old['reservationId']) { $touched[$old['reservationId']] = true; adm_res_visited_sync($old['reservationId']); }
                 }
                 if ($cardNo !== '' && strlen($cardNo) <= 20) Db::exec('UPDATE cell SET cardNo = ? WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$cardNo, $sid, $date, $time, $bed]);
             }
@@ -386,6 +386,7 @@ function adm_visit_put(): never
     $exists = Db::one('SELECT id FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed]);
     if (!$exists) Http::error('セルが空です', 404);
     Karte::reflectCell($ctx['store'], $date, $time, $bed);
+    adm_res_visited_sync(Db::one('SELECT reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$ctx['store']['id'], $date, $time, $bed])['reservationId'] ?? null);
     Http::json(['ok' => true, 'updated' => $n]);
 }
 
@@ -533,7 +534,7 @@ function adm_move_post(): never
             Db::exec('DELETE FROM cell WHERE storeId = ? AND date = ? AND bed = ? AND time IN (' . Db::inList($targetTimes) . ')', array_merge([$sid, $toDate, $toBed], $targetTimes));
             Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId, menus, staff, visited, phone, cardNo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime, $toBed, $cell['text'], $cell['reservationId'], (string)($cell['menus'] ?? ''), (string)($cell['staff'] ?? ''), $visited, $cell['phone'] ?? null, $cell['cardNo'] ?? null]);
             if ($cont) Db::exec('INSERT INTO cell (id, storeId, date, time, bed, text, reservationId) VALUES (?, ?, ?, ?, ?, ?, ?)', [Db::newId(), $sid, $toDate, $toTime + $step, $toBed, $cont['text'], $cont['reservationId']]);
-            if ($cell['reservationId']) Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]);
+            if ($cell['reservationId']) { Db::exec('UPDATE reservation SET date = ?, time = ?, bed = ? WHERE id = ?', [$toDate, $toTime, $toBed, $cell['reservationId']]); adm_res_visited_sync($cell['reservationId']); }
             // 新患継続率（初回カルテ）の自動の行も、予約と一緒に動かす（元の場所に残ると二重に数え、新自の知らせもまた出るため）。
             // 別の日へ動かしたときは来院チェックが外れるので、手を加えていない行は消す（その日に来院したら、また自動で入る）
             if ($toDate === $date) {
@@ -1695,6 +1696,13 @@ function adm_who(string $code): string
     }
     if ($code === '') return '（記録なし）';
     return isset($map[$code]) ? $map[$code] . '（' . $code . '）' : $code;
+}
+
+/** WEB 予約が実際に来院したか（予約表の来院チェック）を予約にも残す（予約表のセルが保持期間で消えても、URL・QR ごとの来院の数に使えるように） */
+function adm_res_visited_sync(?string $rid): void
+{
+    if (!$rid) return;
+    Db::exec('UPDATE reservation SET visited = (SELECT COUNT(*) > 0 FROM cell WHERE reservationId = ? AND visited = 1) WHERE id = ?', [$rid, $rid]);
 }
 
 function adm_res_cancelled(string $rid, string $by, string $note): void
