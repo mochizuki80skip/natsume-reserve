@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 72;
+    private const VERSION = 73;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -515,6 +515,10 @@ SQL);
                     }
                 }
             }
+            if ($ver < 73) {
+                // きっかけ「キャンペーン」をやめて「イベント」の内訳（選ぶ）にまとめる。イベントの内訳は選ばなくてもよい（必須は紹介他事業だけ。ほかは本部が選ぶ）
+                if (self::hasTable($pdo, 'karte_option')) self::mergeCampaignIntoEvent($pdo);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -835,6 +839,28 @@ SQL);
             if ($n && !$n['reservationId'] && Text::isContinuationText((string)$n['text'])) $link->execute([$r['id'], $n['id']]);
             error_log('[migrate] WEB 予約をつなぎ直しました: ' . $r['id']);
         }
+    }
+
+    /** キャンペーンの内訳と、キャンペーン・イベントの URL の内訳を、イベントの内訳（選択肢）に入れ、キャンペーンの URL はイベントに。きっかけの選択肢からキャンペーンを外す（今までの記録はそのまま） */
+    private static function mergeCampaignIntoEvent(PDO $pdo): void
+    {
+        // 選択肢がまだ入っていない（入れたばかり）なら何もしない（はじめに見たときに、キャンペーンのない初期値が入る）
+        if ((int)$pdo->query("SELECT COUNT(*) FROM karte_option WHERE category = 'trigger'")->fetchColumn() === 0) return;
+        $labels = $pdo->query("SELECT label FROM karte_option WHERE category = 'campaign' ORDER BY sortOrder ASC, id ASC")->fetchAll(PDO::FETCH_COLUMN);
+        if (self::hasTable($pdo, 'campaign') && self::hasColumn($pdo, 'campaign', 'trigDetail')) {
+            foreach ($pdo->query("SELECT DISTINCT trigDetail FROM campaign WHERE trig IN ('キャンペーン', 'イベント') AND trigDetail <> '' AND code IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN) as $d) $labels[] = $d;
+            $pdo->exec("UPDATE campaign SET trig = 'イベント' WHERE trig = 'キャンペーン'");
+        }
+        $labels = array_values(array_unique(array_filter(array_map('trim', $labels), fn($l) => $l !== '')));
+        if ((int)$pdo->query("SELECT COUNT(*) FROM karte_option WHERE category = 'trigger' AND label = 'イベント'")->fetchColumn() === 0) {
+            $pdo->exec("INSERT INTO karte_option (category, label, sortOrder) SELECT 'trigger', 'イベント', COALESCE(MAX(sortOrder), 0) + 1 FROM karte_option WHERE category = 'trigger'");
+        }
+        $have = $pdo->query("SELECT label FROM karte_option WHERE category = 'd:イベント'")->fetchAll(PDO::FETCH_COLUMN);
+        $n = count($have);
+        $ins = $pdo->prepare("INSERT INTO karte_option (category, label, sortOrder) VALUES ('d:イベント', ?, ?)");
+        foreach ($labels as $l) if (!in_array($l, $have, true)) $ins->execute([mb_substr($l, 0, 60), $n++]);
+        $pdo->exec("DELETE FROM karte_option WHERE category = 'campaign'");
+        $pdo->exec("DELETE FROM karte_option WHERE category = 'trigger' AND label = 'キャンペーン'");
     }
 
     /** 予約表のセルがもう消えた WEB 予約は、消す前に残した来院の記録（同じ店舗・同じ日・同じ人）で来院したかを入れる */

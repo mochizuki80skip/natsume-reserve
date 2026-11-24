@@ -60,12 +60,12 @@ function DetailCell({ row, detailFor, options, onSave, err }: { row: KarteRow; d
   // 内訳のないきっかけでも、媒体の URL から入った行は媒体の名前が入っている（直せる・消せる）
   // チラシなど、本部が内訳を作ったきっかけは選べる（選ばなくてもよい）
   const gen = row.kind !== 'REVISIT' ? genericDetails(options, row.trig) : [];
-  if (kind === undefined && gen.length) return <td className="border"><Sel value={row.trigDetail} options={row.trigDetail && !gen.includes(row.trigDetail) ? [...gen, row.trigDetail] : gen} onChange={onSave} label="内訳" /></td>;
+  if ((kind === undefined || kind === 'generic') && gen.length) return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={gen} onChange={onSave} label="内訳" /></td>;
   if (kind === undefined) return row.trigDetail ? <td className="border"><Txt value={row.trigDetail} onSave={onSave} label="内訳" maxLength={60} align="left" /></td> : <td className="border bg-slate-50 text-center text-slate-300">—</td>;
   if (kind === 'otherBiz') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.otherBiz} onChange={onSave} label="内訳" /></td>;
   if (kind === 'partner') return <td className={`border ${err ? ERR : ''}`}><Sel value={row.trigDetail} options={options.partner ?? []} onChange={onSave} label="内訳（紹介元）" /></td>;
   if (kind === 'campaign') {
-    const isOther = other || (row.trigDetail !== '' && !options.campaign.includes(row.trigDetail));
+    const isOther = other || (row.trigDetail !== '' && !(options.campaign ?? []).includes(row.trigDetail));
     return (
       <td className={`border ${err ? ERR : ''}`}>
         {isOther ? (
@@ -76,7 +76,7 @@ function DetailCell({ row, detailFor, options, onSave, err }: { row: KarteRow; d
         ) : (
           <select value={row.trigDetail} aria-label="内訳" onChange={(e) => (e.target.value === '__other' ? setOther(true) : onSave(e.target.value))} className={`${cellBase} appearance-none`}>
             <option value="" />
-            {options.campaign.map((o) => <option key={o} value={o}>{o}</option>)}
+            {(options.campaign ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
             <option value="__other">その他（記入）</option>
           </select>
         )}

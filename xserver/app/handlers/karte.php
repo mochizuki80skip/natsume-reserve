@@ -18,7 +18,7 @@ function karte_get(): never
         'rows' => array_map([Karte::class, 'rowOut'], $rows),
         // 新自（交通事故）で事故日・事故内容が空の、ほかの月の行（この月の分は rows にある）
         'accidentPending' => array_map([Karte::class, 'rowOut'], Db::all("SELECT * FROM karte WHERE storeId = ? AND kind IN ('ACCIDENT', 'THIRD') AND (accidentDate IS NULL OR accidentNote = '') AND (date < ? OR date > ?) ORDER BY date DESC LIMIT 200", [$store['id'], $dates[0], $dates[count($dates) - 1]])),
-        'options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'staff' => $staff,
+        'options' => Karte::options(), 'detailFor' => Karte::detailFor(), 'staff' => $staff,
     ]);
 }
 
@@ -207,9 +207,9 @@ function hq_karte_get(): never
 function hq_karte_options_get(): never
 {
     // 選択肢は店舗の集計画面でも使う（店舗にはエリア・店舗一覧は返さない）
-    if (Auth::requireSession()['role'] !== 'hq') Http::json(['options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'areas' => [], 'stores' => []]);
+    if (Auth::requireSession()['role'] !== 'hq') Http::json(['options' => Karte::options(), 'detailFor' => Karte::detailFor(), 'areas' => [], 'stores' => []]);
     $areas = array_map(fn($a) => ['id' => $a['id'], 'name' => $a['name'], 'stores' => array_values(array_filter(explode(',', $a['storeCodes'])))], Db::all('SELECT * FROM area ORDER BY sortOrder ASC, name ASC'));
-    Http::json(['options' => Karte::options(), 'detailFor' => Karte::DETAIL_FOR, 'areas' => $areas, 'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name']], Settings::storesInOrder('1 = 1', [], false))]);
+    Http::json(['options' => Karte::options(), 'detailFor' => Karte::detailFor(), 'areas' => $areas, 'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name']], Settings::storesInOrder('1 = 1', [], false))]);
 }
 
 /** 選択肢の保存（{ category, labels: [...] }） */

@@ -39,7 +39,8 @@ const put = (b) => api(hq, 'PUT', '/api/admin/hq/campaigns', b);
 ok('チラシ／ワンコインの URL', (await put({ label: '見本 ワンコインチラシA', trig: 'チラシ', trigDetail: 'ワンコイン' }))[0] === 200);
 ok('チラシ（内訳なし）の URL も作れる', (await put({ label: '見本 駅前チラシ', trig: 'チラシ', trigDetail: '' }))[0] === 200);
 ok('作っていない内訳は選べない', (await put({ label: '見本 x', trig: 'チラシ', trigDetail: 'ない内訳' }))[0] === 400);
-ok('キャンペーンなどは今までどおり内訳が要る', (await put({ label: '見本 y', trig: 'キャンペーン', trigDetail: '' }))[0] === 400);
+ok('紹介他事業は今までどおり内訳が要る', (await put({ label: '見本 y', trig: '紹介他事業', trigDetail: '' }))[0] === 400);
+ok('きっかけの選択肢にキャンペーンはない', !(await api(hq, 'GET', '/api/admin/hq/karte/options'))[1].options.trigger.includes('キャンペーン'));
 await put({ label: '見本 グーグル', trig: 'Google' });
 await hq.goto(`${B}/admin/hq`); await hq.waitForLoadState('networkidle');
 const sec = hq.getByRole('region', { name: 'WEB 予約の URL・QR' });
@@ -73,16 +74,29 @@ const k0 = await k(0), k1 = await k(1);
 ok('内訳を選んだ URL から来た方は「チラシ／ワンコイン」', k0?.trig === 'チラシ' && k0?.trigDetail === 'ワンコイン', JSON.stringify(k0 && [k0.trig, k0.trigDetail]));
 ok('内訳を選ばない URL から来た方は「チラシ／URL の名前」', k1?.trig === 'チラシ' && k1?.trigDetail === '見本 駅前チラシ', JSON.stringify(k1 && [k1.trig, k1.trigDetail]));
 
+// ---------- 本部が「内訳を必須にする」：イベントの内訳を作って必須に ----------
+await api(hq, 'PUT', '/api/admin/hq/karte/options', { category: 'd:イベント', labels: ['ワンコイン', 'チャリティー'] });
+await hq.goto(`${B}/admin/hq/karte`); await hq.waitForLoadState('networkidle');
+await hq.getByRole('button', { name: '選択肢・エリアの設定' }).click();
+await hq.getByLabel('イベント の内訳を必須にする').click(); await hq.waitForTimeout(1000);
+ok('内訳を必須にするきっかけを選べる', JSON.stringify((await api(hq, 'GET', '/api/admin/hq/karte/options'))[1].options.detailRequired) === JSON.stringify(['イベント']));
+ok('必須にしたきっかけの URL は内訳が要る', (await put({ label: '見本 z', trig: 'イベント', trigDetail: '' }))[0] === 400 && (await put({ label: '見本 イベントURL', trig: 'イベント', trigDetail: 'チャリティー' }))[0] === 200);
+ok('紹介他事業は必須の設定にできない（いつも必須）', (await api(hq, 'PUT', '/api/admin/hq/karte/options', { category: 'detailRequired', labels: ['紹介他事業'] }))[0] === 400);
+
 // ---------- 店舗：手で入れるときは選べる・空でも未入力にしない ----------
 const add = await api(s1, 'POST', '/api/admin/karte', { date: slots[0][0] });
 await api(s1, 'PATCH', '/api/admin/karte', { id: add[1].row.id, patch: { trig: 'チラシ', name: '見本 手入力' } });
-const mine = ((await api(s1, 'GET', `/api/admin/karte?month=${slots[0][0].slice(0, 7)}`))[1].rows ?? []).find((r) => r.id === add[1].row.id);
-ok('店舗：チラシの内訳は空でも未入力にしない', !(mine?.missingFields ?? []).includes('trigDetail'), JSON.stringify(mine?.missingFields));
+const mf = async (trig) => ((await api(hq, 'GET', `/api/admin/hq/karte?from=${slots[0][0]}&to=${slots[0][0]}`))[1].rows ?? []).find((r) => r.store === 'S001' && r.trig === trig && r.trigDetail === '')?.missingFields;
+const m1 = await mf('チラシ');
+ok('店舗：チラシの内訳は空でも未入力にしない', Array.isArray(m1) && !m1.includes('trigDetail'), JSON.stringify(m1));
 await s1.goto(`${B}/admin/karte?month=${slots[0][0].slice(0, 7)}`); await s1.waitForLoadState('networkidle');
 const sel = s1.locator('tr', { has: s1.locator('input[value="見本手入力"]') }).getByLabel('内訳');
 ok('店舗：チラシの内訳を選べる', (await sel.locator('option').allInnerTexts()).includes('通常'));
 await sel.selectOption('通常'); await s1.waitForTimeout(800);
 ok('店舗：選んだ内訳が保存される', sql(`SELECT trigDetail FROM karte WHERE id='${add[1].row.id}'`) === '通常');
+await api(s1, 'PATCH', '/api/admin/karte', { id: add[1].row.id, patch: { trig: 'イベント', trigDetail: '' } });
+const m2 = await mf('イベント');
+ok('店舗：必須にしたきっかけ（イベント）は内訳が空だと未入力', Array.isArray(m2) && m2.includes('trigDetail'), JSON.stringify(m2));
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();
 console.log(process.exitCode ? 'TRIGDETAIL FAILED' : 'TRIGDETAIL OK');

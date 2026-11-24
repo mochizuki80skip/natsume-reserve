@@ -19,20 +19,20 @@ const api = (p, m, u, b) => p.evaluate(async ([m, u, b]) => { const r = await fe
 const hq = await login('', process.env.HQ_PASSWORD ?? 'hq-pass', 'HQ');
 hq.on('dialog', (d) => d.accept(d.type() === 'prompt' ? '公式LINE' : undefined));
 
-// ---- C：内訳つきのきっかけ（キャンペーン／ワンコイン）
+// ---- C：内訳つきのきっかけ（紹介他事業／やまがた）
 await hq.goto(`${B}/admin/hq`); await hq.waitForLoadState('networkidle');
 const sec = hq.getByRole('region', { name: 'WEB 予約の URL・QR' });
 await sec.getByRole('button', { name: '＋ URL・QR を作る' }).click();
 let form = sec.getByRole('form', { name: 'URL・QR を作る' });
 await form.getByLabel('URL の名前').fill('見本 ワンコインのチラシ');
-await form.getByLabel('新患継続率のきっかけ').selectOption('キャンペーン');
+await form.getByLabel('新患継続率のきっかけ').selectOption('紹介他事業');
 ok('内訳つきのきっかけは内訳を選ぶまで保存できない', await form.getByRole('button', { name: '保存' }).isDisabled());
-await form.getByLabel('きっかけの内訳').selectOption('ワンコイン');
+await form.getByLabel('きっかけの内訳').selectOption('やまがた');
 await form.getByRole('button', { name: '保存' }).click(); await hq.waitForTimeout(1000);
 let rows = (await api(hq, 'GET', '/api/admin/hq/campaigns'))[1].rows;
 const one = rows.find((r) => r.label === '見本 ワンコインのチラシ');
-ok('キャンペーン／ワンコインの URL ができる', one?.trig === 'キャンペーン' && one.trigDetail === 'ワンコイン', JSON.stringify(one));
-ok('内訳が選択肢にないものは受けない', (await api(hq, 'PUT', '/api/admin/hq/campaigns', { label: 'x1', trig: 'キャンペーン', trigDetail: 'ない内訳' }))[0] === 400);
+ok('紹介他事業／やまがたの URL ができる', one?.trig === '紹介他事業' && one.trigDetail === 'やまがた', JSON.stringify(one));
+ok('内訳が選択肢にないものは受けない', (await api(hq, 'PUT', '/api/admin/hq/campaigns', { label: 'x1', trig: '紹介他事業', trigDetail: 'ない内訳' }))[0] === 400);
 ok('業者紹介は URL では選べない', (await api(hq, 'PUT', '/api/admin/hq/campaigns', { label: 'x2', trig: '業者紹介', trigDetail: 'x' }))[0] === 400);
 // ---- C：その場できっかけを足す
 await sec.getByRole('button', { name: '＋ URL・QR を作る' }).click();
@@ -50,7 +50,7 @@ const rv = (await api(s1, 'POST', '/api/public/S001/reserve', { kind: 'NEW', dat
 const cell = (await api(s1, 'GET', `/api/admin/day?date=${open[0]}`))[1].data.cells.find((c) => c.text.includes('内訳'));
 await api(s1, 'PUT', '/api/admin/visit', { date: open[0], time: open[1], bed: cell.bed, visited: true });
 const k = ((await api(s1, 'GET', `/api/admin/karte?month=${open[0].slice(0, 7)}`))[1].rows ?? []).find((r) => r.name.includes('内訳'));
-ok('URL から来た初診は きっかけ キャンペーン・内訳 ワンコイン', rv.ok && k?.trig === 'キャンペーン' && k?.trigDetail === 'ワンコイン', JSON.stringify(k && [k.trig, k.trigDetail]));
+ok('URL から来た初診は きっかけ 紹介他事業・内訳 やまがた', rv.ok && k?.trig === '紹介他事業' && k?.trigDetail === 'やまがた', JSON.stringify(k && [k.trig, k.trigDetail]));
 rows = (await api(hq, 'GET', '/api/admin/hq/campaigns'))[1].rows;
 ok('URL の一覧の新患にも数える', rows.find((r) => r.label === '見本 ワンコインのチラシ').kartes === 1);
 

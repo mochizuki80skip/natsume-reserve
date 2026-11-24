@@ -543,7 +543,7 @@ function hq_campaigns_get(): never
     // 内訳つきのきっかけ（紹介他事業・キャンペーン・イベント）も選べる（内訳を選ぶ）。業者紹介は紹介元の QR で使う
     $details = Campaign::detailChoices();
     $triggers = array_values(array_filter(Karte::options()['trigger'], fn($t) => !array_key_exists($t, Karte::DETAIL_FOR) || array_key_exists($t, $details)));
-    Http::json(['rows' => $rows, 'insurance' => Campaign::insurance(), 'triggers' => $triggers, 'details' => (object)$details, 'detailRequired' => array_values(array_filter(array_keys(Karte::DETAIL_FOR), fn($t) => $t !== '業者紹介')),
+    Http::json(['rows' => $rows, 'insurance' => Campaign::insurance(), 'triggers' => $triggers, 'details' => (object)$details, 'detailRequired' => array_values(array_filter(array_keys(Karte::detailFor()), fn($t) => $t !== '業者紹介')),
         'stores' => array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'area' => $s['area']], Settings::storesInOrder('active = 1 AND hqOnly = 0 AND jibaiOnly = 0', [], false))]);
 }
 
@@ -573,7 +573,7 @@ function hq_campaigns_put(): never
     if (array_key_exists($trig, $details)) {
         $tDetail = mb_substr(trim((string)($b['trigDetail'] ?? '')), 0, 60);
         // 紹介他事業・キャンペーン・イベントは内訳が必ず要る。チラシなどの内訳は選ばなくてもよい（なしなら URL の名前が内訳）
-        $need = array_key_exists($trig, Karte::DETAIL_FOR);
+        $need = array_key_exists($trig, Karte::detailFor()) && $trig !== '業者紹介';
         if (($need && $tDetail === '') || ($tDetail !== '' && $details[$trig] !== null && !in_array($tDetail, $details[$trig], true))) Http::error("「{$trig}」の内訳を選んでください", 400);
     }
     $valid = array_column(Db::all('SELECT code FROM store'), 'code');

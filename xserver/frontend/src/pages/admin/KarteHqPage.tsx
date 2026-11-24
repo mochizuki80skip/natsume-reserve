@@ -331,7 +331,6 @@ function Seg({ value, onChange, items }: { value: string; onChange: (v: string) 
 const CAT_LABEL: [keyof KarteOptions, string, string][] = [
   ['trigger', '集客きっかけ', '新患・初自の「きっかけ」'],
   ['otherBiz', '他事業紹介', 'きっかけ「紹介他事業」の内訳'],
-  ['campaign', 'キャンペーン', 'きっかけ「キャンペーン」の内訳（ほかに記入もできます）'],
   ['symptom', '症状カテゴリー', ''],
   ['revisitAction', '再来アクション', '再の人の「きっかけ」欄（空白も可）'],
 ];
@@ -359,7 +358,7 @@ function SettingsTab() {
       <AreasEditor key={JSON.stringify(data.areas)} areas={data.areas} stores={data.stores} onSaved={() => { setMsg('エリアを保存しました'); reload(); }} />
       <div className="rounded-lg border bg-white p-3">
         <h2 className="text-sm font-bold">カルテ集計の選択肢</h2>
-        <p className="mb-2 text-xs text-slate-500">1行に1つずつ書きます。上からの順番でプルダウンに出ます。「イベント」「紹介他事業」「キャンペーン」は内訳と連動するので、名前を変えないでください。</p>
+        <p className="mb-2 text-xs text-slate-500">1行に1つずつ書きます。上からの順番でプルダウンに出ます。「紹介他事業」「業者紹介」は内訳と連動するので、名前を変えないでください。</p>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
           {CAT_LABEL.map(([cat, label, help]) => <OptBox key={cat + (data.options[cat] ?? []).join()} label={label} help={help} initial={(data.options[cat] ?? []).join('\n')} onSave={(t) => saveOpt(cat, t)} />)}
         </div>
@@ -371,14 +370,15 @@ function SettingsTab() {
 
 /** きっかけごとの内訳（チラシ→ワンコイン など）。使うきっかけだけ作る。選ばなくてもよい内訳（URL・QR で選ぶ・店舗は空でもよい） */
 function TrigDetailEditor({ options, detailFor, onSave }: { options: KarteOptions; detailFor: Record<string, unknown>; onSave: (cat: string, text: string) => void }) {
-  const trigs = options.trigger.filter((t) => !(t in detailFor));
+  const trigs = options.trigger.filter((t) => !(t in detailFor) || detailFor[t] === 'generic');
+  const required = options.detailRequired ?? [];
   const has = trigs.filter((t) => genericDetails(options, t).length > 0);
   const [pick, setPick] = useState('');
   const open = [...has, ...(pick && !has.includes(pick) ? [pick] : [])];
   return (
     <div className="rounded-lg border bg-white p-3" aria-label="きっかけごとの内訳">
       <h2 className="text-sm font-bold">きっかけごとの内訳</h2>
-      <p className="mb-2 text-xs text-slate-500">チラシ→ワンコインのように、きっかけの中を分けたいときだけ作ります（使わないきっかけは作らなくて大丈夫です）。URL・QR を作るときに選べ、新患・再来集計でそのきっかけを押すと内訳ごとの人数が出ます。店舗が手で入れるときは選ばなくても未入力になりません。店舗ごとの違いは店舗の集計で分かるので、店舗名の内訳は要りません。消しても、今までの記録は残ります。</p>
+      <p className="mb-2 text-xs text-slate-500">チラシ→ワンコインのように、きっかけの中を分けたいときだけ作ります（使わないきっかけは作らなくて大丈夫です）。URL・QR を作るときに選べ、新患・再来集計でそのきっかけを押すと内訳ごとの人数が出ます。店舗が手で入れるときは、選ばなくても未入力になりません（「内訳を必須にする」に入れたきっかけだけ、空だと未入力になります。紹介他事業はいつも必須です）。店舗ごとの違いは店舗の集計で分かるので、店舗名の内訳は要りません。消しても、今までの記録は残ります。</p>
       <div className="mb-2 flex items-center gap-2 text-sm">
         <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="内訳を作るきっかけ" className="rounded border px-2 py-1">
           <option value="">内訳を作るきっかけを選ぶ</option>
@@ -386,7 +386,18 @@ function TrigDetailEditor({ options, detailFor, onSave }: { options: KarteOption
         </select>
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {open.map((t) => <OptBox key={t + genericDetails(options, t).join()} label={`${t} の内訳`} help="1行に1つ（例：ワンコイン／通常）" initial={genericDetails(options, t).join('\n')} onSave={(x) => onSave(`d:${t}`, x)} />)}
+        {open.map((t) => (
+          <div key={t + genericDetails(options, t).join() + required.includes(t)}>
+            <OptBox label={`${t} の内訳`} help="1行に1つ（例：ワンコイン／通常）" initial={genericDetails(options, t).join('\n')} onSave={(x) => onSave(`d:${t}`, x)} />
+            {genericDetails(options, t).length > 0 && (
+              <label className="mt-1 flex items-center gap-1 text-xs">
+                <input type="checkbox" checked={required.includes(t)} aria-label={`${t} の内訳を必須にする`}
+                  onChange={(e) => onSave('detailRequired', (e.target.checked ? [...required, t] : required.filter((x) => x !== t)).join('\n'))} />
+                内訳を必須にする（空だと店舗の新患継続率で未入力）
+              </label>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

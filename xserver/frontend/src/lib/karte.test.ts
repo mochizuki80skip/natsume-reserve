@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { missingFields, parseAccidentDate, parseMd, retentionOf, type KarteRow } from './karte';
 
 const base: KarteRow = { id: 'x', date: '2026-09-28', auto: true, karteNo: '1', kind: 'NEW', trig: 'Google', trigDetail: '', name: '山田', age: 30, sex: '♂', symptomCat: '腰', symptom: '腰部捻挫', staff: '佐藤', treatment: '矯正', visits: [] };
-const det = { 紹介他事業: 'otherBiz', キャンペーン: 'campaign', イベント: null } as const;
+const det = { 紹介他事業: 'otherBiz', イベント: 'generic' } as const;
 
 describe('カルテの未入力', () => {
   it('全部入っていれば無し', () => expect(missingFields(base, det).size).toBe(0));
-  it('内訳が必要なきっかけで内訳が空なら未入力', () => expect([...missingFields({ ...base, trig: 'イベント' }, det)]).toEqual(['trigDetail']));
+  it('内訳が必要なきっかけで内訳が空なら未入力', () => expect([...missingFields({ ...base, trig: '紹介他事業' }, det)]).toEqual(['trigDetail']));
+  it('本部が必須にしたきっかけも内訳が空なら未入力', () => expect([...missingFields({ ...base, trig: 'イベント' }, det)]).toEqual(['trigDetail']));
+  it('必須にしていないきっかけ（チラシなど）は内訳が空でもよい', () => expect(missingFields({ ...base, trig: 'チラシ' }, det).size).toBe(0));
   it('再はきっかけ空でもよい', () => expect(missingFields({ ...base, kind: 'REVISIT', trig: '' }, det).size).toBe(0));
   it('新患はきっかけ必須・年齢必須', () => expect([...missingFields({ ...base, trig: '', age: null }, det)].sort()).toEqual(['age', 'trig']));
 });

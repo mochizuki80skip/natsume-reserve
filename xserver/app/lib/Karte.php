@@ -12,9 +12,8 @@ final class Karte
 
     /** 選択肢の種類と初期値（本部の画面で変更できる） */
     public const OPTION_DEFAULTS = [
-        'trigger' => ['紹介家族', '紹介友人', '紹介職場', '紹介その他', '自院HP', '交通事故HP', 'ママこケアHP', 'Google', 'Yahoo!', 'エキテン', '口コミ', 'のぼり旗', '店前', 'SNS', 'チラシ', 'イベント', 'その他', 'ギフトカード', '紹介他事業', 'キャンペーン', '業者紹介'],
+        'trigger' => ['紹介家族', '紹介友人', '紹介職場', '紹介その他', '自院HP', '交通事故HP', 'ママこケアHP', 'Google', 'Yahoo!', 'エキテン', '口コミ', 'のぼり旗', '店前', 'SNS', 'チラシ', 'イベント', 'その他', 'ギフトカード', '紹介他事業', '業者紹介'],
         'otherBiz' => ['やまがた', 'みさき三島', 'みさき沼津', 'あおい', 'かなめ', 'あかり', "ONE'SBODY フレスポ", 'East-one裾野', 'East-one三島', 'East-one長泉', 'リカバリー三島', 'リカバリー裾野', 'なつめ富士原田', 'なつめ淀川町', 'みらい', 'みつき', 'なつめ沼田町', 'なつめ瀬名', 'なつめ竜南', 'あやめ', 'なつめ長田', 'ミツカル', 'アローズ', 'ゆかり', 'なつめ篠ケ瀬', 'なつめ浜松葵西', 'なつめ浜北美薗', 'なつめ大岡', 'なつめ岡宮', 'なつめ富士錦町', 'なつめ東原', 'なつめ島田', "ONE'SBODY 静岡安倍川"],
-        'campaign' => ['ワンコイン', 'チャリティー'],
         'symptom' => ['腰', '肩', '首', '上肢', '前腕', '手', '背中', '股関節', '臀部', '大腿', '膝', '下腿', '足首', '足底', '頭', '自賠', '事故第三者'],
         'revisitAction' => ['LINE', 'DM'],
         // 予約表で予約ごとに選ぶメニューと物販（本部が追加・並べ替え・削除できる）。予約表では 2 段に分けて出す
@@ -22,7 +21,18 @@ final class Karte
         'goods' => ['パイオ', 'テープ', 'プロテイン', 'ODAIJINI', 'サポーター', '湿布', '回答書'],
     ];
     /** 内訳が必要なきっかけ（値＝内訳の選択肢の種類。null は記入のみ） */
-    public const DETAIL_FOR = ['紹介他事業' => 'otherBiz', 'キャンペーン' => 'campaign', 'イベント' => null, '業者紹介' => 'partner'];
+    public const DETAIL_FOR = ['紹介他事業' => 'otherBiz', '業者紹介' => 'partner'];
+
+    /** 本部が「内訳を必須」にしたきっかけも含めた、内訳が必要なきっかけ（値 'generic'＝「きっかけごとの内訳」から選ぶ） */
+    public static function detailFor(): array
+    {
+        static $cache = null;
+        if ($cache !== null) return $cache;
+        $opt = self::options();
+        $out = self::DETAIL_FOR;
+        foreach ($opt['detailRequired'] ?? [] as $t) if (!isset($out[$t]) && in_array($t, $opt['trigger'] ?? [], true) && !empty($opt[self::DETAIL_PREFIX . $t])) $out[$t] = 'generic';
+        return $cache = $out;
+    }
 
     public const EDITABLE = ['date', 'karteNo', 'kind', 'trig', 'trigDetail', 'name', 'nameOk', 'age', 'sex', 'symptomCat', 'symptom', 'staff', 'treatment', 'visits', 'stopped', 'transferred', 'survey', 'accidentDate', 'accidentNote'];
 
@@ -51,6 +61,10 @@ final class Karte
         if ($generic) {
             $t = mb_substr($cat, mb_strlen(self::DETAIL_PREFIX));
             if (!in_array($t, self::options()['trigger'] ?? [], true) || array_key_exists($t, self::DETAIL_FOR)) throw new HttpError(400, 'そのきっかけには内訳を付けられません');
+        } elseif ($cat === 'detailRequired') {
+            // 内訳を必須にするきっかけ（内訳を作ったきっかけだけ）
+            $opt = self::options();
+            foreach ($labels as $l) if (!in_array($l, $opt['trigger'] ?? [], true) || array_key_exists($l, self::DETAIL_FOR)) throw new HttpError(400, 'そのきっかけは必須にできません');
         } elseif (!array_key_exists($cat, self::OPTION_DEFAULTS)) throw new HttpError(400, 'bad request');
         $labels = array_values(array_unique(array_filter(array_map(fn($l) => mb_substr(trim((string)$l), 0, 60), $labels), fn($l) => $l !== '')));
         Db::transaction(function () use ($cat, $labels) {
@@ -246,7 +260,7 @@ final class Karte
         if (($r['age'] ?? null) === null) $mf[] = 'age';
         if (($r['kind'] ?? '') !== 'REVISIT') {
             if (trim((string)($r['trig'] ?? '')) === '') $mf[] = 'trig';
-            elseif (array_key_exists($r['trig'], self::DETAIL_FOR) && trim((string)($r['trigDetail'] ?? '')) === '') $mf[] = 'trigDetail';
+            elseif (array_key_exists($r['trig'], self::detailFor()) && trim((string)($r['trigDetail'] ?? '')) === '') $mf[] = 'trigDetail';
         }
         return $mf;
     }
