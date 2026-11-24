@@ -7,8 +7,8 @@ import { useFetch } from '@/lib/api';
 import { halfNum, halfNumInput } from '@/lib/format';
 import { parseChurnSheet, type ChurnLine } from '@/lib/churnImport';
 
-interface ChurnRow { id: string; churnDate: string; lastVisit: string | null; cardNo: string; name: string; sex: string; age: number | null; kind: string; visits: string; staff: string; symptom: string; treatment: string; manage: string; reason: string; source: 'auto' | 'import' | 'manual'; edited: boolean }
-interface ChurnResp { month: string; today: string; rows: ChurnRow[]; canEdit: boolean; stats: { count: number; active: number; excluded: number; rate: number | null; rateEx: number | null }; manage: string[]; staff: string[] }
+interface ChurnRow { id: string; churnDate: string; lastVisit: string | null; cardNo: string; name: string; sex: string; age: number | null; kind: string; visits: string; staff: string; symptom: string; treatment: string; manage: string; reason: string; source: 'auto' | 'import' | 'manual'; edited: boolean; dismissed?: boolean; after?: { seenAfter: string | null; uncheckedAfter: string | null; nextBooking: string | null } | null }
+interface ChurnResp { month: string; today: string; rows: ChurnRow[]; dismissed?: ChurnRow[]; canEdit: boolean; stats: { count: number; active: number; excluded: number; rate: number | null; rateEx: number | null }; manage: string[]; staff: string[] }
 interface FollowRow { id: string; listDate: string; lastVisit: string; cardNo: string; name: string; staff: string; contactedAt: string | null; nextText: string; noBooking: boolean; note: string; autoNext: { date: string; time: number } | null }
 interface FollowResp { date: string; today: string; pending: boolean; pendingCount: number; rows: FollowRow[]; canEdit: boolean }
 
@@ -86,6 +86,8 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
   const ro = !data.canEdit;
   const run = async (fn: () => Promise<unknown>, done = '保存しました') => { try { await fn(); setMsg({ ok: true, text: done }); reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
   const patch = (id: string, p: object) => run(() => send('/api/admin/churn', 'PATCH', { id, patch: p }));
+  const patch2 = (id: string, p: object) => send('/api/admin/churn', 'PATCH', { id, patch: p });
+  const warn = data.rows.filter((r) => r.after?.seenAfter || r.after?.uncheckedAfter).length;
   const st = data.stats;
   const noReason = data.rows.filter((r) => !r.reason && !r.manage).length;
   const autoCls = (r: ChurnRow) => (r.source === 'auto' && !r.edited ? 'bg-sky-100' : '');
@@ -97,6 +99,7 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
         <b className="text-sm">{Number(ym.slice(0, 4))}年{Number(ym.slice(5))}月に離反した方</b>
         <button type="button" onClick={() => setMonth(shiftYm(ym, 1))} className="rounded border bg-white px-2 py-0.5 text-sm">翌月 ›</button>
         {noReason > 0 && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">管理・理由が未入力 {noReason} 件</span>}
+        {warn > 0 && <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-900" aria-label="あとで予約表に名前がある方">あとで予約表に名前がある方 {warn} 件（離反ではないかもしれません）</span>}
         <span className="ml-auto" />
         {!ro && <button type="button" onClick={() => run(() => send('/api/admin/churn', 'POST', { churnDate: data.today.startsWith(ym) ? data.today : `${ym}-01` }), '行を追加しました')} className="rounded border bg-white px-2 py-0.5 text-sm">＋ 行を追加</button>}
         {!ro && <button type="button" onClick={() => setPaste('')} className="rounded border bg-white px-2 py-0.5 text-sm">📋 スプレッドシートから貼り付け</button>}
@@ -128,8 +131,11 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
                 <td className={`border p-0 ${autoCls(r)}`}><Pick value={r.treatment} opts={['矯正', 'マッサ']} label="施術内容" ro={ro} onSave={(v) => patch(r.id, { treatment: v })} /></td>
                 <td className="border p-0"><Pick value={r.manage} opts={data.manage} label="管理" ro={ro} onSave={(v) => patch(r.id, { manage: v })} /></td>
                 <td className="border p-0"><Cell value={r.reason} label="理由" ro={ro} w="min-w-[220px] w-full" onSave={(v) => patch(r.id, { reason: v })} /></td>
-                <td className="border px-1 text-center text-slate-500">{md(r.lastVisit)}</td>
-                <td className="border px-1 text-center">{!ro && r.source !== 'auto' && <button type="button" title="この行を削除" onClick={() => confirm('この行を削除しますか？') && run(() => send('/api/admin/churn', 'DELETE', { id: r.id }), '削除しました')} className="text-[11px] text-slate-400 hover:text-red-700">✕</button>}</td>
+                <td className="border px-1 text-center text-slate-500">{md(r.lastVisit)}<AfterNote a={r.after} /></td>
+                <td className="whitespace-nowrap border px-1 text-center">
+                  {!ro && <button type="button" aria-label="離反ではない" title="まだ通院している・別の人と混ざったなど、離反ではない方を数えずに下へ移します" onClick={() => run(() => patch2(r.id, { dismissed: true }), '「離反ではない」に移しました')} className="mr-1 rounded border border-slate-300 px-1 text-[10.5px] text-slate-600 hover:bg-slate-100">離反ではない</button>}
+                  {!ro && r.source !== 'auto' && <button type="button" title="この行を削除" onClick={() => confirm('この行を削除しますか？') && run(() => send('/api/admin/churn', 'DELETE', { id: r.id }), '削除しました')} className="text-[11px] text-slate-400 hover:text-red-700">✕</button>}
+                </td>
               </tr>
             ))}
             {data.rows.length === 0 && <tr><td colSpan={14} className="p-4 text-center text-slate-500">この月に離反した方はいません（予約表の来院チェックから自動で出します）。</td></tr>}
@@ -139,10 +145,87 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
         <i className="mr-1 inline-block h-2.5 w-2.5 border bg-sky-100 align-middle" />水色＝来院の記録から自動で入った欄（直せます）。<i className="mx-1 inline-block h-2.5 w-2.5 border bg-yellow-200 align-middle" />黄色＝通院回数が空（システムを使う前から通っている方は店舗で入れてください）。
         離反＝最後の来院から翌月の同じ日までに来院がない方（例：3/2 が最後なら 4/2 に離反）。新患継続率の予後が中止・転院の方は「管理」に自動で入ります。
-        離反率＝その月に離反した方 ÷ 前月に来院した方（実人数）。
+        離反率＝その月に離反した方 ÷ 前月に来院した方（実人数）。来院は<b>予約表の来院チェック</b>で数えます（チェックのない来院は数えません）。
+        <span className="text-orange-800">オレンジの字＝最後の来院のあとにも予約表に名前がある方（来院チェックの付け忘れ・名前の書き方の違いなど）。離反でなければ「離反ではない」を押してください。</span>
       </p>
+      {(data.dismissed?.length ?? 0) > 0 && (
+        <details className="mt-2 rounded border bg-white" aria-label="離反ではないにした方">
+          <summary className="cursor-pointer px-3 py-1.5 text-sm">「離反ではない」にした方 {data.dismissed!.length} 名（数えていません）</summary>
+          <ul className="border-t px-3 py-1 text-[12px]">
+            {data.dismissed!.map((r) => (
+              <li key={r.id} className="flex items-center gap-2 py-0.5">
+                <span className="w-12 text-slate-500">{md(r.churnDate)}</span><span className="w-14">{r.cardNo}</span><span className="w-32">{r.name}</span><span className="text-slate-500">最終来院 {md(r.lastVisit)}</span><AfterNote a={r.after} inline />
+                {!ro && <button type="button" onClick={() => run(() => patch2(r.id, { dismissed: false }), 'リストに戻しました')} className="ml-auto text-[11px] text-brand underline">リストに戻す</button>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <Lookup />
       {paste !== null && <ImportDialog initial={paste} ym={ym} onClose={() => setPaste(null)} onDone={(m) => { setPaste(null); setMsg({ ok: true, text: m }); reload(); }} />}
     </>
+  );
+}
+
+/** 最後の来院のあとの様子（来院・来院チェックのない名前・これからの予約） */
+function AfterNote({ a, inline }: { a?: ChurnRow['after']; inline?: boolean }) {
+  if (!a || (!a.seenAfter && !a.uncheckedAfter && !a.nextBooking)) return null;
+  const cls = inline ? 'ml-1 text-[11px]' : 'block whitespace-nowrap text-[10.5px] leading-tight';
+  return (
+    <>
+      {a.seenAfter && <span className={`${cls} font-bold text-orange-700`}>{md(a.seenAfter)} 来院あり</span>}
+      {a.uncheckedAfter && <span className={`${cls} font-bold text-orange-700`} title="予約表に名前はあるが、来院チェックが付いていない">{md(a.uncheckedAfter)} 名前あり（チェックなし）</span>}
+      {a.nextBooking && <span className={`${cls} text-sky-700`}>次の予約 {md(a.nextBooking)}</span>}
+    </>
+  );
+}
+
+interface LookupResp { rows: { date: string; text: string; visited: number | null; cardNo: string; src: 'cell' | 'archive' | 'book' }[]; lastSeen: string | null; churnDate: string | null; today: string; onList: boolean }
+
+/** 患者様を調べる：システムが見ている来院（来院チェックの有無）と、離反の見え方 */
+function Lookup() {
+  const [q, setQ] = useState('');
+  const [res, setRes] = useState<LookupResp | null>(null);
+  const [err, setErr] = useState('');
+  const go = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(''); setRes(null);
+    const r = await fetch(`/api/admin/churn/lookup?q=${encodeURIComponent(q)}`, { cache: 'no-store' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) setErr((j as { error?: string }).error ?? '調べられませんでした'); else setRes(j as LookupResp);
+  };
+  return (
+    <details className="mt-2 rounded border bg-white" aria-label="患者様を調べる">
+      <summary className="cursor-pointer px-3 py-1.5 text-sm font-bold">🔍 患者様を調べる（リストに載らない・載っている理由を見る）</summary>
+      <form onSubmit={go} className="flex flex-wrap items-center gap-2 border-t px-3 py-2 text-sm">
+        <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="調べる氏名かカルテNo" placeholder="氏名（一部でも）かカルテNo" className="w-56 rounded border px-2 py-1" />
+        <button type="submit" className="rounded bg-brand px-3 py-1 text-white">調べる</button>
+        <span className="text-xs text-slate-500">この 5 か月の予約表から探します。来院チェックのない日は数えていません。</span>
+      </form>
+      {err && <p className="px-3 pb-2 text-sm text-red-700">{err}</p>}
+      {res && (
+        <div className="border-t px-3 py-2 text-[12px]">
+          <p className="mb-1" aria-label="調べた結果">
+            {res.lastSeen
+              ? <>来院チェックのある最後の来院：<b>{md(res.lastSeen)}</b> → 離反の日 <b>{md(res.churnDate)}</b>{res.churnDate && res.churnDate > res.today ? '（まだ来ていません）' : res.onList ? '（離反者リストに載っています）' : '（離反者リストには載っていません）'}</>
+              : '来院チェックのある来院が見つかりません（離反者リストには出ません）'}
+          </p>
+          <table className="w-full border-collapse">
+            <thead><tr className="bg-slate-100 text-left">{['日付', '予約表の書き方', 'カルテNo', '来院チェック'].map((h) => <th key={h} className="border px-1">{h}</th>)}</tr></thead>
+            <tbody>
+              {res.rows.map((h, i) => (
+                <tr key={i} className={h.src === 'book' ? 'text-sky-700' : !h.visited ? 'bg-orange-50' : ''}>
+                  <td className="border px-1">{mdw(h.date)}</td><td className="border px-1">{h.text}</td><td className="border px-1">{h.cardNo}</td>
+                  <td className="border px-1">{h.src === 'book' ? 'これからの予約' : h.visited ? '✓ あり' : <b className="text-orange-700">なし（数えていない）</b>}</td>
+                </tr>
+              ))}
+              {res.rows.length === 0 && <tr><td colSpan={4} className="border px-1 py-2 text-center text-slate-500">見つかりませんでした</td></tr>}
+            </tbody>
+          </table>
+          <p className="mt-1 text-[11px] text-slate-500">同じ方なのに書き方やカルテNo が違う行があると、別の人として数えています。名前の前にカルテNo を書くと、まとめやすくなります。</p>
+        </div>
+      )}
+    </details>
   );
 }
 

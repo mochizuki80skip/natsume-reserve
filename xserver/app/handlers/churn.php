@@ -8,7 +8,7 @@ function churn_row(array $r): array
 {
     return ['id' => $r['id'], 'churnDate' => $r['churnDate'], 'lastVisit' => $r['lastVisit'], 'cardNo' => $r['cardNo'], 'name' => $r['name'], 'sex' => $r['sex'], 'age' => $r['age'] === null ? null : (int)$r['age'],
         'kind' => $r['kind'], 'visits' => $r['visits'], 'staff' => $r['staff'], 'symptom' => $r['symptom'], 'treatment' => $r['treatment'], 'manage' => $r['manage'], 'reason' => $r['reason'],
-        'source' => $r['source'], 'edited' => (bool)$r['edited']];
+        'source' => $r['source'], 'edited' => (bool)$r['edited'], 'dismissed' => (bool)($r['dismissed'] ?? 0)];
 }
 
 /** 入力値を検証して DB の値に（$auto＝自動で入る欄を直したか） */
@@ -38,13 +38,18 @@ function churn_get(): never
     if (!Time::isValidMonth($ym)) $ym = substr(Time::nowJst()['date'], 0, 7);
     Churn::sync($store, $ym);
     $d = Time::datesOfMonth($ym);
-    $rows = array_map('churn_row', Db::all('SELECT * FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? ORDER BY churnDate ASC, createdAt ASC', [$store['id'], $d[0], end($d)]));
+    $raw = Db::all('SELECT * FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? ORDER BY churnDate ASC, createdAt ASC', [$store['id'], $d[0], end($d)]);
+    $after = Churn::afterOf($store, $raw);
+    $all = array_map(fn($r) => churn_row($r) + ['after' => $after[$r['id']] ?? null], $raw);
+    // 「離反ではない」にした行は、数えずに下へ別に出す
+    $rows = array_values(array_filter($all, fn($r) => !$r['dismissed']));
+    $dismissed = array_values(array_filter($all, fn($r) => $r['dismissed']));
     // 離反率＝その月に離反した人数 ÷ 前月に来院した実人数（「除く」は中止・転院の方を分子・分母から外す）
     $active = Churn::activeCount($store, $ym);
     $ex = count(array_filter($rows, fn($r) => in_array($r['manage'], Churn::EXCLUDE, true)));
     $n = count($rows);
     Http::json([
-        'month' => $ym, 'today' => Time::nowJst()['date'], 'rows' => $rows, 'canEdit' => Auth::canEditStore($ctx['session'], $store),
+        'month' => $ym, 'today' => Time::nowJst()['date'], 'rows' => $rows, 'dismissed' => $dismissed, 'canEdit' => Auth::canEditStore($ctx['session'], $store),
         'stats' => ['count' => $n, 'active' => $active, 'excluded' => $ex,
             'rate' => $active > 0 ? round($n / $active * 100, 1) : null,
             'rateEx' => $active - $ex > 0 ? round(($n - $ex) / ($active - $ex) * 100, 1) : null],
@@ -70,12 +75,27 @@ function churn_patch(): never
     $row = Db::one('SELECT id FROM churn WHERE id = ? AND storeId = ?', [(string)($b['id'] ?? ''), $ctx['store']['id']]);
     if (!$row) Http::error('not found', 404);
     $auto = false;
-    $set = churn_clean(is_array($b['patch'] ?? null) ? $b['patch'] : [], $auto);
+    $p = is_array($b['patch'] ?? null) ? $b['patch'] : [];
+    // 「離反ではない（まだ通院中など）」：数えずに下へ。自動の行も、作り直しで消えないように「直した行」にする
+    if (array_key_exists('dismissed', $p)) {
+        Db::exec('UPDATE churn SET dismissed = ?, edited = 1 WHERE id = ?', [!empty($p['dismissed']) ? 1 : 0, $row['id']]);
+        unset($p['dismissed']);
+    }
+    $set = churn_clean($p, $auto);
     if ($set) {
         $cols = implode(', ', array_map(fn($k) => "`$k` = ?", array_keys($set)));
         Db::exec("UPDATE churn SET $cols" . ($auto ? ', edited = 1' : '') . ' WHERE id = ?', array_merge(array_values($set), [$row['id']]));
     }
     Http::json(['ok' => true, 'row' => churn_row(Db::one('SELECT * FROM churn WHERE id = ?', [$row['id']]))]);
+}
+
+/** 患者様を調べる（?q=氏名かカルテNo）：システムが見ている来院と、離反の見え方 */
+function churn_lookup(): never
+{
+    $ctx = Auth::context();
+    $r = Churn::lookup($ctx['store'], (string)Http::query('q', ''));
+    if (isset($r['error'])) Http::error($r['error'], 400);
+    Http::json($r);
 }
 
 /** 手で足した行・取り込んだ行だけ消せる（自動の行は、来院の記録から出しているため） */
@@ -139,7 +159,7 @@ function churn_export(): never
     $d = Time::datesOfMonth($ym);
     $md = fn(?string $x) => $x ? (int)substr($x, 5, 2) . '/' . (int)substr($x, 8, 2) : '';
     $rows = array_map(fn($r) => [$md($r['churnDate']), $r['cardNo'], $r['name'], $r['sex'], $r['age'], $r['kind'], $r['visits'], $r['staff'], $r['symptom'], $r['treatment'], $r['manage'], $r['reason'], $md($r['lastVisit'])],
-        Db::all('SELECT * FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? ORDER BY churnDate ASC, createdAt ASC', [$store['id'], $d[0], end($d)]));
+        Db::all('SELECT * FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND dismissed = 0 ORDER BY churnDate ASC, createdAt ASC', [$store['id'], $d[0], end($d)]));
     $bytes = Xlsx::build('離反者リスト', "{$store['name']}　離反者リスト　{$ym}　（出力 " . Time::nowJst()['date'] . '）',
         ['離反した日付', 'カルテNo.', '患者氏名', '性', '年', '内訳（新・再・既）', '通院回数', '担当', '症状', '施術内容', '管理（治癒・転院）', '理由', '最終来院'], $rows);
     $ja = rawurlencode("離反者リスト_{$store['name']}_{$ym}");

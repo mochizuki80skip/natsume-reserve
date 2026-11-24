@@ -578,6 +578,7 @@ CREATE TABLE IF NOT EXISTS `churn` (
   `reason` VARCHAR(200) NOT NULL DEFAULT '',
   `source` VARCHAR(10) NOT NULL DEFAULT 'auto',
   `edited` TINYINT(1) NOT NULL DEFAULT 0,
+  `dismissed` TINYINT(1) NOT NULL DEFAULT 0,  -- 1＝「離反ではない（まだ通院中など）」にした行（数えない）
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `churn_store_date` (`storeId`, `churnDate`),

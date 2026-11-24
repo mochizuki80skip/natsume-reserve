@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 66;
+    private const VERSION = 67;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -478,6 +478,10 @@ SQL);
                 // 不具合で取消になった WEB 予約のつなぎ直しを、11 月より前に受けた予約（先の日の予約）にも広げる
                 self::repairDetachedWeb($pdo);
             }
+            if ($ver < 67) {
+                // 離反者リスト：「離反ではない（まだ通院中など）」にした行（数えずに下へ別に出す）
+                if (self::hasTable($pdo, 'churn') && !self::hasColumn($pdo, 'churn', 'dismissed')) $pdo->exec('ALTER TABLE `churn` ADD COLUMN `dismissed` TINYINT(1) NOT NULL DEFAULT 0');
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -728,6 +732,7 @@ SQL);
   `reason` VARCHAR(200) NOT NULL DEFAULT \'\',
   `source` VARCHAR(10) NOT NULL DEFAULT \'auto\',
   `edited` TINYINT(1) NOT NULL DEFAULT 0,
+  `dismissed` TINYINT(1) NOT NULL DEFAULT 0,
   `createdAt` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `churn_store_date` (`storeId`, `churnDate`),

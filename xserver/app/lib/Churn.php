@@ -134,18 +134,25 @@ final class Churn
         // 最後の来院が [月初の 1 か月前, 月末の 1 か月前] にある方。間にほかの来院がないか見るため、月末までの来院を読む
         $visits = self::visits($store, Time::addDays($first, -40), min($last, $today));
         $byKey = [];
-        foreach ($visits as $v) $byKey[$v['key']][] = $v;
+        $datesOf = []; // 同じ人の来院日（カルテNo でも氏名でも。番号のある来院と氏名だけの来院が分かれても、あとの来院を見落とさないように）
+        foreach ($visits as $v) { $byKey[$v['key']][] = $v; $datesOf[$v['key']][$v['date']] = true; $datesOf['n:' . $v['nk']][$v['date']] = true; }
         $karte = self::karteOf($store['id']);
         $want = [];
         $cands = [];
+        $seen = [];
+        uksort($byKey, fn($a, $b) => (str_starts_with((string)$a, 'n:') <=> str_starts_with((string)$b, 'n:')) ?: strcmp((string)$a, (string)$b));
         foreach ($byKey as $key => $vs) {
-            for ($i = 0; $i < count($vs); $i++) {
-                $v = $vs[$i];
+            foreach ($vs as $v) {
                 $cd = self::churnDate($v['date']);
                 if ($cd < $first || $cd > $last || $cd > $today) continue;
-                $next = $vs[$i + 1]['date'] ?? null;
-                if ($next !== null && $next < $cd) continue; // 離反の前に来院している
-                if ($next !== null && $next === $v['date']) continue;
+                // 最後の来院から離反の日の前日までに、同じ人の来院があれば離反ではない（離反の日の当日の来院は離反。集計API の説明と同じ）
+                $later = false;
+                foreach (array_unique([$key, 'n:' . $v['nk']]) as $kk) foreach (array_keys($datesOf[$kk] ?? []) as $d) if ($d > $v['date'] && $d < $cd) { $later = true; break 2; }
+                if ($later) continue;
+                // 同じ人・同じ日の来院は 1 行に（番号のある方を先に）
+                $sk = $v['nk'] . '|' . $v['date'];
+                if (isset($seen[$sk])) continue;
+                $seen[$sk] = true;
                 $k = $karte[$key] ?? $karte['n:' . $v['nk']] ?? null;
                 $cands[] = [$key, $v, $cd, $k];
             }
@@ -180,8 +187,22 @@ final class Churn
     private static function save(array $store, string $first, string $last, array $want): void
     {
         $have = [];
-        foreach (Db::all("SELECT id, patientKey, lastVisit, edited, manage FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source = 'auto'", [$store['id'], $first, $last]) as $r) {
+        foreach (Db::all("SELECT id, patientKey, lastVisit, edited, manage, cardNo, name FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source = 'auto'", [$store['id'], $first, $last]) as $r) {
             $id = $r['patientKey'] . '|' . $r['lastVisit'];
+            // 手で直した行で、人の見分け方が変わった（「様6」を外した・番号と氏名をまとめた）ものは、同じ人・同じ最後の来院の新しい見分け方に付け替える（2 行にしない）
+            if (!isset($want[$id]) && (int)$r['edited']) {
+                $ck = self::cardKey((string)$r['cardNo']); $nk = Karte::personKey((string)$r['name']);
+                foreach ($want as $wid => $w) {
+                    if ($w['lastVisit'] !== $r['lastVisit'] || isset($have[$wid])) continue;
+                    if (($ck !== '' && $ck === self::cardKey($w['cardNo'])) || ($nk !== '' && $nk === Karte::personKey($w['name']))) {
+                        if (!Db::one("SELECT id FROM churn WHERE storeId = ? AND source = 'auto' AND patientKey = ? AND lastVisit = ? AND id <> ?", [$store['id'], $w['patientKey'], $w['lastVisit'], $r['id']])) {
+                            Db::exec('UPDATE churn SET patientKey = ? WHERE id = ?', [$w['patientKey'], $r['id']]);
+                            $id = $wid;
+                        }
+                        break;
+                    }
+                }
+            }
             $have[$id] = true;
             if (!isset($want[$id])) { if (!(int)$r['edited']) Db::exec('DELETE FROM churn WHERE id = ?', [$r['id']]); continue; }
             // 手で直していなければ、自動の欄を新しくする（管理は空のときだけ入れる）
@@ -216,7 +237,8 @@ final class Churn
         $want = self::wanted($store, $ym);
         $out = [];
         $have = [];
-        foreach (Db::all('SELECT patientKey, lastVisit, edited, manage, kind, source, churnDate, cardNo, name FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ?', [$store['id'], $first, $last]) as $r) {
+        foreach (Db::all('SELECT patientKey, lastVisit, edited, manage, kind, source, churnDate, cardNo, name, dismissed FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ?', [$store['id'], $first, $last]) as $r) {
+            if ((int)$r['dismissed']) { $have[$r['patientKey'] . '|' . $r['lastVisit']] = true; continue; }
             if ($r['source'] !== 'auto') { $out[] = ['kind' => (string)$r['kind'], 'manage' => (string)$r['manage']]; continue; }
             $id = $r['patientKey'] . '|' . $r['lastVisit'];
             $have[$id] = true;
@@ -234,6 +256,84 @@ final class Churn
             $out[] = ['kind' => $w['kind'], 'manage' => $w['manage']];
         }
         return $out;
+    }
+
+    /**
+     * リストの行ごとに、最後の来院のあとの様子：来院（来院チェックあり）・来院チェックのない予約表の名前（過去の日）・これからの予約。
+     * 「まだ通院している方が載っている」を画面で見分けるため。キーは行の id
+     * @return array<string, array{seenAfter:?string, uncheckedAfter:?string, nextBooking:?string}>
+     */
+    public static function afterOf(array $store, array $rows): array
+    {
+        if (!$rows) return [];
+        $today = Time::nowJst()['date'];
+        $from = $today;
+        foreach ($rows as $r) $from = min($from, $r['lastVisit'] ?: Time::addMonths($r['churnDate'], -1));
+        $map = self::cardMap($store['id']);
+        $byPerson = [];
+        foreach (Db::all('SELECT c.date, c.text, c.visited, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date > ? AND c.bed > 0', [$store['id'], $from]) as $c) {
+            $text = (string)$c['text'];
+            if (Text::isContinuationText($text) || Availability::isBlockMark($text)) continue;
+            $nk = Karte::personKey($text);
+            if ($nk === '') continue;
+            $card = self::cardKey((string)($c['cardNo'] ?? '')) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
+            $t = $c['date'] > $today ? 'book' : ((int)$c['visited'] ? 'seen' : 'unchecked');
+            foreach (array_unique(array_filter([$card, 'n:' . $nk])) as $k) $byPerson[$k][] = [$c['date'], $t];
+        }
+        foreach (Db::all('SELECT date, name, cardNo FROM visit_archive WHERE storeId = ? AND date > ?', [$store['id'], $from]) as $v) {
+            $nk = Karte::personKey((string)$v['name']);
+            $card = self::cardKey((string)$v['cardNo']) ?: ($map[$nk] ?? '');
+            foreach (array_unique(array_filter([$card, $nk !== '' ? 'n:' . $nk : ''])) as $k) $byPerson[$k][] = [$v['date'], 'seen'];
+        }
+        $out = [];
+        foreach ($rows as $r) {
+            $base = $r['lastVisit'] ?: Time::addMonths($r['churnDate'], -1);
+            $keys = array_unique(array_filter([self::cardKey((string)$r['cardNo']), str_starts_with((string)$r['patientKey'], 'n:') || $r['patientKey'] === '' ? '' : (string)$r['patientKey'], Karte::personKey((string)$r['name']) !== '' ? 'n:' . Karte::personKey((string)$r['name']) : '']));
+            $o = ['seenAfter' => null, 'uncheckedAfter' => null, 'nextBooking' => null];
+            foreach ($keys as $k) foreach ($byPerson[$k] ?? [] as [$d, $t]) {
+                if ($d <= $base) continue;
+                if ($t === 'seen') $o['seenAfter'] = max($o['seenAfter'] ?? '', $d);
+                elseif ($t === 'unchecked') $o['uncheckedAfter'] = max($o['uncheckedAfter'] ?? '', $d);
+                elseif ($o['nextBooking'] === null || $d < $o['nextBooking']) $o['nextBooking'] = $d;
+            }
+            $out[$r['id']] = $o;
+        }
+        return $out;
+    }
+
+    /**
+     * 患者様を調べる：氏名（一部でも）かカルテNo で、システムが見ている来院（予約表の名前・来院チェックの有無）と、離反の見え方を返す
+     */
+    public static function lookup(array $store, string $q): array
+    {
+        $q = trim($q);
+        $today = Time::nowJst()['date'];
+        $from = Time::addDays($today, -150);
+        $digits = self::cardKey(preg_match('/^[\d０-９]+$/u', $q) ? mb_convert_kana($q, 'n') : '');
+        $qk = Karte::personKey($q);
+        if ($digits === '' && mb_strlen($qk) < 2) return ['error' => '氏名は 2 文字以上、またはカルテNo を入れてください'];
+        $map = self::cardMap($store['id']);
+        $hits = [];
+        $add = function (string $date, string $text, ?int $visited, string $card, string $src) use (&$hits, $map, $digits, $qk) {
+            if (Text::isContinuationText($text) || Availability::isBlockMark($text)) return;
+            $nk = Karte::personKey($text);
+            if ($nk === '') return;
+            $ck = self::cardKey($card) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
+            if ($digits !== '' ? $ck !== $digits : !str_contains($nk, $qk)) return;
+            $hits[] = ['date' => $date, 'text' => mb_substr($text, 0, 40), 'visited' => $visited, 'cardNo' => $ck, 'src' => $src];
+        };
+        foreach (Db::all('SELECT c.date, c.text, c.visited, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date >= ? AND c.bed > 0', [$store['id'], $from]) as $c) {
+            $add($c['date'], (string)$c['text'], (int)$c['visited'], (string)($c['cardNo'] ?? ''), $c['date'] > $today ? 'book' : 'cell');
+        }
+        foreach (Db::all('SELECT date, name, cardNo FROM visit_archive WHERE storeId = ? AND date >= ?', [$store['id'], $from]) as $v) $add($v['date'], (string)$v['name'], 1, (string)$v['cardNo'], 'archive');
+        usort($hits, fn($a, $b) => strcmp($b['date'], $a['date']));
+        $hits = array_slice($hits, 0, 80);
+        // 離反の見え方（来院チェックのある最後の来院から）
+        $lastSeen = null;
+        foreach ($hits as $h) if ($h['src'] !== 'book' && $h['visited']) { $lastSeen = $h['date']; break; }
+        $listed = $lastSeen ? Db::all('SELECT churnDate, name, dismissed FROM churn WHERE storeId = ? AND lastVisit = ? ', [$store['id'], $lastSeen]) : [];
+        return ['rows' => $hits, 'lastSeen' => $lastSeen, 'churnDate' => $lastSeen ? self::churnDate($lastSeen) : null, 'today' => $today,
+            'onList' => (bool)array_filter($listed, fn($l) => !(int)$l['dismissed'] && ($digits !== '' || str_contains(Karte::personKey((string)$l['name']), $qk)))];
     }
 
     /** 前月に来院した実人数（離反率の母数） */

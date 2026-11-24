@@ -165,6 +165,7 @@ function route_table(): array
         ['DELETE', '#^/api/admin/churn$#', 'churn_delete'],
         ['POST', '#^/api/admin/churn/import$#', 'churn_import'],
         ['GET', '#^/api/admin/churn/export$#', 'churn_export'],
+        ['GET', '#^/api/admin/churn/lookup$#', 'churn_lookup'],
         ['GET', '#^/api/admin/follow$#', 'follow_get'],
         ['PATCH', '#^/api/admin/follow$#', 'follow_patch'],
         ['GET', '#^/api/admin/staffing$#', 'staffing_get'],
