@@ -28,6 +28,21 @@ final class Churn
         return sprintf('%04d-%02d-%02d', $y, $m, min($d, $dim));
     }
 
+    /** 読みがなの比べ方：空白を取り、ひらがな・半角カナを全角カタカナに */
+    private static function kanaKey(string $s): string
+    {
+        $k = Karte::personKey(mb_convert_kana($s, 'KVC', 'UTF-8'));
+        return preg_match('/^[\x{30A0}-\x{30FF}ー]+$/u', $k) ? $k : '';
+    }
+
+    /** 氏名（personKey）からカルテNo：氏名で、なければ読みがな（ひらがな・カタカナで書いた方）で */
+    private static function mapCard(array $map, string $nk): string
+    {
+        if (isset($map[$nk])) return $map[$nk];
+        $kk = self::kanaKey($nk);
+        return $kk !== '' ? ($map['k:' . $kk] ?? '') : '';
+    }
+
     /** 氏名 → カルテNo（氏名が 1 人だけに当たるものだけ） */
     private static function cardMap(string $storeId): array
     {
@@ -38,9 +53,17 @@ final class Churn
             if ($k === '' || $no === '') return;
             $byName[$k][$no] = true;
         };
-        foreach (Db::all('SELECT name, cardNo FROM patient_card WHERE storeId = ?', [$storeId]) as $r) $add((string)$r['name'], (string)$r['cardNo']);
+        // 読みがな（カタカナ）でも引けるように：予約表にひらがな・カタカナで書いた方を、患者一覧のフリガナから番号につなぐ
+        $byKana = [];
+        foreach (Db::all('SELECT name, kana, cardNo FROM patient_card WHERE storeId = ?', [$storeId]) as $r) {
+            $add((string)$r['name'], (string)$r['cardNo']);
+            $no = self::cardKey((string)$r['cardNo']);
+            $kk = self::kanaKey((string)($r['kana'] ?? ''));
+            if ($kk !== '' && $no !== '') $byKana[$kk][$no] = true;
+        }
         $out = [];
         foreach ($byName as $k => $nos) if (count($nos) === 1) $out[$k] = (string)array_key_first($nos);
+        foreach ($byKana as $k => $nos) if (count($nos) === 1) $out['k:' . $k] = (string)array_key_first($nos);
         // 新患継続率のカルテNo は患者一覧より優先
         foreach (Db::all("SELECT name, karteNo FROM karte WHERE storeId = ? AND karteNo <> '' AND name <> ''", [$storeId]) as $r) {
             $k = Karte::personKey((string)$r['name']);
@@ -66,7 +89,7 @@ final class Churn
             $nk = Karte::personKey($text);
             if ($nk === '') return;
             $direct = self::cardKey($card) ?: self::cardKey(Karte::leadingCardNo($text));
-            $card = $direct ?: ($map[$nk] ?? '');
+            $card = $direct ?: self::mapCard($map, $nk);
             $rows[] = ['date' => $date, 'name' => $name, 'key' => $card !== '' ? $card : 'n:' . $nk, 'card' => $card, 'staff' => $staff, 'nk' => $nk, 'src' => $direct !== '' ? 'direct' : ($card !== '' ? 'map' : '')];
         };
         foreach (Db::all('SELECT c.date, c.text, c.staff, COALESCE(NULLIF(r.cardNo, \'\'), c.cardNo) AS cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0 AND c.visited = 1', [$sid, $from, $to]) as $c) {
@@ -96,7 +119,7 @@ final class Churn
             if (Text::isContinuationText($text) || Availability::isBlockMark($text)) continue;
             $nk = Karte::personKey($text);
             if ($nk === '') continue;
-            $card = self::cardKey((string)($c['cardNo'] ?? '')) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
+            $card = self::cardKey((string)($c['cardNo'] ?? '')) ?: self::cardKey(Karte::leadingCardNo($text)) ?: self::mapCard($map, $nk);
             foreach (array_unique([$card !== '' ? $card : 'n:' . $nk, 'n:' . $nk]) as $key) $out[$key][] = ['date' => $c['date'], 'time' => (int)$c['time']];
         }
         return $out;
@@ -303,13 +326,13 @@ final class Churn
             if (Text::isContinuationText($text) || Availability::isBlockMark($text)) continue;
             $nk = Karte::personKey($text);
             if ($nk === '') continue;
-            $card = self::cardKey((string)($c['cardNo'] ?? '')) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
+            $card = self::cardKey((string)($c['cardNo'] ?? '')) ?: self::cardKey(Karte::leadingCardNo($text)) ?: self::mapCard($map, $nk);
             $t = $c['date'] > $today ? 'book' : ((int)$c['visited'] ? 'seen' : 'unchecked');
             foreach (array_unique(array_filter([$card, 'n:' . $nk])) as $k) $byPerson[$k][] = [$c['date'], $t];
         }
         foreach (Db::all('SELECT date, name, cardNo FROM visit_archive WHERE storeId = ? AND date > ?', [$store['id'], $from]) as $v) {
             $nk = Karte::personKey((string)$v['name']);
-            $card = self::cardKey((string)$v['cardNo']) ?: ($map[$nk] ?? '');
+            $card = self::cardKey((string)$v['cardNo']) ?: self::mapCard($map, $nk);
             foreach (array_unique(array_filter([$card, $nk !== '' ? 'n:' . $nk : ''])) as $k) $byPerson[$k][] = [$v['date'], 'seen'];
         }
         $out = [];
@@ -345,7 +368,7 @@ final class Churn
             if (Text::isContinuationText($text) || Availability::isBlockMark($text)) return;
             $nk = Karte::personKey($text);
             if ($nk === '') return;
-            $ck = self::cardKey($card) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
+            $ck = self::cardKey($card) ?: self::cardKey(Karte::leadingCardNo($text)) ?: self::mapCard($map, $nk);
             if ($digits !== '' ? $ck !== $digits : !str_contains($nk, $qk)) return;
             $hits[] = ['date' => $date, 'text' => mb_substr($text, 0, 40), 'visited' => $visited, 'cardNo' => $ck, 'src' => $src];
         };

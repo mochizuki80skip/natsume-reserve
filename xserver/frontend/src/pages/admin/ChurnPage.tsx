@@ -88,7 +88,7 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
   const run = async (fn: () => Promise<unknown>, done = '保存しました') => { try { await fn(); setMsg({ ok: true, text: done }); reload(); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); } };
   const patch = (id: string, p: object) => run(() => send('/api/admin/churn', 'PATCH', { id, patch: p }));
   const patch2 = (id: string, p: object) => send('/api/admin/churn', 'PATCH', { id, patch: p });
-  const warn = data.rows.filter((r) => r.after?.seenAfter || r.after?.uncheckedAfter).length;
+  const warn = data.rows.filter((r) => (r.after?.seenAfter && r.after.seenAfter < r.churnDate) || r.after?.uncheckedAfter).length;
   const st = data.stats;
   const noReason = data.rows.filter((r) => !r.reason && !r.manage).length;
   const autoCls = (r: ChurnRow) => (r.source === 'auto' && !r.edited ? 'bg-sky-100' : '');
@@ -133,7 +133,7 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
                 <td className={`border p-0 ${autoCls(r)}`}><Pick value={r.treatment} opts={['矯正', 'マッサ']} label="施術内容" ro={ro} onSave={(v) => patch(r.id, { treatment: v })} /></td>
                 <td className="border p-0"><Pick value={r.manage} opts={data.manage} label="管理" ro={ro} onSave={(v) => patch(r.id, { manage: v })} /></td>
                 <td className="border p-0"><Cell value={r.reason} label="理由" ro={ro} w="min-w-[220px] w-full" onSave={(v) => patch(r.id, { reason: v })} /></td>
-                <td className="border px-1 text-center text-slate-500">{md(r.lastVisit)}<AfterNote a={r.after} /></td>
+                <td className="border px-1 text-center text-slate-500">{md(r.lastVisit)}<AfterNote a={r.after} churnDate={r.churnDate} /></td>
                 <td className="whitespace-nowrap border px-1 text-center">
                   {!ro && <button type="button" aria-label="離反ではない" title="まだ通院している・別の人と混ざったなど、離反ではない方を数えずに下へ移します" onClick={() => run(() => patch2(r.id, { dismissed: true }), '「離反ではない」に移しました')} className="mr-1 rounded border border-slate-300 px-1 text-[10.5px] text-slate-600 hover:bg-slate-100">離反ではない</button>}
                   {!ro && r.source !== 'auto' && <button type="button" title="この行を削除" onClick={() => confirm('この行を削除しますか？') && run(() => send('/api/admin/churn', 'DELETE', { id: r.id }), '削除しました')} className="text-[11px] text-slate-400 hover:text-red-700">✕</button>}
@@ -148,7 +148,7 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
         <i className="mr-1 inline-block h-2.5 w-2.5 border bg-sky-100 align-middle" />水色＝来院の記録から自動で入った欄（直せます）。<i className="mx-1 inline-block h-2.5 w-2.5 border bg-yellow-200 align-middle" />黄色＝通院回数が空（システムを使う前から通っている方は店舗で入れてください）。
         離反＝最後の来院から翌月の同じ日までに来院がない方（例：3/2 が最後なら 4/2 に離反）。新患継続率の予後が中止・転院の方は「管理」に自動で入ります。
         離反率＝その月に離反した方 ÷ 前月に来院した方（実人数）。来院は<b>予約表の来院チェック</b>で数えます（チェックのない来院は数えません）。次の予約がある方は数えず下に出し、予約日に来院しないまま過ぎたらリストに戻します。
-        <span className="text-orange-800">オレンジの字＝最後の来院のあとにも予約表に名前がある方（来院チェックの付け忘れ・名前の書き方の違いなど）。離反でなければ「離反ではない」を押してください。</span>
+        <span className="text-orange-800">オレンジの字＝最後の来院のあとにも予約表に名前がある方（来院チェックの付け忘れ・名前の書き方の違いなど）。離反でなければ「離反ではない」を押してください。緑の「再来」＝離反の日（当日を含む）のあとに来院した方（離反はそのまま数えます）。</span>
       </p>
       {(data.booked?.length ?? 0) > 0 && (
         <details className="mt-2 rounded border bg-white" aria-label="次の予約がある方">
@@ -171,7 +171,7 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
           <ul className="border-t px-3 py-1 text-[12px]">
             {data.dismissed!.map((r) => (
               <li key={r.id} className="flex items-center gap-2 py-0.5">
-                <span className="w-12 text-slate-500">{md(r.churnDate)}</span><span className="w-14">{r.cardNo}</span><span className="w-32">{r.name}</span><span className="text-slate-500">最終来院 {md(r.lastVisit)}</span><AfterNote a={r.after} inline />
+                <span className="w-12 text-slate-500">{md(r.churnDate)}</span><span className="w-14">{r.cardNo}</span><span className="w-32">{r.name}</span><span className="text-slate-500">最終来院 {md(r.lastVisit)}</span><AfterNote a={r.after} churnDate={r.churnDate} inline />
                 {!ro && <button type="button" onClick={() => run(() => patch2(r.id, { dismissed: false }), 'リストに戻しました')} className="ml-auto text-[11px] text-brand underline">リストに戻す</button>}
               </li>
             ))}
@@ -185,12 +185,15 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
 }
 
 /** 最後の来院のあとの様子（来院・来院チェックのない名前・これからの予約） */
-function AfterNote({ a, inline }: { a?: ChurnRow['after']; inline?: boolean }) {
+function AfterNote({ a, inline, churnDate }: { a?: ChurnRow['after']; inline?: boolean; churnDate?: string }) {
   if (!a || (!a.seenAfter && !a.uncheckedAfter && !a.nextBooking)) return null;
   const cls = inline ? 'ml-1 text-[11px]' : 'block whitespace-nowrap text-[10.5px] leading-tight';
   return (
     <>
-      {a.seenAfter && <span className={`${cls} font-bold text-orange-700`}>{md(a.seenAfter)} 来院あり</span>}
+      {/* 離反の日（その日も含む）のあとに来院＝再来（離反はそのまま残す）。離反の日より前の来院は、離反ではないかもしれない */}
+      {a.seenAfter && (churnDate && a.seenAfter >= churnDate
+        ? <span className={`${cls} font-bold text-emerald-700`} title="離反のあとに来院（離反はそのまま数えます）">{md(a.seenAfter)} 再来</span>
+        : <span className={`${cls} font-bold text-orange-700`}>{md(a.seenAfter)} 来院あり</span>)}
       {a.uncheckedAfter && <span className={`${cls} font-bold text-orange-700`} title="予約表に名前はあるが、来院チェックが付いていない">{md(a.uncheckedAfter)} 名前あり（チェックなし）</span>}
       {a.nextBooking && <span className={`${cls} text-sky-700`}>次の予約 {md(a.nextBooking)}</span>}
     </>

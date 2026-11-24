@@ -40,6 +40,11 @@ cell(`${prevYm}-13`, '見本 七郎', 1, 750); cell(add(today, 4), '見本 七�
 // 五郎：前は「見本 五郎様6」の書き方で人を見分けていた。そのときに理由を入れた行（手で直した行）が残っている
 cell(`${prevYm}-09`, '見本 五郎様6', 1, 690);
 sql(`INSERT INTO churn (id, storeId, churnDate, patientKey, lastVisit, cardNo, name, source, edited, reason) VALUES ('cfold5', '${sid}', '${ym}-09', 'n:見本五郎様6', '${prevYm}-09', '', '見本 五郎様6', 'auto', 1, '見本の理由')`);
+// 八郎：離反の日の当日に来院 → 離反のまま（再来として出す）
+cell(`${prevYm}-14`, '見本 八郎', 1, 780); cell(`${ym}-14`, '見本 八郎', 1, 780);
+// 九子：患者一覧（フリガナ）で、ひらがなで書いた来院も同じ番号の方につながる
+await api('POST', '/api/admin/patients', { rows: [{ no: '009501', name: '見本 九子', kana: 'ミホン キュウコ' }] });
+cell(`${prevYm}-06`, '見本 九子', 1, 810); cell(`${prevYm}-16`, 'みほん きゅうこ', 1, 810);
 
 const get = async () => (await api('GET', `/api/admin/churn?month=${ym}`))[1];
 let d = await get();
@@ -57,12 +62,17 @@ sql(`UPDATE cell SET date = '${add(today, -1)}', visited = 1 WHERE storeId='${si
 d = await get();
 ok('来院しないまま予約日が過ぎたらリストに戻る', d.rows.some((r) => r.name.includes('六郎')) && !d.booked.some((r) => r.name.includes('六郎')), JSON.stringify(d.booked.map((r) => r.name)));
 ok('予約どおり来院したら外したまま', d.booked.some((r) => r.name.includes('七郎')) && !d.rows.some((r) => r.name.includes('七郎')));
+const hachi = d.rows.find((r) => r.name.includes('八郎'));
+ok('離反の日の当日に来院した方は離反のまま（あとの来院は再来）', !!hachi && hachi.after?.seenAfter === `${ym}-14`, JSON.stringify(hachi?.after));
+const kyu = d.rows.filter((r) => r.cardNo === '9501');
+ok('患者一覧のフリガナで、ひらがなの来院も同じ番号につながる（1 人・最後の来院から）', kyu.length === 1 && kyu[0].lastVisit === `${prevYm}-16`, JSON.stringify(d.rows.filter((r) => /九子|きゅうこ/.test(r.name)).map((r) => [r.name, r.cardNo, r.lastVisit])));
 const before = d.stats.count;
 
 // 画面
 await p.goto(`${B}/admin/churn?month=${ym}`); await p.waitForSelector('table[aria-label="離反者リスト"]');
 ok('画面：あとで名前がある方の件数が出る', await p.getByLabel('あとで予約表に名前がある方').isVisible());
 ok('画面：行に「名前あり（チェックなし）」が出る', (await p.locator('table[aria-label="離反者リスト"]').innerText()).includes('名前あり（チェックなし）'));
+ok('画面：離反のあとに来院した方は「再来」', (await p.locator('table[aria-label="離反者リスト"]').innerText()).includes(`${Number(ym.slice(5))}/14 再来`));
 // 「離反ではない」
 const row = p.locator('table[aria-label="離反者リスト"] tbody tr:has(input[value="見本 四郎"])');
 await row.getByRole('button', { name: '離反ではない' }).click(); await p.waitForTimeout(1200);
