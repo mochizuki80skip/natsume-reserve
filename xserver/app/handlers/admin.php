@@ -740,9 +740,9 @@ function adm_history_rows(string $sid, array $f, int $take): array
     $sql = 'SELECT createdAt, kind, date, time, bed, name, status FROM reservation WHERE storeId = ? AND ' . ($op ? 'createdAt >= ? AND createdAt < ?' : 'date BETWEEN ? AND ?');
     $params = $op ? [$sid, $f['from'] . ' 00:00:00', Time::addDays($f['to'], 1) . ' 00:00:00'] : [$sid, $f['from'], $f['to']];
     if ($f['q'] !== '') { $sql .= ' AND name LIKE ?'; $params[] = '%' . $f['q'] . '%'; }
-    foreach (Db::all($sql . " ORDER BY createdAt DESC LIMIT $take", $params) as $r) {
+    foreach (Db::all(str_replace('SELECT createdAt, kind,', 'SELECT id, storeId, cancelledAt, cancelledBy, cancelNote, createdAt, kind,', $sql) . " ORDER BY createdAt DESC LIMIT $take", $params) as $r) {
         $rows[] = ['createdAt' => $r['createdAt'], 'byCode' => 'WEB', 'kind' => 'WEB', 'date' => $r['date'], 'time' => $r['time'], 'bed' => $r['bed'], 'before' => '', 'after' => $r['name'],
-            'note' => (ADM_KIND_JA[$r['kind']] ?? $r['kind']) . ($r['status'] === 'CANCELLED' ? '・今は取消' : '')];
+            'note' => (ADM_KIND_JA[$r['kind']] ?? $r['kind']) . ($r['status'] === 'CANCELLED' ? '・今は取消（' . adm_cancel_reason($r) . '）' : '')];
     }
     usort($rows, fn($a, $b) => strcmp((string)$b['createdAt'], (string)$a['createdAt']));
     return array_map(fn($r) => [
@@ -750,6 +750,30 @@ function adm_history_rows(string $sid, array $f, int $take): array
         'kind' => $r['kind'], 'kindText' => ADM_HIST_JA[$r['kind']] ?? $r['kind'], 'date' => $r['date'], 'time' => (int)$r['time'], 'bed' => (int)$r['bed'],
         'before' => $r['before'], 'after' => $r['after'], 'note' => $r['note'],
     ], array_slice($rows, 0, $take));
+}
+
+/**
+ * WEB 予約が取消になった理由。記録（取消の操作・キャンセル名簿・予約表の変更の履歴）があればそれを、
+ * 記録を始める前の取消は、今の予約表のその枠の様子から考えられる理由を返す
+ */
+function adm_cancel_reason(array $r): string
+{
+    if (!empty($r['cancelledAt'])) return Time::formatDateTimeShort($r['cancelledAt']) . '　' . adm_who((string)$r['cancelledBy']) . '　' . (string)$r['cancelNote'];
+    $cl = Db::one('SELECT kind, byCode, createdAt FROM cancel_log WHERE reservationId = ? ORDER BY createdAt DESC LIMIT 1', [$r['id']]);
+    if ($cl) return Time::formatDateTimeShort($cl['createdAt']) . '　' . adm_who((string)$cl['byCode']) . '　' . ($cl['kind'] === 'NOSHOW' ? '無断キャンセル' : ($cl['kind'] === 'CHANGE' ? '予約変更' : 'キャンセル（事前連絡）')) . '（キャンセル名簿）';
+    $key = Karte::personKey((string)$r['name']);
+    foreach (Db::all("SELECT `before`, `after`, byCode, createdAt FROM cell_log WHERE storeId = ? AND date = ? AND time = ? AND bed = ? AND `before` <> '' ORDER BY createdAt DESC", [$r['storeId'], $r['date'], (int)$r['time'], (int)$r['bed']]) as $l) {
+        if ($key === '' || Karte::personKey((string)$l['before']) !== $key) continue;
+        $what = $l['after'] === '' ? '予約表でセルを消した' : (Karte::isSamePerson((string)$l['before'], (string)$l['after']) ? '予約表で氏名に書き足し（「' . $l['after'] . '」）。様・回数・カルテNoの書き足しで取消になる不具合（11/24 の更新で直しました）' : '予約表で別の名前に書き換えた');
+        return Time::formatDateTimeShort($l['createdAt']) . '　' . adm_who((string)$l['byCode']) . '　' . $what;
+    }
+    $cutoff = Time::addDays(Time::nowJst()['date'], -Settings::global()['retentionDays']);
+    if ($r['date'] < $cutoff) return '予約表の保存期間を過ぎているため、理由を調べられません';
+    $c = Db::one('SELECT text, reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?', [$r['storeId'], $r['date'], (int)$r['time'], (int)$r['bed']]);
+    $t = trim((string)($c['text'] ?? ''));
+    if ($t !== '' && Karte::personKey($t) === $key) return '予約表には同じ方の名前（「' . $t . '」）が残っています。様・回数・カルテNoを書き足したときの不具合で取消になったものと考えられます（記録を始める前のため、操作したアカウントは分かりません）';
+    if ($t !== '') return '予約表のこの枠は、今は別の名前になっています（書き換え・入れ替え。記録を始める前のため、操作したアカウントは分かりません）';
+    return '予約表から消されています（予約・来院ログの「取消」か、記録を始める前の操作のため、操作したアカウントは分かりません）';
 }
 
 function adm_reservations_get(): never
@@ -768,8 +792,7 @@ function adm_reservations_get(): never
             $c = Campaign::forStore($r['campaign'] ?? null);
             $r['campaign'] = $c ? ['route' => $c['route'] ?? '', 'name' => $c['name'] ?? '', 'memo' => $c['memo'] ?? ''] : null;
             // 取消になったとき：いつ・どのアカウントで・何をして（記録を始める前の取消は空）
-            $r['cancelText'] = $r['status'] === 'CANCELLED' && !empty($r['cancelledAt'])
-                ? Time::formatDateTimeShort($r['cancelledAt']) . '　' . (string)$r['cancelledBy'] . '　' . (string)$r['cancelNote'] : '';
+            $r['cancelText'] = $r['status'] === 'CANCELLED' ? (empty($r['cancelledAt']) ? '（推定）' : '') . adm_cancel_reason($r) : '';
         }
         return $r;
     }, $rows);
@@ -818,11 +841,56 @@ function adm_reservations_export(): never
         $rows = array_map(fn($r) => [$r['createdAt'], $r['date'], Time::minToHm((int)$r['time']), (int)$r['bed'], ADM_KIND_JA[$r['kind']] ?? $r['kind'], $r['name'], $r['cardNo'] ?? '', Text::formatJpPhone($r['phone']), ADM_STATUS_JA[$r['status']] ?? $r['status'], (string)($r['cancelledAt'] ?? ''), (string)($r['cancelledBy'] ?? ''), (string)($r['cancelNote'] ?? ''), $camp($r['campaign'] ?? null)], $list);
         $label = 'WEB予約一覧';
     }
-    $base = "{$store['code']}_{$f['tab']}_{$f['from']}_{$f['to']}";
-    $jaName = rawurlencode("{$store['name']}_{$label}_{$f['from']}_{$f['to']}");
+    adm_send_table($format, $label, $store['name'], "{$store['code']}_{$f['tab']}_{$f['from']}_{$f['to']}", $f, $header, $rows);
+}
+
+/** 本部メニュー・MG メニューの変更履歴で見られる店舗と、選んだ店舗（store＝店舗コード。空なら本部は全店、管轄MG は管轄の店舗） */
+function hq_history_scope(): array
+{
+    $s = Auth::requireSession();
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') Http::error('forbidden', 403);
+    $all = Settings::storesInOrder($s['role'] === 'hq' ? '1 = 1' : 'hqOnly = 0', [], false);
+    $code = (string)Http::query('store', '');
+    if ($code !== '') $pick = array_values(array_filter($all, fn($x) => $x['code'] === $code));
+    else $pick = $s['role'] === 'mg' ? array_values(array_filter($all, fn($x) => in_array($x['id'], array_column(Auth::mgStores(), 'id'), true))) : array_values(array_filter($all, fn($x) => (int)$x['active'] === 1));
+    return [$s, $all, $pick];
+}
+
+/** 全店（または選んだ店舗）の変更履歴。新しい順に最大 500 件 */
+function hq_history_rows(array $pick, array $f, int $take): array
+{
+    $rows = [];
+    foreach ($pick as $st) foreach (adm_history_rows($st['id'], $f, $take) as $r) { $r['store'] = $st['name']; $rows[] = $r; }
+    usort($rows, fn($a, $b) => strcmp((string)$b['createdAt'], (string)$a['createdAt']));
+    return array_slice($rows, 0, $take);
+}
+
+function hq_history_get(): never
+{
+    [$s, $all, $pick] = hq_history_scope();
+    $f = adm_log_filter();
+    $f['tab'] = 'history';
+    $f['store'] = (string)Http::query('store', '');
+    Http::json(['filter' => $f, 'stores' => array_map(fn($x) => ['code' => $x['code'], 'name' => $x['name']], $all), 'rows' => hq_history_rows($pick, $f, 500)]);
+}
+
+function hq_history_export(): never
+{
+    [$s, $all, $pick] = hq_history_scope();
+    $f = adm_log_filter();
+    $f['tab'] = 'history';
+    $rows = array_map(fn($h) => [$h['createdAt'], $h['store'], $h['who'], $h['kindText'], $h['date'], Time::minToHm($h['time']), $h['bed'], $h['before'], $h['after'], $h['note']], hq_history_rows($pick, $f, 5000));
+    $who = count($pick) === 1 ? $pick[0]['name'] : ($s['role'] === 'mg' && Http::query('store', '') === '' ? '管轄の店舗' : '全店');
+    adm_send_table(Http::query('format') === 'xlsx' ? 'xlsx' : 'csv', '変更履歴', $who, 'history_' . $f['from'] . '_' . $f['to'], $f, ['操作日時', '店舗', 'アカウント', '操作', '予約日', '時刻', 'ベッド', '変更前', '変更後', '詳細'], $rows);
+}
+
+/** 表を CSV か Excel で送る（予約・来院ログ・本部の変更履歴の保存） */
+function adm_send_table(string $format, string $label, string $who, string $base, array $f, array $header, array $rows): never
+{
+    $jaName = rawurlencode("{$who}_{$label}_{$f['from']}_{$f['to']}");
     header('Cache-Control: no-store');
     if ($format === 'xlsx') {
-        $bytes = Xlsx::build($label, "{$store['name']}　{$label}　{$f['from']} 〜 {$f['to']}　（出力 " . Time::nowJst()['date'] . '）', $header, $rows);
+        $bytes = Xlsx::build($label, "{$who}　{$label}　{$f['from']} 〜 {$f['to']}　（出力 " . Time::nowJst()['date'] . '）', $header, $rows);
         header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         header("Content-Disposition: attachment; filename=\"$base.xlsx\"; filename*=UTF-8''$jaName.xlsx");
         echo $bytes;

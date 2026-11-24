@@ -218,7 +218,7 @@ export const GUIDE: GuideArticle[] = [
     id: 'log', cat: 'そのほかの画面', title: '予約・来院ログ',
     lead: 'WEB 予約と、キャンセル・変更名簿を、期間や名前で探して見られます。',
     steps: [
-      { text: '上のメニューの「**予約・来院ログ**」を開きます。「WEB予約一覧」「キャンセル名簿」「変更履歴」を切り替えて、期間・名前・電話番号・診察券番号で探します。「変更履歴」では、予約表をだれが（店舗・本部・管轄MG のどのアカウントで）・いつ・どう変えたかが分かります。', img: 'log-1.png' },
+      { text: '上のメニューの「**予約・来院ログ**」を開きます。「WEB予約一覧」「キャンセル名簿」「変更履歴」を切り替えて、期間・名前・電話番号・診察券番号で探します。「変更履歴」では、予約表をだれが（店舗・本部・管轄MG のどのアカウントで）・いつ・どう変えたかが分かります。全店の変更履歴は、本部メニューの「変更履歴（全店）」（管轄MG は MG メニューの「変更履歴」）で見られます。WEB予約一覧で取消になっている予約には、取消になった理由が出ます。', img: 'log-1.png' },
       { text: 'CSV・Excel で書き出すこともできます。' },
     ],
     related: ['web', 'change', 'find'], words: '履歴 変更履歴 だれが 誰が アカウント 一覧 書き出し',
@@ -361,6 +361,7 @@ export const GUIDE_FOR_SCREEN: { prefix: string; label: string; ids: string[] }[
   { prefix: '/admin/shifts', label: 'シフト表', ids: ['shifts', 'capacity'] },
   { prefix: '/admin/report', label: '日報', ids: ['report', 'visit', 'madoguchi'] },
   { prefix: '/admin/reservations', label: '予約・来院ログ', ids: ['log', 'web'] },
+  { prefix: '/admin/hq/history', label: '変更履歴（全店）', ids: ['log'] },
   { prefix: '/admin/karte/summary', label: '新患・再来集計', ids: ['summary', 'karte'] },
   { prefix: '/admin/karte', label: '新患継続率', ids: ['karte', 'visit'] },
   { prefix: '/admin/staff-counts', label: '担当数', ids: ['staffcounts', 'staff'] },

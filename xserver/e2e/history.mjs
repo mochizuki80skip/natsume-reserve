@@ -104,6 +104,42 @@ await st.goto(`${B}/admin/day/${D}`); await st.waitForSelector('#grid');
 await st.getByText('この日の変更の履歴').click(); await st.waitForTimeout(800);
 const panel = await st.locator('details:has-text("この日の変更の履歴")').innerText();
 ok('予約表の下の履歴にも操作とアカウントが出る', panel.includes('予約変更') && panel.includes('本部：') && panel.includes('キャンセル'), panel.slice(0, 200));
+// ---------- 本部メニュー・MG メニューの変更履歴 ----------
+const hh = (await api(hq, 'GET', `/api/admin/hq/history?from=${D}&to=${D}&basis=date`))[1];
+ok('本部：全店の変更履歴に店舗名つきで出る', hh.rows.length > 0 && hh.rows.every((x) => x.store) && hh.rows.some((x) => x.store === storeName && x.who.startsWith('管轄MG：')), JSON.stringify(hh.rows[0]));
+ok('本部：店舗の選択肢がある', hh.stores.some((x) => x.code === 'S001') && hh.stores.some((x) => x.code === 'S002'));
+const hs2 = (await api(hq, 'GET', `/api/admin/hq/history?from=${D}&to=${D}&basis=date&store=S002`))[1];
+ok('本部：店舗を選ぶとその店舗だけ', hs2.rows.every((x) => x.store !== storeName));
+const mh = (await api(mg, 'GET', `/api/admin/hq/history?from=${D}&to=${D}&basis=date`))[1];
+ok('管轄MG：管轄の店舗の履歴が見られる', mh.rows.length > 0 && mh.rows.every((x) => x.store === storeName), String(mh.rows.length));
+ok('店舗のアカウントでは全店の履歴は見られない', (await api(st, 'GET', `/api/admin/hq/history?from=${D}&to=${D}`))[0] === 403);
+const hcsv = await hq.evaluate(async (u) => (await fetch(u)).text(), `/api/admin/hq/history/export?from=${D}&to=${D}&basis=date&format=csv`);
+ok('本部：CSV に店舗の列つきで保存できる', hcsv.includes('操作日時,店舗,アカウント'));
+await hq.goto(`${B}/admin`); await hq.waitForLoadState('networkidle');
+await hq.getByText('本部メニュー').click(); await hq.getByRole('link', { name: '変更履歴（全店）' }).click();
+await hq.waitForSelector('table[aria-label="変更履歴（全店）"]');
+await hq.getByLabel('日付の見方').selectOption('date');
+await hq.locator('input[type=date]').first().fill(D); await hq.locator('input[type=date]').nth(1).fill(D);
+await hq.getByRole('button', { name: '絞り込む' }).click(); await hq.waitForTimeout(1000);
+ok('本部メニューから変更履歴の画面が開ける', (await hq.locator('table[aria-label="変更履歴（全店）"]').innerText()).includes('管轄MG：見本 管轄'));
+
+// ---------- 取消になった理由（記録を始める前の取消も、予約表の様子から） ----------
+const rv2 = await api(st, 'POST', '/api/public/S001/reserve', { kind: 'RETURN', date: D, time: 720 - 60, name: '見本 古い取消', phone: '09011114444', cardNo: '9998' });
+const rid2 = sql("SELECT id FROM reservation WHERE name='見本 古い取消'");
+// 直す前の不具合と同じ状態（予約表には「様」付きの同じ人が残り、予約だけ取消・記録なし）を作る
+sql(`UPDATE cell SET text=CONCAT(text,'様3'), reservationId=NULL WHERE reservationId='${rid2}' AND text LIKE '%古い取消%'; UPDATE cell SET reservationId=NULL WHERE reservationId='${rid2}'; UPDATE reservation SET status='CANCELLED', cancelledAt=NULL, cancelledBy=NULL, cancelNote=NULL WHERE id='${rid2}'; DELETE FROM cell_log WHERE \`after\` LIKE '%古い取消%'`);
+const wl = (await api(st, 'GET', `/api/admin/reservations?from=${D}&to=${D}&status=CANCELLED`))[1].rows;
+const old = wl.find((x) => x.name === '見本 古い取消');
+ok('準備：WEB 予約', rv2[0] === 200);
+ok('記録を始める前の取消にも理由（推定）が出る：様などの書き足しの不具合', !!old && old.cancelText.startsWith('（推定）') && old.cancelText.includes('不具合'), old?.cancelText);
+const mine = wl.find((x) => x.name === '見本 ウェブ');
+ok('記録のある取消は、日時とアカウントが出る', !mine || mine.status === 'BOOKED', '');
+const del = await api(st, 'POST', '/api/public/S001/reserve', { kind: 'RETURN', date: D, time: 600, name: '見本 消された', phone: '09011115555', cardNo: '9997' });
+const dc = (await api(st, 'GET', `/api/admin/day?date=${D}`))[1].data.cells.find((x) => x.text.includes('見本 消された'));
+await put(st, 600, dc.bed, '');
+const dl = (await api(st, 'GET', `/api/admin/reservations?from=${D}&to=${D}&status=CANCELLED`))[1].rows.find((x) => x.name === '見本 消された');
+ok('予約表で消した取消は、消したアカウントが出る', del[0] === 200 && !!dl && dl.cancelText.includes('店舗：' + storeName) && !dl.cancelText.startsWith('（推定）'), dl?.cancelText);
+
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));
 await br.close();
 console.log(process.exitCode ? 'HISTORY FAILED' : 'HISTORY OK');

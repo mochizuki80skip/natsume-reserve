@@ -52,6 +52,8 @@ function route_table(): array
         ['PUT', '#^/api/admin/visit$#', 'adm_visit_put'],
         ['POST', '#^/api/admin/cancel$#', 'adm_cancel_post'],
         ['DELETE', '#^/api/admin/cancel$#', 'adm_cancel_delete'],
+        ['GET', '#^/api/admin/hq/history$#', 'hq_history_get'],
+        ['GET', '#^/api/admin/hq/history/export$#', 'hq_history_export'],
         ['PATCH', '#^/api/admin/cancel$#', 'adm_cancel_patch'],
         // ログ
         ['GET', '#^/api/admin/reservations$#', 'adm_reservations_get'],

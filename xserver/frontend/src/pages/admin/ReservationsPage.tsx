@@ -12,7 +12,7 @@ const KIND_JA: Record<string, string> = { NEW: '初診', ACCIDENT: '初診（交
 
 interface Filter { tab: 'web' | 'cancel' | 'history'; basis: 'op' | 'date'; from: string; to: string; status: string; q: string }
 interface HistRow { createdAt: string; createdAtText: string; who: string; kind: string; kindText: string; date: string; time: number; bed: number; before: string; after: string; note: string }
-const HIST_CLASS: Record<string, string> = { INPUT: 'bg-sky-100 text-sky-800', EDIT: 'bg-amber-100 text-amber-800', DELETE: 'bg-red-100 text-red-800', CANCEL: 'bg-red-100 text-red-800', MOVE: 'bg-violet-100 text-violet-800', RESTORE: 'bg-emerald-100 text-emerald-800', WEB: 'bg-emerald-100 text-emerald-800' };
+export const HIST_CLASS: Record<string, string> = { INPUT: 'bg-sky-100 text-sky-800', EDIT: 'bg-amber-100 text-amber-800', DELETE: 'bg-red-100 text-red-800', CANCEL: 'bg-red-100 text-red-800', MOVE: 'bg-violet-100 text-violet-800', RESTORE: 'bg-emerald-100 text-emerald-800', WEB: 'bg-emerald-100 text-emerald-800' };
 interface WebRow { id: string; date: string; time: number; bed: number; kind: string; name: string; cardNo: string | null; phone: string; phoneText: string; status: string; createdAtText: string; cancelText?: string; campaign?: { route: string; name: string; memo: string } | null }
 interface CancelRow { id: string; date: string; time: number; bed: number; name: string; kind: string; source: string; byCode: string; who?: string; memo: string | null; nextDate: string | null; nextTime?: number | null; createdAtText: string }
 interface Resp { filter: Filter; rows: (WebRow | CancelRow | HistRow)[] }
@@ -141,7 +141,7 @@ export default function ReservationsPage() {
                   <td className="px-2 py-1">{r.name}</td>
                   <td className="px-2 py-1">{r.cardNo ?? ''}</td>
                   <td className="whitespace-nowrap px-2 py-1">{r.phoneText}</td>
-                  <td className="px-2 py-1">{STATUS_JA[r.status] ?? r.status}{r.cancelText && <span className="block whitespace-nowrap text-[11px] text-red-700" title="取消になった日時・アカウント・操作">{r.cancelText}</span>}</td>
+                  <td className="px-2 py-1">{STATUS_JA[r.status] ?? r.status}{r.cancelText && <span className="block min-w-[16rem] max-w-md text-[11px] text-red-700" title="取消になった日時・アカウント・操作（記録を始める前の取消は、予約表の様子から考えられる理由）">{r.cancelText}</span>}</td>
                   <td className="px-2 py-1 text-xs" title={r.campaign?.memo ? `店舗向け：${r.campaign.memo}` : undefined}>{r.campaign ? <span className="whitespace-nowrap font-bold text-orange-800">🎁 {r.campaign.name}</span> : ''}</td>
                   <td className="px-2 py-1"><Link to={`/admin/day/${r.date}`} className="text-brand underline">予約表</Link></td>
                 </tr>

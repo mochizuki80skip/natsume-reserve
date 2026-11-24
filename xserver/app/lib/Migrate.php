@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 65;
+    private const VERSION = 66;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -474,6 +474,10 @@ SQL);
                 }
                 if (self::hasTable($pdo, 'cell_log') && !self::hasIndex($pdo, 'cell_log', 'cell_log_store_created')) $pdo->exec('ALTER TABLE `cell_log` ADD KEY `cell_log_store_created` (`storeId`, `createdAt`)');
             }
+            if ($ver < 66) {
+                // 不具合で取消になった WEB 予約のつなぎ直しを、11 月より前に受けた予約（先の日の予約）にも広げる
+                self::repairDetachedWeb($pdo);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -773,7 +777,7 @@ SQL);
     private static function repairDetachedWeb(PDO $pdo): void
     {
         if (!self::hasTable($pdo, 'cell') || !self::hasTable($pdo, 'cancel_log')) return;
-        $rs = $pdo->query("SELECT r.id, r.storeId, r.date, r.time, r.bed, r.name FROM reservation r WHERE r.status = 'CANCELLED' AND r.createdAt >= '2026-11-01'
+        $rs = $pdo->query("SELECT r.id, r.storeId, r.date, r.time, r.bed, r.name FROM reservation r WHERE r.status = 'CANCELLED'
             AND NOT EXISTS (SELECT 1 FROM cancel_log l WHERE l.reservationId = r.id)")->fetchAll(PDO::FETCH_ASSOC);
         $cell = $pdo->prepare('SELECT id, text, reservationId FROM cell WHERE storeId = ? AND date = ? AND time = ? AND bed = ?');
         $link = $pdo->prepare('UPDATE cell SET reservationId = ? WHERE id = ?');

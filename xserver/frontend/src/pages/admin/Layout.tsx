@@ -134,6 +134,7 @@ export default function AdminLayout() {
                   <Link to="/admin/hq/jibai">自賠集計{hqJibaiBadge}</Link>
                   <Link to="/admin/hq/accidents">新自・新三（全店）{(me.accidentTwoMonths ?? 0) > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10.5px] font-bold text-white" aria-label={`2ヶ月経過の未選択 ${me.accidentTwoMonths}件`}>{me.accidentTwoMonths}</span>}</Link>
                   <Link to="/admin/staffing">人員配置</Link>
+                  <Link to="/admin/hq/history">変更履歴</Link>
                 </DropMenu>
               )}
             </>)}
@@ -146,6 +147,7 @@ export default function AdminLayout() {
                 <Link to="/admin/accident-ends">事故患者 終了報告</Link>
                 <Link to="/admin/acct">窓口集計（全店）</Link>
                 <Link to="/admin/staffing">人員配置</Link>
+                <Link to="/admin/hq/history">変更履歴（全店）</Link>
                 <Link to="/admin/hq">本部（店舗・設定）</Link>
                 <Link to="/admin/hq/accounts">アカウント</Link>
               </DropMenu>
