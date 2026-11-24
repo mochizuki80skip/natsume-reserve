@@ -339,10 +339,14 @@ final class Churn
         foreach ($rows as $r) {
             $base = $r['lastVisit'] ?: Time::addMonths($r['churnDate'], -1);
             $keys = array_unique(array_filter([self::cardKey((string)$r['cardNo']), str_starts_with((string)$r['patientKey'], 'n:') || $r['patientKey'] === '' ? '' : (string)$r['patientKey'], Karte::personKey((string)$r['name']) !== '' ? 'n:' . Karte::personKey((string)$r['name']) : '']));
-            $o = ['seenAfter' => null, 'uncheckedAfter' => null, 'nextBooking' => null];
+            $o = ['seenAfter' => null, 'uncheckedAfter' => null, 'nextBooking' => null, 'returnedAt' => null];
             foreach ($keys as $k) foreach ($byPerson[$k] ?? [] as [$d, $t]) {
                 if ($d <= $base) continue;
-                if ($t === 'seen') $o['seenAfter'] = max($o['seenAfter'] ?? '', $d);
+                if ($t === 'seen') {
+                    $o['seenAfter'] = max($o['seenAfter'] ?? '', $d);
+                    // 離反の日（当日を含む）のあとの最初の来院＝再来した日
+                    if ($d >= $r['churnDate'] && ($o['returnedAt'] === null || $d < $o['returnedAt'])) $o['returnedAt'] = $d;
+                }
                 elseif ($t === 'unchecked') $o['uncheckedAfter'] = max($o['uncheckedAfter'] ?? '', $d);
                 elseif ($o['nextBooking'] === null || $d < $o['nextBooking']) $o['nextBooking'] = $d;
             }

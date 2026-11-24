@@ -7,7 +7,7 @@ import { useFetch } from '@/lib/api';
 import { halfNum, halfNumInput } from '@/lib/format';
 import { parseChurnSheet, type ChurnLine } from '@/lib/churnImport';
 
-interface ChurnRow { id: string; churnDate: string; lastVisit: string | null; cardNo: string; name: string; sex: string; age: number | null; kind: string; visits: string; staff: string; symptom: string; treatment: string; manage: string; reason: string; source: 'auto' | 'import' | 'manual'; edited: boolean; dismissed?: boolean; bookedDate?: string | null; after?: { seenAfter: string | null; uncheckedAfter: string | null; nextBooking: string | null } | null }
+interface ChurnRow { id: string; churnDate: string; lastVisit: string | null; cardNo: string; name: string; sex: string; age: number | null; kind: string; visits: string; staff: string; symptom: string; treatment: string; manage: string; reason: string; source: 'auto' | 'import' | 'manual'; edited: boolean; dismissed?: boolean; bookedDate?: string | null; after?: { seenAfter: string | null; uncheckedAfter: string | null; nextBooking: string | null; returnedAt?: string | null } | null }
 interface CardRate { visits: number; direct: number; map: number; none: number; rate: number | null }
 interface ChurnResp { month: string; today: string; rows: ChurnRow[]; dismissed?: ChurnRow[]; booked?: ChurnRow[]; cardRate?: CardRate; canEdit: boolean; stats: { count: number; active: number; excluded: number; rate: number | null; rateEx: number | null }; manage: string[]; staff: string[] }
 interface FollowRow { id: string; listDate: string; lastVisit: string; cardNo: string; name: string; staff: string; contactedAt: string | null; nextText: string; noBooking: boolean; note: string; autoNext: { date: string; time: number } | null }
@@ -186,14 +186,13 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
 
 /** 最後の来院のあとの様子（来院・来院チェックのない名前・これからの予約） */
 function AfterNote({ a, inline, churnDate }: { a?: ChurnRow['after']; inline?: boolean; churnDate?: string }) {
-  if (!a || (!a.seenAfter && !a.uncheckedAfter && !a.nextBooking)) return null;
+  if (!a || (!a.seenAfter && !a.uncheckedAfter && !a.nextBooking && !a.returnedAt)) return null;
   const cls = inline ? 'ml-1 text-[11px]' : 'block whitespace-nowrap text-[10.5px] leading-tight';
   return (
     <>
       {/* 離反の日（その日も含む）のあとに来院＝再来（離反はそのまま残す）。離反の日より前の来院は、離反ではないかもしれない */}
-      {a.seenAfter && (churnDate && a.seenAfter >= churnDate
-        ? <span className={`${cls} font-bold text-emerald-700`} title="離反のあとに来院（離反はそのまま数えます）">{md(a.seenAfter)} 再来</span>
-        : <span className={`${cls} font-bold text-orange-700`}>{md(a.seenAfter)} 来院あり</span>)}
+      {a.returnedAt && <span className={`${cls} font-bold text-emerald-700`} title="離反のあとに初めて来院した日（離反はそのまま数えます）">{md(a.returnedAt)} 再来</span>}
+      {a.seenAfter && churnDate && a.seenAfter < churnDate && <span className={`${cls} font-bold text-orange-700`}>{md(a.seenAfter)} 来院あり</span>}
       {a.uncheckedAfter && <span className={`${cls} font-bold text-orange-700`} title="予約表に名前はあるが、来院チェックが付いていない">{md(a.uncheckedAfter)} 名前あり（チェックなし）</span>}
       {a.nextBooking && <span className={`${cls} text-sky-700`}>次の予約 {md(a.nextBooking)}</span>}
     </>
