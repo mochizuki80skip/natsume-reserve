@@ -8,7 +8,8 @@ import { halfNum, halfNumInput } from '@/lib/format';
 import { parseChurnSheet, type ChurnLine } from '@/lib/churnImport';
 
 interface ChurnRow { id: string; churnDate: string; lastVisit: string | null; cardNo: string; name: string; sex: string; age: number | null; kind: string; visits: string; staff: string; symptom: string; treatment: string; manage: string; reason: string; source: 'auto' | 'import' | 'manual'; edited: boolean; dismissed?: boolean; after?: { seenAfter: string | null; uncheckedAfter: string | null; nextBooking: string | null } | null }
-interface ChurnResp { month: string; today: string; rows: ChurnRow[]; dismissed?: ChurnRow[]; canEdit: boolean; stats: { count: number; active: number; excluded: number; rate: number | null; rateEx: number | null }; manage: string[]; staff: string[] }
+interface CardRate { visits: number; direct: number; map: number; none: number; rate: number | null }
+interface ChurnResp { month: string; today: string; rows: ChurnRow[]; dismissed?: ChurnRow[]; cardRate?: CardRate; canEdit: boolean; stats: { count: number; active: number; excluded: number; rate: number | null; rateEx: number | null }; manage: string[]; staff: string[] }
 interface FollowRow { id: string; listDate: string; lastVisit: string; cardNo: string; name: string; staff: string; contactedAt: string | null; nextText: string; noBooking: boolean; note: string; autoNext: { date: string; time: number } | null }
 interface FollowResp { date: string; today: string; pending: boolean; pendingCount: number; rows: FollowRow[]; canEdit: boolean }
 
@@ -99,6 +100,7 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
         <b className="text-sm">{Number(ym.slice(0, 4))}年{Number(ym.slice(5))}月に離反した方</b>
         <button type="button" onClick={() => setMonth(shiftYm(ym, 1))} className="rounded border bg-white px-2 py-0.5 text-sm">翌月 ›</button>
         {noReason > 0 && <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">管理・理由が未入力 {noReason} 件</span>}
+        {data.cardRate && data.cardRate.visits > 0 && <span aria-label="カルテNo 付き率" title={`番号で入力 ${data.cardRate.direct} 件・名前から番号につながった ${data.cardRate.map} 件・名前だけ ${data.cardRate.none} 件`} className={`rounded px-2 py-0.5 text-xs font-bold ${(data.cardRate.rate ?? 0) >= 90 ? 'bg-emerald-100 text-emerald-900' : (data.cardRate.rate ?? 0) >= 70 ? 'bg-amber-100 text-amber-900' : 'bg-red-100 text-red-800'}`}>この月の来院のカルテNo 付き率 {data.cardRate.rate}%（{data.cardRate.visits} 件中 {data.cardRate.direct + data.cardRate.map} 件）</span>}
         {warn > 0 && <span className="rounded bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-900" aria-label="あとで予約表に名前がある方">あとで予約表に名前がある方 {warn} 件（離反ではないかもしれません）</span>}
         <span className="ml-auto" />
         {!ro && <button type="button" onClick={() => run(() => send('/api/admin/churn', 'POST', { churnDate: data.today.startsWith(ym) ? data.today : `${ym}-01` }), '行を追加しました')} className="rounded border bg-white px-2 py-0.5 text-sm">＋ 行を追加</button>}

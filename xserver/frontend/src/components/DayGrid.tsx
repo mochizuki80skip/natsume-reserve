@@ -110,6 +110,8 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   }, []);
   // 診察券番号 → 氏名（店舗設定で取り込んだ患者一覧から）。数字だけを入れると候補を出し、Enter で氏名に置き換える
   const numCache = useRef(new Map<string, string | null>());
+  // 診察券番号から氏名に置き換えたセル → その番号（保存のときに一緒に送り、セルにカルテNo として残す）
+  const cardFor = useRef(new Map<string, { no: string; text: string }>());
   const numTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [numHint, setNumHint] = useState<{ k: string; no: string; name: string | null } | null>(null);
 
@@ -132,12 +134,17 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   const flush = useCallback(async () => {
     if (dirty.current.size === 0) return;
     if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-    const all = Array.from(dirty.current.entries()).map(([k, text]) => { const [time, bed] = k.split(':').map(Number); return { time, bed, text, prev: serverText.current.get(k) ?? '' }; });
+    const all = Array.from(dirty.current.entries()).map(([k, text]) => {
+      const [time, bed] = k.split(':').map(Number);
+      const cf = cardFor.current.get(k);
+      if (cf) cardFor.current.delete(k);
+      return { time, bed, text, prev: serverText.current.get(k) ?? '', ...(cf && cf.text === text ? { cardNo: cf.no } : {}) };
+    });
     dirty.current.clear();
     setSaveState('saving');
     // 保存できなかったら、入力を捨てずに待たせて少しあとにもう一度送る（そのあと同じセルを打ち直していれば新しい方を送る）
     const requeue = (list: typeof all) => {
-      for (const c of list) { const k = key(c.time, c.bed); if (!dirty.current.has(k)) dirty.current.set(k, c.text); touchedAt.current.set(k, Date.now()); }
+      for (const c of list) { const k = key(c.time, c.bed); if (!dirty.current.has(k)) { dirty.current.set(k, c.text); if (c.cardNo) cardFor.current.set(k, { no: c.cardNo, text: c.text }); } touchedAt.current.set(k, Date.now()); }
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => { void flushRef.current(); }, 5000);
     };
@@ -214,7 +221,7 @@ export default function DayGrid({ data, published, today, onRefresh, onEdited }:
   async function applyCardNo(time: number, bed: number, r: number, c: number, no: string) {
     const name = await lookupNo(no);
     setNumHint(null);
-    if (name) { setCellsTracked([{ time, bed, text: name }]); setPasteInfo(`診察券番号 ${no} → ${name}`); }
+    if (name) { cardFor.current.set(key(time, bed), { no, text: name }); setCellsTracked([{ time, bed, text: name }]); setPasteInfo(`診察券番号 ${no} → ${name}`); }
     else setPasteInfo(`診察券番号 ${no} は患者一覧・新患継続率にありません（番号のまま残しました。店舗設定で患者一覧を取り込み直すか、新患継続率にカルテNo を入れると出るようになります）`);
     // 画面に氏名が出てから次の行へ（先に移ると、入力前の内容の記録がずれて「元に戻す」が 1 回余分になる）
     setTimeout(() => focusCell(r + 1, c), 0);

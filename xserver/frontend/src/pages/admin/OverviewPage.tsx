@@ -1,4 +1,5 @@
 // 本部：全店の 1 日の状況
+import { useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { addDays, formatDateJa } from '@/lib/time';
@@ -92,8 +93,48 @@ export default function OverviewPage() {
           )}
         </table>
       </div>
+      <CardRateTable />
       {me.session.role === 'mg' && <div className="mt-6"><ClosureBulkEditor /><SpecialBulkEditor /></div>}
       <p className="mt-2 text-xs text-slate-500">予約・来院は氏名が入ったセルの数（「上記初診対応」などは含まない）。WEB は WEB予約の件数。初診・再来・自賠・新三（新・第三者行為）はセルの文字による内訳（新三は初診にも数えます）。「予約表」を押すとその店舗に切り替えて予約表を開きます。</p>
     </div>
+  );
+}
+
+interface CardRateRow { code: string; name: string; visits: number; direct: number; map: number; none: number; rate: number | null }
+
+/** 店舗ごとのカルテNo 付き率（離反などを番号で数えられている割合。入力の差を見るため） */
+function CardRateTable() {
+  const [month, setMonth] = useState('');
+  const { data } = useFetch<{ month: string; rows: CardRateRow[] }>(`/api/admin/hq/card-rate${month ? `?month=${month}` : ''}`);
+  const shift = (ym: string, n: number) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5)) - 1 + n, 1)).toISOString().slice(0, 7);
+  if (!data) return null;
+  const cls = (r: number | null) => (r === null ? '' : r >= 90 ? 'text-emerald-700' : r >= 70 ? 'text-amber-700' : 'text-red-700');
+  return (
+    <section className="mt-6" aria-label="カルテNo 付き率">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h2 className="font-bold">カルテNo 付き率（店舗ごと）</h2>
+        <button type="button" onClick={() => setMonth(shift(data.month, -1))} className="rounded border bg-white px-2 text-sm">‹</button>
+        <b className="text-sm">{Number(data.month.slice(0, 4))}年{Number(data.month.slice(5))}月</b>
+        <button type="button" onClick={() => setMonth(shift(data.month, 1))} className="rounded border bg-white px-2 text-sm">›</button>
+      </div>
+      <div className="overflow-x-auto rounded border bg-white">
+        <table className="w-full text-sm">
+          <thead><tr className="bg-slate-100 text-left">{['店舗', '来院（チェックあり）', '番号で入力', '名前から番号につながった', '名前だけ', 'カルテNo 付き率'].map((h) => <th key={h} className="px-2 py-1">{h}</th>)}</tr></thead>
+          <tbody>
+            {data.rows.map((r) => (
+              <tr key={r.code} className="border-t">
+                <td className="px-2 py-1">{r.name}</td>
+                <td className="px-2 py-1 text-right tabular-nums">{r.visits}</td>
+                <td className="px-2 py-1 text-right tabular-nums">{r.direct}</td>
+                <td className="px-2 py-1 text-right tabular-nums">{r.map}</td>
+                <td className="px-2 py-1 text-right tabular-nums">{r.none}</td>
+                <td className={`px-2 py-1 text-right font-bold tabular-nums ${cls(r.rate)}`}>{r.rate === null ? '－' : `${r.rate}%`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">離反などは、カルテNo が分かる来院は番号で、分からない来院は名前で数えます。付き率が低い店舗は、名前の書き方の違いで数字がずれやすくなります。番号で入力＝WEB 予約の診察券番号・予約表に診察券番号を打って名前に置き換えた・名前の前に番号を書いた。名前から番号につながった＝患者一覧（レセコンの CSV）・新患継続率のカルテNo から。</p>
+    </section>
   );
 }

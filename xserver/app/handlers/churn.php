@@ -49,7 +49,9 @@ function churn_get(): never
     $ex = count(array_filter($rows, fn($r) => in_array($r['manage'], Churn::EXCLUDE, true)));
     $n = count($rows);
     Http::json([
-        'month' => $ym, 'today' => Time::nowJst()['date'], 'rows' => $rows, 'dismissed' => $dismissed, 'canEdit' => Auth::canEditStore($ctx['session'], $store),
+        'month' => $ym, 'today' => Time::nowJst()['date'], 'rows' => $rows, 'dismissed' => $dismissed,
+        // その月の来院のカルテNo 付き率（離反の数字をどこまで信用できるかの目安）
+        'cardRate' => Churn::cardRate($store, $d[0], min(end($d), Time::nowJst()['date'])), 'canEdit' => Auth::canEditStore($ctx['session'], $store),
         'stats' => ['count' => $n, 'active' => $active, 'excluded' => $ex,
             'rate' => $active > 0 ? round($n / $active * 100, 1) : null,
             'rateEx' => $active - $ex > 0 ? round(($n - $ex) / ($active - $ex) * 100, 1) : null],
@@ -87,6 +89,25 @@ function churn_patch(): never
         Db::exec("UPDATE churn SET $cols" . ($auto ? ', edited = 1' : '') . ' WHERE id = ?', array_merge(array_values($set), [$row['id']]));
     }
     Http::json(['ok' => true, 'row' => churn_row(Db::one('SELECT * FROM churn WHERE id = ?', [$row['id']]))]);
+}
+
+/** 本部・管轄MG：店舗ごとのカルテNo 付き率（?month=YYYY-MM。本部は全店、管轄MG は管轄の店舗） */
+function churn_card_rate(): never
+{
+    $s = Auth::requireSession();
+    if ($s['role'] !== 'hq' && $s['role'] !== 'mg') Http::error('forbidden', 403);
+    $ym = Http::query('month');
+    $today = Time::nowJst()['date'];
+    if (!Time::isValidMonth($ym)) $ym = substr($today, 0, 7);
+    $d = Time::datesOfMonth($ym);
+    $stores = $s['role'] === 'mg' ? Auth::mgStores() : Settings::storesInOrder('active = 1 AND jibaiOnly = 0', [], false);
+    $out = [];
+    foreach ($stores as $st) {
+        $st = Db::one('SELECT * FROM store WHERE id = ?', [$st['id']]);
+        if (!$st || (int)($st['jibaiOnly'] ?? 0)) continue;
+        $out[] = ['code' => $st['code'], 'name' => $st['name']] + Churn::cardRate($st, $d[0], min(end($d), $today));
+    }
+    Http::json(['month' => $ym, 'rows' => $out]);
 }
 
 /** 患者様を調べる（?q=氏名かカルテNo）：システムが見ている来院と、離反の見え方 */

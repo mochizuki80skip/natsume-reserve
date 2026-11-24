@@ -65,10 +65,11 @@ final class Churn
             $name = Karte::nameOfText($text);
             $nk = Karte::personKey($text);
             if ($nk === '') return;
-            $card = self::cardKey($card) ?: self::cardKey(Karte::leadingCardNo($text)) ?: ($map[$nk] ?? '');
-            $rows[] = ['date' => $date, 'name' => $name, 'key' => $card !== '' ? $card : 'n:' . $nk, 'card' => $card, 'staff' => $staff, 'nk' => $nk];
+            $direct = self::cardKey($card) ?: self::cardKey(Karte::leadingCardNo($text));
+            $card = $direct ?: ($map[$nk] ?? '');
+            $rows[] = ['date' => $date, 'name' => $name, 'key' => $card !== '' ? $card : 'n:' . $nk, 'card' => $card, 'staff' => $staff, 'nk' => $nk, 'src' => $direct !== '' ? 'direct' : ($card !== '' ? 'map' : '')];
         };
-        foreach (Db::all('SELECT c.date, c.text, c.staff, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0 AND c.visited = 1', [$sid, $from, $to]) as $c) {
+        foreach (Db::all('SELECT c.date, c.text, c.staff, COALESCE(NULLIF(r.cardNo, \'\'), c.cardNo) AS cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date BETWEEN ? AND ? AND c.bed > 0 AND c.visited = 1', [$sid, $from, $to]) as $c) {
             $push($c['date'], (string)$c['text'], (string)($c['staff'] ?? ''), (string)($c['cardNo'] ?? ''));
         }
         foreach (Db::all('SELECT date, name, staff, cardNo FROM visit_archive WHERE storeId = ? AND date BETWEEN ? AND ?', [$sid, $from, $to]) as $v) {
@@ -78,7 +79,7 @@ final class Churn
         $cardsOf = [];
         foreach ($rows as $r) if ($r['card'] !== '') $cardsOf[$r['nk']][$r['card']] = true;
         foreach ($rows as &$r) {
-            if ($r['card'] === '' && isset($cardsOf[$r['nk']]) && count($cardsOf[$r['nk']]) === 1) { $r['card'] = (string)array_key_first($cardsOf[$r['nk']]); $r['key'] = $r['card']; }
+            if ($r['card'] === '' && isset($cardsOf[$r['nk']]) && count($cardsOf[$r['nk']]) === 1) { $r['card'] = (string)array_key_first($cardsOf[$r['nk']]); $r['key'] = $r['card']; $r['src'] = 'map'; }
         }
         unset($r);
         usort($rows, fn($a, $b) => strcmp($a['date'], $b['date']));
@@ -90,7 +91,7 @@ final class Churn
     {
         $map = self::cardMap($store['id']);
         $out = [];
-        foreach (Db::all('SELECT c.date, c.time, c.text, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date > ? AND c.bed > 0 ORDER BY c.date ASC, c.time ASC', [$store['id'], $from]) as $c) {
+        foreach (Db::all('SELECT c.date, c.time, c.text, COALESCE(NULLIF(r.cardNo, \'\'), c.cardNo) AS cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date > ? AND c.bed > 0 ORDER BY c.date ASC, c.time ASC', [$store['id'], $from]) as $c) {
             $text = (string)$c['text'];
             if (Text::isContinuationText($text) || Availability::isBlockMark($text)) continue;
             $nk = Karte::personKey($text);
@@ -271,7 +272,7 @@ final class Churn
         foreach ($rows as $r) $from = min($from, $r['lastVisit'] ?: Time::addMonths($r['churnDate'], -1));
         $map = self::cardMap($store['id']);
         $byPerson = [];
-        foreach (Db::all('SELECT c.date, c.text, c.visited, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date > ? AND c.bed > 0', [$store['id'], $from]) as $c) {
+        foreach (Db::all('SELECT c.date, c.text, c.visited, COALESCE(NULLIF(r.cardNo, \'\'), c.cardNo) AS cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date > ? AND c.bed > 0', [$store['id'], $from]) as $c) {
             $text = (string)$c['text'];
             if (Text::isContinuationText($text) || Availability::isBlockMark($text)) continue;
             $nk = Karte::personKey($text);
@@ -322,7 +323,7 @@ final class Churn
             if ($digits !== '' ? $ck !== $digits : !str_contains($nk, $qk)) return;
             $hits[] = ['date' => $date, 'text' => mb_substr($text, 0, 40), 'visited' => $visited, 'cardNo' => $ck, 'src' => $src];
         };
-        foreach (Db::all('SELECT c.date, c.text, c.visited, r.cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date >= ? AND c.bed > 0', [$store['id'], $from]) as $c) {
+        foreach (Db::all('SELECT c.date, c.text, c.visited, COALESCE(NULLIF(r.cardNo, \'\'), c.cardNo) AS cardNo FROM cell c LEFT JOIN reservation r ON r.id = c.reservationId WHERE c.storeId = ? AND c.date >= ? AND c.bed > 0', [$store['id'], $from]) as $c) {
             $add($c['date'], (string)$c['text'], (int)$c['visited'], (string)($c['cardNo'] ?? ''), $c['date'] > $today ? 'book' : 'cell');
         }
         foreach (Db::all('SELECT date, name, cardNo FROM visit_archive WHERE storeId = ? AND date >= ?', [$store['id'], $from]) as $v) $add($v['date'], (string)$v['name'], 1, (string)$v['cardNo'], 'archive');
@@ -334,6 +335,18 @@ final class Churn
         $listed = $lastSeen ? Db::all('SELECT churnDate, name, dismissed FROM churn WHERE storeId = ? AND lastVisit = ? ', [$store['id'], $lastSeen]) : [];
         return ['rows' => $hits, 'lastSeen' => $lastSeen, 'churnDate' => $lastSeen ? self::churnDate($lastSeen) : null, 'today' => $today,
             'onList' => (bool)array_filter($listed, fn($l) => !(int)$l['dismissed'] && ($digits !== '' || str_contains(Karte::personKey((string)$l['name']), $qk)))];
+    }
+
+    /**
+     * カルテNo 付き率：期間の来院（来院チェックあり）のうち、カルテNo で数えられた件数。
+     * direct＝番号で入った（WEB 予約の診察券番号・診察券番号から置き換え・名前の前の番号）、map＝名前から番号につながった（患者一覧・新患継続率・同じ名前のほかの来院）、none＝名前だけ
+     */
+    public static function cardRate(array $store, string $from, string $to): array
+    {
+        $o = ['visits' => 0, 'direct' => 0, 'map' => 0, 'none' => 0];
+        foreach (self::visits($store, $from, $to) as $v) { $o['visits']++; $o[$v['src'] !== '' ? $v['src'] : 'none']++; }
+        $o['rate'] = $o['visits'] > 0 ? round(($o['direct'] + $o['map']) / $o['visits'] * 100, 1) : null;
+        return $o;
     }
 
     /** 前月に来院した実人数（離反率の母数） */

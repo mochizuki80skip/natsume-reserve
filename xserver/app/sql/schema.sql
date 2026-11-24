@@ -260,6 +260,7 @@ CREATE TABLE IF NOT EXISTS `cell` (
   `bed` INT NOT NULL,
   `text` VARCHAR(100) NOT NULL,
   `phone` VARCHAR(20) NULL,  -- 電話で取った予約の電話番号（+81…。氏名の下に出す。セルの文字には入れない）
+  `cardNo` VARCHAR(20) NULL, -- 診察券番号から氏名に置き換えたときのカルテNo（離反などを番号で数える。画面には出さない）
   `visited` TINYINT(1) NOT NULL DEFAULT 0,
   `reservationId` VARCHAR(32) NULL,
   `menus` VARCHAR(300) NOT NULL DEFAULT '',
