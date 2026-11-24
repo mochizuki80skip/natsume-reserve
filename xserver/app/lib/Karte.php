@@ -449,6 +449,7 @@ final class Karte
             'symptomCat' => $r['symptomCat'], 'symptom' => $r['symptom'], 'staff' => $r['staff'], 'treatment' => $r['treatment'], 'visits' => $visits,
             'stopped' => (bool)($r['stopped'] ?? 0), 'transferred' => (bool)($r['transferred'] ?? 0), 'survey' => (bool)($r['survey'] ?? 0),
             'accidentDate' => $r['accidentDate'] ?? null, 'accidentNote' => (string)($r['accidentNote'] ?? ''),
+            'weeklyPlan' => isset($r['weeklyPlan']) ? (int)$r['weeklyPlan'] : null,
         ];
     }
 

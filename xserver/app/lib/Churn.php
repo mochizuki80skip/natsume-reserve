@@ -349,6 +349,42 @@ final class Churn
         return $o;
     }
 
+    /**
+     * 初回の行（新自・新三など）ごとの来院実績：初回の日から、来院チェックのある来院日（最初の 12 回）と、月ごとの来院回数（最大 12 か月）。
+     * カルテNo が分かればその番号の来院、なければ氏名の来院。キーは行の id
+     * @param array<int, array{id:string, storeId:string, date:string, karteNo:?string, name:?string}> $rows
+     * @return array<string, array{dates:string[], monthly:array<int, array{ym:string, n:int}>}>
+     */
+    public static function visitHistory(array $rows): array
+    {
+        $today = Time::nowJst()['date'];
+        $byStore = [];
+        foreach ($rows as $r) $byStore[$r['storeId']][] = $r;
+        $out = [];
+        foreach ($byStore as $sid => $list) {
+            $store = Db::one('SELECT * FROM store WHERE id = ?', [$sid]);
+            if (!$store) continue;
+            $from = min(array_column($list, 'date'));
+            $idx = [];
+            foreach (self::visits($store, $from, $today) as $v) { $idx[$v['key']][$v['date']] = true; $idx['n:' . $v['nk']][$v['date']] = true; }
+            foreach ($list as $r) {
+                $keys = array_filter([self::cardKey((string)($r['karteNo'] ?? '')), Karte::personKey((string)($r['name'] ?? '')) !== '' ? 'n:' . Karte::personKey((string)$r['name']) : '']);
+                $set = [$r['date'] => true]; // 初回の日は 1 回目（来院チェックがなくても）
+                foreach ($keys as $k) foreach (array_keys($idx[$k] ?? []) as $d) if ($d >= $r['date']) $set[$d] = true;
+                $dates = array_keys($set);
+                sort($dates);
+                $monthly = [];
+                $ym = substr($r['date'], 0, 7);
+                for ($i = 0; $i < 12 && $ym <= substr($today, 0, 7); $i++) {
+                    $monthly[] = ['ym' => $ym, 'n' => count(array_filter($dates, fn($d) => str_starts_with($d, $ym)))];
+                    $ym = substr(Time::addMonths($ym . '-01', 1), 0, 7);
+                }
+                $out[$r['id']] = ['dates' => array_slice($dates, 0, 12), 'monthly' => $monthly];
+            }
+        }
+        return $out;
+    }
+
     /** 前月に来院した実人数（離反率の母数） */
     public static function activeCount(array $store, string $ym): int
     {

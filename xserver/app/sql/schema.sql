@@ -417,6 +417,7 @@ CREATE TABLE IF NOT EXISTS `karte` (
   `survey` TINYINT(1) NOT NULL DEFAULT 0,
   `accidentDate` CHAR(10) NULL,                    -- 新自：事故日
   `accidentNote` VARCHAR(200) NOT NULL DEFAULT '', -- 新自：事故内容
+  `weeklyPlan` TINYINT NULL,  -- 新自・新三の週の通院予定（1〜5 回）
   `accidentStatus` VARCHAR(10) NOT NULL DEFAULT '', -- 新自・新三の 2ヶ月経過の状態（''＝未選択・CONT＝継続・STOP＝中止・END＝終了）
   `accidentStatusAt` DATETIME NULL,
   `unclaimedReason` VARCHAR(200) NOT NULL DEFAULT '', -- 自賠の未請求者リストの理由（店舗が入れる）

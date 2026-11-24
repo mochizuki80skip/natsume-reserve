@@ -7,7 +7,7 @@ export interface KarteRow {
   /** 予後（中止・転院）・アンケート（チェック欄） */
   stopped?: boolean; transferred?: boolean; survey?: boolean;
   /** 新自（交通事故）・新三（第三者行為）：事故日・事故内容 */
-  accidentDate?: string | null; accidentNote?: string;
+  accidentDate?: string | null; accidentNote?: string; weeklyPlan?: number | null;
 }
 export interface KarteOptions { trigger: string[]; otherBiz: string[]; campaign: string[]; symptom: string[]; revisitAction: string[]; menu?: string[]; goods?: string[]; partner?: string[] }
 /** 内訳が必要なきっかけ → 内訳の選択肢の種類（null は記入のみ） */

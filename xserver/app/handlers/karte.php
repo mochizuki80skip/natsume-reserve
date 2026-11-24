@@ -315,8 +315,19 @@ function accidents_rows(string $ym): array
             'trig' => (string)$k['trig'], 'trigDetail' => (string)$k['trigDetail'], 'staff' => (string)$k['staff'],
             'accidentDate' => $k['accidentDate'], 'accidentNote' => (string)($k['accidentNote'] ?? ''),
             'missing' => $k['accidentDate'] === null || trim((string)$k['accidentNote']) === '', 'earlier' => $k['date'] < $first,
+            'weeklyPlan' => $k['weeklyPlan'] === null ? null : (int)$k['weeklyPlan'], 'storeId' => $k['storeId'], 'karteNo0' => $k['karteNo'],
         ];
     }
+    // 初回から 12 回目までの来院日と、月ごとの来院回数（予約表の来院チェックから）
+    $hist = Churn::visitHistory(array_map(fn($r) => ['id' => $r['id'], 'storeId' => $r['storeId'], 'date' => $r['date'], 'karteNo' => $r['karteNo'], 'name' => $r['name']], $out));
+    $s = Auth::requireSession();
+    foreach ($out as &$r) {
+        $r['visitDates'] = $hist[$r['id']]['dates'] ?? [];
+        $r['monthly'] = $hist[$r['id']]['monthly'] ?? [];
+        $r['canEdit'] = Auth::canEditStore($s, $stores[$r['storeId']]);
+        unset($r['storeId'], $r['karteNo0']);
+    }
+    unset($r);
     return [$out, array_map(fn($s) => ['code' => $s['code'], 'name' => $s['name'], 'area' => $areaOf[$s['code']] ?? ''], array_values($stores))];
 }
 
@@ -330,14 +341,33 @@ function hq_accidents(): never
     Http::json(['month' => $ym, 'rows' => $rows, 'stores' => $stores, 'areas' => $areas]);
 }
 
+/** 新自・新三の「週の通院予定」（{ id, plan: 1〜5 | null }）。店舗＝自店舗、本部・管轄MG＝直せる店舗 */
+function accidents_plan_put(): never
+{
+    $s = Auth::requireSession();
+    Http::requireJson();
+    $b = Http::body();
+    $plan = $b['plan'] ?? null;
+    if ($plan !== null && $plan !== '' && (!is_numeric($plan) || (int)$plan < 1 || (int)$plan > 5)) Http::error('週の通院予定は 1〜5 回で選んでください', 400);
+    $k = Db::one("SELECT id, storeId FROM karte WHERE id = ? AND kind IN ('ACCIDENT', 'THIRD')", [(string)($b['id'] ?? '')]);
+    $stores = accident2_stores($s);
+    if (!$k || !isset($stores[$k['storeId']])) Http::error('見つかりません', 404);
+    if (!Auth::canEditStore($s, $stores[$k['storeId']])) Http::error('この店舗は見るだけです（直すことはできません）', 403);
+    Db::exec('UPDATE karte SET weeklyPlan = ? WHERE id = ?', [$plan === null || $plan === '' ? null : (int)$plan, $k['id']]);
+    Http::json(['ok' => true]);
+}
+
 function hq_accidents_export(): never
 {
     accidents_auth();
     $ym = Http::query('month', substr(Time::nowJst()['date'], 0, 7));
     if (!Time::isValidMonth($ym)) Http::error('bad month', 400);
     [$rows] = accidents_rows($ym);
-    $list = array_map(fn($r) => [$r['area'], $r['storeName'], $r['date'], $r['kind'] === 'THIRD' ? '新三' : '新自', $r['karteNo'], $r['name'], $r['trig'] . ($r['trigDetail'] !== '' ? "（{$r['trigDetail']}）" : ''), $r['accidentDate'] ?? '', $r['accidentNote'], $r['staff'], $r['missing'] ? '未入力あり' : ''], $rows);
-    $bytes = Xlsx::build('新自・新三', '新自・新三（全店）' . $ym . '　（出力 ' . Time::nowJst()['date'] . '。前の月までの未入力も含む）', ['エリア', '店舗', '初診日', '区分', 'カルテNo', '氏名', 'きっかけ', '事故日', '事故内容', '担当', '未入力'], $list);
+    $md = fn(string $d) => (int)substr($d, 5, 2) . '/' . (int)substr($d, 8, 2);
+    $list = array_map(fn($r) => array_merge([$r['area'], $r['storeName'], $r['date'], $r['kind'] === 'THIRD' ? '新三' : '新自', $r['karteNo'], $r['name'], $r['trig'] . ($r['trigDetail'] !== '' ? "（{$r['trigDetail']}）" : ''), $r['accidentDate'] ?? '', $r['accidentNote'], $r['staff'], $r['weeklyPlan'] === null ? '' : $r['weeklyPlan'] . '回'],
+        array_map(fn($i) => isset($r['visitDates'][$i]) ? $md($r['visitDates'][$i]) : '', range(0, 11)),
+        [implode('・', array_map(fn($m) => (int)substr($m['ym'], 5) . '月' . $m['n'] . '回', $r['monthly'])), $r['missing'] ? '未入力あり' : '']), $rows);
+    $bytes = Xlsx::build('新自・新三', '新自・新三（全店）' . $ym . '　（出力 ' . Time::nowJst()['date'] . '。前の月までの未入力も含む）', array_merge(['エリア', '店舗', '初診日', '区分', 'カルテNo', '氏名', 'きっかけ', '事故日', '事故内容', '担当', '週の予定'], array_map(fn($i) => $i . '回目', range(1, 12)), ['月ごとの来院', '未入力']), $list);
     header('Cache-Control: no-store');
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header("Content-Disposition: attachment; filename=\"accidents.xlsx\"; filename*=UTF-8''" . rawurlencode('新自新三_' . $ym) . '.xlsx');

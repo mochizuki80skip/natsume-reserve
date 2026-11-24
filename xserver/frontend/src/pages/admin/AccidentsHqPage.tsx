@@ -1,15 +1,18 @@
-// 新自・新三（全店） /admin/hq/accidents?month=YYYY-MM（本部・管轄MG＝全店。見るだけ）
+// 新自・新三（全店） /admin/hq/accidents?month=YYYY-MM（本部・管轄MG＝全店。週の通院予定は直せる店舗だけ選べる。来院日 1〜12 回目・月ごとの来院回数）
 // その月の新自（交通事故）・新三（第三者行為）と、前の月までの未入力（事故日・事故内容）。店舗ごとの未入力の件数、エリア・店舗・未入力だけで絞り込み、Excel
 import { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useFetch } from '@/lib/api';
 import { useAdmin } from './Layout';
 import AccidentTwoMonths from '@/components/AccidentTwoMonths';
+import WeeklyPlanSelect from '@/components/WeeklyPlanSelect';
 
 interface Row {
   id: string; store: string; storeName: string; area: string; date: string; kind: 'ACCIDENT' | 'THIRD'; karteNo: string; name: string;
   trig: string; trigDetail: string; staff: string; accidentDate: string | null; accidentNote: string; missing: boolean; earlier: boolean;
+  weeklyPlan: number | null; visitDates: string[]; monthly: { ym: string; n: number }[]; canEdit: boolean;
 }
+const md = (d?: string) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : '');
 interface Resp { month: string; rows: Row[]; stores: { code: string; name: string; area: string }[]; areas: string[] }
 
 const shiftYm = (ym: string, n: number) => { const [y, m] = ym.split('-').map(Number); const d = new Date(Date.UTC(y, m - 1 + n, 1)); return d.toISOString().slice(0, 7); };
@@ -42,7 +45,7 @@ export default function AccidentsHqPage() {
         <a href={`/api/admin/hq/accidents/export?month=${ym}`} className="ml-auto rounded border bg-white px-3 py-1 font-bold no-underline">Excel で保存</a>
       </div>
       <AccidentTwoMonths wide />
-      <p className="text-xs text-slate-600">新規の交通事故（新自）・第三者行為（新三）の事故日・事故内容を、全店まとめて見る画面です（見るだけ。入力は店舗の「新患継続率」の下の一覧で行います）。前の月までの未入力も出します。<span className="rounded bg-yellow-300 px-1">黄色</span>は未入力です。</p>
+      <p className="text-xs text-slate-600">新規の交通事故（新自）・第三者行為（新三）の事故日・事故内容を、全店まとめて見る画面です（事故日・事故内容の入力は店舗の「新患継続率」の下の一覧で行います）。「週予定」は週の通院予定（店舗・本部・管轄MG が選べます）、1〜12 は初診から何回目の来院がいつか、「月ごと」は初診の月から月ごとの来院回数です（予約表の来院チェックから。カルテNo が同じなら名前の書き方が違っても同じ方）。前の月までの未入力も出します。<span className="rounded bg-yellow-300 px-1">黄色</span>は未入力です。</p>
       {data && (
         <div className="flex flex-wrap items-center gap-1.5 rounded border bg-white px-3 py-2" role="group" aria-label="店舗ごとの未入力">
           <b className="mr-1 text-xs">未入力</b>
@@ -67,7 +70,12 @@ export default function AccidentsHqPage() {
       <div className="overflow-x-auto rounded border bg-white">
         <table className="w-full border-collapse text-[12.5px]" aria-label="新自・新三（全店）">
           <thead className="bg-slate-100">
-            <tr>{['店舗', '初診日', '区分', 'カルテNo', '氏名', 'きっかけ', '事故日', '事故内容', '担当'].map((h) => <th key={h} className="whitespace-nowrap border px-1.5 py-1 text-left">{h}</th>)}</tr>
+            <tr>
+              {['店舗', '初診日', '区分', 'カルテNo', '氏名', 'きっかけ', '事故日', '事故内容', '担当'].map((h) => <th key={h} className="whitespace-nowrap border px-1.5 py-1 text-left">{h}</th>)}
+              <th className="whitespace-nowrap border px-0.5 py-1 text-[11px]" title="週の通院予定">週予定</th>
+              {Array.from({ length: 12 }, (_, i) => <th key={i} className="border px-0.5 py-1 text-center text-[11px] tabular-nums" title={`${i + 1}回目の来院日`}>{i + 1}</th>)}
+              <th className="whitespace-nowrap border px-1 py-1 text-[11px]" title="月ごとの来院回数（初診の月から）">月ごと</th>
+            </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
@@ -81,10 +89,13 @@ export default function AccidentsHqPage() {
                 <td className={`whitespace-nowrap border px-1.5 py-1 tabular-nums ${r.accidentDate ? '' : 'bg-yellow-300'}`}>{ymd(r.accidentDate)}</td>
                 <td className={`min-w-[14rem] whitespace-pre-line border px-1.5 py-1 ${r.accidentNote.trim() ? '' : 'bg-yellow-300'}`}>{r.accidentNote}</td>
                 <td className="whitespace-nowrap border px-1.5 py-1">{r.staff}</td>
+                <td className="w-12 border p-0 text-[11.5px]"><WeeklyPlanSelect key={r.id} id={r.id} value={r.weeklyPlan} ro={!r.canEdit} /></td>
+                {Array.from({ length: 12 }, (_, i) => <td key={i} className="whitespace-nowrap border px-0.5 py-1 text-center text-[11px] tabular-nums" aria-label={`${i + 1}回目`}>{md(r.visitDates?.[i])}</td>)}
+                <td className="whitespace-nowrap border px-1 py-0.5 text-[11px] leading-tight tabular-nums" aria-label="月ごとの来院">{(r.monthly ?? []).map((m) => <span key={m.ym} className="block">{Number(m.ym.slice(5))}月 <b>{m.n}</b>回</span>)}</td>
               </tr>
             ))}
-            {data && rows.length === 0 && <tr><td colSpan={9} className="px-2 py-4 text-center text-slate-500">該当する新自・新三はありません</td></tr>}
-            {!data && <tr><td colSpan={9} className="px-2 py-4 text-center text-slate-500">読み込み中…</td></tr>}
+            {data && rows.length === 0 && <tr><td colSpan={23} className="px-2 py-4 text-center text-slate-500">該当する新自・新三はありません</td></tr>}
+            {!data && <tr><td colSpan={23} className="px-2 py-4 text-center text-slate-500">読み込み中…</td></tr>}
           </tbody>
         </table>
       </div>

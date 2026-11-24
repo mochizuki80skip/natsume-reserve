@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 68;
+    private const VERSION = 69;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -485,6 +485,10 @@ SQL);
             if ($ver < 68) {
                 // 予約表のセルのカルテNo（診察券番号から氏名に置き換えたときの番号。離反などを番号で数える）
                 if (self::hasTable($pdo, 'cell') && !self::hasColumn($pdo, 'cell', 'cardNo')) $pdo->exec('ALTER TABLE `cell` ADD COLUMN `cardNo` VARCHAR(20) NULL');
+            }
+            if ($ver < 69) {
+                // 新自・新三の週の通院予定（1〜5 回。店舗・本部・管轄MG が入れる）
+                if (self::hasTable($pdo, 'karte') && !self::hasColumn($pdo, 'karte', 'weeklyPlan')) $pdo->exec('ALTER TABLE `karte` ADD COLUMN `weeklyPlan` TINYINT NULL');
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

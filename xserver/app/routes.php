@@ -116,6 +116,7 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/referrals/export$#', 'hq_referrals_export'],
         ['GET', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_get'],
         ['GET', '#^/api/admin/hq/accidents$#', 'hq_accidents'],
+        ['PUT', '#^/api/admin/accidents/plan$#', 'accidents_plan_put'],
         ['GET', '#^/api/admin/accidents/two-months$#', 'accidents_two_months'],
         ['GET', '#^/api/admin/accident-ends$#', 'ae_get'],
         ['POST', '#^/api/admin/accident-ends$#', 'ae_post'],

@@ -1,4 +1,5 @@
 // 新患継続率の下：新自（交通事故）・新三（第三者行為）の一覧。事故日・事故内容を入れる（空は黄色。前の月の未入力も出す）
+import WeeklyPlanSelect from './WeeklyPlanSelect';
 import { useState } from 'react';
 import { accidentMissing, isInjuryKind, parseAccidentDate, type KarteRow } from '@/lib/karte';
 import { halfNumInput } from '@/lib/format';
@@ -42,6 +43,7 @@ function Rows({ rows, onPatch }: { rows: KarteRow[]; onPatch: (id: string, p: Pa
             <td className={`border ${missDate ? 'bg-yellow-300' : ''}`}><AccDate row={r} onSave={(v) => onPatch(r.id, { accidentDate: v })} /></td>
             <td className={`border ${missNote ? 'bg-yellow-300' : ''}`}><AccNote row={r} onSave={(v) => onPatch(r.id, { accidentNote: v })} /></td>
             <td className="whitespace-nowrap border px-1 py-1">{r.staff}</td>
+            <td className="border p-0"><WeeklyPlanSelect id={r.id} value={r.weeklyPlan} /></td>
           </tr>
         );
       })}
@@ -61,18 +63,18 @@ export default function AccidentList({ rows, pending, monthLabel, onPatch }: { r
           ? <span className="rounded bg-yellow-300 px-2 py-0.5 text-xs font-bold text-yellow-900" role="status">⚠ 事故日・事故内容の未入力 {missing}件</span>
           : <span className="text-xs text-green-700">未入力はありません</span>}
       </div>
-      <p className="mt-1 text-xs text-slate-500">新・再が「初自」「新三」の方です。事故日・事故内容を入れてください（空の欄は黄色。上のメニューの「新患継続率」にも未入力の数が出ます）。事故日は「9/18」「0918」で入れられます。</p>
+      <p className="mt-1 text-xs text-slate-500">新・再が「初自」「新三」の方です。事故日・事故内容を入れてください（空の欄は黄色。上のメニューの「新患継続率」にも未入力の数が出ます）。事故日は「9/18」「0918」で入れられます。「週の予定」は週に何回通院する予定かを選びます（本部・管轄MG の画面にも出ます）。</p>
       <div className="mt-2 overflow-x-auto">
         <table className="w-full min-w-[860px] border-collapse text-[12px]">
           <thead>
             <tr className="bg-[#5b3f8c] text-left text-white">
-              {[['初診日', 84], ['区分', 44], ['カルテNo', 60], ['氏名', 100], ['きっかけ', 130], ['事故日', 90], ['事故内容', 0], ['担当', 60]].map(([h, w]) => <th key={h} className="whitespace-nowrap border border-[#5b3f8c] px-1 py-1 font-bold" style={w ? { width: w as number } : undefined}>{h}</th>)}
+              {[['初診日', 84], ['区分', 44], ['カルテNo', 60], ['氏名', 100], ['きっかけ', 130], ['事故日', 90], ['事故内容', 0], ['担当', 60], ['週の予定', 56]].map(([h, w]) => <th key={h} className="whitespace-nowrap border border-[#5b3f8c] px-1 py-1 font-bold" style={w ? { width: w as number } : undefined}>{h}</th>)}
             </tr>
           </thead>
           <tbody>
             <Rows rows={mine} onPatch={onPatch} />
-            {mine.length === 0 && <tr><td colSpan={8} className="border p-3 text-center text-slate-500">この月の新自・新三はまだありません。</td></tr>}
-            {pending.length > 0 && <tr><td colSpan={8} className="border bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">ほかの月の未入力（{pending.length}件）</td></tr>}
+            {mine.length === 0 && <tr><td colSpan={9} className="border p-3 text-center text-slate-500">この月の新自・新三はまだありません。</td></tr>}
+            {pending.length > 0 && <tr><td colSpan={9} className="border bg-amber-50 px-2 py-1 text-xs font-bold text-amber-900">ほかの月の未入力（{pending.length}件）</td></tr>}
             <Rows rows={pending} onPatch={onPatch} />
           </tbody>
         </table>
