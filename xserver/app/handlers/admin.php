@@ -121,7 +121,7 @@ function adm_churn_missing(array $store): int
         try { foreach ($months as $ym) Churn::sync($store, $ym); } catch (Throwable $e) { error_log('[churn] ' . $e->getMessage()); }
         Db::exec('REPLACE INTO app_meta (k, v) VALUES (?, ?)', [$key, (string)time()]);
     }
-    return (int)(Db::one("SELECT COUNT(*) AS n FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND manage = '' AND reason = '' AND dismissed = 0", [$store['id'], $months[0] . '-01', $today])['n'] ?? 0);
+    return (int)(Db::one("SELECT COUNT(*) AS n FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND manage = '' AND reason = '' AND dismissed = 0 AND bookedDate IS NULL", [$store['id'], $months[0] . '-01', $today])['n'] ?? 0);
 }
 
 // ---------- 予約表 ----------

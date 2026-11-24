@@ -32,8 +32,11 @@ sql(`DELETE FROM cell WHERE storeId='${sid}' AND text LIKE '%見本%'; DELETE FR
 cell(`${prevYm}-10`, '見本 一郎'); cell(`${ym}-09`, '見本 一郎', 1, 600);
 // 三郎：カルテNo を打ち間違えた来院（9003・9004）と、氏名だけの来院（20 日）。最後は 20 日 → 離反は 1 行だけ
 cell(`${prevYm}-12`, '9003 見本 三郎', 1, 630); cell(`${prevYm}-15`, '9004 見本 三郎', 1, 630); cell(`${prevYm}-20`, '見本 三郎', 1, 630);
-// 四郎：前月 8 日に来院チェックあり → 今月 1 日に予約表に名前（来院チェックなし）・先の予約もある
-cell(`${prevYm}-08`, '見本 四郎', 1, 660); cell(`${ym}-01`, '見本 四郎', 0, 660); cell(add(today, 5), '見本 四郎', 0, 660);
+// 四郎：前月 8 日に来院チェックあり → 今月 1 日に予約表に名前（来院チェックなし）
+cell(`${prevYm}-08`, '見本 四郎', 1, 660); cell(`${ym}-01`, '見本 四郎', 0, 660);
+// 六郎・七郎：前月に来院、今日から先に次の予約がある（離反から外す）
+cell(`${prevYm}-11`, '見本 六郎', 1, 720); cell(add(today, 3), '見本 六郎', 0, 720);
+cell(`${prevYm}-13`, '見本 七郎', 1, 750); cell(add(today, 4), '見本 七郎', 0, 750);
 // 五郎：前は「見本 五郎様6」の書き方で人を見分けていた。そのときに理由を入れた行（手で直した行）が残っている
 cell(`${prevYm}-09`, '見本 五郎様6', 1, 690);
 sql(`INSERT INTO churn (id, storeId, churnDate, patientKey, lastVisit, cardNo, name, source, edited, reason) VALUES ('cfold5', '${sid}', '${ym}-09', 'n:見本五郎様6', '${prevYm}-09', '', '見本 五郎様6', 'auto', 1, '見本の理由')`);
@@ -46,7 +49,14 @@ ok('カルテNo の違い・氏名だけに分かれた来院でも 1 人 1 行�
 const goro = d.rows.filter((r) => r.name.includes('五郎'));
 ok('手で理由を入れた行は、見分け方が変わっても 2 行にしない（理由は残る）', goro.length === 1 && goro[0].reason === '見本の理由', JSON.stringify(goro.map((r) => [r.name, r.reason])));
 const shiro = d.rows.find((r) => r.name.includes('四郎'));
-ok('あとで予約表に名前（来院チェックなし）・次の予約を知らせる', shiro?.after?.uncheckedAfter === `${ym}-01` && shiro?.after?.nextBooking === add(today, 5), JSON.stringify(shiro?.after));
+ok('あとで予約表に名前（来院チェックなし）を知らせる', shiro?.after?.uncheckedAfter === `${ym}-01`, JSON.stringify(shiro?.after));
+ok('次の予約がある方は離反から外す（下に別に出す）', !d.rows.some((r) => /六郎|七郎/.test(r.name)) && d.booked.some((r) => r.name.includes('六郎') && r.bookedDate === add(today, 3)) && d.booked.some((r) => r.name.includes('七郎')), JSON.stringify(d.booked.map((r) => [r.name, r.bookedDate])));
+// 六郎：来院しないまま予約日が過ぎた → リストに戻る／七郎：予約どおり来院 → 外したまま
+sql(`UPDATE cell SET date = '${add(today, -1)}' WHERE storeId='${sid}' AND text='見本 六郎' AND visited = 0`);
+sql(`UPDATE cell SET date = '${add(today, -1)}', visited = 1 WHERE storeId='${sid}' AND text='見本 七郎' AND visited = 0`);
+d = await get();
+ok('来院しないまま予約日が過ぎたらリストに戻る', d.rows.some((r) => r.name.includes('六郎')) && !d.booked.some((r) => r.name.includes('六郎')), JSON.stringify(d.booked.map((r) => r.name)));
+ok('予約どおり来院したら外したまま', d.booked.some((r) => r.name.includes('七郎')) && !d.rows.some((r) => r.name.includes('七郎')));
 const before = d.stats.count;
 
 // 画面
@@ -67,7 +77,7 @@ ok('リストに戻せる', (await get()).stats.count === before);
 await p.getByText('患者様を調べる').click();
 await p.getByLabel('調べる氏名かカルテNo').fill('見本 四郎'); await p.getByRole('button', { name: '調べる' }).click(); await p.waitForTimeout(800);
 const res = await p.locator('details[aria-label="患者様を調べる"]').innerText();
-ok('調べる：来院チェックのない日が分かる', res.includes('なし（数えていない）') && res.includes('これからの予約') && res.includes('離反者リストに載っています'), res.slice(0, 300));
+ok('調べる：来院チェックのない日が分かる', res.includes('なし（数えていない）') && res.includes('離反者リストに載っています'), res.slice(0, 300));
 const lk = (await api('GET', `/api/admin/churn/lookup?q=9004`))[1];
 ok('調べる：カルテNo でも探せる', lk.rows.length === 1 && lk.rows[0].text.includes('三郎'), JSON.stringify(lk.rows));
 ok('調べる：1 文字では探さない', (await api('GET', '/api/admin/churn/lookup?q=' + encodeURIComponent('見')))[0] === 400);

@@ -8,7 +8,7 @@ function churn_row(array $r): array
 {
     return ['id' => $r['id'], 'churnDate' => $r['churnDate'], 'lastVisit' => $r['lastVisit'], 'cardNo' => $r['cardNo'], 'name' => $r['name'], 'sex' => $r['sex'], 'age' => $r['age'] === null ? null : (int)$r['age'],
         'kind' => $r['kind'], 'visits' => $r['visits'], 'staff' => $r['staff'], 'symptom' => $r['symptom'], 'treatment' => $r['treatment'], 'manage' => $r['manage'], 'reason' => $r['reason'],
-        'source' => $r['source'], 'edited' => (bool)$r['edited'], 'dismissed' => (bool)($r['dismissed'] ?? 0)];
+        'source' => $r['source'], 'edited' => (bool)$r['edited'], 'dismissed' => (bool)($r['dismissed'] ?? 0), 'bookedDate' => $r['bookedDate'] ?? null];
 }
 
 /** 入力値を検証して DB の値に（$auto＝自動で入る欄を直したか） */
@@ -42,14 +42,16 @@ function churn_get(): never
     $after = Churn::afterOf($store, $raw);
     $all = array_map(fn($r) => churn_row($r) + ['after' => $after[$r['id']] ?? null], $raw);
     // 「離反ではない」にした行は、数えずに下へ別に出す
-    $rows = array_values(array_filter($all, fn($r) => !$r['dismissed']));
+    // 次の予約がある方（予約どおり来院した方も）は数えずに別に出す
+    $rows = array_values(array_filter($all, fn($r) => !$r['dismissed'] && !$r['bookedDate']));
     $dismissed = array_values(array_filter($all, fn($r) => $r['dismissed']));
+    $booked = array_values(array_filter($all, fn($r) => !$r['dismissed'] && $r['bookedDate']));
     // 離反率＝その月に離反した人数 ÷ 前月に来院した実人数（「除く」は中止・転院の方を分子・分母から外す）
     $active = Churn::activeCount($store, $ym);
     $ex = count(array_filter($rows, fn($r) => in_array($r['manage'], Churn::EXCLUDE, true)));
     $n = count($rows);
     Http::json([
-        'month' => $ym, 'today' => Time::nowJst()['date'], 'rows' => $rows, 'dismissed' => $dismissed,
+        'month' => $ym, 'today' => Time::nowJst()['date'], 'rows' => $rows, 'dismissed' => $dismissed, 'booked' => $booked,
         // その月の来院のカルテNo 付き率（離反の数字をどこまで信用できるかの目安）
         'cardRate' => Churn::cardRate($store, $d[0], min(end($d), Time::nowJst()['date'])), 'canEdit' => Auth::canEditStore($ctx['session'], $store),
         'stats' => ['count' => $n, 'active' => $active, 'excluded' => $ex,
@@ -180,7 +182,7 @@ function churn_export(): never
     $d = Time::datesOfMonth($ym);
     $md = fn(?string $x) => $x ? (int)substr($x, 5, 2) . '/' . (int)substr($x, 8, 2) : '';
     $rows = array_map(fn($r) => [$md($r['churnDate']), $r['cardNo'], $r['name'], $r['sex'], $r['age'], $r['kind'], $r['visits'], $r['staff'], $r['symptom'], $r['treatment'], $r['manage'], $r['reason'], $md($r['lastVisit'])],
-        Db::all('SELECT * FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND dismissed = 0 ORDER BY churnDate ASC, createdAt ASC', [$store['id'], $d[0], end($d)]));
+        Db::all('SELECT * FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND dismissed = 0 AND bookedDate IS NULL ORDER BY churnDate ASC, createdAt ASC', [$store['id'], $d[0], end($d)]));
     $bytes = Xlsx::build('離反者リスト', "{$store['name']}　離反者リスト　{$ym}　（出力 " . Time::nowJst()['date'] . '）',
         ['離反した日付', 'カルテNo.', '患者氏名', '性', '年', '内訳（新・再・既）', '通院回数', '担当', '症状', '施術内容', '管理（治癒・転院）', '理由', '最終来院'], $rows);
     $ja = rawurlencode("離反者リスト_{$store['name']}_{$ym}");

@@ -48,6 +48,13 @@ ok('月ごとの来院回数（初診の月から）', r.monthly[0].ym === prevY
 await hq.goto(`${B}/admin/hq/accidents?month=${prevYm}`); await hq.waitForSelector('table[aria-label="新自・新三（全店）"]'); await hq.waitForTimeout(800);
 const tr = hq.locator('table[aria-label="新自・新三（全店）"] tbody tr', { hasText: '9301' });
 ok('画面：12 回目まで日付が並ぶ', (await tr.getByLabel('1回目', { exact: true }).innerText()) === `${Number(first.slice(5, 7))}/3` && (await tr.getByLabel('12回目', { exact: true }).innerText()) !== '');
+await api(s1, 'PATCH', '/api/admin/karte', { id: k.id, patch: { accidentDate: first, accidentNote: '見本：交差点で右折待ちのところに後ろから追突され、首と腰を痛めた。救急で受診したあと、こちらに来院。' } });
+for (const w of [1366, 1280]) {
+  await hq.setViewportSize({ width: w, height: 900 }); await hq.reload(); await hq.waitForSelector('table[aria-label="新自・新三（全店）"]'); await hq.waitForTimeout(800);
+  const sw = await hq.getByTestId('accidents-wrap').evaluate((e) => [e.scrollWidth, e.clientWidth]);
+  ok(`パソコンの画面（幅 ${w}）で横にスクロールしない`, sw[0] <= sw[1], JSON.stringify(sw));
+}
+await hq.screenshot({ path: new URL('./', import.meta.url).pathname + 'out-accidentvisits.png', fullPage: true });
 ok('画面：月ごとの来院回数', (await tr.getByLabel('月ごとの来院').innerText()).includes(`${Number(prevYm.slice(5))}月 ${1 + days.length}回`));
 
 // ---------- 週の通院予定：店舗が選ぶ → 本部に出る → 本部が直す ----------

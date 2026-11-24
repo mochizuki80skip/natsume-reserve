@@ -7,9 +7,9 @@ import { useFetch } from '@/lib/api';
 import { halfNum, halfNumInput } from '@/lib/format';
 import { parseChurnSheet, type ChurnLine } from '@/lib/churnImport';
 
-interface ChurnRow { id: string; churnDate: string; lastVisit: string | null; cardNo: string; name: string; sex: string; age: number | null; kind: string; visits: string; staff: string; symptom: string; treatment: string; manage: string; reason: string; source: 'auto' | 'import' | 'manual'; edited: boolean; dismissed?: boolean; after?: { seenAfter: string | null; uncheckedAfter: string | null; nextBooking: string | null } | null }
+interface ChurnRow { id: string; churnDate: string; lastVisit: string | null; cardNo: string; name: string; sex: string; age: number | null; kind: string; visits: string; staff: string; symptom: string; treatment: string; manage: string; reason: string; source: 'auto' | 'import' | 'manual'; edited: boolean; dismissed?: boolean; bookedDate?: string | null; after?: { seenAfter: string | null; uncheckedAfter: string | null; nextBooking: string | null } | null }
 interface CardRate { visits: number; direct: number; map: number; none: number; rate: number | null }
-interface ChurnResp { month: string; today: string; rows: ChurnRow[]; dismissed?: ChurnRow[]; cardRate?: CardRate; canEdit: boolean; stats: { count: number; active: number; excluded: number; rate: number | null; rateEx: number | null }; manage: string[]; staff: string[] }
+interface ChurnResp { month: string; today: string; rows: ChurnRow[]; dismissed?: ChurnRow[]; booked?: ChurnRow[]; cardRate?: CardRate; canEdit: boolean; stats: { count: number; active: number; excluded: number; rate: number | null; rateEx: number | null }; manage: string[]; staff: string[] }
 interface FollowRow { id: string; listDate: string; lastVisit: string; cardNo: string; name: string; staff: string; contactedAt: string | null; nextText: string; noBooking: boolean; note: string; autoNext: { date: string; time: number } | null }
 interface FollowResp { date: string; today: string; pending: boolean; pendingCount: number; rows: FollowRow[]; canEdit: boolean }
 
@@ -147,9 +147,24 @@ function ChurnTab({ month, setMonth }: { month: string; setMonth: (m: string) =>
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
         <i className="mr-1 inline-block h-2.5 w-2.5 border bg-sky-100 align-middle" />水色＝来院の記録から自動で入った欄（直せます）。<i className="mx-1 inline-block h-2.5 w-2.5 border bg-yellow-200 align-middle" />黄色＝通院回数が空（システムを使う前から通っている方は店舗で入れてください）。
         離反＝最後の来院から翌月の同じ日までに来院がない方（例：3/2 が最後なら 4/2 に離反）。新患継続率の予後が中止・転院の方は「管理」に自動で入ります。
-        離反率＝その月に離反した方 ÷ 前月に来院した方（実人数）。来院は<b>予約表の来院チェック</b>で数えます（チェックのない来院は数えません）。
+        離反率＝その月に離反した方 ÷ 前月に来院した方（実人数）。来院は<b>予約表の来院チェック</b>で数えます（チェックのない来院は数えません）。次の予約がある方は数えず下に出し、予約日に来院しないまま過ぎたらリストに戻します。
         <span className="text-orange-800">オレンジの字＝最後の来院のあとにも予約表に名前がある方（来院チェックの付け忘れ・名前の書き方の違いなど）。離反でなければ「離反ではない」を押してください。</span>
       </p>
+      {(data.booked?.length ?? 0) > 0 && (
+        <details className="mt-2 rounded border bg-white" aria-label="次の予約がある方">
+          <summary className="cursor-pointer px-3 py-1.5 text-sm">次の予約がある方 {data.booked!.length} 名（数えていません。予約日に来院しなければリストに戻ります）</summary>
+          <ul className="border-t px-3 py-1 text-[12px]">
+            {data.booked!.map((r) => (
+              <li key={r.id} className="flex items-center gap-2 py-0.5">
+                <span className="w-12 text-slate-500">{md(r.churnDate)}</span><span className="w-14">{r.cardNo}</span><span className="w-32">{r.name}</span><span className="text-slate-500">最終来院 {md(r.lastVisit)}</span>
+                {r.bookedDate && r.bookedDate >= data.today
+                  ? <span className="font-bold text-sky-700">次の予約 {md(r.bookedDate)}</span>
+                  : <span className="font-bold text-emerald-700">予約どおり来院{r.after?.seenAfter ? `（${md(r.after.seenAfter)}）` : ''}</span>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {(data.dismissed?.length ?? 0) > 0 && (
         <details className="mt-2 rounded border bg-white" aria-label="離反ではないにした方">
           <summary className="cursor-pointer px-3 py-1.5 text-sm">「離反ではない」にした方 {data.dismissed!.length} 名（数えていません）</summary>

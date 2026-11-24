@@ -199,7 +199,7 @@ final class Report
         foreach (Churn::visits($store, $prevFirst, $prevLast) as $v) $last[$v['key']] = $v['staff'];
         $base = array_count_values(array_filter($last, fn($x) => $x !== ''));
         $churned = [];
-        foreach (Db::all('SELECT staff FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND dismissed = 0', [$sid, $ym . '-01', $ym . '-31']) as $r) if ($r['staff'] !== '') $churned[$r['staff']] = ($churned[$r['staff']] ?? 0) + 1;
+        foreach (Db::all('SELECT staff FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND dismissed = 0 AND bookedDate IS NULL', [$sid, $ym . '-01', $ym . '-31']) as $r) if ($r['staff'] !== '') $churned[$r['staff']] = ($churned[$r['staff']] ?? 0) + 1;
         $help = Db::one('SELECT status, name FROM help_in WHERE storeId = ? AND date = ?', [$sid, $date]);
         $person = fn($m) => ['name' => $m['name'], 'head' => (bool)(int)$m['isHead'], 'shift' => $shift[$m['id']] ?? 'WORK'];
         return [

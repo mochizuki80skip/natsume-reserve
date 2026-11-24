@@ -115,6 +115,18 @@ final class Churn
         return $out;
     }
 
+    /**
+     * 次の予約で離反から外すか（返すのは外す理由の予約日。null＝外さない）。
+     * 今日から先の予約があれば外す。前に予約で外していて、そのあと来院していれば外したまま（予約どおり来た）。
+     * 来院しないまま予約日が過ぎたら戻す
+     */
+    private static function bookedState(?string $was, array $w): ?string
+    {
+        if (!empty($w['nextBook'])) return $was && !empty($w['seenAfter']) ? $was : $w['nextBook'];
+        if ($was && !empty($w['seenAfter'])) return $was;
+        return null;
+    }
+
     /** その月に離反した方（自動の行）を作り直す。手で直した行・取り込んだ行はそのまま */
     public static function sync(array $store, string $ym): void
     {
@@ -133,7 +145,10 @@ final class Churn
         $last = end($dates);
         $today = Time::nowJst()['date'];
         // 最後の来院が [月初の 1 か月前, 月末の 1 か月前] にある方。間にほかの来院がないか見るため、月末までの来院を読む
-        $visits = self::visits($store, Time::addDays($first, -40), min($last, $today));
+        // 離反のあとに来院したか（次の予約どおりに来たか）も見るため、今日までの来院を読む
+        $visits = self::visits($store, Time::addDays($first, -40), $today);
+        // 今日から先の予約（予約表に名前がある日）。次の予約がある方は離反から外す（予約日に来なければ戻す）
+        $books = self::bookingsAfter($store, Time::addDays($today, -1));
         $byKey = [];
         $datesOf = []; // 同じ人の来院日（カルテNo でも氏名でも。番号のある来院と氏名だけの来院が分かれても、あとの来院を見落とさないように）
         foreach ($visits as $v) { $byKey[$v['key']][] = $v; $datesOf[$v['key']][$v['date']] = true; $datesOf['n:' . $v['nk']][$v['date']] = true; }
@@ -155,7 +170,13 @@ final class Churn
                 if (isset($seen[$sk])) continue;
                 $seen[$sk] = true;
                 $k = $karte[$key] ?? $karte['n:' . $v['nk']] ?? null;
-                $cands[] = [$key, $v, $cd, $k];
+                // 次の予約（今日から先）と、離反の日のあとの最初の来院
+                $nextBook = null; $seenAfter = null;
+                foreach (array_unique([$key, 'n:' . $v['nk']]) as $kk) {
+                    foreach ($books[$kk] ?? [] as $b) if ($b['date'] > $v['date'] && ($nextBook === null || $b['date'] < $nextBook)) $nextBook = $b['date'];
+                    foreach (array_keys($datesOf[$kk] ?? []) as $d) if ($d > $v['date'] && ($seenAfter === null || $d < $seenAfter)) $seenAfter = $d;
+                }
+                $cands[] = [$key, $v, $cd, $k, $nextBook, $seenAfter];
             }
         }
         // 初回から最後の来院までの来院回数（システムに入っている分）。来院の記録は 1 回だけまとめて読む（患者様ごとに読むと遅いため）
@@ -166,7 +187,7 @@ final class Churn
             $to = max(array_map(fn($c) => $c[1]['date'], $ks));
             foreach (self::visits($store, $from, $to) as $x) $hist[$x['key']][$x['date']] = true;
         }
-        foreach ($cands as [$key, $v, $cd, $k]) {
+        foreach ($cands as [$key, $v, $cd, $k, $nextBook, $seenAfter]) {
             $count = '';
             if ($k) {
                 // カルテNo（数字だけ）の患者様も数える（配列のキーが数値になっても同じ患者様として引けるようにする）
@@ -180,6 +201,7 @@ final class Churn
                 'symptom' => $k ? mb_substr(trim(($k['symptomCat'] ?? '') . ($k['symptom'] !== '' && $k['symptom'] !== $k['symptomCat'] ? ' ' . $k['symptom'] : '')), 0, 100) : '',
                 'treatment' => $k['treatment'] ?? '',
                 'manage' => $k && (int)($k['stopped'] ?? 0) ? '中止' : ($k && (int)($k['transferred'] ?? 0) ? '転院' : ''),
+                'nextBook' => $nextBook, 'seenAfter' => $seenAfter,
             ];
         }
         return $want;
@@ -188,7 +210,7 @@ final class Churn
     private static function save(array $store, string $first, string $last, array $want): void
     {
         $have = [];
-        foreach (Db::all("SELECT id, patientKey, lastVisit, edited, manage, cardNo, name FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source = 'auto'", [$store['id'], $first, $last]) as $r) {
+        foreach (Db::all("SELECT id, patientKey, lastVisit, edited, manage, cardNo, name, bookedDate FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ? AND source = 'auto'", [$store['id'], $first, $last]) as $r) {
             $id = $r['patientKey'] . '|' . $r['lastVisit'];
             // 手で直した行で、人の見分け方が変わった（「様6」を外した・番号と氏名をまとめた）ものは、同じ人・同じ最後の来院の新しい見分け方に付け替える（2 行にしない）
             if (!isset($want[$id]) && (int)$r['edited']) {
@@ -206,6 +228,9 @@ final class Churn
             }
             $have[$id] = true;
             if (!isset($want[$id])) { if (!(int)$r['edited']) Db::exec('DELETE FROM churn WHERE id = ?', [$r['id']]); continue; }
+            // 次の予約がある方は離反から外す（bookedDate＝その予約日）。予約どおり来院したら外したまま、来院しないまま予約日が過ぎたら戻す
+            $bd = self::bookedState($r['bookedDate'], $want[$id]);
+            if ($bd !== $r['bookedDate']) Db::exec('UPDATE churn SET bookedDate = ? WHERE id = ?', [$bd, $r['id']]);
             // 手で直していなければ、自動の欄を新しくする（管理は空のときだけ入れる）
             if (!(int)$r['edited']) {
                 $w = $want[$id];
@@ -220,8 +245,8 @@ final class Churn
         }
         foreach ($want as $id => $w) {
             if (isset($have[$id]) || isset($imported[$w['churnDate'] . '|' . $w['patientKey']])) continue;
-            Db::exec('INSERT INTO churn (id, storeId, churnDate, patientKey, lastVisit, cardNo, name, sex, age, kind, visits, staff, symptom, treatment, manage, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [Db::newId(), $store['id'], $w['churnDate'], $w['patientKey'], $w['lastVisit'], $w['cardNo'], $w['name'], $w['sex'], $w['age'], $w['kind'], $w['visits'], $w['staff'], $w['symptom'], $w['treatment'], $w['manage'], 'auto']);
+            Db::exec('INSERT INTO churn (id, storeId, churnDate, patientKey, lastVisit, cardNo, name, sex, age, kind, visits, staff, symptom, treatment, manage, source, bookedDate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [Db::newId(), $store['id'], $w['churnDate'], $w['patientKey'], $w['lastVisit'], $w['cardNo'], $w['name'], $w['sex'], $w['age'], $w['kind'], $w['visits'], $w['staff'], $w['symptom'], $w['treatment'], $w['manage'], 'auto', self::bookedState(null, $w)]);
         }
     }
 
@@ -238,8 +263,8 @@ final class Churn
         $want = self::wanted($store, $ym);
         $out = [];
         $have = [];
-        foreach (Db::all('SELECT patientKey, lastVisit, edited, manage, kind, source, churnDate, cardNo, name, dismissed FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ?', [$store['id'], $first, $last]) as $r) {
-            if ((int)$r['dismissed']) { $have[$r['patientKey'] . '|' . $r['lastVisit']] = true; continue; }
+        foreach (Db::all('SELECT patientKey, lastVisit, edited, manage, kind, source, churnDate, cardNo, name, dismissed, bookedDate FROM churn WHERE storeId = ? AND churnDate BETWEEN ? AND ?', [$store['id'], $first, $last]) as $r) {
+            if ((int)$r['dismissed'] || ($r['bookedDate'] && $r['source'] === 'auto' && isset($want[$r['patientKey'] . '|' . $r['lastVisit']]) && self::bookedState($r['bookedDate'], $want[$r['patientKey'] . '|' . $r['lastVisit']]))) { $have[$r['patientKey'] . '|' . $r['lastVisit']] = true; continue; }
             if ($r['source'] !== 'auto') { $out[] = ['kind' => (string)$r['kind'], 'manage' => (string)$r['manage']]; continue; }
             $id = $r['patientKey'] . '|' . $r['lastVisit'];
             $have[$id] = true;
@@ -254,6 +279,7 @@ final class Churn
         }
         foreach ($want as $id => $w) {
             if (isset($have[$id]) || isset($imported[$w['churnDate'] . '|' . $w['patientKey']])) continue;
+            if (self::bookedState(null, $w)) continue; // 次の予約がある方は数えない
             $out[] = ['kind' => $w['kind'], 'manage' => $w['manage']];
         }
         return $out;

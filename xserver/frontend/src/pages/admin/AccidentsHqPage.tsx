@@ -67,35 +67,33 @@ export default function AccidentsHqPage() {
         <label><input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} /> 未入力だけ</label>
         <span className="text-xs text-slate-500">{rows.length} 件</span>
       </div>
-      <div className="overflow-x-auto rounded border bg-white">
-        <table className="w-full border-collapse text-[12.5px]" aria-label="新自・新三（全店）">
-          <thead className="bg-slate-100">
+      <div className="overflow-x-auto rounded border bg-white" data-testid="accidents-wrap">
+        {/* パソコンの画面で横にスクロールしないよう、関係する欄を 2 段にまとめる（店舗＋エリア、初診日＋区分、カルテNo＋氏名＋きっかけ、事故日＋事故内容、担当＋週の予定） */}
+        <table className="w-full border-collapse text-[12px]" aria-label="新自・新三（全店）">
+          <thead className="bg-slate-100 text-[11px]">
             <tr>
-              {['店舗', '初診日', '区分', 'カルテNo', '氏名', 'きっかけ', '事故日', '事故内容', '担当'].map((h) => <th key={h} className="whitespace-nowrap border px-1.5 py-1 text-left">{h}</th>)}
-              <th className="whitespace-nowrap border px-0.5 py-1 text-[11px]" title="週の通院予定">週予定</th>
-              {Array.from({ length: 12 }, (_, i) => <th key={i} className="border px-0.5 py-1 text-center text-[11px] tabular-nums" title={`${i + 1}回目の来院日`}>{i + 1}</th>)}
-              <th className="whitespace-nowrap border px-1 py-1 text-[11px]" title="月ごとの来院回数（初診の月から）">月ごと</th>
+              {[['店舗', ''], ['初診日', '区分'], ['氏名', 'カルテNo・きっかけ'], ['事故日', '事故内容'], ['担当', '週の予定']].map(([a, b]) => <th key={a} className="whitespace-nowrap border px-1 py-0.5 text-left leading-tight">{a}{b && <span className="block font-normal text-slate-500">{b}</span>}</th>)}
+              {Array.from({ length: 12 }, (_, i) => <th key={i} className="border px-0 py-0.5 text-center tabular-nums" title={`${i + 1}回目の来院日`}>{i + 1}</th>)}
+              <th className="whitespace-nowrap border px-1 py-0.5" title="月ごとの来院回数（初診の月から）">月ごと</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.id} className="align-top">
-                <td className="whitespace-nowrap border px-1.5 py-1">{r.storeName}{r.area && <span className="block text-[10.5px] text-slate-500">{r.area}</span>}</td>
-                <td className="whitespace-nowrap border px-1.5 py-1 tabular-nums">{ymd(r.date)}{r.earlier && <span className="block text-[10.5px] text-red-700">前の月の未入力</span>}</td>
-                <td className="whitespace-nowrap border px-1.5 py-1">{r.kind === 'THIRD' ? '新三' : '新自'}</td>
-                <td className="whitespace-nowrap border px-1.5 py-1">{r.karteNo}</td>
-                <td className="whitespace-nowrap border px-1.5 py-1">{r.name}</td>
-                <td className="whitespace-nowrap border px-1.5 py-1">{r.trig}{r.trigDetail ? `（${r.trigDetail}）` : ''}</td>
-                <td className={`whitespace-nowrap border px-1.5 py-1 tabular-nums ${r.accidentDate ? '' : 'bg-yellow-300'}`}>{ymd(r.accidentDate)}</td>
-                <td className={`min-w-[14rem] whitespace-pre-line border px-1.5 py-1 ${r.accidentNote.trim() ? '' : 'bg-yellow-300'}`}>{r.accidentNote}</td>
-                <td className="whitespace-nowrap border px-1.5 py-1">{r.staff}</td>
-                <td className="w-12 border p-0 text-[11.5px]"><WeeklyPlanSelect key={r.id} id={r.id} value={r.weeklyPlan} ro={!r.canEdit} /></td>
-                {Array.from({ length: 12 }, (_, i) => <td key={i} className="whitespace-nowrap border px-0.5 py-1 text-center text-[11px] tabular-nums" aria-label={`${i + 1}回目`}>{md(r.visitDates?.[i])}</td>)}
-                <td className="whitespace-nowrap border px-1 py-0.5 text-[11px] leading-tight tabular-nums" aria-label="月ごとの来院">{(r.monthly ?? []).map((m) => <span key={m.ym} className="block">{Number(m.ym.slice(5))}月 <b>{m.n}</b>回</span>)}</td>
+                <td className="border px-1 py-0.5 leading-tight">{r.storeName}{r.area && <span className="block text-[10px] text-slate-500">{r.area}</span>}</td>
+                <td className="whitespace-nowrap border px-1 py-0.5 leading-tight tabular-nums">{md(r.date)}<span className="block text-[10.5px]">{r.kind === 'THIRD' ? '新三' : '新自'}</span>{r.earlier && <span className="block text-[10px] text-red-700">前の月の未入力</span>}</td>
+                <td className="border px-1 py-0.5 leading-tight">{r.name}<span className="block text-[10.5px] text-slate-500">{r.karteNo}{r.karteNo && (r.trig || r.trigDetail) ? '・' : ''}{r.trig}{r.trigDetail ? `（${r.trigDetail}）` : ''}</span></td>
+                <td className="max-w-[13rem] border px-1 py-0.5 leading-tight">
+                  <span className={`block tabular-nums ${r.accidentDate ? '' : 'bg-yellow-300'}`}>{ymd(r.accidentDate) || '事故日なし'}</span>
+                  <span className={`line-clamp-2 block text-[11px] ${r.accidentNote.trim() ? '' : 'bg-yellow-300'}`} title={r.accidentNote}>{r.accidentNote || '事故内容なし'}</span>
+                </td>
+                <td className="border px-1 py-0.5 leading-tight">{r.staff}<span className="block w-12 text-[11px]"><WeeklyPlanSelect key={r.id} id={r.id} value={r.weeklyPlan} ro={!r.canEdit} /></span></td>
+                {Array.from({ length: 12 }, (_, i) => <td key={i} className="whitespace-nowrap border px-0.5 py-0.5 text-center text-[10.5px] tabular-nums" aria-label={`${i + 1}回目`}>{md(r.visitDates?.[i])}</td>)}
+                <td className="whitespace-nowrap border px-1 py-0.5 text-[10.5px] leading-tight tabular-nums" aria-label="月ごとの来院">{(r.monthly ?? []).map((m) => <span key={m.ym} className="block">{Number(m.ym.slice(5))}月 <b>{m.n}</b>回</span>)}</td>
               </tr>
             ))}
-            {data && rows.length === 0 && <tr><td colSpan={23} className="px-2 py-4 text-center text-slate-500">該当する新自・新三はありません</td></tr>}
-            {!data && <tr><td colSpan={23} className="px-2 py-4 text-center text-slate-500">読み込み中…</td></tr>}
+            {data && rows.length === 0 && <tr><td colSpan={18} className="px-2 py-4 text-center text-slate-500">該当する新自・新三はありません</td></tr>}
+            {!data && <tr><td colSpan={18} className="px-2 py-4 text-center text-slate-500">読み込み中…</td></tr>}
           </tbody>
         </table>
       </div>
