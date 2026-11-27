@@ -126,9 +126,14 @@ ok('管轄MG：予約表を直せる', (await api(mg, 'PUT', '/api/admin/cells',
 const swTo = (code) => mg.evaluate(async (code) => { const f = new FormData(); f.set('store', code); f.set('back', '/admin'); const r = await fetch('/api/admin/switch', { method: 'POST', body: f, redirect: 'manual' }); return r.status; }, code);
 ok('管轄外の店舗にも切り替えられる', [0, 302, 303].includes(await swTo('S001')));
 const me2 = (await api(mg, 'GET', '/api/admin/me'))[1];
-ok('管轄外は見るだけ（予約表は見られる・直せない）', me2.store.code === 'S001' && me2.store.readOnly === true && (await api(mg, 'GET', `/api/admin/day?date=${D}`))[0] === 200 && (await api(mg, 'PUT', '/api/admin/cells', { date: D, cells: [{ time: 540, bed: 2, text: 'x' }] }))[0] === 403);
+ok('管轄外も予約表の入力（予約を取る）はできる', me2.store.code === 'S001' && me2.store.readOnly === true && (await api(mg, 'GET', `/api/admin/day?date=${D}`))[0] === 200 && (await api(mg, 'PUT', '/api/admin/cells', { date: D, cells: [{ time: 540, bed: 2, text: '見本 管轄外の予約' }] }))[0] === 200);
+{ const c = (await api(mg, 'GET', `/api/admin/day?date=${D}`))[1].data.cells.find((x) => x.text === '見本 管轄外の予約');
+  ok('管轄外も来院チェック・予約の移動・キャンセルはできる', (await api(mg, 'PUT', '/api/admin/visit', { date: D, time: 540, bed: c.bed, visited: true }))[0] === 200
+    && (await api(mg, 'POST', '/api/admin/move', { date: D, time: 540, bed: c.bed, toDate: D, toTime: 600, toBed: 3, allowOver: true }))[0] === 200
+    && (await api(mg, 'POST', '/api/admin/cancel', { date: D, time: 600, bed: 3, kind: 'ADVANCE' }))[0] === 200); }
+ok('管轄外の設定（休診・営業時間など）は直せない', (await api(mg, 'PUT', '/api/admin/days', { from: D, to: D, closed: 'ALL' }))[0] === 403);
 await mg.goto(`${B}/admin/day/${D}`); await mg.waitForSelector('#grid');
-ok('管轄外の店舗では「見るだけ」と出る', await mg.getByText('管轄外の店舗なので見るだけです').isVisible());
+ok('管轄外の店舗では「予約表の入力はできる」と出る', await mg.getByText(/管轄外の店舗です。予約表の入力・予約の変更/).isVisible());
 ok('管轄外の窓口集計も見るだけ', (await api(mg, 'GET', `/api/admin/madoguchi?month=${M}`))[1].canEdit === false && (await api(mg, 'PUT', '/api/admin/madoguchi/day', { date: D, patch: { copay: 1 } }))[0] === 403);
 await swTo('S002');
 ok('全店状況・自賠集計を見られる', (await api(mg, 'GET', `/api/admin/hq/overview?date=${D}`))[0] === 200 && (await api(mg, 'GET', `/api/admin/hq/jibai?ym=${M}`))[0] === 200);

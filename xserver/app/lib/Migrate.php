@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 74;
+    private const VERSION = 75;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -522,6 +522,17 @@ SQL);
             if ($ver < 74) {
                 // 今までの新患継続率の「キャンペーン／○○」も「イベント／○○」に（内訳はそのまま）
                 if (self::hasTable($pdo, 'karte')) $pdo->exec("UPDATE karte SET trig = 'イベント' WHERE trig = 'キャンペーン'");
+            }
+            if ($ver < 75) {
+                // ワンコインはチラシでまとめる（今までの「イベント／ワンコイン」も「チラシ／ワンコイン」に。イベントの内訳の選択肢からは外す）
+                if (self::hasTable($pdo, 'karte')) $pdo->exec("UPDATE karte SET trig = 'チラシ' WHERE trig IN ('イベント', 'キャンペーン') AND trigDetail = 'ワンコイン'");
+                if (self::hasTable($pdo, 'campaign') && self::hasColumn($pdo, 'campaign', 'trigDetail')) $pdo->exec("UPDATE campaign SET trig = 'チラシ' WHERE trig IN ('イベント', 'キャンペーン') AND trigDetail = 'ワンコイン'");
+                if (self::hasTable($pdo, 'karte_option') && (int)$pdo->query("SELECT COUNT(*) FROM karte_option WHERE category = 'trigger'")->fetchColumn() > 0) {
+                    $pdo->exec("DELETE FROM karte_option WHERE category = 'd:イベント' AND label = 'ワンコイン'");
+                    if ((int)$pdo->query("SELECT COUNT(*) FROM karte_option WHERE category = 'd:チラシ' AND label = 'ワンコイン'")->fetchColumn() === 0) {
+                        $pdo->exec("INSERT INTO karte_option (category, label, sortOrder) SELECT 'd:チラシ', 'ワンコイン', COALESCE(MAX(sortOrder), -1) + 1 FROM karte_option WHERE category = 'd:チラシ'");
+                    }
+                }
             }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);

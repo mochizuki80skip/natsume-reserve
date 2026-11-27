@@ -209,6 +209,15 @@ final class Auth
         return self::$store = (Settings::storesInOrder('active = 1', [], false)[0] ?? null);
     }
 
+    /** 予約表の入力・予約の変更の API か（管轄MG が管轄外の店舗でも使える） */
+    public const BOOKING_WRITE_PATHS = ['/api/admin/cells', '/api/admin/cell-menus', '/api/admin/cell-staff', '/api/admin/cell-phone', '/api/admin/visit', '/api/admin/cancel', '/api/admin/move', '/api/admin/reservations'];
+
+    private static function isBookingWrite(): bool
+    {
+        $path = rtrim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH), '/');
+        return in_array($path, self::BOOKING_WRITE_PATHS, true);
+    }
+
     /** API 用：セッション＋店舗。店舗が無ければ 404 */
     public static function context(): array
     {
@@ -216,8 +225,8 @@ final class Auth
         if ($s['role'] === 'acct') throw new HttpError(403, 'この画面は経理アカウントでは使えません');
         $store = self::resolveStore($s);
         if (!$store) throw new HttpError(404, '店舗が登録されていません');
-        // 管轄MG：管轄外の店舗は見るだけ（書き込みの操作は止める）
-        if ($s['role'] === 'mg' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' && !self::canEditStore($s, $store)) throw new HttpError(403, '管轄外の店舗は見るだけです（直すことはできません）');
+        // 管轄MG：管轄外の店舗は、予約表の入力・予約の変更（予約を取る・動かす・キャンセル・来院チェックなど）だけできる。設定などの書き込みは止める
+        if ($s['role'] === 'mg' && ($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' && !self::canEditStore($s, $store) && !self::isBookingWrite()) throw new HttpError(403, '管轄外の店舗は、予約表の入力・予約の変更だけできます（設定などは直せません）');
         return ['session' => $s, 'store' => $store];
     }
 }
