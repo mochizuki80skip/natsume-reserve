@@ -68,11 +68,15 @@ await sel.selectOption('2'); await hq.waitForTimeout(800);
 ok('本部も直せる', sql(`SELECT weeklyPlan FROM karte WHERE id='${k.id}'`) === '2');
 ok('1〜5 回のほかは入れられない', (await api(hq, 'PUT', '/api/admin/accidents/plan', { id: k.id, plan: 6 }))[0] === 400);
 
-// ---------- 管轄MG：管轄の店舗は直せる・管轄外は見るだけ ----------
+// ---------- 管轄MG：管轄の店舗も管轄外の店舗も直せる（新自・新三） ----------
 await api(hq, 'PUT', '/api/admin/hq/areas', { areas: [{ name: '見本エリア', stores: ['S002'] }] });
 await api(hq, 'POST', '/api/admin/hq/accounts', { code: 'mgav1', name: '見本 MG', password: 'mgpass123', role: 'mg', area: '見本エリア' });
 const mg = await login('', 'mgpass123', 'mgav1');
-ok('管轄MG：管轄外の店舗は直せない', (await api(mg, 'PUT', '/api/admin/accidents/plan', { id: k.id, plan: 4 }))[0] === 403);
+ok('管轄MG：管轄外の店舗の週の予定も直せる', (await api(mg, 'PUT', '/api/admin/accidents/plan', { id: k.id, plan: 4 }))[0] === 200 && sql(`SELECT weeklyPlan FROM karte WHERE id='${k.id}'`) === '4');
+await mg.context().addCookies([{ name: 'bk_store', value: 'S001', url: B }]);
+ok('管轄MG：管轄外の店舗の事故日・事故内容も直せる', (await api(mg, 'PATCH', '/api/admin/karte', { id: k.id, patch: { accidentNote: '見本：MG が直した事故内容' } }))[0] === 200 && sql(`SELECT accidentNote FROM karte WHERE id='${k.id}'`) === '見本：MG が直した事故内容');
+ok('管轄MG：管轄外の店舗の新患継続率のほかの欄は直せない', (await api(mg, 'PATCH', '/api/admin/karte', { id: k.id, patch: { age: '40' } }))[0] === 403);
+await mg.context().clearCookies({ name: 'bk_store' });
 const s2 = await login('S002', 'password');
 await api(s2, 'PUT', '/api/admin/cells', { date: first, cells: [{ time: 540, bed: 1, text: '見本 二子（新三）' }] });
 await api(s2, 'PUT', '/api/admin/visit', { date: first, time: 540, bed: 1, visited: true });
@@ -80,7 +84,7 @@ const k2 = (await api(s2, 'GET', `/api/admin/karte?month=${prevYm}`))[1].rows.fi
 ok('管轄MG：管轄の店舗は直せる', (await api(mg, 'PUT', '/api/admin/accidents/plan', { id: k2.id, plan: 4 }))[0] === 200 && sql(`SELECT weeklyPlan FROM karte WHERE id='${k2.id}'`) === '4');
 ok('ほかの店舗のアカウントでは直せない', (await api(s2, 'PUT', '/api/admin/accidents/plan', { id: k.id, plan: 1 }))[0] === 404);
 await mg.goto(`${B}/admin/hq/accidents?month=${prevYm}`); await mg.waitForSelector('table[aria-label="新自・新三（全店）"]'); await mg.waitForTimeout(800);
-ok('管轄MG の画面：管轄外の行は選ぶ欄が出ない', (await mg.locator('table[aria-label="新自・新三（全店）"] tbody tr', { hasText: '9301' }).getByLabel('週の通院予定').count()) === 0);
+ok('管轄MG の画面：管轄外の行も選ぶ欄が出る', (await mg.locator('table[aria-label="新自・新三（全店）"] tbody tr', { hasText: '9301' }).getByLabel('週の通院予定').count()) === 1);
 const xl = await hq.evaluate(async (u) => (await fetch(u)).status, `/api/admin/hq/accidents/export?month=${prevYm}`);
 ok('Excel に保存できる', xl === 200);
 ok('画面のエラーなし', errs.length === 0, errs.join(' / '));

@@ -324,7 +324,7 @@ function accidents_rows(string $ym): array
     foreach ($out as &$r) {
         $r['visitDates'] = $hist[$r['id']]['dates'] ?? [];
         $r['monthly'] = $hist[$r['id']]['monthly'] ?? [];
-        $r['canEdit'] = Auth::canEditStore($s, $stores[$r['storeId']]);
+        $r['canEdit'] = Auth::canEditAccident($s, $stores[$r['storeId']]);
         unset($r['storeId'], $r['karteNo0']);
     }
     unset($r);
@@ -352,7 +352,7 @@ function accidents_plan_put(): never
     $k = Db::one("SELECT id, storeId FROM karte WHERE id = ? AND kind IN ('ACCIDENT', 'THIRD')", [(string)($b['id'] ?? '')]);
     $stores = accident2_stores($s);
     if (!$k || !isset($stores[$k['storeId']])) Http::error('見つかりません', 404);
-    if (!Auth::canEditStore($s, $stores[$k['storeId']])) Http::error('この店舗は見るだけです（直すことはできません）', 403);
+    if (!Auth::canEditAccident($s, $stores[$k['storeId']])) Http::error('この店舗は見るだけです（直すことはできません）', 403);
     Db::exec('UPDATE karte SET weeklyPlan = ? WHERE id = ?', [$plan === null || $plan === '' ? null : (int)$plan, $k['id']]);
     Http::json(['ok' => true]);
 }
@@ -405,7 +405,7 @@ function accidents_two_months(): never
             'id' => $k['id'], 'store' => $st['code'], 'storeName' => $st['name'], 'area' => $areaOf[$st['code']] ?? '',
             'date' => $k['date'], 'kind' => $k['kind'], 'karteNo' => (string)$k['karteNo'], 'name' => (string)$k['name'],
             'trig' => (string)$k['trig'], 'trigDetail' => (string)$k['trigDetail'], 'staff' => (string)$k['staff'],
-            'lastVisit' => $last, 'status' => (string)$k['accidentStatus'], 'canEdit' => Auth::canEditStore($s, $st),
+            'lastVisit' => $last, 'status' => (string)$k['accidentStatus'], 'canEdit' => Auth::canEditAccident($s, $st),
         ];
     }
     Http::json(['today' => $today, 'rows' => $rows, 'mine' => $s['role'] === 'mg' ? array_column(Auth::mgStores(), 'code') : null]);
@@ -422,7 +422,7 @@ function accidents_status_put(): never
     $k = Db::one("SELECT id, storeId FROM karte WHERE id = ? AND kind IN ('ACCIDENT', 'THIRD')", [(string)($b['id'] ?? '')]);
     $stores = accident2_stores($s);
     if (!$k || !isset($stores[$k['storeId']])) Http::error('見つかりません', 404);
-    if (!Auth::canEditStore($s, $stores[$k['storeId']])) Http::error('この店舗は見るだけです（直すことはできません）', 403);
+    if (!Auth::canEditAccident($s, $stores[$k['storeId']])) Http::error('この店舗は見るだけです（直すことはできません）', 403);
     Db::exec('UPDATE karte SET accidentStatus = ?, accidentStatusAt = ? WHERE id = ?', [$status, $status === '' ? null : Time::nowJstDateTime(), $k['id']]);
     Http::json(['ok' => true]);
 }

@@ -50,8 +50,9 @@ await api(hq, 'PUT', '/api/admin/hq/areas', { areas: [{ name: '見本エリア',
 await api(hq, 'POST', '/api/admin/hq/accounts', { code: 'mg2m', name: '見本 MG', password: 'mgpass123', role: 'mg', area: '見本エリア' });
 const mg = await login('', 'mgpass123', 'mg2m');
 r = (await api(mg, 'GET', '/api/admin/accidents/two-months'))[1];
-ok('MG：全店が見える（直せるのは管轄だけ）', r.rows.length === 2 && r.rows.find((x) => x.store === 'S002').canEdit === false && r.rows.find((x) => x.store === 'S001').canEdit === true);
-ok('MG：管轄外は選べない', (await api(mg, 'PUT', '/api/admin/accidents/status', { id: r.rows.find((x) => x.store === 'S002').id, status: 'END' }))[0] === 403);
+ok('MG：全店が見えて、管轄外も直せる', r.rows.length === 2 && r.rows.every((x) => x.canEdit === true));
+ok('MG：管轄外も選べる', (await api(mg, 'PUT', '/api/admin/accidents/status', { id: r.rows.find((x) => x.store === 'S002').id, status: 'CONT' }))[0] === 200);
+await api(mg, 'PUT', '/api/admin/accidents/status', { id: r.rows.find((x) => x.store === 'S002').id, status: '' }); // 元に戻す（このあとの数字の確認のため）
 ok('MG：メニューの数字は管轄の店舗だけ（0）', (await api(mg, 'GET', '/api/admin/me'))[1].accidentTwoMonths === 0);
 ok('本部：メニューの数字は全店（S002 の 1）', (await api(hq, 'GET', '/api/admin/me'))[1].accidentTwoMonths === 1);
 await hq.goto(`${B}/admin/hq/accidents`); await hq.waitForLoadState('networkidle');

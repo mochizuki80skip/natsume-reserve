@@ -184,6 +184,12 @@ final class Auth
         };
     }
 
+    /** 新自・新三（週の予定・継続／中止／終了・事故日と事故内容）を直せる店舗（本部・管轄MG＝全店、店舗＝自店舗、経理＝なし） */
+    public static function canEditAccident(array $session, array $store): bool
+    {
+        return in_array($session['role'], ['hq', 'mg'], true) || ($session['role'] === 'store' && $store['id'] === $session['storeId']);
+    }
+
     /** 操作対象の店舗。本部は Cookie（店舗切替）で選んだ店舗、無ければ先頭の稼働店舗 */
     public static function resolveStore(array $session): ?array
     {
@@ -215,7 +221,13 @@ final class Auth
     private static function isBookingWrite(): bool
     {
         $path = rtrim((string)parse_url((string)($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH), '/');
-        return in_array($path, self::BOOKING_WRITE_PATHS, true);
+        if (in_array($path, self::BOOKING_WRITE_PATHS, true)) return true;
+        // 新自・新三の事故日・事故内容だけを直すとき（新患継続率の下の一覧）
+        if ($path === '/api/admin/karte' && ($_SERVER['REQUEST_METHOD'] ?? '') === 'PATCH') {
+            $p = Http::body()['patch'] ?? null;
+            return is_array($p) && $p && !array_diff(array_keys($p), ['accidentDate', 'accidentNote']);
+        }
+        return false;
     }
 
     /** API 用：セッション＋店舗。店舗が無ければ 404 */
