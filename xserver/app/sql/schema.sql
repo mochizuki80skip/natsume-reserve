@@ -658,3 +658,12 @@ CREATE TABLE IF NOT EXISTS `accident_end` (
   KEY `accident_end_at` (`submittedAt`),
   CONSTRAINT `fk_accident_end_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- マーケ：店舗ごと・月ごとの広告費の配分（本部・管轄MG が入れる）
+CREATE TABLE IF NOT EXISTS `marke_budget` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `ym` CHAR(7) NOT NULL,
+  `amount` DECIMAL(10,1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`storeId`, `ym`),
+  CONSTRAINT `fk_marke_budget_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

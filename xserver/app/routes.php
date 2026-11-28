@@ -15,6 +15,7 @@ require_once __DIR__ . '/handlers/closure.php';
 require_once __DIR__ . '/handlers/report.php';
 require_once __DIR__ . '/handlers/stats.php';
 require_once __DIR__ . '/handlers/accidentend.php';
+require_once __DIR__ . '/handlers/marke.php';
 
 /** @return array<int, array{0:string,1:string,2:callable}> [メソッド, 正規表現, 関数] */
 function route_table(): array
@@ -116,6 +117,10 @@ function route_table(): array
         ['GET', '#^/api/admin/hq/referrals/export$#', 'hq_referrals_export'],
         ['GET', '#^/api/admin/hq/campaigns$#', 'hq_campaigns_get'],
         ['GET', '#^/api/admin/hq/accidents$#', 'hq_accidents'],
+        ['GET', '#^/api/admin/marke/daily$#', 'marke_daily'],
+        ['PUT', '#^/api/admin/marke/budget$#', 'marke_budget_put'],
+        ['GET', '#^/api/admin/marke/trig$#', 'marke_trig'],
+        ['GET', '#^/api/admin/marke/urls$#', 'marke_urls'],
         ['PUT', '#^/api/admin/accidents/plan$#', 'accidents_plan_put'],
         ['GET', '#^/api/admin/accidents/two-months$#', 'accidents_two_months'],
         ['GET', '#^/api/admin/accident-ends$#', 'ae_get'],

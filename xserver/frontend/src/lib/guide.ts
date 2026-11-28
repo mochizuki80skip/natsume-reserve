@@ -215,6 +215,17 @@ export const GUIDE: GuideArticle[] = [
     related: ['capacity', 'settings'], words: '出勤 休み 有給 応援 解放ベッド',
   },
   {
+    id: 'marke', cat: 'そのほかの画面', title: 'マーケ（本部・管轄MG）',
+    lead: '店舗ごとの新規・再来・新自・新三・来院数、きっかけ別の入件、URL・QR の月別を、全体・エリア・店舗で見られます。本部メニュー（管轄MG は MG メニュー）の「📈 マーケ」から開きます。',
+    steps: [
+      { text: '**① 店舗ごとの入件（日ごと）**：月を選び、「新規（新患）」「再来」「新自」「新三」「来院数」を切り替えます。日付×店舗の表に、月の合計と前年同月が出ます。「新規」のときは「広告費の配分」の行に店舗ごとの配分を入れられます（本部は全店、管轄MG は管轄の店舗）。' },
+      { text: '**② きっかけ別（店舗ごと）**：月・年度（4月〜）・期間を選びます。店舗×きっかけの表で、多いところほど色が濃くなります。きっかけの名前を押すと内訳（チラシ→ワンコイン など）が出ます。' },
+      { text: '**③ URL・QR の月別**：年度を選び、URL・QR ごと（きっかけでまとめて）の月ごとの数を見ます。「来院した新規」「新規の WEB 予約」「WEB 予約（全部）」「来院（全部）」を切り替えられます。' },
+      { text: '右上の「見る範囲」で、全体（全店）・エリア（管轄）・店舗を選べます。数字はすべて新患継続率と予約表の来院チェックから自動で数えます。' },
+    ],
+    related: ['log', 'karte'], words: 'マーケ 新規 新患 再来 推移 きっかけ 広告費 配分 URL QR 月別 年度',
+  },
+  {
     id: 'log', cat: 'そのほかの画面', title: '予約・来院ログ',
     lead: 'WEB 予約と、キャンセル・変更名簿を、期間や名前で探して見られます。',
     steps: [
@@ -365,6 +376,7 @@ export const GUIDE_FOR_SCREEN: { prefix: string; label: string; ids: string[] }[
   { prefix: '/admin/report', label: '日報', ids: ['report', 'visit', 'madoguchi'] },
   { prefix: '/admin/reservations', label: '予約・来院ログ', ids: ['log', 'web'] },
   { prefix: '/admin/hq/history', label: '変更履歴（全店）', ids: ['log'] },
+  { prefix: '/admin/marke', label: 'マーケ', ids: ['marke'] },
   { prefix: '/admin/karte/summary', label: '新患・再来集計', ids: ['summary', 'karte'] },
   { prefix: '/admin/karte', label: '新患継続率', ids: ['karte', 'visit'] },
   { prefix: '/admin/staff-counts', label: '担当数', ids: ['staffcounts', 'staff'] },

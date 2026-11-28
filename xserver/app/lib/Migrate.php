@@ -5,7 +5,7 @@ declare(strict_types=1);
 final class Migrate
 {
     /** この数字を上げたら run() に処理を足す */
-    private const VERSION = 75;
+    private const VERSION = 76;
     public const API_KEY_DDL = "CREATE TABLE IF NOT EXISTS `api_key` (
   `id` VARCHAR(32) NOT NULL,
   `name` VARCHAR(40) NOT NULL,
@@ -534,6 +534,10 @@ SQL);
                     }
                 }
             }
+            if ($ver < 76) {
+                // マーケ：店舗ごと・月ごとの広告費の配分
+                $pdo->exec(self::MARKE_BUDGET_DDL);
+            }
             $st = $pdo->prepare("REPLACE INTO app_meta (k, v) VALUES ('schema', ?)");
             $st->execute([self::VERSION]);
         } catch (Throwable $e) {
@@ -908,6 +912,14 @@ SQL);
             $ins->execute([bin2hex(random_bytes(16)), $c['storeId'], $c['date'], (int)$c['time'], (int)$c['bed'], mb_substr((string)$c['name'], 0, 100), '', mb_substr((string)$c['byCode'], 0, 20), $c['createdAt'], $c['kind'] === 'CHANGE' ? 'MOVE' : 'CANCEL', mb_substr($note, 0, 100)]);
         }
     }
+
+    public const MARKE_BUDGET_DDL = 'CREATE TABLE IF NOT EXISTS `marke_budget` (
+  `storeId` VARCHAR(32) NOT NULL,
+  `ym` CHAR(7) NOT NULL,
+  `amount` DECIMAL(10,1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`storeId`, `ym`),
+  CONSTRAINT `fk_marke_budget_store` FOREIGN KEY (`storeId`) REFERENCES `store` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
     public const CELL_LOG_DDL = 'CREATE TABLE IF NOT EXISTS `cell_log` (
   `id` VARCHAR(32) NOT NULL,
