@@ -18,3 +18,9 @@ export function savePatient(p: PatientMemory): void {
 export function forgetPatient(): void {
   try { localStorage.removeItem(KEY); } catch { /* 同上 */ }
 }
+
+/** 電話番号を下 4 桁だけ見せる（覚えた番号を画面に出すとき。共用の端末でほかの人に番号を見られないように） */
+export function maskPhone(p: string): string {
+  const d = p.replace(/\D/g, '');
+  return d.length >= 4 ? `***-****-${d.slice(-4)}` : '****';
+}

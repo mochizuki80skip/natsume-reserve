@@ -94,6 +94,11 @@ ok('予約確定', true, `${dateTitle} ${slotLabel}`);
 const doneText = await page.textContent('main');
 ok('完了画面の案内（現金のみ・マイナンバーカード・受給者証・時間に余裕）', ['現金のみ', 'マイナンバーカード', '受給者証', '余裕をもって'].every((w) => doneText.includes(w)));
 await page.screenshot({ path: 'e2e/out-customer-done.png' });
+// 「この端末に覚えておく」は、はじめは外れている（共用の端末で次の人に出ないように）。覚えたい方だけ入れる
+const rememberBox = page.getByRole('checkbox', { name: /この端末にお名前・電話番号・診察券番号を覚えておく/ });
+ok('「この端末に覚えておく」は、はじめは外れている', !(await rememberBox.isChecked()) && (await page.evaluate(() => localStorage.getItem('natsume.patient'))) === null);
+await rememberBox.click();
+ok('チェックを入れると覚える', (await page.evaluate(() => JSON.parse(localStorage.getItem('natsume.patient') ?? '{}').name)) === 'テスト 太郎');
 // ご予約の確認ページ（名前はフルネーム）
 await page.getByRole('link', { name: 'ご予約の確認ページを開く' }).click();
 await page.waitForSelector('text=ご予約中', { timeout: 15000 });
@@ -114,7 +119,10 @@ ok('通院中を選ぶと「診察券をご用意ください」', ((await page.
   await o.click();
   await page.getByRole('button', { name: 'この日時で予約へ進む' }).click();
   ok('通院中は診察券番号が必須で、確認の案内が出る', (await page.locator('label:has-text("診察券番号") input[required]').count()) === 1 && (await page.textContent('form')).includes('お手元の診察券に書かれている番号'));
-  ok('2 回目は氏名・電話番号が入っている', (await page.inputValue('input[placeholder*="山田"]')) === 'テスト 太郎' && (await page.inputValue('input[type="tel"]')) === '09012345678');
+  ok('2 回目は氏名が入り、電話番号は下 4 桁だけ見える', (await page.inputValue('input[placeholder*="山田"]')) === 'テスト 太郎' && (await page.getByLabel('前回の電話番号').innerText()).includes('***-****-5678') && (await page.locator('input[type="tel"]').count()) === 0);
+  await page.getByRole('button', { name: '別の番号にする' }).click();
+  ok('「別の番号にする」で入れ直せる', (await page.inputValue('input[type="tel"]')) === '');
+  await page.fill('input[type="tel"]', '09012345678');
 }
 // 診察券番号を覚えているスマホでは、通院中の案内を「前回の番号が入ります」に変える
 {
@@ -129,6 +137,11 @@ ok('通院中を選ぶと「診察券をご用意ください」', ((await page.
   await page.getByRole('button', { name: /ご通院したことがある方/ }).click().catch(() => {});
   await page.getByRole('radio', { name: /現在通院中/ }).click(); await page.waitForTimeout(300);
   ok('「別の方の予約」では「診察券をご用意ください」', ((await page.getByRole('note', { name: '通院中の方へのお願い' }).textContent()) ?? '').includes('ご用意ください'));
+  // 共用の端末向け：「この端末の記録を消す」で、覚えたお名前・電話番号と予約の一覧を消せる
+  await page.goto(page.url()); await page.waitForSelector('table.wk tbody tr', { timeout: 15000 });
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'この端末の記録を消す' }).click(); await page.waitForTimeout(300);
+  ok('「この端末の記録を消す」で覚えた内容と予約の一覧が消える', await page.evaluate(() => localStorage.getItem('natsume.patient') === null && localStorage.getItem('natsume.myReservations') === null) && !(await page.textContent('main')).includes('いつもありがとうございます'));
 }
 
 // 同じ枠が 2 枠使われたか（初回=30分）は管理画面で確認する
@@ -386,11 +399,11 @@ await hp.goto(`${BASE}/admin/login`);
 await hp.fill('input[autocomplete="username"]', 'HQ');
 await hp.fill('input[type="password"]', process.env.HQ_PASSWORD ?? 'hq-pass');
 await hp.getByRole('button', { name: 'ログイン' }).click();
-await hp.waitForURL(/\/admin\/day\//, { timeout: 15000 });
+await hp.waitForURL(/\/admin\/hq\/overview/, { timeout: 15000 });
 await hp.goto(`${BASE}/admin/hq`);
 await hp.waitForSelector('h1:has-text("本部管理")');
 ok('本部画面', (await hp.textContent('h1')).includes('本部管理'));
-ok('店舗切替セレクト', await hp.locator('select[name="store"]').count() === 1);
+ok('本部のメニューに「店舗の予約表」（店舗の切り替えは店舗の画面の下の段）', (await hp.getByText('🏥 店舗の予約表').count()) === 1);
 
 await browser.close();
 console.log(process.exitCode ? 'SMOKE FAILED' : 'SMOKE OK');

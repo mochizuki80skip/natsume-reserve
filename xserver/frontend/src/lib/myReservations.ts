@@ -21,6 +21,11 @@ export function addMyReservation(r: MyReservation): void {
   } catch { /* 保存できない端末では何もしない */ }
 }
 
+/** この端末に覚えた予約の一覧を、すべて消す */
+export function clearMyReservations(): void {
+  try { localStorage.removeItem(KEY); } catch { /* 同上 */ }
+}
+
 export function removeMyReservations(tokens: string[]): void {
   try { localStorage.setItem(KEY, JSON.stringify(loadMyReservations().filter((x) => !tokens.includes(x.token)))); } catch { /* 同上 */ }
 }

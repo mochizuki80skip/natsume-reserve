@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import PublicFooter from '@/components/PublicFooter';
 import { Link, useSearchParams } from 'react-router-dom';
 import { formatDateJa, minToHm } from '@/lib/time';
-import { loadMyReservations, removeMyReservations } from '@/lib/myReservations';
+import { clearMyReservations, loadMyReservations, removeMyReservations } from '@/lib/myReservations';
+import { forgetPatient, loadPatient } from '@/lib/patientMemory';
 
 interface View { state: 'BOOKED' | 'PAST' | 'CANCELLED' | 'ENDED'; store: { code: string; name: string; phone: string }; date?: string; time?: number; name?: string; daysLeft?: number }
 type Item = View & { token: string };
@@ -61,6 +62,10 @@ export default function MyReservations() {
       <p className="mt-3 text-sm text-slate-700">変更・キャンセルは、各店舗へ<b>お電話</b>でお願いします（くわしく見る から電話番号を押せます）。</p>
       {back && <Link to={`/s/${encodeURIComponent(back)}`} className="mt-4 block rounded-lg bg-brand px-4 py-3 text-center text-base font-bold text-white no-underline">WEB 予約の画面に戻る</Link>}
       <p className="mt-2 text-xs text-slate-500">終わった予約は、予約日の翌日まで出て、そのあと消えます。</p>
+      {((items?.length ?? 0) > 0 || loadPatient()) && (
+        <button type="button" onClick={() => { if (!window.confirm('この端末に覚えたお名前・電話番号・診察券番号と、予約の一覧を消します。よろしいですか？')) return; forgetPatient(); clearMyReservations(); setItems([]); }}
+          className="mt-3 w-full rounded-lg border px-4 py-2 text-sm text-slate-600">この端末の記録を消す（共用の端末の方は、使い終わったら押してください）</button>
+      )}
       <PublicFooter />
     </main>
   );

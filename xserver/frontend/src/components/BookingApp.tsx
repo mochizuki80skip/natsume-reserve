@@ -7,8 +7,8 @@ import { formatDateJa, minToHm } from '@/lib/time';
 import { formatJpPhone } from '@/lib/format';
 import { Link } from 'react-router-dom';
 import WeekGrid, { KIND_TEXT, type Kind, type Selection } from './WeekGrid';
-import { forgetPatient, loadPatient, savePatient } from '@/lib/patientMemory';
-import { addMyReservation, loadMyReservations } from '@/lib/myReservations';
+import { forgetPatient, loadPatient, maskPhone, savePatient } from '@/lib/patientMemory';
+import { addMyReservation, loadMyReservations, clearMyReservations } from '@/lib/myReservations';
 import CampaignBox, { type PublicCampaign } from './CampaignBox';
 
 interface Companion { kind: Kind | null; name: string; cardNo: string; sel: Selection | null }
@@ -31,7 +31,10 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
   // この端末で前に予約した方の情報（次回は入力欄に最初から入れる）。「別の方の予約をする」で今回は使わない
   const [memory, setMemory] = useState(loadPatient);
   const [useMemory, setUseMemory] = useState(true);
-  const [remember, setRemember] = useState(true);
+  // 覚えた電話番号を入れたときは、下 4 桁だけ見せる（「別の番号にする」で入れ直せる）
+  const [phoneMasked, setPhoneMasked] = useState(false);
+  // 「この端末に覚えておく」は、はじめは外しておく（共用の端末で次の人に出ないように）。前に覚えた方はそのまま
+  const [remember, setRemember] = useState(() => !!loadPatient());
   const [gridKey, setGridKey] = useState(0);
   // ご家族（お連れ様）と一緒の予約：人数・お連れ様（2人目以降）・日時の決め方（みんな同じ／1人ずつ）
   const [count, setCount] = useState(1);
@@ -62,9 +65,9 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
   }
   async function proceedLeader(s: Selection) {
     setError('');
-    if (!party) { setSel(s); setStep(2); if (memory && useMemory) setForm((f) => ({ cardNo: f.cardNo || memory.cardNo, name: f.name || memory.name, phone: f.phone || memory.phone })); return; }
+    if (!party) { setSel(s); setStep(2); if (memory && useMemory) { setForm((f) => ({ cardNo: f.cardNo || memory.cardNo, name: f.name || memory.name, phone: f.phone || memory.phone })); setPhoneMasked((m) => m || !!memory.phone); } return; }
     if (!allKinds) { setError('お連れ様の来院区分を選んでください（上の「ご予約の人数」の欄）'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    if (memory && useMemory) setForm((f) => ({ cardNo: f.cardNo || memory.cardNo, name: f.name || memory.name, phone: f.phone || memory.phone }));
+    if (memory && useMemory) { setForm((f) => ({ cardNo: f.cardNo || memory.cardNo, name: f.name || memory.name, phone: f.phone || memory.phone })); setPhoneMasked((m) => m || !!memory.phone); }
     if (mode === 'each') { setSel(s); setStage('comps'); window.scrollTo(0, 0); return; }
     const list = comps.map((c) => ({ ...c, sel: s }));
     const msg = await checkParty(s, list);
@@ -190,7 +193,8 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
             <div className="mb-3 rounded-lg border border-brand bg-brand-light px-3 py-2 text-sm text-brand-dark">
               <b>{memory.name} 様</b>、いつもありがとうございます。<br />
               <span className="text-xs">お名前・電話番号{memory.cardNo ? '・診察券番号' : ''}は前回の内容が入ります。</span>
-              <button type="button" className="ml-1 text-xs underline" onClick={() => { setUseMemory(false); setForm({ cardNo: '', name: '', phone: '' }); }}>別の方（ご家族など）の予約をする</button>
+              <button type="button" className="ml-1 text-xs underline" onClick={() => { setUseMemory(false); setPhoneMasked(false); setForm({ cardNo: '', name: '', phone: '' }); }}>別の方（ご家族など）の予約をする</button>
+              <button type="button" className="ml-2 text-xs underline" onClick={() => { if (!window.confirm('この端末に覚えたお名前・電話番号・診察券番号と、予約の一覧を消します。よろしいですか？')) return; forgetPatient(); clearMyReservations(); setMemory(null); setRemember(false); setUseMemory(false); setPhoneMasked(false); setForm({ cardNo: '', name: '', phone: '' }); setHasMine(false); }}>この端末の記録を消す</button>
             </div>
           )}
           {stage === 'leader' && <PartyBox count={count} onCount={changeCount} comps={comps} setComp={setComp} mode={mode} onMode={(m) => { setMode(m); setError(''); }} />}
@@ -243,10 +247,15 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
           <label className="mb-3 block text-sm">氏名<span className="ml-1 text-red-500">*</span>
             <input required maxLength={40} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" placeholder="例）山田 太郎" />
           </label>
-          <label className="mb-3 block text-sm">電話番号（携帯）<span className="ml-1 text-red-500">*</span>
-            <input required type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" placeholder="例）09012345678" />
+          {/* 覚えた番号を見せているときは label にしない（文字を押すと「別の番号にする」まで押されてしまうため） */}
+          {(() => { const Wrap = phoneMasked && form.phone ? 'div' : 'label'; return (
+          <Wrap className="mb-3 block text-sm">電話番号（携帯）<span className="ml-1 text-red-500">*</span>
+            {phoneMasked && form.phone
+              ? <span className="mt-1 flex items-center gap-2"><span className="flex-1 rounded border bg-slate-50 px-3 py-2 tabular-nums" aria-label="前回の電話番号">{maskPhone(form.phone)}（前回の番号）</span><button type="button" onClick={() => { setPhoneMasked(false); setForm({ ...form, phone: '' }); }} className="whitespace-nowrap text-xs underline">別の番号にする</button></span>
+              : <input required type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full rounded border px-3 py-2" placeholder="例）09012345678" />}
             <span className="mt-1 block text-xs text-slate-500">{smsEnabled ? 'ご予約確定のSMSをお送りします。' : '当院からご連絡する場合に使用します。'}</span>
-          </label>
+          </Wrap>
+          ); })()}
           {comps.map((c, i) => c.kind && c.sel && (
             <div key={i} className="mb-3 rounded-lg border border-brand/40 bg-brand-light/30 p-3" role="group" aria-label={`${i + 2}人目（お連れ様）`}>
               <p className="text-sm font-bold text-brand-dark">{i + 2}人目（お連れ様）</p>
@@ -284,7 +293,7 @@ export default function BookingApp({ store, smsEnabled, via, refCode, closures =
               <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">診察券番号</dt><dd>{form.cardNo || '（未入力）'}</dd></div>
             )}
             <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">氏名</dt><dd className="font-bold">{form.name}</dd></div>
-            <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">電話番号</dt><dd className="font-bold tabular-nums">{formatJpPhone(form.phone) || form.phone}</dd></div>
+            <div className="flex gap-3 px-4 py-3"><dt className="w-24 shrink-0 text-slate-500">電話番号</dt><dd className="font-bold tabular-nums">{phoneMasked ? `${maskPhone(form.phone)}（前回の番号）` : formatJpPhone(form.phone) || form.phone}</dd></div>
           </dl>
           {comps.map((c, i) => c.kind && c.sel && (
             <dl key={i} className="mt-2 divide-y rounded-lg border bg-white text-sm" aria-label={`${i + 2}人目（お連れ様）の確認`}>
