@@ -116,7 +116,7 @@ ok('店舗のアカウントでは全店の履歴は見られない', (await api
 const hcsv = await hq.evaluate(async (u) => (await fetch(u)).text(), `/api/admin/hq/history/export?from=${D}&to=${D}&basis=date&format=csv`);
 ok('本部：CSV に店舗の列つきで保存できる', hcsv.includes('操作日時,店舗,アカウント'));
 await hq.goto(`${B}/admin`); await hq.waitForLoadState('networkidle');
-await hq.getByText('本部メニュー').click(); await hq.getByRole('link', { name: '変更履歴（全店）' }).click();
+await hq.getByRole('link', { name: '変更履歴', exact: true }).click();
 await hq.waitForSelector('table[aria-label="変更履歴（全店）"]');
 await hq.getByLabel('日付の見方').selectOption('date');
 await hq.locator('input[type=date]').first().fill(D); await hq.locator('input[type=date]').nth(1).fill(D);

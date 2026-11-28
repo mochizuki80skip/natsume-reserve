@@ -11,7 +11,7 @@ const errs = [];
 const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); if (!c) process.exitCode = 1; };
 const hp = await br.newPage({ viewport: { width: 1400, height: 1000 } });
 hp.on('pageerror', (e) => errs.push(e.message));
-await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]', 'HQ'); await hp.fill('input[type=password]', HQPW); await hp.getByRole('button', { name: 'ログイン' }).click(); await hp.waitForURL(/admin\/day/);
+await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]', 'HQ'); await hp.fill('input[type=password]', HQPW); await hp.getByRole('button', { name: 'ログイン' }).click(); await hp.waitForURL(/admin\/hq\/overview/);
 const api = (pg, m, u, b) => pg.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
 
 // 1) 本部の店舗一覧で「自賠請求のみ」にする（S002 を見本に）
@@ -36,6 +36,8 @@ await api(hp, 'PUT', '/api/admin/hq/stores-page', { open: false });
 ok('WEB 予約の空き・予約は受けない', (await api(hp, 'GET', '/api/public/S002/week'))[0] === 404 && (await api(hp, 'POST', '/api/public/S002/reserve', { kind: 'RETURN', date: '2026-11-04', time: 600, name: 'x', phone: '09012345678' }))[0] === 404);
 const cp = await br.newPage(); await cp.goto(`${B}/s/S002`); await cp.waitForSelector('h1');
 ok('WEB 予約のページは「見つかりません」', (await cp.textContent('h1')).includes('ページが見つかりません'));
+// 本部の店舗切り替えは、店舗の画面の下の段のドロップダウン
+await hp.goto(`${B}/admin/shifts`); await hp.waitForSelector('header select[name=store]');
 const groups = await hp.locator('header select[name=store] optgroup').evaluateAll((gs) => gs.map((g) => g.label));
 ok('店舗切り替えではいちばん下の「自賠請求のみ」', groups[groups.length - 1] === '自賠請求のみ', groups.join('|'));
 const jb = (await api(hp, 'GET', '/api/admin/hq/jibai'))[1];

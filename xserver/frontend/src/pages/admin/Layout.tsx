@@ -33,6 +33,49 @@ function DropMenu({ label, plain, children }: { label: ReactNode; plain?: boolea
   );
 }
 
+/** 店舗の画面（本部は、開いている間だけ下の段にその店舗のメニューを出す） */
+const STORE_PAGE = /^\/admin\/(day|shifts|reservations|karte(?!\/import)|churn|staff-counts|jibai|madoguchi|report|settings|story|cell|move)/;
+
+type StoreItem = Me['stores'][number];
+/** 本部専用 → エリアごと（本部の店舗一覧の並び順） */
+function storeGroups(stores: StoreItem[]): [string, StoreItem[]][] {
+  const g = (s: StoreItem) => (s.jibaiOnly ? '自賠請求のみ' : s.hqOnly ? '本部専用' : s.area || 'エリア未設定');
+  return [...new Map(stores.map((s) => [g(s), 0])).keys()].map((k) => [k, stores.filter((s) => g(s) === k)]);
+}
+
+/** 店舗の予約表へ 1 回で飛ぶ一覧（エリアごと・今日の予約数つき）。押すとその店舗に切り替えて今日の予約表を開く */
+function StoreJump({ me, label, mineOnly }: { me: Me; label: string; mineOnly?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const { data } = useFetch<{ rows: { code: string; rAm: number; rPm: number; closed: boolean }[] }>(open ? `/api/admin/hq/overview?date=${me.today}` : null);
+  const count = new Map((data?.rows ?? []).map((r) => [r.code, r]));
+  const list = me.stores.filter((s) => s.active && !s.jibaiOnly && (!mineOnly || s.mine));
+  const go = (code: string) => {
+    const f = document.createElement('form'); f.method = 'post'; f.action = '/api/admin/switch';
+    for (const [k, v] of [['store', code], ['back', `/admin/day/${me.today}`]]) { const i = document.createElement('input'); i.type = 'hidden'; i.name = k; i.value = v; f.appendChild(i); }
+    document.body.appendChild(f); f.submit();
+  };
+  return (
+    <details className="relative" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary className="cursor-pointer list-none rounded border border-brand bg-brand px-2 py-0.5 font-bold text-white">{label} ▾</summary>
+      <div className="absolute right-0 z-50 mt-1 w-[min(44rem,92vw)] rounded border bg-white p-2 text-[13px] shadow-lg" aria-label={`${label}の一覧`}>
+        <p className="mb-1 text-[11px] text-slate-500">店舗を押すと、その店舗の今日の予約表が開きます（数字は今日の予約数）</p>
+        {storeGroups(list).map(([g, ss]) => (
+          <div key={g} className="mb-1.5">
+            <b className="block text-[11px] text-slate-500">{g}</b>
+            <div className="flex flex-wrap gap-1">
+              {ss.map((s) => { const r = count.get(s.code); const n = r ? r.rAm + r.rPm : null; return (
+                <button key={s.code} type="button" onClick={() => go(s.code)} className="inline-flex items-center gap-1.5 rounded border bg-slate-50 px-2 py-1 hover:bg-brand-light">
+                  {s.name}<span className="text-[11px] text-slate-500">今日</span><b className="tabular-nums text-brand-dark">{r?.closed ? '休' : n ?? '…'}</b>
+                </button>
+              ); })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export default function AdminLayout() {
   const location = useLocation();
   // 表の幅が広い画面（新患継続率・本部の集計）は横幅いっぱいに使う
@@ -80,6 +123,7 @@ export default function AdminLayout() {
   if (store?.jibaiOnly && me.session.role !== 'acct' && !/^\/admin\/(jibai|hq|updates|guide)/.test(location.pathname)) return <Navigate to="/admin/jibai" replace />;
   // 経理アカウント：窓口集計・自賠集計だけ（予約表などの店舗の画面は開かない）
   const acct = me.session.role === 'acct';
+  const hq = me.session.role === 'hq';
   if (acct && !/^\/admin\/(acct|madoguchi|hq\/jibai|updates|guide)/.test(location.pathname)) return <Navigate to="/admin/acct" replace />;
   return (
     <div className="min-h-screen">
@@ -89,10 +133,10 @@ export default function AdminLayout() {
       {/* 上のメニュー（予約表・新患継続率など）は画面の上に固定。高さを --admin-head-h にして、予約表の日付の帯などをその下に固定する */}
       <header ref={headRef} className="no-print sticky top-0 z-40 border-b bg-white" aria-label="管理画面のメニュー">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 whitespace-nowrap px-3 py-1.5">
-          <Link to={`/admin/day/${today}`} className="font-bold text-brand-dark">{me.session.role === 'hq' || acct ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
+          <Link to={hq ? '/admin/hq/overview' : `/admin/day/${today}`} className="font-bold text-brand-dark">{hq || acct ? 'なつめ接骨院グループ' : store ? store.name : '店舗未選択'}</Link>
           {acct && <span className="rounded bg-brand-light px-2 text-xs text-brand-dark">経理</span>}
           <button type="button" onClick={() => setNavOpen(!navOpen)} aria-expanded={navOpen} aria-label="メニュー" className="relative ml-auto rounded border px-2.5 py-0.5 text-lg leading-6 sm:hidden">{navOpen ? '✕' : '☰'}{!navOpen && ((me.accidentMissing ?? 0) > 0 || (me.karteMissing ?? 0) > 0 || (me.churnMissing ?? 0) > 0 || (me.accidentTwoMonths ?? 0) > 0) && <i className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden />}</button>
-          {(me.session.role === 'hq' || me.session.role === 'mg') && (
+          {me.session.role === 'mg' && (
             <form action="/api/admin/switch" method="post" className={`flex items-center gap-1 text-sm ${navOpen ? 'max-sm:w-full' : 'max-sm:hidden'}`}>
               <input type="hidden" name="back" value={location.pathname + location.search} />
               <select name="store" defaultValue={store?.code ?? ''} className="rounded border px-2 py-1">
@@ -113,7 +157,23 @@ export default function AdminLayout() {
             </>) : store?.jibaiOnly ? (
               // 自賠請求だけに使う店舗：メニューは自賠請求だけ
               <Link to="/admin/jibai" className="hover:underline">自賠請求{jibaiBadge}</Link>
-            ) : (<>
+            ) : hq ? (<>
+              {/* 本部：本部で使う画面を上に。店舗の画面は「🏥 店舗の予約表」から開き、開いている間は下の段にその店舗のメニュー */}
+              <Link to="/admin/hq/overview" className="hover:underline">全店状況</Link>
+              <Link to="/admin/hq/karte" className="hover:underline">新患・再来集計</Link>
+              <Link to="/admin/hq/accidents" className="hover:underline">新自・新三{(me.accidentTwoMonths ?? 0) > 0 && <span className="ml-0.5 rounded-full bg-amber-500 px-1.5 text-[10.5px] font-bold text-white" aria-label={`2ヶ月経過の未選択 ${me.accidentTwoMonths}件`}>{me.accidentTwoMonths}</span>}</Link>
+              <Link to="/admin/hq/jibai" className="hover:underline">自賠集計{hqJibaiBadge}</Link>
+              <Link to="/admin/acct" className="hover:underline">窓口集計</Link>
+              <Link to="/admin/marke" className="hover:underline">📈 マーケ</Link>
+              <Link to="/admin/staffing" className="hover:underline">人員配置</Link>
+              <Link to="/admin/hq/history" className="hover:underline">変更履歴</Link>
+              <DropMenu label="本部設定">
+                <Link to="/admin/hq">本部（店舗・設定）</Link>
+                <Link to="/admin/hq/accounts">アカウント</Link>
+                <Link to="/admin/accident-ends">事故患者 終了報告</Link>
+              </DropMenu>
+              <StoreJump me={me} label="🏥 店舗の予約表" />
+            </>) : (<>
               <Link to={`/admin/day/${today}`} className="hover:underline">予約表</Link>
               <Link to="/admin/shifts" className="hover:underline">シフト</Link>
               <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
@@ -138,22 +198,8 @@ export default function AdminLayout() {
                   <Link to="/admin/marke">📈 マーケ</Link>
                 </DropMenu>
               )}
+              {me.session.role === 'mg' && <StoreJump me={me} label="🏥 管轄の予約状況" mineOnly />}
             </>)}
-            {me.session.role === 'hq' && (
-              <DropMenu label={<>本部メニュー{hqN > 0 && <i className="ml-1 inline-block h-2 w-2 rounded-full bg-red-600 align-middle" aria-hidden />}</>}>
-                <Link to="/admin/hq/overview">全店状況</Link>
-                <Link to="/admin/hq/karte">新患・再来集計（全店）</Link>
-                <Link to="/admin/hq/jibai">自賠集計{hqJibaiBadge}</Link>
-                <Link to="/admin/hq/accidents">新自・新三（全店）{(me.accidentTwoMonths ?? 0) > 0 && <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10.5px] font-bold text-white" aria-label={`2ヶ月経過の未選択 ${me.accidentTwoMonths}件`}>{me.accidentTwoMonths}</span>}</Link>
-                <Link to="/admin/accident-ends">事故患者 終了報告</Link>
-                <Link to="/admin/acct">窓口集計（全店）</Link>
-                <Link to="/admin/staffing">人員配置</Link>
-                <Link to="/admin/hq/history">変更履歴（全店）</Link>
-                <Link to="/admin/marke">📈 マーケ</Link>
-                <Link to="/admin/hq">本部（店舗・設定）</Link>
-                <Link to="/admin/hq/accounts">アカウント</Link>
-              </DropMenu>
-            )}
             {/* 使い方：開いていた画面の記事を上に出す */}
             <Link to={location.pathname.startsWith('/admin/guide') ? location.pathname + location.search : `/admin/guide?from=${encodeURIComponent(location.pathname + location.search)}`} className="hover:underline">使い方</Link>
             <DropMenu label="その他" plain>
@@ -164,6 +210,30 @@ export default function AdminLayout() {
             </DropMenu>
           </nav>
         </div>
+        {hq && store && STORE_PAGE.test(location.pathname) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t bg-cyan-50 px-3 py-1 text-[13px]" aria-label="店舗のメニュー">
+            <form action="/api/admin/switch" method="post" className="flex items-center gap-1">
+              <input type="hidden" name="back" value={location.pathname + location.search} />
+              <span aria-hidden>📍</span>
+              <select name="store" defaultValue={store.code} aria-label="表示する店舗" onChange={(e) => e.currentTarget.form?.submit()} className="rounded border bg-white px-2 py-0.5 font-bold">
+                {storeGroups(me.stores).map(([g, list]) => <optgroup key={g} label={g}>{list.map((s) => <option key={s.code} value={s.code}>{s.name}{s.active ? '' : '（停止中）'}</option>)}</optgroup>)}
+              </select>
+            </form>
+            {store.jibaiOnly ? <Link to="/admin/jibai" className="hover:underline">自賠請求</Link> : (<>
+              <Link to={`/admin/day/${today}`} className="hover:underline">予約表</Link>
+              <Link to="/admin/shifts" className="hover:underline">シフト</Link>
+              <Link to="/admin/reservations" className="hover:underline">予約・来院ログ</Link>
+              <Link to="/admin/karte" className="hover:underline">新患継続率</Link>
+              <Link to="/admin/karte/summary" className="hover:underline">新患・再来集計</Link>
+              <Link to="/admin/churn" className="hover:underline">離反</Link>
+              <Link to="/admin/staff-counts" className="hover:underline">担当数</Link>
+              <Link to="/admin/jibai" className="hover:underline">自賠請求</Link>
+              <Link to="/admin/madoguchi" className="hover:underline">窓口集計</Link>
+              <Link to="/admin/report" className="hover:underline">日報</Link>
+              <Link to="/admin/settings" className="hover:underline">店舗設定</Link>
+            </>)}
+          </div>
+        )}
       </header>
       {/* 管轄MG が管轄外の店舗を開いているとき */}
       {store?.readOnly && me.session.role === 'mg' && <p className="no-print border-b border-amber-300 bg-amber-100 px-3 py-1 text-center text-sm font-bold text-amber-900">「{store.name}」は管轄外の店舗です。予約表の入力・予約の変更（予約を取る・動かす・キャンセル・来院チェック）はできます。設定などは見るだけです</p>}

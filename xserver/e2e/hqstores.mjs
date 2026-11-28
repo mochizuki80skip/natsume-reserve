@@ -12,7 +12,7 @@ const ok = (l, c, x = '') => { console.log(`${c ? 'PASS' : 'FAIL'} ${l} ${x}`); 
 const ctx = await br.newContext({ viewport: { width: 1400, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
 const hp = await ctx.newPage();
 hp.on('pageerror', (e) => errs.push(e.message));
-await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]', 'HQ'); await hp.fill('input[type=password]', HQPW); await hp.getByRole('button', { name: 'ログイン' }).click(); await hp.waitForURL(/admin\/day/);
+await hp.goto(`${B}/admin/login`); await hp.fill('input[autocomplete="username"]', 'HQ'); await hp.fill('input[type=password]', HQPW); await hp.getByRole('button', { name: 'ログイン' }).click(); await hp.waitForURL(/admin\/hq\/overview/);
 const api = (pg, m, u, b) => pg.evaluate(async ([m, u, b]) => { const r = await fetch(u, { method: m, headers: { 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }); return [r.status, await r.json().catch(() => null)]; }, [m, u, b]);
 const order = async () => (await api(hp, 'GET', '/api/admin/hq'))[1].stores.map((s) => s.code).join(',');
 
@@ -47,6 +47,8 @@ ok('本部専用の店舗は店舗のアカウントでログインできない'
 const lg2 = await api(pub, 'POST', '/api/admin/login', { code: 'S002', password: 'password' });
 ok('ほかの店舗はログインできる', lg2[0] === 200);
 // 店舗切り替え：本部専用 → エリアごとの見出し
+// 本部の店舗切り替えは、店舗の画面の下の段のドロップダウン
+await hp.goto(`${B}/admin/shifts`); await hp.waitForSelector('header select[name=store]');
 const groups = await hp.locator('header select[name=store] optgroup').evaluateAll((gs) => gs.map((g) => `${g.label}:${[...g.querySelectorAll('option')].map((o) => o.textContent).join('/')}`));
 ok('店舗切り替えに本部専用とエリアの見出し', groups.join('|') === '本部専用:見本 東|静岡エリア:サンプル駅前院|東部エリア:サンプル本店', groups.join('|'));
 
